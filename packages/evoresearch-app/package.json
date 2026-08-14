@@ -24,7 +24,11 @@
   "dependencies": {
     "@deepseek-ai/dsh-host-frontend-static": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": "^3.18.1",
-    "lucide-react": "^1.31.0"
+    "dompurify": "^3.4.13",
+    "highlight.js": "^11.12.0",
+    "lucide-react": "^1.31.0",
+    "markdown-it": "^15.0.0",
+    "markdown-it-task-lists": "^2.1.1"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

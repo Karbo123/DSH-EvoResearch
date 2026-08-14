@@ -8,9 +8,10 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check } from 'lucide-react'
+import { Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
+import { renderMarkdown } from './markdown'
 
 const SUGGESTED_PROMPTS = [
   'Survey recent papers on a topic',
@@ -120,7 +121,7 @@ function UserBubble({ text, time }: { text: string; time?: number }) {
       jsxs('div', {
         className: 'evo-msg-bubble evo-msg-bubble-user',
         children: [
-          jsx('div', { className: 'evo-msg-text', children: text }),
+          jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
           jsx('div', {
             className: 'evo-msg-meta',
             children: [jsx('div', { className: 'evo-msg-time', children: fmtTime(time) }), jsx(CopyButton, { text })],
@@ -146,7 +147,7 @@ function AssistantBubble({ node }: { node: ChatNode }) {
           text !== '' && jsx('div', {
             className: 'evo-msg-bubble evo-msg-bubble-assistant',
             children: [
-              jsx('div', { className: 'evo-msg-text', children: text }),
+              jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
               jsxs('div', {
                 className: 'evo-msg-meta',
                 children: [
@@ -174,6 +175,7 @@ function AssistantBubble({ node }: { node: ChatNode }) {
 
 export function ChatArea({ nodes, partial, running, error, currentTitle, session, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
+  const [preview, setPreview] = useState(false)
   const [autoApprove, setAutoApprove] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
 
@@ -239,9 +241,43 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('span', { className: 'evo-composer-dot', 'data-busy': running || undefined }),
                   jsx('span', { children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
                   jsx(SessionStatusLine, { session }),
+                  jsx('span', { style: { flex: 1 } }),
+                  // Markdown 输入预览：Write / Preview 切换
+                  jsx('div', {
+                    className: 'evo-md-toggle',
+                    role: 'group',
+                    'aria-label': 'Markdown preview',
+                    children: [
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-toggle-btn',
+                        'data-active': !preview || undefined,
+                        title: t('write'),
+                        'aria-label': t('write'),
+                        onClick: () => setPreview(false),
+                        children: jsx(PenLine, {}),
+                      }, 'write'),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-toggle-btn',
+                        'data-active': preview || undefined,
+                        title: t('preview'),
+                        'aria-label': t('preview'),
+                        onClick: () => setPreview(true),
+                        children: jsx(Eye, {}),
+                      }, 'preview'),
+                    ],
+                  }),
                 ],
               }),
-              jsx('textarea', {
+              preview
+                ? jsx('div', {
+                    className: 'evo-composer-preview evo-md',
+                    children: input.trim() === ''
+                      ? jsx('span', { className: 'evo-composer-preview-empty', children: t('previewEmpty') })
+                      : jsx(Fragment, { children: [jsx('div', { dangerouslySetInnerHTML: { __html: renderMarkdown(input) } })] }),
+                  })
+                : jsx('textarea', {
                 className: 'evo-composer-textarea',
                 placeholder: t('askAnything'),
                 rows: 1,

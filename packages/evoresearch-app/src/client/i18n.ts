@@ -50,6 +50,9 @@ const DICT: Record<string, [string, string]> = {
   autoApprove: ['Auto-approve', '自动批准'],
   send: ['Send', '发送'],
   attachFiles: ['Attach files', '添加附件'],
+  write: ['Write', '编辑'],
+  preview: ['Preview', '预览'],
+  previewEmpty: ['Nothing to preview yet — start typing Markdown.', '暂无预览内容——开始输入 Markdown 吧。'],
   // 检查器
   workspace: ['Workspace', '工作区'],
   agents: ['Agents', '智能体'],

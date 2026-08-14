@@ -18,6 +18,7 @@ import {
   MessagesSquare, Moon, Sun, Settings, Languages,
 } from 'lucide-react'
 import { CSS } from './styles'
+import { KATEX_CSS } from './katex-css'
 import { applyTheme, resolvedTheme, toggleTheme } from './theme'
 import { ThreadList, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
@@ -47,13 +48,18 @@ let sessionsService: {
 
 /** 注入样式（data-plugin-css 模式，可被 HMR 清理）。 */
 function installCss() {
-  const tagId = '@evoresearch/dsh-app/workspace.css'
-  if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) {
-    const tag = document.createElement('style')
-    tag.dataset.plugin = '@evoresearch/dsh-app'
-    tag.dataset.pluginCss = tagId
-    tag.textContent = CSS
-    document.head.appendChild(tag)
+  const sheets: Array<[string, string]> = [
+    ['@evoresearch/dsh-app/workspace.css', CSS],
+    ['@evoresearch/dsh-app/katex.css', KATEX_CSS],
+  ]
+  for (const [tagId, css] of sheets) {
+    if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) {
+      const tag = document.createElement('style')
+      tag.dataset.plugin = '@evoresearch/dsh-app'
+      tag.dataset.pluginCss = tagId
+      tag.textContent = css
+      document.head.appendChild(tag)
+    }
   }
 }
 

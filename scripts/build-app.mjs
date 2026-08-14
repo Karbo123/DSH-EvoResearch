@@ -26,6 +26,27 @@ function packageName() {
   return pkg.name
 }
 
+/**
+ * 生成 src/client/katex-css.ts：katex.min.css 中字体 url 内联为 data URL。
+ * 客户端运行时不发起字体请求；该文件由构建期生成（不入库）。
+ */
+function generateKatexCss() {
+  const katexDist = join(ROOT, 'node_modules', 'katex', 'dist')
+  const css = readFileSync(join(katexDist, 'katex.min.css'), 'utf8')
+  const inlined = css.replace(/url\(fonts\/([^)]+)\)/g, (_match, file) => {
+    const data = readFileSync(join(katexDist, 'fonts', file)).toString('base64')
+    const ext = file.split('.').pop()
+    const mime = ext === 'woff2' ? 'font/woff2' : ext === 'woff' ? 'font/woff' : 'font/ttf'
+    return `url(data:${mime};base64,${data})`
+  })
+  writeFileSync(
+    join(PKG, 'src', 'client', 'katex-css.ts'),
+    `// 由 scripts/build-app.mjs 构建期生成（katex.min.css + 内联字体），勿手改、勿入库。\nexport const KATEX_CSS = ${JSON.stringify(inlined)}\n`,
+    'utf8',
+  )
+  console.log(`[build-app] katex css → src/client/katex-css.ts（${Math.round(inlined.length / 1024)} KB，字体内联）`)
+}
+
 async function buildNodeHalf() {
   // 包根：空 apply（官方 ui-* node half 同构）；真实运行时在 ./runtime 子路径
   await build({
@@ -62,6 +83,8 @@ async function buildNodeHalf() {
 }
 
 async function buildClient() {
+  // 生成 KaTeX CSS（字体内联为 data URL），供客户端注入
+  generateKatexCss()
   const tmp = join(PKG, 'lib', 'client', '.bundle.tmp.js')
   const out = join(PKG, 'lib', 'client', 'index.js')
   await build({
