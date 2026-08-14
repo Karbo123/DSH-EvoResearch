@@ -1,11 +1,11 @@
 /**
- * 设置弹窗：主题 / 语言 / 权限模式 / 模型 / 插件清单 / 关于。
+ * 设置弹窗：权限模式 / 模型 / 插件清单 / 关于。
+ * （主题与语言在顶栏/标题栏切换，不在弹窗内重复。）
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect } from 'react'
-import { X, Palette, Languages, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon } from 'lucide-react'
-import { t, readLang } from './i18n'
-import { readPreference, applyTheme } from './theme'
+import { X, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon } from 'lucide-react'
+import { t } from './i18n'
 
 export interface SettingsDialogProps {
   onClose: () => void
@@ -126,20 +126,6 @@ function PluginListSection() {
 }
 
 export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
-  const [themePref, setThemePref] = useState(readPreference())
-  const [lang, setLangState] = useState(localStorage.getItem('evoresearch-lang') === 'zh' ? 'zh' : 'en')
-
-  const changeTheme = (value: 'light' | 'dark' | 'system') => {
-    setThemePref(value)
-    localStorage.setItem('evoresearch-theme', value)
-    applyTheme()
-  }
-
-  const changeLang = (value: 'zh' | 'en') => {
-    setLangState(value)
-    localStorage.setItem('evoresearch-lang', value)
-  }
-
   return jsxs('div', {
     className: 'evo-modal-mask',
     onPointerDown: (e: { target: HTMLElement; currentTarget: HTMLElement }) => { if (e.target === e.currentTarget) onClose() },
@@ -158,42 +144,8 @@ export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
             className: 'evo-modal-body',
             children: jsxs(Fragment, {
               children: [
-                // ── 主题 ──
-                jsxs('div', {
-                  className: 'evo-setting',
-                  children: [
-                    jsxs('div', {
-                      className: 'evo-setting-label',
-                      children: [jsx(Palette, {}), jsx('span', { children: t('theme') })],
-                    }),
-                    jsxs('div', {
-                      className: 'evo-setting-options',
-                      children: [
-                        jsx('button', { type: 'button', className: 'evo-setting-option', 'data-active': themePref === 'light' || undefined, onClick: () => changeTheme('light'), children: t('light') }),
-                        jsx('button', { type: 'button', className: 'evo-setting-option', 'data-active': themePref === 'dark' || undefined, onClick: () => changeTheme('dark'), children: t('dark') }),
-                        jsx('button', { type: 'button', className: 'evo-setting-option', 'data-active': themePref === 'system' || undefined, onClick: () => changeTheme('system'), children: t('system') }),
-                      ],
-                    }),
-                  ],
-                }),
-                // ── 语言 ──
-                jsxs('div', {
-                  className: 'evo-setting',
-                  children: [
-                    jsxs('div', {
-                      className: 'evo-setting-label',
-                      children: [jsx(Languages, {}), jsx('span', { children: t('language') })],
-                    }),
-                    jsxs('div', {
-                      className: 'evo-setting-options',
-                      children: [
-                        jsx('button', { type: 'button', className: 'evo-setting-option', 'data-active': lang === 'en' || undefined, onClick: () => changeLang('en'), children: 'English' }),
-                        jsx('button', { type: 'button', className: 'evo-setting-option', 'data-active': lang === 'zh' || undefined, onClick: () => changeLang('zh'), children: '中文' }),
-                      ],
-                    }),
-                    lang !== readLang() && jsx('div', { className: 'evo-setting-hint', children: lang === 'zh' ? '切换语言后刷新页面生效' : 'Language switches take effect after refresh' }),
-                  ],
-                }),
+                // ── 权限模式 ──
+                jsx(PermissionSection, { sessionId }),
                 // ── 模型 ──
                 jsxs('div', {
                   className: 'evo-setting',
@@ -205,8 +157,6 @@ export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
                     jsx('div', { className: 'evo-setting-hint', children: '由 DSH 设置管理（settings.yaml 的 llm-deepseek / llm-pi-ai 段）。' }),
                   ],
                 }),
-                // ── 权限模式 ──
-                jsx(PermissionSection, { sessionId }),
                 // ── 插件清单 ──
                 jsx(PluginListSection, {}),
                 // ── 关于 ──

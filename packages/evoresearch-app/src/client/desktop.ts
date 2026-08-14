@@ -37,7 +37,7 @@ function callWindow(method: string): void {
 
 const DRAG_THRESHOLD = 4
 
-/** 标题栏 JS 拖拽（阈值后调 Tauri start_dragging）。 */
+/** 标题栏 JS 拖拽（备用路径；主路径用 Tauri data-tauri-drag-region 原生拖拽）。 */
 function useTitlebarDrag(): { onPointerDown(e: PointerEvent): void } {
   let state: { pointerId: number; startX: number; startY: number; active: boolean } | null = null
 
@@ -73,13 +73,14 @@ export interface DesktopTitlebarProps {
   onNewChat: () => void
   onSideChats: () => void
   onToggleTheme: () => void
+  onToggleLanguage: () => void
   onToggleInspector: () => void
   onSettings: () => void
 }
 
 /** 36px 自绘标题栏（无边框窗口）。 */
 export function DesktopTitlebar(props: DesktopTitlebarProps) {
-  const { connected, themeDark, onHome, onToggleSidebar, onNewChat, onSideChats, onToggleTheme, onToggleInspector, onSettings } = props
+  const { connected, themeDark, onHome, onToggleSidebar, onNewChat, onSideChats, onToggleTheme, onToggleLanguage, onToggleInspector, onSettings } = props
   const { onPointerDown } = useTitlebarDrag()
 
   const icon = (name: keyof typeof TB_ICONS, title: string, onClick: () => void) =>
@@ -98,6 +99,9 @@ export function DesktopTitlebar(props: DesktopTitlebarProps) {
 
   return jsxs('div', {
     className: 'evo-tb',
+    // Tauri 原生拖拽区：空白区 mousedown 即启动窗口拖动（同步可靠），
+    // 交互元素（按钮）不带该属性，点击正常；JS 拖拽作为备用路径。
+    'data-tauri-drag-region': true,
     onPointerDown: onPointerDown as any,
     onDoubleClick: () => callWindow('window_toggle_maximize'),
     children: [
@@ -137,7 +141,7 @@ export function DesktopTitlebar(props: DesktopTitlebarProps) {
             }),
           }),
           icon('side-chats', 'Side chats', onSideChats),
-          icon('language', 'Language', () => {}),
+          icon('language', 'Language', onToggleLanguage),
           icon('theme', themeDark ? 'Switch to light mode' : 'Switch to dark mode', onToggleTheme),
           icon('inspector', 'Show workspace', onToggleInspector),
           icon('settings', 'Settings', onSettings),

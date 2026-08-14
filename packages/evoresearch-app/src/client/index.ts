@@ -25,7 +25,7 @@ import { Inspector, type InspectorTab } from './inspector'
 import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
-import { t } from './i18n'
+import { t, readLang, setLang } from './i18n'
 import { MemoryPanel, SchedulePanel } from './panels'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews']
@@ -135,6 +135,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     // 创建空白会话并打开（host 侧默认工作目录；目录选择接入后经 pickDirectory）
     void sessionsService?.create({}).then((id) => sessionsService?.open(id))
   }
+  const toggleLanguage = () => {
+    setLang(readLang() === 'zh' ? 'en' : 'zh')
+    location.reload()
+  }
   const sendMessage = (text: string) => {
     const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
     if (s === undefined || text.trim() === '') return
@@ -186,6 +190,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             onNewChat: startNewChat,
             onSideChats: () => { setInspector(true); setInspectorTab('chats') },
             onToggleTheme: () => { toggleTheme(); setThemeDark(resolvedTheme() === 'dark') },
+            onToggleLanguage: toggleLanguage,
             onToggleInspector: () => setInspector((v) => !v),
             onSettings: () => setSettingsOpen(true),
           })
@@ -240,7 +245,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
-                title: 'Language',
+                onClick: toggleLanguage,
+                title: t('language'),
                 children: jsx(Languages, {}),
               }),
               jsx('button', {

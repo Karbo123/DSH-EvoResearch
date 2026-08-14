@@ -245,16 +245,16 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tb-close:hover { background: #e81123; color: #ffffff; }
 /* ── 设置弹窗 ── */
 .evo-modal-mask { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
-.evo-modal { width: 460px; max-width: calc(100vw - 48px); max-height: calc(100vh - 96px); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
+.evo-modal { width: 560px; max-width: calc(100vw - 48px); max-height: calc(100vh - 96px); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
 .evo-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--color-border-light); }
 .evo-modal-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
-.evo-modal-body { padding: 8px 18px 18px; overflow-y: auto; }
-.evo-setting { padding: 12px 0; border-bottom: 1px solid var(--color-border-light); }
-.evo-setting:last-child { border-bottom: none; }
+.evo-modal-body { padding: 14px 18px 18px; overflow-y: auto; }
+.evo-setting { padding: 14px 16px; margin-bottom: 12px; background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 10px; }
+.evo-setting:last-child { margin-bottom: 0; }
 .evo-setting-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--color-text-primary); margin-bottom: 8px; }
-.evo-setting-label svg { width: 15px; height: 15px; color: var(--color-text-tertiary); }
+.evo-setting-label svg { width: 15px; height: 15px; color: var(--brand); }
 .evo-setting-options { display: flex; gap: 6px; flex-wrap: wrap; }
-.evo-setting-option { padding: 5px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
+.evo-setting-option { padding: 5px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s; }
 .evo-setting-option:hover { border-color: var(--brand); color: var(--color-text-primary); }
 .evo-setting-option[data-active] { background: var(--brand-solid); border-color: var(--brand-solid); color: var(--brand-foreground); }
 .evo-setting-hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 6px; line-height: 1.6; }
