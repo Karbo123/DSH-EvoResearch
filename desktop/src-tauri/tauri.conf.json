@@ -3,17 +3,18 @@
   "productName": "EvoResearch",
   "version": "0.1.0",
   "identifier": "com.evoresearch.desktop",
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
   "build": {
     "beforeDevCommand": "",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "",
     "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [],
-    "security": {
-      "csp": null
-    }
   },
   "bundle": {
     "active": true,

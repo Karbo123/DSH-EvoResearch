@@ -151,7 +151,10 @@ fn main() {
                 }
             };
 
-            // 3) 创建主窗口
+            // 3) 创建主窗口（无边框 + 自绘标题栏，参考 EvoScientist 桌面壳：
+            //    frameless + 网页内注入 36px 标题栏）
+            let mut url = url;
+            url = format!("{}?desktop=1", url);
             WebviewWindowBuilder::new(
                 handle,
                 "main",
@@ -160,11 +163,46 @@ fn main() {
             .title("EvoResearch")
             .inner_size(1280.0, 820.0)
             .min_inner_size(960.0, 600.0)
+            .decorations(false) // 无系统标题栏：自绘
+            .shadow(true)
             .build()?;
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            window_minimize,
+            window_toggle_maximize,
+            window_close,
+            window_start_drag
+        ])
         .build(tauri::generate_context!())
         .expect("Tauri 应用初始化失败");
 
     app.run(|_app_handle, _event| {});
+}
+
+/// 窗口控制命令（自绘标题栏按钮调用）。
+#[tauri::command]
+fn window_minimize(window: tauri::WebviewWindow) {
+    let _ = window.minimize();
+}
+
+#[tauri::command]
+fn window_toggle_maximize(window: tauri::WebviewWindow) {
+    if window.is_maximized().unwrap_or(false) {
+        let _ = window.unmaximize();
+    } else {
+        let _ = window.maximize();
+    }
+}
+
+#[tauri::command]
+fn window_close(window: tauri::WebviewWindow) {
+    let _ = window.close();
+}
+
+/// 开始窗口拖拽（自绘标题栏 JS 拖拽模式，对应 EvoScientist pywebview 的 begin_drag）。
+/// 调用后 OS 接管拖动直到指针松开，因此调用方应在 pointer 越过阈值后调用一次。
+#[tauri::command]
+fn window_start_drag(window: tauri::WebviewWindow) {
+    let _ = window.start_dragging();
 }

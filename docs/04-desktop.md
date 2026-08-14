@@ -118,8 +118,24 @@ cargo tauri build --bundles nsis
 1. Tauri 壳启动时 **spawn sidecar**（`node.exe launch.js`，隐藏控制台窗口）；
 2. sidecar 启动 DSH web 服务（profile: EvoResearch，绑定 127.0.0.1 随机端口）；
 3. 壳读取 sidecar 就绪后的端口（stdout JSON / 本地端口文件），
-   用 WebView2 加载 `http://127.0.0.1:<port>`；
+   用 WebView2 加载 `http://127.0.0.1:<port>?desktop=1`（desktop 参数 = 无边框自绘标题栏模式）；
 4. 壳退出时终止 sidecar 进程树（Tauri `kill_children` + Node 侧 `process.on('exit')` 兜底）。
+
+## 无边框自绘标题栏（参考 EvoScientist 桌面壳）
+
+窗口 `decorations: false`（无系统标题栏），标题栏由**前端渲染**（`?desktop=1` 时激活），
+视觉与交互规范移植自 `EvoScientist/desktop/titlebar.py`：
+
+- **36px 高** fixed top；深色 `#18181b/#3f3f46/#d4d4d8`，浅色 `#f4f4f5/#e4e4e7/#52525b`；
+- 左：品牌（R 图标 + EvoResearch）→ 回首页；`tools`：sidebar / new-chat；
+- 右：`actions`（Connected 状态 / side-chats / language / theme / inspector / settings）
+  + 窗口控制（最小化 / 最大化还原 / 关闭，hover 红 `#e81123`）；
+- **拖拽**：标题栏空白区 pointer 拖拽（阈值 4px 后调 Tauri `start_dragging()`，
+  对应 pywebview 的 `begin_drag`）；双击最大化；
+- 网页顶栏在桌面模式隐藏（`html.evo-desktop` + `[data-desktop]` 布局补偿 36px）。
+
+窗口控制命令（Rust）：`window_minimize` / `window_toggle_maximize` / `window_close` /
+`window_start_drag`；前端经 `window.__TAURI__.core.invoke` 调用（`withGlobalTauri: true`）。
 
 ## 体积优化清单（按优先级）
 

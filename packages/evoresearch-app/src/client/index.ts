@@ -23,8 +23,14 @@ import { ThreadList, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
 import { registerConversation } from './conversation'
+import { DesktopTitlebar } from './desktop'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews']
+
+/** 桌面模式（无边框窗口 + 自绘标题栏）：由 Tauri 壳以 ?desktop=1 加载。 */
+function isDesktop(): boolean {
+  return typeof location !== 'undefined' && new URLSearchParams(location.search).get('desktop') === '1'
+}
 
 /** 插件激活时由 apply 写入的会话服务（组件经闭包使用）。 */
 let sessionsService: {
@@ -75,10 +81,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [panels, setPanels] = useState(readPanels)
   const [dragging, setDragging] = useState<'left' | 'right' | null>(null)
   const frameRef = useRef<HTMLDivElement | null>(null)
+  const desktop = isDesktop()
 
   // 主题：初始化 + 跟随系统变化（pref=system 时）
   useEffect(() => {
     applyTheme()
+    document.documentElement.classList.toggle('evo-desktop', isDesktop())
     const mq = matchMedia('(prefers-color-scheme: dark)')
     const onChange = () => {
       setThemeDark(resolvedTheme() === 'dark')
@@ -153,9 +161,22 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   return jsxs('div', {
     ref: frameRef,
     className: 'evo-app',
+    'data-desktop': desktop || undefined,
     children: [
-      // ── 顶栏 ──
-      jsxs('header', {
+      // ── 桌面模式：自绘标题栏（替代网页顶栏）；网页模式：普通顶栏 ──
+      desktop
+        ? jsx(DesktopTitlebar, {
+            connected: true,
+            themeDark,
+            onHome: startNewChat,
+            onToggleSidebar: () => setSidebar((v) => !v),
+            onNewChat: startNewChat,
+            onSideChats: () => { setInspector(true); setInspectorTab('chats') },
+            onToggleTheme: () => { toggleTheme(); setThemeDark(resolvedTheme() === 'dark') },
+            onToggleInspector: () => setInspector((v) => !v),
+            onSettings: () => {},
+          })
+        : jsxs('header', {
         className: 'evo-topbar',
         children: [
           jsxs('div', {

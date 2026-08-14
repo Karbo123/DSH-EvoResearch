@@ -212,4 +212,37 @@ body { margin: 0; }
 .evo-tool-card svg { width: 14px; height: 14px; margin-top: 1px; flex-shrink: 0; color: var(--color-text-tertiary); }
 .evo-tool-name { font-weight: 600; color: var(--color-text-primary); font-family: var(--font-mono, ui-monospace, Consolas, monospace); flex-shrink: 0; }
 .evo-tool-args { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-tertiary); font-family: var(--font-mono, ui-monospace, Consolas, monospace); }
+/* ── 桌面自绘标题栏（移植 EvoScientist titlebar.py 视觉规范）── */
+html.evo-desktop body { margin: 0 !important; }
+.evo-app[data-desktop] { height: calc(100vh - 36px); margin-top: 36px; }
+.evo-tb {
+  position: fixed; top: 0; left: 0; right: 0; height: 36px; z-index: 2147483647;
+  display: flex; align-items: center; justify-content: flex-start; box-sizing: border-box;
+  overflow: hidden; background: #18181b; border-bottom: 1px solid #3f3f46; color: #d4d4d8;
+  font: 500 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none; user-select: none;
+}
+html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; color: #52525b; }
+.evo-tb-brand {
+  display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 100%;
+  border: 0; background: transparent; color: inherit; cursor: pointer; letter-spacing: 0.02em; white-space: nowrap;
+}
+.evo-tb-brand:hover { background: rgba(128, 128, 128, 0.18); }
+.evo-tb-tools, .evo-tb-actions { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.evo-tb-tools { margin-left: 2px; }
+.evo-tb-actions { position: absolute; top: 3px; right: 142px; justify-content: flex-end; padding-right: 2px; }
+.evo-tb-tools button, .evo-tb-actions button {
+  width: 30px; height: 30px; min-width: 30px; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background-color 100ms ease, color 100ms ease;
+}
+.evo-tb-tools button:hover, .evo-tb-actions button:hover { background: rgba(128, 128, 128, 0.18); }
+.evo-tb-tools svg, .evo-tb-actions svg { width: 16px; height: 16px; flex: none; }
+.evo-tb-health { width: auto !important; min-width: 0; max-width: 132px; padding: 0 8px; gap: 6px; font-size: 12px; justify-content: center; margin-right: 4px; }
+.evo-tb-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex: none; }
+.evo-tb-dot.disconnected { background: #f87171; }
+.evo-tb-controls { position: absolute; top: 0; right: 0; display: flex; align-items: stretch; height: 100%; margin-left: 4px; border-left: 1px solid rgba(128, 128, 128, 0.18); }
+.evo-tb-win { width: 46px; height: 100%; border: 0; margin: 0; padding: 0; background: transparent; color: inherit; display: grid; place-items: center; cursor: default; transition: background-color 100ms ease, color 100ms ease; }
+.evo-tb-win:hover { background: rgba(128, 128, 128, 0.18); }
+.evo-tb-close:hover { background: #e81123; color: #ffffff; }
 `
