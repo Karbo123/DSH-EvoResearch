@@ -6,6 +6,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
 import { FolderOpen, Bot, MessagesSquare, X, Download, RefreshCw, Files } from 'lucide-react'
+import { t } from './i18n'
 
 export type InspectorTab = 'workspace' | 'agents' | 'chats'
 
@@ -18,9 +19,9 @@ export interface InspectorProps {
 }
 
 const TABS = [
-  { key: 'workspace', label: 'Workspace', icon: FolderOpen },
-  { key: 'agents', label: 'Agents', icon: Bot },
-  { key: 'chats', label: 'Side chats', icon: MessagesSquare },
+  { key: 'workspace', label: t('workspace'), icon: FolderOpen },
+  { key: 'agents', label: t('agents'), icon: Bot },
+  { key: 'chats', label: t('sideChats'), icon: MessagesSquare },
 ] as const
 
 export function Inspector({ tab, onTab, onClose, workspaceName }: InspectorProps) {
@@ -82,7 +83,7 @@ export function Inspector({ tab, onTab, onClose, workspaceName }: InspectorProps
                   className: 'evo-insp-empty',
                   children: [
                     jsx(Files, {}),
-                    jsx('div', { children: workspaceName === null ? 'No files in the workspace yet' : `Workspace: ${workspaceName}` }),
+                    jsx('div', { children: workspaceName === null ? t('noFilesYet') : `Workspace: ${workspaceName}` }),
                   ],
                 }),
               ],
@@ -91,7 +92,7 @@ export function Inspector({ tab, onTab, onClose, workspaceName }: InspectorProps
               className: 'evo-insp-empty',
               children: [
                 jsx(tab === 'agents' ? Bot : MessagesSquare, {}),
-                jsx('div', { children: tab === 'agents' ? 'No active agents' : 'No side chats yet' }),
+                jsx('div', { children: tab === 'agents' ? t('noActiveAgents') : t('noSideChats') }),
               ],
             }),
       }),

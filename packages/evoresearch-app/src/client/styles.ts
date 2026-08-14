@@ -245,4 +245,26 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tb-win { width: 46px; height: 100%; border: 0; margin: 0; padding: 0; background: transparent; color: inherit; display: grid; place-items: center; cursor: default; transition: background-color 100ms ease, color 100ms ease; }
 .evo-tb-win:hover { background: rgba(128, 128, 128, 0.18); }
 .evo-tb-close:hover { background: #e81123; color: #ffffff; }
+/* ── 设置弹窗 ── */
+.evo-modal-mask { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
+.evo-modal { width: 460px; max-width: calc(100vw - 48px); max-height: calc(100vh - 96px); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
+.evo-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--color-border-light); }
+.evo-modal-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
+.evo-modal-body { padding: 8px 18px 18px; overflow-y: auto; }
+.evo-setting { padding: 12px 0; border-bottom: 1px solid var(--color-border-light); }
+.evo-setting:last-child { border-bottom: none; }
+.evo-setting-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--color-text-primary); margin-bottom: 8px; }
+.evo-setting-label svg { width: 15px; height: 15px; color: var(--color-text-tertiary); }
+.evo-setting-options { display: flex; gap: 6px; flex-wrap: wrap; }
+.evo-setting-option { padding: 5px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
+.evo-setting-option:hover { border-color: var(--brand); color: var(--color-text-primary); }
+.evo-setting-option[data-active] { background: var(--brand-solid); border-color: var(--brand-solid); color: var(--brand-foreground); }
+.evo-setting-hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 6px; line-height: 1.6; }
+.evo-setting-error { color: var(--color-error); }
+.evo-model-list { display: flex; flex-direction: column; gap: 4px; }
+.evo-model-group { display: flex; flex-direction: column; gap: 2px; }
+.evo-model-group-name { font-size: 11.5px; color: var(--color-text-tertiary); padding: 6px 2px 2px; letter-spacing: 0.3px; }
+.evo-model-item { text-align: left; padding: 6px 10px; border: none; background: none; border-radius: 8px; color: var(--color-text-secondary); font-size: 13px; cursor: pointer; }
+.evo-model-item:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-model-item[data-active] { background: var(--hover-bg); color: var(--color-text-primary); font-weight: 600; }
 `

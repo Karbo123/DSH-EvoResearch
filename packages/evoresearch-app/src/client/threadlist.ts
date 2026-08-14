@@ -7,15 +7,16 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
 import { FolderGit2, GraduationCap, BrainCircuit, Clock, SquarePen, Search, MessageSquare } from 'lucide-react'
+import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
 export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace'
 
 const MENU = [
-  { key: 'import', label: 'Import Project', icon: FolderGit2 },
-  { key: 'skills', label: 'Research Skills', icon: GraduationCap },
-  { key: 'memory', label: 'EvoMemory', icon: BrainCircuit },
-  { key: 'schedule', label: 'Scheduled', icon: Clock },
+  { key: 'import', label: t('importProject'), icon: FolderGit2 },
+  { key: 'skills', label: t('researchSkills'), icon: GraduationCap },
+  { key: 'memory', label: t('evomemory'), icon: BrainCircuit },
+  { key: 'schedule', label: t('scheduled'), icon: Clock },
 ] as const
 
 /**
@@ -82,7 +83,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
             className: 'evo-tl-newchat',
             onClick: onNewChat,
             children: jsxs(Fragment, {
-              children: [jsx(SquarePen, {}), jsx('span', { children: 'New chat' })],
+              children: [jsx(SquarePen, {}), jsx('span', { children: t('newChat') })],
             }),
           }),
         ],
@@ -106,7 +107,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
           jsx(Search, {}),
           jsx('input', {
             type: 'text',
-            placeholder: 'Search research...',
+            placeholder: t('searchResearch'),
             value: query,
             onInput: (e) => setQuery(e.currentTarget.value),
           }),
@@ -118,7 +119,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
           jsxs('div', {
             className: 'evo-tl-section',
             children: [
-              jsx('span', { className: 'evo-tl-section-title', children: 'Recents' }),
+              jsx('span', { className: 'evo-tl-section-title', children: t('recents') }),
             ],
           }),
           results.length === 0
@@ -126,7 +127,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                 className: 'evo-tl-empty',
                 children: [
                   jsx(MessageSquare, {}),
-                  jsx('div', { children: hasActive ? 'No matching research' : 'No research yet' }),
+                  jsx('div', { children: hasActive ? t('noMatchingResearch') : t('noResearchYet') }),
                 ],
               })
             : results.map((s) => jsx('button', {

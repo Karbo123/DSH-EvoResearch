@@ -9,6 +9,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
 import { Paperclip, ShieldCheck, ArrowUp, Wrench, User } from 'lucide-react'
+import { t } from './i18n'
 
 const SUGGESTED_PROMPTS = [
   'Survey recent papers on a topic',
@@ -160,8 +161,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, onSend 
           : jsxs('div', {
               className: 'evo-welcome',
               children: [
-                jsx('h1', { children: 'Where research evolves' }),
-                jsx('p', { children: 'Your self-evolving lab partner — reads the literature, runs experiments, and remembers what matters.' }),
+                jsx('h1', { children: t('welcome') }),
+                jsx('p', { children: t('tagline') }),
                 jsx('div', {
                   className: 'evo-suggest',
                   children: SUGGESTED_PROMPTS.map((p) => jsx('button', {
@@ -184,12 +185,12 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, onSend 
                 className: 'evo-composer-status',
                 children: [
                   jsx('span', { className: 'evo-composer-dot', 'data-busy': running || undefined }),
-                  jsx('span', { children: currentTitle === null ? 'No active conversation' : running ? 'Running…' : currentTitle }),
+                  jsx('span', { children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
                 ],
               }),
               jsx('textarea', {
                 className: 'evo-composer-textarea',
-                placeholder: 'Ask EvoResearch anything...',
+                placeholder: t('askAnything'),
                 rows: 1,
                 value: input,
                 onInput: (e) => {
@@ -210,7 +211,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, onSend 
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-tool',
-                    title: 'Attach files',
+                    title: t('attachFiles'),
                     children: jsx(Paperclip, {}),
                   }),
                   jsx('button', {
@@ -219,7 +220,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, onSend 
                     'data-on': autoApprove || undefined,
                     onClick: () => setAutoApprove((v) => !v),
                     children: jsxs(Fragment, {
-                      children: [jsx(ShieldCheck, {}), jsx('span', { children: 'Auto-approve' })],
+                      children: [jsx(ShieldCheck, {}), jsx('span', { children: t('autoApprove') })],
                     }),
                   }),
                   jsx('span', { className: 'evo-composer-spacer' }),
@@ -229,7 +230,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, onSend 
                     disabled: !input.trim() || running,
                     onClick: submit,
                     children: jsxs(Fragment, {
-                      children: [jsx('span', { children: 'Send' }), jsx(ArrowUp, {})],
+                      children: [jsx('span', { children: t('send') }), jsx(ArrowUp, {})],
                     }),
                   }),
                 ],

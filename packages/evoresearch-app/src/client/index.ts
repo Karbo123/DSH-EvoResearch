@@ -24,6 +24,8 @@ import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
 import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
+import { SettingsDialog } from './settings'
+import { t } from './i18n'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews']
 
@@ -80,6 +82,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [themeDark, setThemeDark] = useState(() => resolvedTheme() === 'dark')
   const [panels, setPanels] = useState(readPanels)
   const [dragging, setDragging] = useState<'left' | 'right' | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const frameRef = useRef<HTMLDivElement | null>(null)
   const desktop = isDesktop()
 
@@ -174,7 +177,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             onSideChats: () => { setInspector(true); setInspectorTab('chats') },
             onToggleTheme: () => { toggleTheme(); setThemeDark(resolvedTheme() === 'dark') },
             onToggleInspector: () => setInspector((v) => !v),
-            onSettings: () => {},
+            onSettings: () => setSettingsOpen(true),
           })
         : jsxs('header', {
         className: 'evo-topbar',
@@ -205,7 +208,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 type: 'button',
                 className: 'evo-icon-btn',
                 onClick: startNewChat,
-                title: 'New chat',
+                title: t('newChat'),
                 children: jsx(SquarePen, {}),
               }),
             ],
@@ -247,7 +250,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
-                title: 'Settings',
+                onClick: () => setSettingsOpen(true),
+                title: t('settings'),
                 children: jsx(Settings, {}),
               }),
             ],
@@ -323,6 +327,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 }),
               }),
             ],
+          }),
+          settingsOpen && jsx(SettingsDialog, {
+            onClose: () => setSettingsOpen(false),
           }),
         ],
       }),
