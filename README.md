@@ -2,10 +2,10 @@
 
 # 🔬 EvoResearch
 
-**面向科研的自主 AI 研究员 —— deepseek-harness（DSH）插件**
+**面向科研的自主智能体 —— deepseek-harness（DSH）插件**
 
 基于 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) **0.1.0-rc.6** 构建，
-用 TypeScript / Node.js 从零实现的科研 Agent 能力套件：**自进化科研记忆、项目工作区、
+用 TypeScript / Node.js 从零实现的科研智能体能力套件：**自进化科研记忆、项目工作区、
 多智能体团队、定时任务、多通道接入与 Windows 桌面版**。
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
