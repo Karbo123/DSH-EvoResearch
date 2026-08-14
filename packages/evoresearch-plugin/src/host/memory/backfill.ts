@@ -1,5 +1,5 @@
 /**
- * EvoMemory v2 回填（backfill）：把既有会话历史批量索引进 Turn Catalog。
+ * 科研记忆 回填（backfill）：把既有会话历史批量索引进 Turn Catalog。
  *
  * 对齐 EvoResearch memory/research/backfill.py：
  * - 项目 Agent 构建时或首次访问 Research API 时后台 newest-first 回填；

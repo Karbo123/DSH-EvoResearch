@@ -120,8 +120,8 @@ export class AutoSkillsService {
   run(proposalId: string): boolean {
     const proposal = this.proposals.find((p) => p.proposalId === proposalId)
     if (!proposal || proposal.status !== 'approved') return false
-    // TODO(EvoMemory v2): 通过 ctx.skills 装载技能并触发一次技能执行
-    console.log(`[EVORESEARCH:autoskills] 运行技能 ${proposal.name}（待接入 dsh-skill 执行）`)
+    // TODO(科研记忆): 通过 ctx.skills 装载技能并触发一次技能执行
+    console.log(`[evoresearch:autoskills] 运行技能 ${proposal.name}（待接入 dsh-skill 执行）`)
     return true
   }
 

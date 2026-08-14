@@ -25,7 +25,7 @@
 
 | | 特性 | 说明 |
 |---|---|---|
-| 🧠 | **EvoMemory v2/v3 科研记忆** | 每轮对话自动进入 Turn Catalog，七类多标签分类（idea/method/experiment/related_work/reproduction/project/general），FTS5 + RRF 混合检索，每轮注入 ≤6000 token 记忆包 |
+| 🧠 | **科研记忆 科研记忆** | 每轮对话自动进入 Turn Catalog，七类多标签分类（idea/method/experiment/related_work/reproduction/project/general），FTS5 + RRF 混合检索，每轮注入 ≤6000 token 记忆包 |
 | 🎯 | **Goal Contract 长程目标控制** | 长期任务自动生成目标合同，四轴保守判定（目标/范围/证据/完成），证据链可审计推进 |
 | 📂 | **科研项目工作区** | `projects/<name>/.evoresearch-data/` 数据随项目目录隔离，项目即 git 仓库，支持导入与 AI 自动命名创建 |
 | 🤖 | **多智能体团队** | 6 个科研角色预设（规划/调研/编码/调试/数据分析/写作），`/expert invite` 一键邀请 |
@@ -199,7 +199,7 @@ docs/                          # 中文文档（架构/功能映射/开发/桌�
 
 | 文档 | 内容 |
 |---|---|
-| [docs/00-decisions.md](docs/00-decisions.md) | 技术选型决策（SQLite vs PostgreSQL、嵌入模型、桌面方案等） |
+| [docs/00-decisions.md](docs/00-decisions.md) | 技术选型决策（存储、嵌入模型、桌面方案等） |
 | [docs/01-architecture.md](docs/01-architecture.md) | 架构设计与数据流 |
 | [docs/02-feature-map.md](docs/02-feature-map.md) | 与上游 EvoScientist 的功能逐条映射表 |
 | [docs/03-development.md](docs/03-development.md) | 开发指南（挂载、配置、扩展点） |
@@ -214,10 +214,6 @@ EvoResearch 只做「科研化」扩展（记忆、项目、团队、调度、�
 **Q：数据存在哪里？**
 每个科研项目一个独立目录 `projects/<name>/`，内部 `.evoresearch-data/` 存放
 记忆库、观测文件与调度任务；项目本身是 git 仓库，可整体迁移、导入、备份。
-
-**Q：为什么用 SQLite 不用 PostgreSQL？**
-桌面端无法背数据库服务；「项目即目录」哲学要求数据随目录走；Node 内置 `node:sqlite`
-自带 FTS5（零原生依赖）。存储接口已抽象，企业多用户部署可插拔 PostgreSQL。
 
 **Q：没有网络/API Key 时能用吗？**
 分类与记忆包构建在 LLM 失败时自动退化（确定性分类 + 纯 FTS5 检索），不阻塞主回答。

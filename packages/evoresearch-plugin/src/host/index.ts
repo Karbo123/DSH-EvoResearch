@@ -3,16 +3,16 @@
  *
  * 组装全部科研能力：
  * - WorkspaceService：科研项目工作区（projects/<name>/.evoresearch-data 隔离）；
- * - MemoryRuntime：EvoMemory v2/v3（Turn Catalog / 记忆包注入 / 检索工具 / Goal Control）；
+ * - MemoryRuntime：科研记忆（Turn Catalog / 记忆包注入 / 检索工具 / Goal Control）；
  * - SchedulerService：定时任务（cron，项目隔离）；
  * - ChannelManager：消息通道（Telegram 等）；
  * - AutoSkillsService / ExpertService：技能蒸馏与专家团队；
- * - EVORESEARCHApiService：Client 可调用的 Remote API；
+ * - EvoResearchApiService：Client 可调用的 Remote API；
  * - 斜杠命令：/project /memory /schedule /channel /expert /autoskills。
  *
- * 配置（settings.yaml 的 EVORESEARCH 段，或环境变量）：
+ * 配置（settings.yaml 的 evoresearch 段，或环境变量）：
  * ```yaml
- * EVORESEARCH:
+ * evoresearch:
  *   dataRoot: D:\evoresearch      # 部署根目录（projects/ 所在目录），默认 $EVORESEARCH_DATA_ROOT 或 cwd
  *   memoryTokenBudget: 6000
  *   auxiliaryModel: { provider: deepseek-official, model: deepseek-v4-flash }
@@ -28,12 +28,13 @@ import { builtinAdapters } from './channels/adapters.js'
 import type { ChannelMessage } from './channels/base.js'
 import { AutoSkillsService, type AutoSkillsConfig } from './autoskills.js'
 import { ExpertService, type ExpertConfig } from './experts.js'
-import { EVORESEARCHApiService, type HostServices } from './api.js'
+import { EvoResearchApiService, type HostServices } from './api.js'
 import { registerCommands } from './commands.js'
 import { listProjects } from './core/paths.js'
+import { registerVisionTool } from './vision.js'
 
-/** 插件配置（settings 的 EVORESEARCH 段合并环境变量）。 */
-export interface EVORESEARCHPluginConfig {
+/** 插件配置（settings 的 evoresearch 段合并环境变量）。 */
+export interface EvoResearchPluginConfig {
   /** 部署根目录。 */
   readonly dataRoot?: string
   readonly memoryTokenBudget?: number
@@ -42,12 +43,14 @@ export interface EVORESEARCHPluginConfig {
   readonly autoStartChannels?: boolean
   /** 是否启用科研记忆（默认 true）。 */
   readonly memoryEnabled?: boolean
+  /** 是否注册 vision_check 视觉检查工具（默认 true；模型未配置时自动跳过）。 */
+  readonly visionEnabled?: boolean
 }
 
 /** 从 settings/env 解析配置。 */
-function resolveConfig(ctx: Context): EVORESEARCHPluginConfig {
+function resolveConfig(ctx: Context): EvoResearchPluginConfig {
   const settings = ctx.get('settings') as { get?: (ns: string) => unknown } | undefined
-  const fromSettings = (settings?.get?.('EVORESEARCH') ?? {}) as Partial<EVORESEARCHPluginConfig>
+  const fromSettings = (settings?.get?.('evoresearch') ?? {}) as Partial<EvoResearchPluginConfig>
   const fromEnv: { dataRoot?: string } = {}
   if (process.env.EVORESEARCH_DATA_ROOT) fromEnv.dataRoot = process.env.EVORESEARCH_DATA_ROOT
   return { ...fromEnv, ...fromSettings }
@@ -73,20 +76,20 @@ export async function deliverToAgent(
   return sessionId
 }
 
-const name = 'EVORESEARCH-host'
+const name = 'evoresearch-host'
 
 const inject = ['commands', 'tools', 'systemPrompt'] as const
 
 function apply(ctx: Context): void {
   const config = resolveConfig(ctx)
   const dataRoot = config.dataRoot ?? process.cwd()
-  console.log(`[EVORESEARCH] host 插件激活（dataRoot: ${dataRoot}）`)
+  console.log(`[evoresearch] host 插件激活（dataRoot: ${dataRoot}）`)
 
   // 1) 科研项目工作区
   const workspaceConfig: WorkspaceConfig = { dataRoot }
   const workspace = new WorkspaceService(workspaceConfig)
 
-  // 2) EvoMemory v2/v3
+  // 2) 科研记忆
   const memoryConfig: MemoryConfig = {
     dataRoot,
     tokenBudget: config.memoryTokenBudget,
@@ -109,7 +112,7 @@ function apply(ctx: Context): void {
     const cwd = projectName
       ? path.join(dataRoot, 'projects', projectName)
       : dataRoot
-    return deliverToAgent(ctx, `[${message.senderName ?? message.senderId} 经 ${message.chatId} 通道] ${message.text}`, cwd, 'EVORESEARCH:channel')
+    return deliverToAgent(ctx, `[${message.senderName ?? message.senderId} 经 ${message.chatId} 通道] ${message.text}`, cwd, 'evoresearch:channel')
   })
 
   // 5) AutoSkills / 专家
@@ -118,30 +121,34 @@ function apply(ctx: Context): void {
   const expertConfig: ExpertConfig = { dataRoot }
   const experts = new ExpertService(expertConfig)
 
-  // 6) Remote API（构造即注册 services.EVORESEARCH）
+  // 6) Remote API（构造即注册 services.evoresearch）
   const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts }
-  void new EVORESEARCHApiService(ctx, services)
+  void new EvoResearchApiService(ctx, services)
 
   // 7) 斜杠命令
   const disposeCommands = registerCommands(ctx, { workspace, memory, scheduler, channels, autoskills, experts })
 
-  // 8) 挂载副作用（记忆事件订阅 + prompt 注入 + 工具；调度 tick；通道）
+  // 8) 视觉检查工具（vision_check，配置就绪时注册）
+  const disposeVision = registerVisionTool(ctx, config.visionEnabled ?? true)
+
+  // 9) 挂载副作用（记忆事件订阅 + prompt 注入 + 工具；调度 tick；通道）
   const disposeMemory = memory.attach(ctx)
   const disposeScheduler = scheduler.attach(ctx)
   const disposeChannels = channels.attach(ctx)
   if (config.autoStartChannels) {
     void channels.startAll().catch((error) => {
-      console.error('[EVORESEARCH] 自动启动通道失败:', error)
+      console.error('[evoresearch] 自动启动通道失败:', error)
     })
   }
 
-  // 9) 卸载时清理全部副作用（cordis effect 回调必须返回 disposer）
+  // 10) 卸载时清理全部副作用（cordis effect 回调必须返回 disposer）
   ctx.effect(() => {
     return () => {
       disposeMemory()
       disposeScheduler()
       disposeChannels()
       disposeCommands()
+      disposeVision?.()
     }
   })
 }

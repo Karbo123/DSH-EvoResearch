@@ -7,5 +7,5 @@
  */
 /** Host 插件体 —— 本 surface 插件无 host 侧行为。 */
 export function apply(): void {
-  console.log('[EVORESEARCH] client node half apply() 已执行')
+  console.log('[evoresearch] client node half apply() 已执行')
 }

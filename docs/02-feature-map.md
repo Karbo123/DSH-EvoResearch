@@ -15,7 +15,7 @@
 | 项目列表 / 创建（/project 命令 + Remote API） | `commands.ts` + `api.ts` | ✅ |
 | 按项目切换记忆与会话（workspace_dir 路由） | session header cwd + `storeFor(workspaceDir)` | ✅ |
 
-## B. EvoMemory v2（主37、W31）
+## B. 科研记忆（主37、W31）
 
 | 上游 EvoScientist 功能 | 本实现 | 状态 |
 |---|---|---|
@@ -32,7 +32,7 @@
 | backfill 断点续做（source_version 指纹） | `backfill.ts`（幂等 + 进度记录）+ MemoryRuntime 后台接线 | ✅ |
 | 缓存观测（hit/miss/token） | 🔲（依赖 provider cost 元数据） | 🔲 |
 
-## C. EvoMemory v3（主38、W32）
+## C. 科研记忆（主38、W32）
 
 | 上游 EvoScientist 功能 | 本实现 | 状态 |
 |---|---|---|
@@ -107,7 +107,7 @@
 
 | 上游 EvoScientist 功能 | 本实现 | 状态 |
 |---|---|---|
-| EVORESEARCH.sh start/stop/status/update/push | DSH 平台（dsh CLI / profiles）替代；update 流水线 🔲 | 🟡 |
+| evoresearch.sh start/stop/status/update/push | DSH 平台（dsh CLI / profiles）替代；update 流水线 🔲 | 🟡 |
 | 启动懒加载 + 数据库索引 | node:sqlite WAL + 覆盖索引（idx_*） | ✅ |
 | WSL/运行稳定性 | 本项目仅 Windows（文档注明） | ✅ |
 
@@ -121,9 +121,9 @@
 ## 验证记录（0.1.0-rc.1）
 
 - ✅ `npm run verify`：tsc 双配置构建 + 43 个单元测试 + client bundle 模拟加载校验 + 文档完整性校验；
-- ✅ 挂载组合：独立 profile（EVORESEARCH-smoke）`--dump-config` 确认 EVORESEARCH-host / EVORESEARCH-client 行合并、包可解析；
-- ✅ 真实运行：`dsh --profile EVORESEARCH-smoke --port 3210` 启动成功，host 插件与 client node half 均激活
-  （`[EVORESEARCH] host 插件激活` / `[EVORESEARCH] client node half apply() 已执行`）；
+- ✅ 挂载组合：独立 profile（evoresearch-smoke）`--dump-config` 确认 evoresearch-host / evoresearch-client 行合并、包可解析；
+- ✅ 真实运行：`dsh --profile evoresearch-smoke --port 3210` 启动成功，host 插件与 client node half 均激活
+  （`[evoresearch] host 插件激活` / `[evoresearch] client node half apply() 已执行`）；
 - ✅ 浏览器链路：index.html 的 `window.__DSH_BOOT__` 图包含 `@evoresearch/dsh-plugin`，
   `/plugins/@evoresearch/dsh-plugin/client.js` 以 ModuleLoader factory 格式正确 serve（200）。
 

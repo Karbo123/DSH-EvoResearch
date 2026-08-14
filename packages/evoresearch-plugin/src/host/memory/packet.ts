@@ -1,5 +1,5 @@
 /**
- * EvoMemory v2 记忆包（<research_memory_packet>）：每轮注入的科研记忆摘要。
+ * 科研记忆 记忆包（<research_memory_packet>）：每轮注入的科研记忆摘要。
  *
  * 对齐 EvoResearch memory/research/packet.py 与 middleware/memory.py：
  * - 默认 6000 token 预算（DEFAULT_PACKET_TOKEN_BUDGET）；

@@ -6,22 +6,15 @@
 > 硬性约束：Node.js 后端、不使用 Python、不基于 deepagents、Windows 优先（Web + 桌面）、
 > 桌面打包体积最小、文档与注释使用中文。
 
-## 1. 存储：SQLite（node:sqlite 内置驱动），PostgreSQL 仅预留接口
+## 1. 存储：SQLite（node:sqlite 内置驱动）
 
-**决策**：主存储使用 SQLite，由 Node 22.5+ **内置**的 `node:sqlite`（DatabaseSync）驱动；
-定义 `DatabaseBackend` 抽象接口，PostgreSQL 留作企业多用户部署的可插拔实现（第一版不实现）。
+**决策**：主存储使用 SQLite，由 Node 22.5+ **内置**的 `node:sqlite`（DatabaseSync）驱动，
+存储层通过抽象接口接入，可随部署形态扩展。
 
-**依据**：
+**依据**：桌面端与「项目即目录」的数据模型要求嵌入式单文件存储；`node:sqlite` 自带 FTS5
+全文检索（零原生依赖，对桌面打包体积最友好）；与 DSH 平台自身的会话查询层同构。
 
-| 维度 | 分析 |
-|---|---|
-| 桌面端硬约束 | PostgreSQL 需要独立服务进程 + 安装/初始化/运维，直接违背"打包体积最小、零依赖"；SQLite 是嵌入式单文件，零服务。 |
-| 上游 EvoScientist 核心哲学：项目即目录 | 数据模型是 `projects/<name>/.evoresearch-data/`，记忆/观测/会话数据随项目目录走，项目本身是 git 仓库。SQLite 文件天然跟随目录、可导入/导出/迁移/备份；PostgreSQL 集中式存储会摧毁这套哲学。 |
-| 检索 | 已实测 Node 26 内置 `node:sqlite` **自带 FTS5**（unicode61 tokenizer），零原生依赖；向量检索可用 `sqlite-vec` 扩展或退化纯 FTS。PostgreSQL 中文分词（pg_jieba）维护成本高且桌面不可用。 |
-| 与平台一致 | DSH 自身会话查询层（`dsh-session-query-sqlite`）就是 SQLite + FTS5。 |
-| 否决 PostgreSQL 的补充 | 多用户/并发/集中备份是它唯一优势，但 DSH 定位本地优先 harness，第一版单用户。 |
-
-## 2. 嵌入模型（EvoMemory 向量召回）：三级可退化
+## 2. 嵌入模型（科研记忆 向量召回）：三级可退化
 
 **决策**：抽象 `EmbeddingProvider` 接口，三级方案：
 
@@ -35,7 +28,7 @@
 
 **决策**：不重写会话存储。DSH 已有 `dsh-session`（事件日志 + JSONL 持久化）、
 `dsh-session-query-sqlite`（FTS5 会话查询）。项目隔离通过 session header 的 `cwd`
-（= workspace_dir）实现，EvoMemory 的 `research_memory.db` 按项目独立存放。
+（= workspace_dir）实现，科研记忆 的 `research_memory.db` 按项目独立存放。
 
 ## 4. 模型路由 / Fallback / 审批 / 子代理 / 调度 / 技能 / MCP：全部复用 DSH 平台
 
@@ -48,13 +41,13 @@
 | 定时任务 | `timer`（本插件自实现 cron 调度） | scheduler.ts（项目隔离 + 结果回报主对话） |
 | 技能 | `skills` + `dsh-skill-filesystem` | AutoSkills 提案 → 技能目录（autoskills.ts） |
 | MCP | `dsh-mcp-client` | 直接使用（WebUI System 弹窗管理） |
-| 目标 | `goals`（DSH 原生）+ EvoMemory v3 Goal Contract | 二者并存：科研 Goal 走本插件（goals.ts） |
+| 目标 | `goals`（DSH 原生）+ 科研记忆 Goal Contract | 二者并存：科研 Goal 走本插件（goals.ts） |
 
 ## 5. Web 扩展：Client 插件 + Typert Remote，不另起 HTTP 服务
 
 **决策**：WebUI 扩展注册到 DSH 现有 Web GUI 的 Slots（`sidebar.footer.action`、
 `shell.overlay`、`conversation.input.dock` 等），Client→Host 通信走平台 Typert Gateway
-（`ctx.remote.EVORESEARCH.*`）。不写独立 SPA，不新增 HTTP 层 —— 与"DSH 插件"定位一致，
+（`ctx.remote.evoresearch.*`）。不写独立 SPA，不新增 HTTP 层 —— 与"DSH 插件"定位一致，
 避免与平台 UI 割裂。
 
 ## 6. 桌面壳：Tauri 2（Rust）+ Node sidecar

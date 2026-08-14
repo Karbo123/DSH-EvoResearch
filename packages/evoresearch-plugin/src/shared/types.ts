@@ -7,7 +7,7 @@
  * - 项目工作区（projects/<name>/.evoresearch-data/ 隔离）。
  */
 
-/** 科研记忆的七个类别（与 EvoResearch EvoMemory v2 一致，多标签）。 */
+/** 科研记忆的七个类别（与 EvoResearch 科研记忆 一致，多标签）。 */
 export const RESEARCH_CATEGORIES = [
   'idea',
   'method',

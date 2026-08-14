@@ -1,5 +1,5 @@
 /**
- * EvoMemory v3 Goal Control：长程目标的自动合同、切片推进与保守判定。
+ * 科研记忆 Goal Control：长程目标的自动合同、切片推进与保守判定。
  *
  * 对齐 EvoResearch memory/research/goal_control.py：
  * - _looks_long_horizon 触发条件：长度 ≥80 且命中 ≥2 个长期任务提示词；

@@ -1,7 +1,7 @@
 {
   "name": "@evoresearch/dsh-plugin",
   "version": "0.1.0-rc.1",
-  "description": "EvoResearch 的 deepseek-harness 插件实现：科研项目工作区、EvoMemory v2/v3 科研记忆、多智能体团队、AutoSkills、定时任务、多通道、WebUI 扩展与 i18n（TypeScript / Node.js，不使用 Python 与 deepagents）",
+  "description": "EvoResearch 的 deepseek-harness 插件实现：科研项目工作区、科研记忆、多智能体团队、AutoSkills、定时任务、多通道、WebUI 扩展与 i18n（TypeScript / Node.js，不使用 Python 与 deepagents）",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",

@@ -1,5 +1,5 @@
 /**
- * EvoMemory 模型工具注册：科研记忆的按需读取与长期 Observation 维护。
+ * 科研记忆 模型工具注册：科研记忆的按需读取与长期 Observation 维护。
  *
  * 对齐 EvoResearch memory/research/tools.py：
  * - search_research_history：按查询检索历史轮次（压缩前的精确原文由 read_research_turn 读取）；

@@ -1,5 +1,5 @@
 /**
- * EvoMemory v3 启动对账（recovery）：项目记忆库的一致性维护。
+ * 科研记忆 启动对账（recovery）：项目记忆库的一致性维护。
  *
  * 对齐 EvoResearch memory/research/recovery.py：
  * - PRAGMA quick_check：损坏的库跳过不写（只记录日志，不阻塞启动）；

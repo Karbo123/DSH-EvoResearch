@@ -18,7 +18,7 @@ D:\DSH-Research\
 │       ├── src/client/           # Client 插件（浏览器 WebUI 扩展）
 │       ├── src/shared/           # 两侧共享的纯 JSON 类型
 │       ├── test/                 # node:test 单元测试
-│       └── cordis.patch.yml      # bundle patch（插入 EVORESEARCH-host / EVORESEARCH-client 行）
+│       └── cordis.patch.yml      # bundle patch（插入 evoresearch-host / evoresearch-client 行）
 ├── profiles/evoresearch/        # 示例 profile（dsh-base + dsh-web-app + 本插件）
 ├── desktop/                      # Tauri 2 桌面壳 + Node sidecar 打包脚本
 ├── docs/                         # 中文文档
@@ -57,13 +57,13 @@ npm run verify         # build + test
    ```
 
 3. 启动：`npx dsh --profile evoresearch`（或 `dsh web --patch ...`）；
-   - `cordis.patch.yml` 自动插入 `EVORESEARCH-host`（Host 插件）与 `EVORESEARCH-client`（浏览器插件）；
+   - `cordis.patch.yml` 自动插入 `evoresearch-host`（Host 插件）与 `evoresearch-client`（浏览器插件）；
    - client 插件由 `dsh-client-modules` 扫描 `dsh.client` 声明纳入 `window.__DSH_BOOT__`。
 
-## 配置项（settings.yaml 的 EVORESEARCH 段）
+## 配置项（settings.yaml 的 evoresearch 段）
 
 ```yaml
-EVORESEARCH:
+evoresearch:
   dataRoot: D:\evoresearch        # 部署根目录（projects/ 所在），默认 $EVORESEARCH_DATA_ROOT 或 cwd
   memoryTokenBudget: 6000          # 记忆包 token 预算
   auxiliaryModel:                  # 分类/Goal 提取用辅助模型（缺省取当前默认模型）
@@ -87,13 +87,13 @@ EVORESEARCH:
 
 ## 如何新增一个 Remote API（Client 可调）
 
-在 `src/host/api.ts` 的 `EVORESEARCHApiService` 内新增 `@Remote('methodName')` 方法；
-Client 侧以 `ctx.remote.EVORESEARCH.methodName(args)` 调用（wire 为 JSON，返回必须可序列化）。
+在 `src/host/api.ts` 的 `evoresearchApiService` 内新增 `@Remote('methodName')` 方法；
+Client 侧以 `ctx.remote.evoresearch.methodName(args)` 调用（wire 为 JSON，返回必须可序列化）。
 
 ## 测试约定
 
 - 纯逻辑（cron/路径/SQLite/分类器/Goal 判定）全部有 node:test 覆盖；
-- 数据库测试使用内存库（`EVORESEARCHDb.openMemory` / `ResearchMemoryStore.openMemory`），不留文件残留；
+- 数据库测试使用内存库（`evoresearchDb.openMemory` / `ResearchMemoryStore.openMemory`），不留文件残留；
 - 涉及真实 LLM/网络的分支保持可注入（LLM 失败走确定性回退的路径已覆盖）。
 
 ## 编码约定

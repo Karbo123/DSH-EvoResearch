@@ -65,7 +65,7 @@ desktop/
 
 1. 壳 `locate_sidecar` 探测资源目录中的 node.exe/launch.js/app
    （Tauri 把 `../sidecar/dist/**/*` 复制为 `<exe目录>/_up_/sidecar/dist/...`，`_up_` 是 `..` 的映射）；
-2. spawn `node.exe launch.js`（cwd = app/，隐藏控制台，stderr 写入 `%TEMP%/EVORESEARCH-sidecar.err.log`）；
+2. spawn `node.exe launch.js`（cwd = app/，隐藏控制台，stderr 写入 `%TEMP%/evoresearch-sidecar.err.log`）；
 3. launch.js 设置 `DSH_HOME = cwd`（独立数据根，不污染用户 `~/.dsh`），
    启动 `dsh --profile evoresearch --port 0`；
 4. 端口文件路径经环境变量 `EVORESEARCH_PORT_FILE` 传入（默认 `%LOCALAPPDATA%/com.evoresearch.desktop/port.json`），

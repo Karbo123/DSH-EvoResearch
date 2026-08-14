@@ -1,5 +1,5 @@
 /**
- * EvoMemory 存储层单元测试（内存库）。
+ * 科研记忆 存储层单元测试（内存库）。
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -46,7 +46,7 @@ describe('ResearchMemoryStore', () => {
   })
 
   it('Observation 写入（Markdown 文件 + 索引）', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'EVORESEARCH-obs-'))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-obs-'))
     const store = ResearchMemoryStore.openMemory()
     const meta = store.writeObservation(dir, {
       observationId: 'O-test1',

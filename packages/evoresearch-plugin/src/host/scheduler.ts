@@ -99,7 +99,7 @@ export class SchedulerService {
     if (!timer) return () => {}
     this.tickDisposer = timer.interval(() => {
       void this.tick(ctx).catch((error) => {
-        console.error('[EVORESEARCH:scheduler] tick 失败:', error)
+        console.error('[evoresearch:scheduler] tick 失败:', error)
       })
     }, 60_000)
     return () => {
@@ -126,7 +126,7 @@ export class SchedulerService {
         task.lastRunAt = Date.now()
         task.lastResultThreadId = threadId
       } catch (error) {
-        console.error(`[EVORESEARCH:scheduler] 任务 ${task.taskId} 执行失败:`, error)
+        console.error(`[evoresearch:scheduler] 任务 ${task.taskId} 执行失败:`, error)
         task.lastRunAt = Date.now()
       }
       this.save()
@@ -143,7 +143,7 @@ export class SchedulerService {
     // 创建后台 agent 会话（owner 为宿主进程，不走交互 UI）
     const handle = await agents.create({
       cwd: task.workspaceDir || this.config.dataRoot,
-      source: 'EVORESEARCH:scheduler',
+      source: 'evoresearch:scheduler',
       initialMessage: `【定时任务 ${task.name}】\n${task.prompt}\n\n完成后请汇报关键结果。`,
     } as never)
     const sessionId = (handle as unknown as { session?: { id?: string } }).session?.id

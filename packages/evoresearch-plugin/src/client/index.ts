@@ -7,21 +7,62 @@
  * - conversation.input.dock：当前会话的科研记忆提示条（Memory · N sources）。
  *
  * i18n：经 ctx.locale.register 注册中英字典，组件通过 slots 注入的 `t` prop 取文案。
- * 数据全部来自 Host 侧 EVORESEARCHApiService（ctx.remote.EVORESEARCH.*，Typert Remote），
+ * 数据全部来自 Host 侧 evoresearchApiService（ctx.remote.evoresearch.*，Typert Remote），
  * 不持有任何 Host 内部对象。样式使用内联 style + DSH 主题 CSS 变量。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import * as React from 'react'
 
-/** Client 插件依赖（包名，由 client-modules 注入）。 */
+/** Client 插件依赖（浏览器端服务名，由对应 client 包提供）：
+ *  slots（dsh-client-ui-slots，UI 注册）、remote（dsh-api-remotes，Host RPC）、
+ *  locale（dsh-client-locale，i18n）。
+ *  注意：package.json 的 dsh.client.inject 是加载拓扑用的包名；
+ *  此处的 exports.inject 是 fiber 依赖用的服务名（与官方 client 插件一致，二者不可混用）。
+ */
 export const inject = [
-  '@deepseek-ai/dsh-client-runtime',
-  '@deepseek-ai/dsh-api-remotes',
-  '@deepseek-ai/dsh-client-locale',
+  'slots',
+  'remote',
+  'locale',
 ]
 
 /** i18n 命名空间。 */
-export const NS = 'EVORESEARCH'
+export const NS = 'evoresearch'
+
+/**
+ * 自包含 i18n：模块内字典 + localStorage 语言偏好（与 DSH 的 locale 偏好同源探测），
+ * 不依赖 slots 的 locale 注入机制（该机制对第三方插件注入不稳定）。
+ */
+const LOCALE_STORAGE_KEYS = ['dsh-locale', 'locale', 'ui-locale', 'dsh.locale']
+
+/** 读取当前语言偏好（en | zh-CN），默认 zh-CN。 */
+function resolveLocale(): string {
+  try {
+    for (const key of LOCALE_STORAGE_KEYS) {
+      const value = window.localStorage.getItem(key)
+      if (value) return value.startsWith('en') ? 'en' : value.startsWith('zh') ? 'zh-CN' : value
+    }
+    if (navigator.language?.startsWith('zh')) return 'zh-CN'
+  } catch {
+    // localStorage 不可用（隐私模式等）时回退默认
+  }
+  return 'zh-CN'
+}
+
+/** 构造翻译函数：查当前语言字典，未覆盖回退英文，{var} 插值。 */
+function makeTranslate(): Translate {
+  const locale = resolveLocale()
+  const dict = DICT[locale] ?? DICT['en'] ?? {}
+  const fallback = DICT['en'] ?? {}
+  return (key, vars) => {
+    let text = dict[key] ?? fallback[key] ?? key
+    if (vars) {
+      for (const [name, value] of Object.entries(vars)) {
+        text = text.split(`{${name}}`).join(String(value))
+      }
+    }
+    return text
+  }
+}
 
 /** 中英字典（未覆盖键回退英文，与 DSH client-locale 行为一致）。 */
 const DICT: Record<string, Record<string, string>> = {
@@ -83,7 +124,7 @@ const DICT: Record<string, Record<string, string>> = {
 export type Translate = (key: string, vars?: Record<string, string | number>) => string
 
 /** 面板打开事件名（插件内部通信）。 */
-const PANEL_EVENT = 'EVORESEARCH:panel'
+const PANEL_EVENT = 'evoresearch:panel'
 
 /** 打开科研面板。 */
 export function openResearchPanel(): void {
@@ -136,13 +177,13 @@ function ResearchPanel({ ctx, onClose, t }: { ctx: Context; onClose: () => void;
   const refresh = React.useCallback(() => {
     const remote = (ctx as unknown as { remote?: Record<string, unknown> }).remote as Record<string, unknown> | undefined
     if (!remote) return
-    const EVORESEARCH = remote.EVORESEARCH as Record<string, (args?: unknown) => Promise<unknown>> | undefined
-    if (!EVORESEARCH) return
-    void EVORESEARCH.projectsList?.().then((value) => setProjects(Array.isArray(value) ? value : []))
-    void EVORESEARCH.memoryCatalog?.({}).then((value) => setCatalog(Array.isArray(value) ? (value as Array<{ category: string; count: number }>) : []))
-    void EVORESEARCH.schedulerList?.().then((value) => setTasks(Array.isArray(value) ? value : []))
-    void EVORESEARCH.channelsStatus?.().then((value) => setChannels(Array.isArray(value) ? value : []))
-    void EVORESEARCH.autoskillsList?.({}).then((value) => setProposals(Array.isArray(value) ? value : []))
+    const evoresearch = remote.evoresearch as Record<string, (args?: unknown) => Promise<unknown>> | undefined
+    if (!evoresearch) return
+    void evoresearch.projectsList?.().then((value) => setProjects(Array.isArray(value) ? value : []))
+    void evoresearch.memoryCatalog?.({}).then((value) => setCatalog(Array.isArray(value) ? (value as Array<{ category: string; count: number }>) : []))
+    void evoresearch.schedulerList?.().then((value) => setTasks(Array.isArray(value) ? value : []))
+    void evoresearch.channelsStatus?.().then((value) => setChannels(Array.isArray(value) ? value : []))
+    void evoresearch.autoskillsList?.({}).then((value) => setProposals(Array.isArray(value) ? value : []))
   }, [ctx])
 
   React.useEffect(() => {
@@ -153,8 +194,8 @@ function ResearchPanel({ ctx, onClose, t }: { ctx: Context; onClose: () => void;
 
   const call = async (name: string, args?: unknown): Promise<void> => {
     const remote = (ctx as unknown as { remote?: Record<string, unknown> }).remote as Record<string, unknown> | undefined
-    const EVORESEARCH = remote?.EVORESEARCH as Record<string, (a?: unknown) => Promise<unknown>> | undefined
-    if (EVORESEARCH?.[name]) await EVORESEARCH[name](args)
+    const evoresearch = remote?.evoresearch as Record<string, (a?: unknown) => Promise<unknown>> | undefined
+    if (evoresearch?.[name]) await evoresearch[name](args)
     refresh()
   }
 
@@ -302,9 +343,9 @@ function MemoryDock({ sessionId, ctx, t }: { sessionId: string; ctx: Context; t:
   React.useEffect(() => {
     let cancelled = false
     const remote = (ctx as unknown as { remote?: Record<string, unknown> }).remote as Record<string, unknown> | undefined
-    const EVORESEARCH = remote?.EVORESEARCH as Record<string, (a?: unknown) => Promise<unknown>> | undefined
-    if (!EVORESEARCH?.memoryPacket) return
-    void EVORESEARCH.memoryPacket({ sessionId }).then((value) => {
+    const evoresearch = remote?.evoresearch as Record<string, (a?: unknown) => Promise<unknown>> | undefined
+    if (!evoresearch?.memoryPacket) return
+    void evoresearch.memoryPacket({ sessionId }).then((value) => {
       if (cancelled) return
       const packet = value as { catalog?: unknown[]; states?: unknown[]; hits?: unknown[] } | null
       if (packet) {
@@ -349,12 +390,13 @@ function SidebarEntry({ onClick, t }: { onClick: () => void; t: Translate }): Re
   )
 }
 
-/** Client 插件 apply：注册三个 Slot 与 i18n 字典。 */
+/** Client 插件 apply：注册三个 Slot 与 i18n。 */
 export function apply(ctx: Context): void {
   const slots = ctx.get('slots')
   if (!slots) return
 
-  // i18n 字典注册（生命周期随插件）
+  // i18n：自包含字典（语言偏好读 localStorage）；同时注册到平台 locale（供 DSH 语言切换）
+  const t = makeTranslate()
   const locale = ctx.get('locale')
   if (locale) {
     ctx.effect(() => locale.register(NS, DICT))
@@ -363,9 +405,8 @@ export function apply(ctx: Context): void {
   // 1) 侧栏底部入口
   slots.inject('sidebar.footer.action', () =>
     slots.register(
-      { name: 'sidebar.footer.action', id: 'EVORESEARCH-research', order: 90, locale: NS },
-      (props: { t?: Translate }) => {
-        const t = props.t ?? ((key: string) => key)
+      { name: 'sidebar.footer.action', id: 'evoresearch-research', order: 90 },
+      () => {
         const [open, setOpen] = React.useState(false)
         React.useEffect(() => {
           const listener = (): void => setOpen(true)
@@ -385,9 +426,8 @@ export function apply(ctx: Context): void {
   // 2) 科研面板 overlay（独立注册，保证入口与面板解耦）
   slots.inject('shell.overlay', () =>
     slots.register(
-      { name: 'shell.overlay', id: 'EVORESEARCH-research-panel', order: 100, locale: NS },
-      (props: { t?: Translate }) => {
-        const t = props.t ?? ((key: string) => key)
+      { name: 'shell.overlay', id: 'evoresearch-research-panel', order: 100 },
+      () => {
         const [open, setOpen] = React.useState(false)
         React.useEffect(() => {
           const listener = (): void => setOpen(true)
@@ -404,14 +444,13 @@ export function apply(ctx: Context): void {
     slots.register(
       {
         name: 'conversation.input.dock',
-        id: 'EVORESEARCH-memory-dock',
+        id: 'evoresearch-memory-dock',
         order: 90,
-        locale: NS,
         inject: (sessionId: string) => ({ sessionId }),
       },
-      (props: { sessionId?: string; t?: Translate }) =>
+      (props: { sessionId?: string }) =>
         props.sessionId
-          ? React.createElement(MemoryDock, { sessionId: props.sessionId, ctx, t: props.t ?? ((key: string) => key) })
+          ? React.createElement(MemoryDock, { sessionId: props.sessionId, ctx, t })
           : React.createElement(React.Fragment, null),
     ),
   )

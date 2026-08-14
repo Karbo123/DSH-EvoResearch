@@ -1,5 +1,5 @@
 /**
- * EvoMemory v2/v3 存储层 —— 每个科研项目独立的 research_memory.db。
+ * 科研记忆 存储层 —— 每个科研项目独立的 research_memory.db。
  *
  * 表结构对齐 D:\EvoScientist\memory\research\store.py 的核心语义：
  * - research_turns（Turn Catalog）+ FTS5：每轮对话的分类、topic、状态（含 v3 interrupted）；
@@ -19,7 +19,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { EVORESEARCHDb, type Migration, cleanForIndex } from '../core/db.js'
+import { evoresearchDb, type Migration, cleanForIndex } from '../core/db.js'
 import {
   type TurnRecord,
   type TurnStatus,
@@ -336,23 +336,23 @@ export function renderObservationFile(meta: {
   return lines.join('\n')
 }
 
-/** EvoMemory 存储门面：封装 research_memory.db 的全部读写。 */
+/** 科研记忆 存储门面：封装 research_memory.db 的全部读写。 */
 export class ResearchMemoryStore {
-  readonly db: EVORESEARCHDb
+  readonly db: evoresearchDb
 
-  private constructor(db: EVORESEARCHDb) {
+  private constructor(db: evoresearchDb) {
     this.db = db
   }
 
   /** 打开项目记忆库（目录不存在时自动创建）。 */
   static open(memoryDir: string): ResearchMemoryStore {
     const file = path.join(memoryDir, 'research_memory.db')
-    return new ResearchMemoryStore(EVORESEARCHDb.open(file, RESEARCH_MEMORY_MIGRATIONS))
+    return new ResearchMemoryStore(evoresearchDb.open(file, RESEARCH_MEMORY_MIGRATIONS))
   }
 
   /** 内存库（测试用）。 */
   static openMemory(): ResearchMemoryStore {
-    return new ResearchMemoryStore(EVORESEARCHDb.openMemory(RESEARCH_MEMORY_MIGRATIONS))
+    return new ResearchMemoryStore(evoresearchDb.openMemory(RESEARCH_MEMORY_MIGRATIONS))
   }
 
   // ── Turn Catalog ──────────────────────────────────────────────────────────

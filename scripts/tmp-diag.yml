@@ -1,0 +1,4 @@
+# 临时诊断 patch：打印 evoresearch 相关行的 fiber 状态与注入依赖
+- insert:
+    - id: diag-inspect
+      name: '@deepseek-ai/cordis-plugin-timer' # 占位行（将被替换）

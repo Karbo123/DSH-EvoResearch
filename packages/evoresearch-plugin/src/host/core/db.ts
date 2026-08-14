@@ -18,7 +18,7 @@ export interface Migration {
 }
 
 /** 打开的数据库句柄（封装 DatabaseSync 常用操作）。 */
-export class EVORESEARCHDb {
+export class evoresearchDb {
   readonly db: DatabaseSync
   private readonly migrations: readonly Migration[]
 
@@ -32,22 +32,22 @@ export class EVORESEARCHDb {
    * @param file 数据库文件绝对路径；父目录不存在时自动创建。
    * @param migrations 迁移列表（按 version 升序）。
    */
-  static open(file: string, migrations: readonly Migration[]): EVORESEARCHDb {
+  static open(file: string, migrations: readonly Migration[]): evoresearchDb {
     fs.mkdirSync(path.dirname(file), { recursive: true })
     const db = new DatabaseSync(file)
     db.exec('PRAGMA journal_mode = WAL')
     db.exec('PRAGMA synchronous = FULL')
     db.exec('PRAGMA foreign_keys = ON')
-    const handle = new EVORESEARCHDb(db, [...migrations].sort((a, b) => a.version - b.version))
+    const handle = new evoresearchDb(db, [...migrations].sort((a, b) => a.version - b.version))
     handle.migrate()
     return handle
   }
 
   /** 打开内存数据库（测试用）。 */
-  static openMemory(migrations: readonly Migration[]): EVORESEARCHDb {
+  static openMemory(migrations: readonly Migration[]): evoresearchDb {
     const db = new DatabaseSync(':memory:')
     db.exec('PRAGMA foreign_keys = ON')
-    const handle = new EVORESEARCHDb(db, [...migrations].sort((a, b) => a.version - b.version))
+    const handle = new evoresearchDb(db, [...migrations].sort((a, b) => a.version - b.version))
     handle.migrate()
     return handle
   }

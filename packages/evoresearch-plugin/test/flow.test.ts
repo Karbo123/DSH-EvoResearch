@@ -53,7 +53,7 @@ describe('MemoryRuntime 数据流闭环', () => {
   let dispose: () => void
 
   beforeEach(() => {
-    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'EVORESEARCH-flow-'))
+    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-flow-'))
     ctx = new Context()
     runtime = new MemoryRuntime({ dataRoot })
     dispose = runtime.attach(ctx)
@@ -129,7 +129,7 @@ describe('MemoryRuntime 数据流闭环', () => {
         id: 'm4',
         role: 'user',
         content: [{ type: 'text', text: '定时任务通知' }],
-        source: { kind: 'plugin', plugin: 'EVORESEARCH:scheduler' },
+        source: { kind: 'plugin', plugin: 'evoresearch:scheduler' },
       },
     })
     assert.equal(runtime.storeFor(dataRoot).listTurns(undefined, 10).length, 0)

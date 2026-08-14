@@ -1,5 +1,5 @@
 /**
- * EvoMemory v2/v3 编排层（MemoryRuntime）：
+ * 科研记忆 编排层（MemoryRuntime）：
  * - 订阅 DSH 会话事件（session/event）：新用户消息 → Turn Catalog + 分类 + 记忆包缓存；
  *   turn 结束 → 完成/中断归档；
  * - 通过 systemPrompt.context 在每步模型调用前注入 <research_memory_packet>；
@@ -49,7 +49,7 @@ interface ResolvedMemoryConfig {
   readonly enabled: boolean
 }
 
-/** EvoMemory 运行时门面。 */
+/** 科研记忆 运行时门面。 */
 export class MemoryRuntime implements GoalRuntime {
   readonly config: ResolvedMemoryConfig
   private readonly stores = new Map<string, ResearchMemoryStore>()
@@ -84,17 +84,17 @@ export class MemoryRuntime implements GoalRuntime {
         try {
           const result = reconcileStore(store, { backupDir: path.join(this.memoryDirFor(workspaceDir), 'backups') })
           if (!result.skipped && (result.markedInterrupted > 0 || result.archivedMissing > 0 || result.backedUp)) {
-            console.log(`[EVORESEARCH:memory] 启动对账（${path.basename(key)}）: 悬挂标记 ${result.markedInterrupted}，补归档 ${result.archivedMissing}，备份 ${result.backedUp}`)
+            console.log(`[evoresearch:memory] 启动对账（${path.basename(key)}）: 悬挂标记 ${result.markedInterrupted}，补归档 ${result.archivedMissing}，备份 ${result.backedUp}`)
           }
         } catch (error) {
-          console.error('[EVORESEARCH:memory] 启动对账失败（不阻塞）:', error)
+          console.error('[evoresearch:memory] 启动对账失败（不阻塞）:', error)
         }
       }
       // v2 回填：既有会话历史后台 newest-first 索引进 Turn Catalog（每项目每进程一次）
       if (!this.backfilled.has(key)) {
         this.backfilled.add(key)
         void this.runBackfill(workspaceDir).catch((error) => {
-          console.error('[EVORESEARCH:memory] 历史回填失败（不阻塞）:', error)
+          console.error('[evoresearch:memory] 历史回填失败（不阻塞）:', error)
         })
       }
     }
@@ -120,7 +120,7 @@ export class MemoryRuntime implements GoalRuntime {
     const { backfillFromSessionQuery } = await import('./backfill.js')
     const created = await backfillFromSessionQuery(store, sessionQuery, workspaceDir)
     if (created > 0) {
-      console.log(`[EVORESEARCH:memory] 历史回填完成（${path.basename(workspaceDir || this.config.dataRoot)}）: 新增 ${created} 轮`)
+      console.log(`[evoresearch:memory] 历史回填完成（${path.basename(workspaceDir || this.config.dataRoot)}）: 新增 ${created} 轮`)
     }
   }
 
@@ -170,7 +170,7 @@ export class MemoryRuntime implements GoalRuntime {
     disposers.push(
       ctx.on('session/event', (session: Session, event: SessionEvent) => {
         void this.handleSessionEvent(ctx, session, event).catch((error) => {
-          console.error('[EVORESEARCH:memory] 会话事件处理失败:', error)
+          console.error('[evoresearch:memory] 会话事件处理失败:', error)
         })
       }),
     )
@@ -180,7 +180,7 @@ export class MemoryRuntime implements GoalRuntime {
     if (systemPrompt) {
       disposers.push(
         systemPrompt.context({
-          name: 'EVORESEARCH:research-memory',
+          name: 'evoresearch:research-memory',
           order: 60,
           text: () => this.latestPacketText(),
         }),
@@ -305,7 +305,7 @@ export class MemoryRuntime implements GoalRuntime {
         try {
           await ensureGoalContract(ctx, this, { provider, model }, store, text, sessionId)
         } catch (error) {
-          console.error('[EVORESEARCH:memory] Goal 提取失败（不影响记忆包）:', error)
+          console.error('[evoresearch:memory] Goal 提取失败（不影响记忆包）:', error)
         }
       }
       // 记忆包（以当前轮文本为查询）
@@ -316,7 +316,7 @@ export class MemoryRuntime implements GoalRuntime {
       })
       this.packets.set(sessionId, packet)
     } catch (error) {
-      console.error('[EVORESEARCH:memory] 后台分类/记忆包失败（不影响主回答）:', error)
+      console.error('[evoresearch:memory] 后台分类/记忆包失败（不影响主回答）:', error)
     }
   }
 }

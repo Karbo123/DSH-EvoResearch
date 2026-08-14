@@ -3,7 +3,7 @@
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { EVORESEARCHDb, createFts5Table, cleanForIndex, type Migration } from '../src/host/core/db.js'
+import { evoresearchDb, createFts5Table, cleanForIndex, type Migration } from '../src/host/core/db.js'
 
 const MIGRATIONS: readonly Migration[] = [
   {
@@ -15,9 +15,9 @@ const MIGRATIONS: readonly Migration[] = [
   },
 ]
 
-describe('EVORESEARCHDb', () => {
+describe('evoresearchDb', () => {
   it('内存库应用迁移并可读写', () => {
-    const handle = EVORESEARCHDb.openMemory(MIGRATIONS)
+    const handle = evoresearchDb.openMemory(MIGRATIONS)
     handle.db.prepare('INSERT INTO notes (body) VALUES (?)').run('hello world')
     const rows = handle.db.prepare('SELECT * FROM notes').all() as Array<{ id: number; body: string }>
     assert.equal(rows.length, 1)
@@ -26,14 +26,14 @@ describe('EVORESEARCHDb', () => {
   })
 
   it('迁移幂等（重复打开不重复应用）', () => {
-    const handle = EVORESEARCHDb.openMemory(MIGRATIONS)
+    const handle = evoresearchDb.openMemory(MIGRATIONS)
     const count = handle.db.prepare('SELECT COUNT(*) AS c FROM schema_migrations').get() as { c: number }
     assert.equal(count.c, MIGRATIONS.length)
     handle.close()
   })
 
   it('FTS5 检索命中（trigram，中文子串匹配）', () => {
-    const handle = EVORESEARCHDb.openMemory(MIGRATIONS)
+    const handle = evoresearchDb.openMemory(MIGRATIONS)
     // createFts5Table 创建的独立 FTS 表：直接向 FTS 表插入
     handle.db.prepare('INSERT INTO notes_fts (body) VALUES (?)').run('深度学习与科研记忆')
     const rows = handle.db
@@ -49,7 +49,7 @@ describe('EVORESEARCHDb', () => {
   })
 
   it('事务回滚', () => {
-    const handle = EVORESEARCHDb.openMemory(MIGRATIONS)
+    const handle = evoresearchDb.openMemory(MIGRATIONS)
     handle.db.prepare('INSERT INTO notes (body) VALUES (?)').run('before')
     assert.throws(() =>
       handle.transaction(() => {

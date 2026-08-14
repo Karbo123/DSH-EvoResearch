@@ -37,7 +37,7 @@ describe('ExpertService 内置团队邀请', () => {
   let experts: ExpertService
 
   beforeEach(() => {
-    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'EVORESEARCH-team-'))
+    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-team-'))
     ctx = new Context()
     experts = new ExpertService({ dataRoot })
   })

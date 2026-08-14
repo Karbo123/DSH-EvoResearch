@@ -1,14 +1,14 @@
 /**
- * EVORESEARCHApiService 单元测试：验证 Typert Remote 服务在最小 cordis 上下文中
+ * EvoResearchApiService 单元测试：验证 Typert Remote 服务在最小 cordis 上下文中
  * 可构造（服务 + gateway 绑定注册无冲突），且 @Remote 装饰器标记的方法
- * 能被 remoteMethods 发现（wire 可调用 —— 这是浏览器端 ctx.remote.EVORESEARCH.*
+ * 能被 remoteMethods 发现（wire 可调用 —— 这是浏览器端 ctx.remote.evoresearch.*
  * 能工作的前提，弥补无法在无浏览器环境下做 HTTP 端到端验证的缺口）。
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
-import { EVORESEARCHApiService, type HostServices } from '../src/host/api.js'
+import { EvoResearchApiService, type HostServices } from '../src/host/api.js'
 import type { WorkspaceService } from '../src/host/workspace.js'
 import type { MemoryRuntime } from '../src/host/memory/index.js'
 import type { SchedulerService } from '../src/host/scheduler.js'
@@ -29,20 +29,20 @@ function fakeServices(): HostServices {
   }
 }
 
-describe('EVORESEARCHApiService', () => {
+describe('EvoResearchApiService', () => {
   it('可在最小 cordis 上下文构造（服务 + gateway 绑定注册）', () => {
     const ctx = new Context()
-    const service = new EVORESEARCHApiService(ctx, fakeServices())
+    const service = new EvoResearchApiService(ctx, fakeServices())
     assert.ok(service)
     // TypertRemoteService 绑定：typertRemote 元数据可读
     const binding = (service as unknown as { typertRemote?: { serviceKey?: string; namespace?: string } }).typertRemote
-    assert.equal(binding?.serviceKey, 'EVORESEARCH')
-    assert.equal(binding?.namespace, 'EVORESEARCH')
+    assert.equal(binding?.serviceKey, 'evoresearch')
+    assert.equal(binding?.namespace, 'evoresearch')
   })
 
   it('@Remote 标记的方法可被 remoteMethods 发现（Client wire 可调用）', () => {
     const ctx = new Context()
-    const service = new EVORESEARCHApiService(ctx, fakeServices())
+    const service = new EvoResearchApiService(ctx, fakeServices())
     const methods = remoteMethods(service)
     const names = methods.map((m) => m.exportName ?? m.method)
     // 核心方法必须在 wire 上可见
@@ -58,9 +58,9 @@ describe('EVORESEARCHApiService', () => {
     const fs = await import('node:fs')
     const os = await import('node:os')
     const path = await import('node:path')
-    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'EVORESEARCH-api-'))
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-api-'))
     const workspace = new WorkspaceService({ dataRoot })
-    const service = new EVORESEARCHApiService(ctx, {
+    const service = new EvoResearchApiService(ctx, {
       workspace,
       memory: {} as MemoryRuntime,
       scheduler: {} as SchedulerService,

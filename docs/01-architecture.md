@@ -5,7 +5,7 @@
 │                        浏览器（DSH Web GUI）                         │
 │  dsh-client-ui-*（平台）   +   @evoresearch/dsh-plugin/client     │
 │    侧栏「🔬 科研」入口 / 科研面板(overlay) / 会话记忆提示条(dock)     │
-│    └── ctx.remote.EVORESEARCH.*（Typert Gateway / JSON RPC）            │
+│    └── ctx.remote.evoresearch.*（Typert Gateway / JSON RPC）            │
 └──────────────────────────────┬─────────────────────────────────────┘
                                │
 ┌──────────────────────────────▼─────────────────────────────────────┐
@@ -13,7 +13,7 @@
 │  @evoresearch/dsh-plugin/host ── 插件入口（apply 组装）             │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │ WorkspaceService   科研项目工作区（projects/<n>/.evoresearch-data） │  │
-│  │ MemoryRuntime      EvoMemory v2/v3（本插件核心）               │  │
+│  │ MemoryRuntime      科研记忆（本插件核心）               │  │
 │  │  ├─ store.ts      research_memory.db（node:sqlite + FTS5）    │  │
 │  │  ├─ classifier.ts 七类多标签分类（LLM + 确定性回退）            │  │
 │  │  ├─ retrieval.ts  FTS5/向量 RRF 融合检索                       │  │
@@ -25,7 +25,7 @@
 │  │                   骨架，消息 → agent 会话）                    │  │
 │  │ AutoSkillsService 观测聚类 → 技能提案 → 审核 → 技能目录         │  │
 │  │ ExpertService     专家团队（active_teams）                     │  │
-│  │ EVORESEARCHApiService  Typert Remote API（EVORESEARCH.*）                │  │
+│  │ evoresearchApiService  Typert Remote API（evoresearch.*）                │  │
 │  │ commands.ts       /project /memory /schedule /channel ...     │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 │        │ 注入/订阅（复用平台服务）                                  │
@@ -58,7 +58,7 @@
 | `channels/` | ChannelAdapter 接口 + 管理器 + Telegram 长轮询 + 骨架适配器 | `channels/*` |
 | `autoskills.ts` | 观测聚类 → 提案 → approve/reject/run → 技能目录 | `memory/autoskills/*` |
 | `experts.ts` | 专家邀请（active_teams 持久化） | `middleware/active_team.py` |
-| `api.ts` | EVORESEARCHApiService（Typert Remote，Client 可调） | `langgraph_dev/http.py` |
+| `api.ts` | evoresearchApiService（Typert Remote，Client 可调） | `langgraph_dev/http.py` |
 | `commands.ts` | 斜杠命令注册（平台命令体系） | `commands/implementation/*` |
 | `index.ts` | 插件入口：配置解析 + 组装 + 副作用管理 | `EvoScientist.py` 接线层（上游参照） |
 
@@ -86,7 +86,7 @@ MemoryRuntime.handleSessionEvent
      e. buildMemoryPacket(query=用户消息) → packets[sessionId]
               │
               ▼
-systemPrompt.context('EVORESEARCH:research-memory')
+systemPrompt.context('evoresearch:research-memory')
   ──▶ 每步模型调用前注入 <research_memory_packet>（≤6000 token）
               │
               ▼

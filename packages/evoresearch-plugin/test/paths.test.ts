@@ -16,7 +16,7 @@ import {
   listProjects,
 } from '../src/host/core/paths.js'
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'EVORESEARCH-paths-'))
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-paths-'))
 
 describe('项目名', () => {
   it('合法名', () => {

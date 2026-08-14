@@ -1,7 +1,7 @@
 /**
  * EvoResearch API 服务：Client（浏览器插件）通过 Typert Gateway 调用的 Remote 方法。
  *
- * 所有方法返回纯 JSON（wire 序列化安全）。命名空间默认 EVORESEARCH，
+ * 所有方法返回纯 JSON（wire 序列化安全）。命名空间默认 evoresearch，
  * 对应上游 EvoScientist WebUI 的 /api/* 路由群（projects/memory/scheduler/channels/autoskills/experts/threads）。
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -44,12 +44,12 @@ function packetToJson(packet: MemoryPacket): unknown {
 }
 
 /** EvoResearch Remote API。 */
-export class EVORESEARCHApiService extends TypertRemoteService {
+export class EvoResearchApiService extends TypertRemoteService {
   private readonly services: HostServices
   private readonly hostCtx: Context
 
   constructor(ctx: Context, services: HostServices) {
-    super(ctx, 'EVORESEARCH')
+    super(ctx, 'evoresearch')
     this.hostCtx = ctx
     this.services = services
   }
@@ -89,7 +89,7 @@ export class EVORESEARCHApiService extends TypertRemoteService {
     }
   }
 
-  // ── EvoMemory ─────────────────────────────────────────────────────────────
+  // ── 科研记忆 ─────────────────────────────────────────────────────────────
 
   @Remote('memoryCatalog')
   memoryCatalog(args: { workspaceDir?: string }): { category: string; count: number }[] {

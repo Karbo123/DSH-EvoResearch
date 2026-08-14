@@ -1,5 +1,5 @@
 /**
- * EvoMemory v2 混合检索：FTS5 + （可选）向量，RRF 融合，类别加权不硬过滤。
+ * 科研记忆 混合检索：FTS5 + （可选）向量，RRF 融合，类别加权不硬过滤。
  *
  * 对齐 EvoResearch memory/research/retrieval.py：
  * - 候选来源：research_turns（FTS5）、observations（FTS5，默认 ACTIVE）、topic states；

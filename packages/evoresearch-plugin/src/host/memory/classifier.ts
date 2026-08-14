@@ -1,5 +1,5 @@
 /**
- * EvoMemory v2 分类器：每轮用户消息的多标签科研分类 + topic 归一化。
+ * 科研记忆 分类器：每轮用户消息的多标签科研分类 + topic 归一化。
  *
  * 对齐 EvoResearch memory/research/classifier.py：
  * - 七类多标签分类（idea/method/experiment/related_work/reproduction/project/general）；
@@ -188,7 +188,7 @@ function semanticMatch(
   _normalizedLabel: string,
   _pool: ReadonlyArray<{ topicKey: string; label: string }>,
 ): { topicKey: string; label: string } | undefined {
-  // TODO(EvoMemory v2): 接入 EmbeddingProvider（远端 embedding API 或本地 transformers.js）
+  // TODO(科研记忆): 接入 EmbeddingProvider（远端 embedding API 或本地 transformers.js）
   // 后，对 normalizedLabel 与 pool 中每个 label 计算余弦相似度，≥0.82 时复用 topicKey。
   return undefined
 }

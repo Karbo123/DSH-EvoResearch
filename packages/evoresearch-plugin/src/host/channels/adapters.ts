@@ -78,7 +78,7 @@ export class TelegramAdapter implements ChannelAdapter {
         }
       } catch (error) {
         // 网络抖动：静默重试（避免刷屏）
-        console.error('[EVORESEARCH:telegram] 轮询失败:', error instanceof Error ? error.message : error)
+        console.error('[evoresearch:telegram] 轮询失败:', error instanceof Error ? error.message : error)
       }
       await new Promise((resolve) => setTimeout(resolve, 1500))
     }

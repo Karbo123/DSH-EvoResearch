@@ -70,7 +70,7 @@ describe('工具收据钩子（session/event tool/call 与 tool/result）', () =
   let dispose: () => void
 
   beforeEach(() => {
-    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'EVORESEARCH-receipt-'))
+    dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-receipt-'))
     ctx = new Context()
     runtime = new MemoryRuntime({ dataRoot })
     dispose = runtime.attach(ctx)

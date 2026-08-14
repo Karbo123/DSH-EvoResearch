@@ -8,6 +8,9 @@
 //! 4. 壳轮询端口文件（≤30s）后加载 `http://127.0.0.1:<port>`；
 //! 5. 壳退出时终止 sidecar 进程树（Node 侧 process.on('exit') 兜底）。
 
+// Windows GUI 子系统：release 构建不显示控制台黑框（直接弹出应用窗口）。
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -66,7 +69,7 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
         .ok_or_else(|| std::io::Error::other("未找到 sidecar app 目录"))?;
     // 端口文件路径经环境变量传给 launch.js（避免两侧路径约定漂移）
     let port_file_env = app_local_data_dir().join("port.json");
-    let stderr_log = std::env::temp_dir().join("EVORESEARCH-sidecar.err.log");
+    let stderr_log = std::env::temp_dir().join("evoresearch-sidecar.err.log");
     let stderr_file = std::fs::File::create(&stderr_log)?;
     Command::new(&node)
         .arg(&launch)
@@ -98,9 +101,9 @@ fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<u16> {
     None
 }
 
-/// 诊断日志（%TEMP%/EVORESEARCH-shell.log）；发布版可移除。
+/// 诊断日志（%TEMP%/evoresearch-shell.log）；发布版可移除。
 fn log(msg: &str) {
-    let log_path = std::env::temp_dir().join("EVORESEARCH-shell.log");
+    let log_path = std::env::temp_dir().join("evoresearch-shell.log");
     let _ = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
