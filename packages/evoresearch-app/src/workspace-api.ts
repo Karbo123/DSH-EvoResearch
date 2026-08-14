@@ -259,6 +259,57 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── Agents：当前会话的子代理树（ctx.subagents.listDescendants）──
+        if (method === 'agents') {
+          const subagents = ctx.get('subagents')
+          if (subagents?.listDescendants === undefined) throw httpError(400, 'method-error', 'subagents 服务不可用')
+          const sessionId = requireString(payload, 'sessionId')
+          const rows = await subagents.listDescendants(sessionId)
+          const agents = (rows ?? [])
+            .filter((row: { kind?: string }) => row.kind === 'child')
+            .map((row: { id: string; mode?: string; label?: string; activity?: string; hasChildren?: boolean; parentId?: string; depth?: number }) => ({
+              id: row.id,
+              mode: row.mode ?? 'one-shot',
+              label: row.label ?? null,
+              activity: row.activity ?? 'idle',
+              hasChildren: row.hasChildren === true,
+              parentId: row.parentId ?? null,
+              depth: row.depth ?? 1,
+            }))
+          writeOk(res, { agents })
+          return
+        }
+
+        // ── AutoSkills：列表 / 审核 / 运行 ──
+        if (method === 'skills') {
+          if (evoresearch?.autoskillsList === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const status = typeof payload.status === 'string' && payload.status !== '' ? payload.status : undefined
+          writeOk(res, await (evoresearch.autoskillsList as (a: { status?: string }) => Promise<unknown>)(status === undefined ? {} : { status }))
+          return
+        }
+        if (method === 'skills/approve' || method === 'skills/reject' || method === 'skills/run') {
+          const serviceMethod = method === 'skills/approve' ? 'autoskillsApprove' : method === 'skills/reject' ? 'autoskillsReject' : 'autoskillsRun'
+          const fn = evoresearch?.[serviceMethod] as ((a: { proposalId: string }) => { ok: boolean }) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = fn({ proposalId: requireString(payload, 'proposalId') })
+          writeOk(res, { ok: result.ok === true })
+          return
+        }
+
+        // ── Projects：校验路径 / 导入 ──
+        if (method === 'projects-validate') {
+          if (evoresearch?.projectValidate === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.projectValidate as (a: { path: string }) => Promise<{ ok: true } | { ok: false; error: string }>)({ path: requireString(payload, 'path') }))
+          return
+        }
+        if (method === 'projects-import') {
+          if (evoresearch?.projectImport === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const sourcePath = requireString(payload, 'sourcePath')
+          const name = typeof payload.name === 'string' && payload.name !== '' ? payload.name : undefined
+          writeOk(res, await (evoresearch.projectImport as (a: { sourcePath: string; name?: string }) => Promise<unknown>)({ sourcePath, ...(name === undefined ? {} : { name }) }))
+          return
+        }
+
         writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown method ${method ?? ''}` } })
       } catch (error) {
         writeError(res, error)

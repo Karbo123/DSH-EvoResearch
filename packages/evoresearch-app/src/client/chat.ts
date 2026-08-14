@@ -8,7 +8,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { Paperclip, ShieldCheck, ArrowUp, Wrench, User } from 'lucide-react'
+import { Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
 
@@ -57,6 +57,46 @@ function fmtTime(t: number | undefined): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+/** 复制文本到剪贴板（clipboard API + execCommand 兜底）。 */
+function copyText(text: string): void {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText !== undefined) {
+    void navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+    return
+  }
+  fallbackCopy(text)
+}
+
+function fallbackCopy(text: string): void {
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  } catch { /* 忽略 */ }
+}
+
+/** 消息复制按钮（点击后短暂显示已复制）。 */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return jsx('button', {
+    type: 'button',
+    className: 'evo-msg-copy',
+    title: copied ? 'Copied' : 'Copy',
+    'aria-label': copied ? 'Copied' : 'Copy',
+    onClick: (e: { stopPropagation(): void }) => {
+      e.stopPropagation()
+      copyText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    },
+    children: copied ? jsx(Check, {}) : jsx(Copy, {}),
+  })
+}
+
 /** assistant 节点 → 可读文本（text + reasoning 块拼接）。 */
 function assistantText(node: ChatNode): string {
   return (node.data.blocks ?? [])
@@ -81,7 +121,10 @@ function UserBubble({ text, time }: { text: string; time?: number }) {
         className: 'evo-msg-bubble evo-msg-bubble-user',
         children: [
           jsx('div', { className: 'evo-msg-text', children: text }),
-          jsx('div', { className: 'evo-msg-time', children: fmtTime(time) }),
+          jsx('div', {
+            className: 'evo-msg-meta',
+            children: [jsx('div', { className: 'evo-msg-time', children: fmtTime(time) }), jsx(CopyButton, { text })],
+          }),
         ],
       }),
     ],
@@ -104,7 +147,13 @@ function AssistantBubble({ node }: { node: ChatNode }) {
             className: 'evo-msg-bubble evo-msg-bubble-assistant',
             children: [
               jsx('div', { className: 'evo-msg-text', children: text }),
-              running && jsx('span', { className: 'evo-msg-cursor' }),
+              jsxs('div', {
+                className: 'evo-msg-meta',
+                children: [
+                  running && jsx('span', { className: 'evo-msg-cursor' }),
+                  !running && jsx(CopyButton, { text }),
+                ],
+              }),
             ],
           }),
           tools.map((tool, i) => jsx('div', {

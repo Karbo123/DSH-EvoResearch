@@ -334,4 +334,44 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-plugin-id { font-size: 12px; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-plugin-state { font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
 .evo-plugin-ok { color: var(--color-success); }
+/* ── 消息复制 ── */
+.evo-msg-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-height: 22px; }
+.evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; }
+.evo-msg-bubble:hover .evo-msg-copy, .evo-msg-copy:focus-visible { opacity: 1; }
+.evo-msg-copy:hover { color: var(--color-text-primary); background: var(--hover-bg); }
+.evo-msg-copy svg { width: 13px; height: 13px; }
+/* ── Agents 树（Inspector）── */
+.evo-insp-subtab-title { font-size: 11.5px; font-weight: 600; color: var(--color-text-tertiary); letter-spacing: 0.3px; text-transform: uppercase; padding: 2px 4px; }
+.evo-agent-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 12px; }
+.evo-agent-row { display: flex; align-items: center; gap: 7px; padding: 5px 8px; border-radius: 7px; font-size: 12.5px; color: var(--color-text-secondary); }
+.evo-agent-row:hover { background: var(--hover-bg); }
+.evo-agent-chevron { width: 13px; height: 13px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-agent-chevron-empty { display: inline-block; }
+.evo-agent-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-border); flex-shrink: 0; }
+.evo-agent-dot.running { background: var(--color-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 22%, transparent); }
+.evo-agent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); }
+.evo-agent-mode { padding: 1px 7px; border-radius: 999px; font-size: 10px; background: var(--hover-bg); color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-agent-mode.continuable { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
+.evo-agent-activity { font-size: 10.5px; color: var(--color-success); flex-shrink: 0; }
+/* ── Research Skills ── */
+.evo-skill-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.evo-skill-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); }
+.evo-skill-head { display: flex; align-items: center; gap: 8px; }
+.evo-skill-status { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-tertiary); flex-shrink: 0; text-transform: capitalize; }
+.evo-skill-status.pending { color: var(--color-warning); }
+.evo-skill-status.approved { color: var(--color-success); }
+.evo-skill-status.rejected { color: var(--color-error); }
+.evo-skill-action { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); flex-shrink: 0; }
+.evo-skill-desc { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.55; }
+.evo-skill-src { font-size: 11px; color: var(--color-text-tertiary); }
+.evo-skill-actions { display: flex; gap: 8px; margin-top: 2px; }
+.evo-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; border: none; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.evo-btn:disabled { opacity: 0.5; cursor: default; }
+.evo-btn svg { width: 13px; height: 13px; }
+.evo-btn-ok { background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }
+.evo-btn-ok:hover { background: color-mix(in srgb, var(--color-success) 26%, transparent); }
+.evo-btn-danger { background: color-mix(in srgb, var(--color-error) 14%, transparent); color: var(--color-error); }
+.evo-btn-danger:hover { background: color-mix(in srgb, var(--color-error) 24%, transparent); }
+.evo-btn-run { background: var(--brand-solid); color: var(--brand-foreground); }
+.evo-btn-run:hover { background: var(--brand-hover); }
 `

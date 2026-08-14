@@ -1,12 +1,16 @@
 /**
- * 业务面板（阶段 2）：EvoMemory 记忆面板 + Scheduled 定时任务面板。
+ * 业务面板（阶段 2）：EvoMemory 记忆面板 + Scheduled 定时任务面板
+ * + Research Skills 技能面板 + Workspace 项目面板。
  *
  * 数据经 /evoresearch/fs/* HTTP API（host 侧直连插件 EvoResearchApiService，
  * 绕开浏览器 Remote $mount 通道）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
-import { BrainCircuit, Clock, Plus, Trash2, ListChecks, Target } from 'lucide-react'
+import {
+  BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
+  Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw,
+} from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {
   idea: 'Idea', method: 'Method', experiment: 'Experiment',
@@ -208,6 +212,214 @@ export function SchedulePanel() {
                     ],
                   }),
                 }, task.taskId ?? task.id)),
+              }),
+      ],
+    }),
+  })
+}
+
+interface SkillProposal {
+  proposalId: string
+  name: string
+  description?: string
+  action?: 'create' | 'update'
+  content?: string
+  sourceObservationIds?: readonly string[]
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt?: number
+}
+
+type SkillFilter = 'all' | 'pending' | 'approved' | 'rejected'
+
+/** Research Skills 面板：AutoSkills 提案列表 + 审核/运行。 */
+export function SkillsPanel() {
+  const [proposals, setProposals] = useState<SkillProposal[] | null>(null)
+  const [filter, setFilter] = useState<SkillFilter>('all')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const load = () => {
+    setProposals(null)
+    void api<SkillProposal[]>('skills', filter === 'all' ? {} : { status: filter })
+      .then(setProposals)
+      .catch((e: any) => setError(String(e?.message ?? e)))
+  }
+
+  useEffect(() => { load() }, [filter])
+
+  const act = (proposalId: string, kind: 'approve' | 'reject' | 'run') => {
+    setBusy(proposalId)
+    void api<{ ok: boolean }>(`skills/${kind}`, { proposalId })
+      .then((result) => {
+        setBusy(null)
+        if (result.ok) load()
+        else setError('操作失败')
+      })
+      .catch((e: any) => { setBusy(null); setError(String(e?.message ?? e)) })
+  }
+
+  const tab = (key: SkillFilter, label: string) => jsx('button', {
+    type: 'button',
+    className: 'evo-insp-subtab',
+    'data-active': filter === key || undefined,
+    onClick: () => setFilter(key),
+    children: label,
+  }, key)
+
+  return jsx(PanelShell, {
+    icon: GraduationCap,
+    title: 'Research Skills',
+    children: jsxs(Fragment, {
+      children: [
+        jsxs('div', {
+          className: 'evo-skill-tabs',
+          children: [tab('all', 'All'), tab('pending', 'Pending'), tab('approved', 'Approved'), tab('rejected', 'Rejected')],
+        }),
+        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        proposals === null
+          ? jsx(LoadingRow, {})
+          : proposals.length === 0
+            ? jsx('span', { className: 'evo-panel-hint', children: 'No skill proposals yet' })
+            : jsx('div', {
+                className: 'evo-panel-list',
+                children: proposals.map((p) => jsxs('div', {
+                  className: 'evo-skill-card',
+                  children: [
+                    jsxs('div', {
+                      className: 'evo-skill-head',
+                      children: [
+                        jsx('span', { className: 'evo-panel-item-main', children: p.name }),
+                        jsx('span', { className: `evo-skill-status ${p.status}`, children: p.status }),
+                        p.action !== undefined && jsx('span', { className: 'evo-skill-action', children: p.action }),
+                      ],
+                    }),
+                    p.description !== '' && p.description !== undefined && jsx('div', { className: 'evo-skill-desc', children: p.description }),
+                    p.sourceObservationIds !== undefined && p.sourceObservationIds.length > 0
+                      && jsx('div', { className: 'evo-skill-src', children: `${p.sourceObservationIds.length} observations` }),
+                    p.status === 'pending' && jsxs('div', {
+                      className: 'evo-skill-actions',
+                      children: [
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-btn evo-btn-ok',
+                          disabled: busy !== null,
+                          onClick: () => act(p.proposalId, 'approve'),
+                          children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: 'Approve' })] }),
+                        }),
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-btn evo-btn-danger',
+                          disabled: busy !== null,
+                          onClick: () => act(p.proposalId, 'reject'),
+                          children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: 'Reject' })] }),
+                        }),
+                      ],
+                    }),
+                    p.status === 'approved' && jsx('div', {
+                      className: 'evo-skill-actions',
+                      children: jsx('button', {
+                        type: 'button',
+                        className: 'evo-btn evo-btn-run',
+                        disabled: busy !== null,
+                        onClick: () => act(p.proposalId, 'run'),
+                        children: jsxs(Fragment, { children: [jsx(Play, {}), jsx('span', { children: 'Run' })] }),
+                      }),
+                    }),
+                  ],
+                }, p.proposalId)),
+              }),
+      ],
+    }),
+  })
+}
+
+interface ProjectRow { name: string; path?: string }
+
+/** Workspace 面板：项目列表 + Import Project。 */
+export function WorkspacePanel() {
+  const [projects, setProjects] = useState<ProjectRow[] | null>(null)
+  const [sourcePath, setSourcePath] = useState('')
+  const [name, setName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+
+  const load = () => {
+    setProjects(null)
+    void api<ProjectRow[]>('projects').then(setProjects).catch((e: any) => setError(String(e?.message ?? e)))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const doImport = () => {
+    if (!sourcePath.trim()) return
+    setImporting(true)
+    setError(null)
+    void api<ProjectRow>('projects-import', {
+      sourcePath: sourcePath.trim(),
+      ...(name.trim() === '' ? {} : { name: name.trim() }),
+    }).then((project) => {
+      setImporting(false)
+      if (project?.name !== undefined) { setSourcePath(''); setName(''); load() }
+      else setError('导入失败')
+    }).catch((e: any) => { setImporting(false); setError(String(e?.message ?? e)) })
+  }
+
+  return jsx(PanelShell, {
+    icon: FolderGit2,
+    title: 'Workspace',
+    children: jsxs(Fragment, {
+      children: [
+        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        jsxs('div', {
+          className: 'evo-panel-form',
+          children: [
+            jsx('input', {
+              type: 'text',
+              className: 'evo-panel-input',
+              placeholder: 'Project source path (folder)',
+              value: sourcePath,
+              onInput: (e) => setSourcePath(e.currentTarget.value),
+            }),
+            jsx('input', {
+              type: 'text',
+              className: 'evo-panel-input',
+              placeholder: 'Project name (optional)',
+              value: name,
+              onInput: (e) => setName(e.currentTarget.value),
+            }),
+            jsx('button', {
+              type: 'button',
+              className: 'evo-panel-add',
+              disabled: importing || !sourcePath.trim(),
+              onClick: doImport,
+              children: jsxs(Fragment, { children: [jsx(FolderUp, {}), jsx('span', { children: 'Import' })] }),
+            }),
+          ],
+        }),
+        jsxs('div', {
+          className: 'evo-panel-row',
+          children: [
+            jsx('span', { className: 'evo-panel-row-label', children: 'Projects' }),
+            jsx('span', { style: { flex: 1 } }),
+            jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: load, children: jsx(RefreshCw, {}) }),
+          ],
+        }),
+        projects === null
+          ? jsx(LoadingRow, {})
+          : (projects ?? []).length === 0
+            ? jsx('span', { className: 'evo-panel-hint', children: 'No projects yet' })
+            : jsx('div', {
+                className: 'evo-panel-list',
+                children: (projects ?? []).map((p) => jsx('div', {
+                  className: 'evo-panel-item',
+                  children: jsxs(Fragment, {
+                    children: [
+                      jsx(FolderGit2, {}),
+                      jsx('span', { className: 'evo-panel-item-main', children: p.name }),
+                      p.path !== undefined && jsx('code', { className: 'evo-panel-item-code', children: p.path }),
+                    ],
+                  }),
+                }, p.name)),
               }),
       ],
     }),

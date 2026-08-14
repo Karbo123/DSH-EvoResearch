@@ -26,14 +26,17 @@ import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
-import { MemoryPanel, SchedulePanel } from './panels'
+import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel } from './panels'
 
-const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews']
+const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
 
 /** 桌面模式（无边框窗口 + 自绘标题栏）：由 Tauri 壳以 ?desktop=1 加载。 */
 function isDesktop(): boolean {
   return typeof location !== 'undefined' && new URLSearchParams(location.search).get('desktop') === '1'
 }
+
+/** 连接状态源（ctx.connection.hostDescription，apply 时写入；快照存在 = 已握手）。 */
+let connectionSource: { getSnapshot(): unknown; subscribe(fn: () => void): () => void } | null = null
 
 /** 插件激活时由 apply 写入的会话服务（组件经闭包使用）。 */
 let sessionsService: {
@@ -86,6 +89,15 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [settingsOpen, setSettingsOpen] = useState(false)
   const frameRef = useRef<HTMLDivElement | null>(null)
   const desktop = isDesktop()
+
+  // 连接状态（Health 指示器）：hostDescription 快照存在 = 已握手；订阅断连/重连。
+  const [connected, setConnected] = useState(() => connectionSource?.getSnapshot() !== undefined)
+  useEffect(() => {
+    const source = connectionSource
+    if (source === null) return
+    setConnected(source.getSnapshot() !== undefined)
+    return source.subscribe(() => setConnected(source.getSnapshot() !== undefined))
+  }, [])
 
   // 主题：初始化 + 跟随系统变化（pref=system 时）
   useEffect(() => {
@@ -183,7 +195,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       // ── 桌面模式：自绘标题栏（替代网页顶栏）；网页模式：普通顶栏 ──
       desktop
         ? jsx(DesktopTitlebar, {
-            connected: true,
+            connected,
             themeDark,
             onHome: startNewChat,
             onToggleSidebar: () => setSidebar((v) => !v),
@@ -233,7 +245,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             children: [
               jsxs('span', {
                 style: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--color-text-tertiary)', padding: '0 8px' },
-                children: [jsx('span', { style: { width: 8, height: 8, borderRadius: '50%', background: 'var(--color-success)', display: 'inline-block' } }), jsx('span', { children: 'Connected' })],
+                title: connected ? 'Connected' : 'Reconnecting',
+                children: [jsx('span', { style: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block', background: connected ? 'var(--color-success)' : 'var(--color-warning)' } }), jsx('span', { children: connected ? 'Connected' : 'Reconnecting' })],
               }),
               jsx('button', {
                 type: 'button',
@@ -310,13 +323,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                     ? jsx(MemoryPanel, {})
                     : view === 'schedule'
                       ? jsx(SchedulePanel, {})
-                      : jsxs('div', {
-                          className: 'evo-insp-empty',
-                          children: [
-                            jsx('div', { children: `View: ${view}` }),
-                            jsx('div', { children: '（Skills / Workspace 面板规划中）' }),
-                          ],
-                        }),
+                      : view === 'skills'
+                        ? jsx(SkillsPanel, {})
+                        : view === 'workspace'
+                          ? jsx(WorkspacePanel, {})
+                          : null,
                 })
               : jsx(ChatArea, {
                   nodes,
@@ -345,6 +356,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   onTab: setInspectorTab,
                   onClose: () => setInspector(false),
                   cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
+                  sessionId: current ?? null,
                 }),
               }),
             ],
@@ -366,6 +378,8 @@ function apply(ctx: any) {
   registerConversation(ctx)
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
+    // 连接状态源：快照存在 = 已握手；断连/重连经 subscribe 通知 UI。
+    connectionSource = ctx.get('connection')?.hostDescription ?? null
     const disposeService = ctx.reflect.provide('layout', {
       toggleSidebar() {},
       openDetails() {},
@@ -375,6 +389,7 @@ function apply(ctx: any) {
     return () => {
       disposeRegistration()
       disposeService()
+      connectionSource = null
       sessionsService = null
     }
   }, 'evoresearch-ui: layout 服务 + root 注册')

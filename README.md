@@ -30,9 +30,9 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 暖色"纸面"设计、青色品牌色，浅/深双主题，三栏可拖拽布局 —— 对话、会话历史、右侧
 工作区检查器一屏尽览。
 
-| 深色主题 · 三栏工作台 | 浅色主题 · 欢迎页 |
-|---|---|
-| ![三栏工作台](docs/screenshots/workspace-dark.png) | ![浅色欢迎页](docs/screenshots/hero-light.png) |
+| 深色主题 · 三栏工作台 | 浅色主题 · 欢迎页 | 深色主题 · 科研技能面板 |
+|---|---|---|
+| ![三栏工作台](docs/screenshots/workspace-dark.png) | ![浅色欢迎页](docs/screenshots/hero-light.png) | ![科研技能面板](docs/screenshots/skills-dark.png) |
 
 > 输入面板的状态条与底部统计条（轮·步 / LLM 耗时 / tok/s / 上下文用量 / 权限模式）已在截图中体现。
 
@@ -51,9 +51,10 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 | 💬 | **斜杠命令** | `/project` `/memory` `/schedule` `/channel` `/expert` `/autoskills` |
 | 🖥️ | **自定义工作台界面** | 自建浏览器表面（不加载官方 ui-\* 外壳）：顶栏 + 会话历史 + 真实多轮对话 + 输入面板 + 右侧检查器，浅/深双主题，中英双语 |
 | 📊 | **会话状态条与统计** | 输入面板实时徽章（排队消息 / 进行中目标 / 权限模式 Read-only·Write·Full effect / 当前模型 / 上下文用量%）+ 底部统计条（轮·步 \| LLM 耗时 · 工具耗时 \| 首 token 平均 · tok/s \| 缓存命中 \| 输入·输出 tokens） |
-| 🧩 | **业务面板** | EvoMemory（项目/七类统计/目标）与 Scheduled（任务列表/添加/删除）面板，经工作台侧栏菜单直达 |
+| 🧩 | **业务面板** | EvoMemory（项目/七类统计/目标）、Scheduled（任务列表/添加/删除）、Research Skills（AutoSkills 提案审核：Approve/Reject/Run）与 Workspace（项目导入）面板，经工作台侧栏菜单直达 |
 | 🗂️ | **工作区文件浏览器** | Inspector 内目录树（懒加载）+ 文本编辑（Ctrl+S 原子保存）+ 图片/PDF/HTML 内联预览 |
-| 🪟 | **Windows 桌面版** | Tauri 2 + Node sidecar，无边框自绘标题栏，NSIS 安装包 **~45 MB**（实测），含全部后端 |
+| 🤖 | **Agent 检查器** | Inspector 的 Agents 页实时列出当前会话的子代理树（深度缩进 / 运行态 / one-shot·continuable 模式徽标），消息气泡支持一键复制 |
+| 🪟 | **Windows 桌面版** | Tauri 2 + Node sidecar，无边框自绘标题栏（原生拖拽 + 窗口控制），NSIS 安装包 **~45 MB**（实测），含全部后端 |
 
 ## 🚀 快速开始
 
