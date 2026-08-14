@@ -26,3 +26,7 @@ projects/
 .tmp-port/
 dsh-web-ui/
 awesome-dsh-plugin/
+
+# 运行时科研记忆数据（不入库）
+.evoresearch-data/
+
