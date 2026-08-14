@@ -1,5 +1,5 @@
 /**
- * 主题管理（复刻 WebUI ThemeProvider 行为）：
+ * 主题管理（跟随系统 + 手动切换）：
  * 默认跟随系统，顶栏切换按钮在 light/dark 之间翻转，偏好存 localStorage
  * （键 evoresearch-theme），`html.dark` 类驱动 token 切换。
  */

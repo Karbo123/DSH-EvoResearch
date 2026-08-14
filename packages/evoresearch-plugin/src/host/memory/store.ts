@@ -1,7 +1,7 @@
 /**
  * 科研记忆 存储层 —— 每个科研项目独立的 research_memory.db。
  *
- * 表结构对齐 D:\EvoScientist\memory\research\store.py 的核心语义：
+ * 表结构核心语义：
  * - research_turns（Turn Catalog）+ FTS5：每轮对话的分类、topic、状态（含 v3 interrupted）；
  * - turn_continuation_messages：「继续」消息幂等映射回原轮；
  * - category_states + FTS5：每个 category/topic 的当前决定、开放问题、来源；

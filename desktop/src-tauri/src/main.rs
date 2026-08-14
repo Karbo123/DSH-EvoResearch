@@ -151,8 +151,7 @@ fn main() {
                 }
             };
 
-            // 3) 创建主窗口（无边框 + 自绘标题栏，参考 EvoScientist 桌面壳：
-            //    frameless + 网页内注入 36px 标题栏）
+            // 3) 创建主窗口（无边框 + 自绘标题栏：frameless + 网页内注入 36px 标题栏）
             let mut url = url;
             url = format!("{}?desktop=1", url);
             WebviewWindowBuilder::new(
@@ -200,7 +199,7 @@ fn window_close(window: tauri::WebviewWindow) {
     let _ = window.close();
 }
 
-/// 开始窗口拖拽（自绘标题栏 JS 拖拽模式，对应 EvoScientist pywebview 的 begin_drag）。
+/// 开始窗口拖拽（自绘标题栏 JS 拖拽模式：阈值后调用一次，OS 接管拖动）。
 /// 调用后 OS 接管拖动直到指针松开，因此调用方应在 pointer 越过阈值后调用一次。
 #[tauri::command]
 fn window_start_drag(window: tauri::WebviewWindow) {

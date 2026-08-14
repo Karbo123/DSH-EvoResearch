@@ -1,7 +1,7 @@
 /**
  * 应用图标分发工具。
  *
- * 源图（唯一权威）：D:\EvoScientist\WebUI\public\favicon.svg（Research OS 风格
+ * 源图（唯一权威）：favicon.svg（Research OS 风格
  * 几何 R 标记），已入库为 packages/evoresearch-app/frontend/favicon.svg：
  * - 前端：构建时随 dist 提供（favicon、顶栏/侧栏 <img src="/favicon.svg">）；
  * - 桌面：本脚本归档到 desktop/icons/icon-source.svg 并调用

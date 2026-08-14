@@ -1,13 +1,12 @@
 /**
  * 会话消息管线：注册官方 conversationEvents Definition 与 chat view target。
  *
- * 裁剪自官方 ui-conversation（dsh-client-ui-conversation）的
- * assistant-step / input-message Definition —— 官方实现依赖 ui-layout 等
- * 外壳包（自定义表面不加载），本文件保留官方语义（事件匹配、节点形状、
- * 流式 chunk 折叠），只裁掉渲染层（渲染由本工作台自写）。
+ * 基于 DSH 官方会话事件契约（conversationEvents / conversationViews）的
+ * assistant-step / input-message 消息 Definition —— 事件匹配、节点形状、
+ * 流式 chunk 折叠与 legacy 快照语义；渲染由本工作台自写。
  *
  * 注册后，Session 的 ConversationSnapshot.chat.legacy 提供
- * { nodes, partial, runningCalls } —— 与官方 ui-conversation 的渲染入口同源。
+ * { nodes, partial, runningCalls } 供工作台渲染。
  */
 import {
   toAssistantBlocks,

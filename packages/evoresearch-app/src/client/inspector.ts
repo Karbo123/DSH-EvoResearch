@@ -1,5 +1,5 @@
 /**
- * 右侧 inspector（复刻 WebUI InspectorPanel 视觉）：
+ * 右侧 inspector（会话/工作区检查）：
  * 顶部 Tabs（Workspace / Agents / Side chats）+ X 关闭；
  * Workspace 下有 Tree/By type 二级视图与空态。
  */

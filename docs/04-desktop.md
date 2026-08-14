@@ -11,7 +11,7 @@
 | 方案 | 安装包体积 | 说明 |
 |---|---|---|
 | Electron | ~100MB+ | 自带 Chromium，否决 |
-| PyInstaller onefile（上游 EvoScientist） | 100MB+ | 本项目不用 Python |
+| PyInstaller onefile（Python 打包） | 100MB+ | 本项目不用 Python |
 | **Tauri 2 + Node sidecar** | **~40-60MB** | WebView2 系统复用（壳 ~5-15MB）+ node.exe（LZMA ~35-45MB）+ 应用代码 |
 | Node SEA 单文件 exe | 80-120MB | 原生模块（node-pty 等）外置复杂度高，备选 |
 
@@ -27,10 +27,10 @@ Node.js 是硬约束（后端必须 NodeJS），因此体积下限 ≈ node.exe 
 | node.exe（v24.19.0 LTS） | 88.5 MB | 未压缩；LZMA 后约 30-35MB |
 | app/（node_modules + profiles） | ~137 MB | 裁剪后 |
 | 对比 Electron 典型 | 100MB+ | **本方案缩小 56%+** |
-| 对比上游 EvoScientist（PyInstaller） | 100MB+ | 本方案缩小 50%+ |
+| 对比 PyInstaller 方案 | 100MB+ | 本方案缩小 50%+ |
 
 **体积优化（deepseek profile 思路，已实现）**：`bundle-sidecar.mjs` 裁剪
-- 未使用的 provider SDK：`@anthropic-ai`/`@google`/`@mistralai`/`@aws-*`/`@smithy`/`@protobufjs`（-32MB）——与上游 EvoScientist `build.py --profile deepseek` 语义一致（适配器惰性 import，不选则不加载）；
+- 未使用的 provider SDK：`@anthropic-ai`/`@google`/`@mistralai`/`@aws-*`/`@smithy`/`@protobufjs`（-32MB）——deepseek profile 语义（适配器惰性 import，不选则不加载）；
 - 原生模块跨平台 prebuilds：node-pty 只留 win32-x64（-28MB），sharp 只留 win32；
 - 裁剪后产物已通过完整 boot 验证（DSH_HOME 隔离 + 插件激活 + BOOT 图 + bundle serve）。
 
@@ -121,10 +121,10 @@ cargo tauri build --bundles nsis
    用 WebView2 加载 `http://127.0.0.1:<port>?desktop=1`（desktop 参数 = 无边框自绘标题栏模式）；
 4. 壳退出时终止 sidecar 进程树（Tauri `kill_children` + Node 侧 `process.on('exit')` 兜底）。
 
-## 无边框自绘标题栏（参考 EvoScientist 桌面壳）
+## 无边框自绘标题栏
 
 窗口 `decorations: false`（无系统标题栏），标题栏由**前端渲染**（`?desktop=1` 时激活），
-视觉与交互规范移植自 `EvoScientist/desktop/titlebar.py`：
+无边框窗口 + 前端渲染标题栏：
 
 - **36px 高** fixed top；深色 `#18181b/#3f3f46/#d4d4d8`，浅色 `#f4f4f5/#e4e4e7/#52525b`；
 - 左：品牌（R 图标 + EvoResearch）→ 回首页；`tools`：sidebar / new-chat；
@@ -142,7 +142,7 @@ cargo tauri build --bundles nsis
 - [ ] NSIS 安装器（LZMA）而非 MSI/WiX；
 - [ ] `npm ci --omit=dev --production` + `pnpm deploy` 式裁剪，剔除 SDK 测试套件
       （`--profile deepseek` 思路：仅保留 OpenAI-compatible/DeepSeek provider，去掉
-      anthropic/google/ollama 等 SDK —— 对应上游 EvoScientist build.py 的 deepseek profile）；
+      anthropic/google/ollama 等 SDK —— deepseek profile 思路）；
 - [ ] node.exe 用官方 x64 最小发行版（不启用 npm 全局缓存）；
 - [ ] 图标与资源压缩（`tauri icon` + 单尺寸 .ico）；
 - [ ] 后续可选：Node SEA 实验（若原生模块约束可解）再砍 ~10MB。

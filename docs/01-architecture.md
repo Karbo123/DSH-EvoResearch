@@ -40,27 +40,27 @@
 
 ### Host 插件（`src/host/`）
 
-| 模块 | 职责 | 与上游 EvoScientist 对应 |
-|---|---|---|
-| `core/paths.ts` | 项目名/路径/工作区安全校验（Windows normcase） | `paths.py` |
-| `core/db.ts` | node:sqlite 封装（WAL/FULL 同步/迁移/FTS5） | `memory/research/store.py` 基础层 |
-| `core/cron.ts` | 5 字段 cron 解析 + nextRun（自研零依赖） | `cron/schedule.py` |
-| `core/llm.ts` | LLM 文本/JSON 调用辅助（流式收集、宽松 JSON 提取、token 估算） | `llm/*` 辅助 |
-| `workspace.ts` | 项目创建/导入/自动创建（AI slug）/git exclude | `paths.py` + WebUI workspace API |
-| `memory/store.ts` | research_memory.db：turns/attempts/receipts/states/observations/goals/进度 | `memory/research/store.py` |
-| `memory/classifier.ts` | 七类分类 + topic 归一化（词面 + 语义接口） | `memory/research/classifier.py` |
-| `memory/retrieval.ts` | RRF 融合、类别加权不硬过滤、EmbeddingProvider 接口 | `memory/research/retrieval.py` |
-| `memory/packet.ts` | 记忆包构建与渲染（<research_memory_packet>） | `memory/research/packet.py` |
-| `memory/tools.ts` | search_research_history / read_research_turn / observations 工具 | `memory/research/tools.py` |
-| `memory/goals.ts` | 长程检测、Goal 提取、四轴判定、投影渲染 | `memory/research/goal_control.py` |
-| `memory/index.ts` | MemoryRuntime：session/event 订阅、prompt 注入、后台分类、按项目懒打开存储 | `middleware/memory.py` |
-| `scheduler.ts` | 定时任务（JSON 持久化 + 每分钟 tick + 结果线程） | `cron/` + WebUI Scheduled Tasks |
-| `channels/` | ChannelAdapter 接口 + 管理器 + Telegram 长轮询 + 骨架适配器 | `channels/*` |
-| `autoskills.ts` | 观测聚类 → 提案 → approve/reject/run → 技能目录 | `memory/autoskills/*` |
-| `experts.ts` | 专家邀请（active_teams 持久化） | `middleware/active_team.py` |
-| `api.ts` | evoresearchApiService（Typert Remote，Client 可调） | `langgraph_dev/http.py` |
-| `commands.ts` | 斜杠命令注册（平台命令体系） | `commands/implementation/*` |
-| `index.ts` | 插件入口：配置解析 + 组装 + 副作用管理 | `EvoScientist.py` 接线层（上游参照） |
+| 模块 | 职责 |
+|---|---|
+| `core/paths.ts` | 项目名/路径/工作区安全校验（Windows normcase） |
+| `core/db.ts` | node:sqlite 封装（WAL/FULL 同步/迁移/FTS5） |
+| `core/cron.ts` | 5 字段 cron 解析 + nextRun（自研零依赖） |
+| `core/llm.ts` | LLM 文本/JSON 调用辅助（流式收集、宽松 JSON 提取、token 估算） |
+| `workspace.ts` | 项目创建/导入/自动创建（AI slug）/git exclude |
+| `memory/store.ts` | research_memory.db：turns/attempts/receipts/states/observations/goals/进度 |
+| `memory/classifier.ts` | 七类分类 + topic 归一化（词面 + 语义接口） |
+| `memory/retrieval.ts` | RRF 融合、类别加权不硬过滤、EmbeddingProvider 接口 |
+| `memory/packet.ts` | 记忆包构建与渲染（<research_memory_packet>） |
+| `memory/tools.ts` | search_research_history / read_research_turn / observations 工具 |
+| `memory/goals.ts` | 长程检测、Goal 提取、四轴判定、投影渲染 |
+| `memory/index.ts` | MemoryRuntime：session/event 订阅、prompt 注入、后台分类、按项目懒打开存储 |
+| `scheduler.ts` | 定时任务（JSON 持久化 + 每分钟 tick + 结果线程） |
+| `channels/` | ChannelAdapter 接口 + 管理器 + Telegram 长轮询 + 骨架适配器 |
+| `autoskills.ts` | 观测聚类 → 提案 → approve/reject/run → 技能目录 |
+| `experts.ts` | 专家邀请（active_teams 持久化） |
+| `api.ts` | evoresearchApiService（Typert Remote，Client 可调） |
+| `commands.ts` | 斜杠命令注册（平台命令体系） |
+| `index.ts` | 插件入口：配置解析 + 组装 + 副作用管理 |
 
 ### 浏览器表面（`packages/evoresearch-app/`）
 

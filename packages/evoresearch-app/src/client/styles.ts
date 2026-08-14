@@ -1,8 +1,8 @@
 /**
- * EvoResearch 工作台样式 —— 复刻 EvoScientist WebUI 的视觉设计系统
- * （暖色"纸面" + 青色品牌，浅/深双主题）。
+ * EvoResearch 工作台样式 —— 暖色"纸面" + 青色品牌设计系统
+ * （浅/深双主题）。
  *
- * token 与布局数值取自 WebUI 的 globals.css / tailwind 配置（对照基准）：
+ * 设计 token 与布局数值：
  * - 浅色：象牙纸面 #faf8f3、纯白卡片、暖炭文字 #33302a、青品牌 #066679
  * - 深色：暖炭纸面 #23211d、表面 #2c2a25、文字 #ece7dc、青品牌 #3b9cb0
  * - 圆角 0.5rem、顶栏 h-14（56px）、聊天最大宽度 900px
@@ -98,7 +98,7 @@ body { margin: 0; }
 }
 .evo-resize-handle { width: 4px; flex-shrink: 0; cursor: col-resize; background: transparent; position: relative; }
 .evo-resize-handle:hover, .evo-resize-handle[data-dragging] { background: var(--color-border); }
-/* ── 左侧栏（ThreadList 复刻）── */
+/* ── 左侧栏 ── */
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-tl-head { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 2px; }
 .evo-tl-title { display: flex; align-items: center; gap: 10px; padding: 4px 6px 8px; }
@@ -192,7 +192,7 @@ body { margin: 0; }
 .evo-insp-empty { padding: 40px 20px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-insp-empty svg { width: 36px; height: 36px; color: var(--color-border); margin-bottom: 8px; }
 .evo-view { flex: 1; overflow-y: auto; }
-/* ── 消息列表（ChatMessage 复刻）── */
+/* ── 消息列表 ── */
 .evo-msg-list { flex: 1; overflow-y: auto; padding: 24px 24px 8px; display: flex; flex-direction: column; gap: 18px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; }
 .evo-msg-error { padding: 10px 14px; border: 1px solid var(--color-error); border-radius: 10px; color: var(--color-error); font-size: 13px; background: color-mix(in srgb, var(--color-error) 8%, transparent); }
 .evo-msg-row { display: flex; gap: 10px; align-items: flex-start; }
@@ -212,7 +212,7 @@ body { margin: 0; }
 .evo-tool-card svg { width: 14px; height: 14px; margin-top: 1px; flex-shrink: 0; color: var(--color-text-tertiary); }
 .evo-tool-name { font-weight: 600; color: var(--color-text-primary); font-family: var(--font-mono, ui-monospace, Consolas, monospace); flex-shrink: 0; }
 .evo-tool-args { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-tertiary); font-family: var(--font-mono, ui-monospace, Consolas, monospace); }
-/* ── 桌面自绘标题栏（移植 EvoScientist titlebar.py 视觉规范）── */
+/* ── 桌面自绘标题栏 ── */
 html.evo-desktop body { margin: 0 !important; }
 .evo-app[data-desktop] { height: calc(100vh - 36px); margin-top: 36px; }
 .evo-tb {

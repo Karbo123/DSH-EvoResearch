@@ -4,7 +4,7 @@
 
 **面向科研的自主智能体 —— 基于 deepseek-harness（DSH）0.1.0-rc.6 构建**
 
-用 TypeScript / Node.js 从零实现的科研智能体能力套件：**自进化科研记忆、项目工作区、
+用 TypeScript / Node.js 实现的科研智能体能力套件：**自进化科研记忆、项目工作区、
 多智能体团队、定时任务、多通道接入、自定义工作台界面与 Windows 桌面版**。
 
 [![Release](https://img.shields.io/github/v/release/Karbo123/DSH-EvoResearch?color=2f6bff&label=Release)](https://github.com/Karbo123/DSH-EvoResearch/releases)
@@ -232,7 +232,7 @@ docs/                          # 中文文档（架构/功能映射/开发/桌�
 |---|---|
 | [docs/00-decisions.md](docs/00-decisions.md) | 技术选型决策（存储、嵌入模型、桌面方案等） |
 | [docs/01-architecture.md](docs/01-architecture.md) | 架构设计与数据流 |
-| [docs/02-feature-map.md](docs/02-feature-map.md) | 与上游 EvoScientist 的功能逐条映射表 |
+| [docs/02-feature-map.md](docs/02-feature-map.md) | 功能地图（能力清单、设计与状态） |
 | [docs/03-development.md](docs/03-development.md) | 开发指南（挂载、配置、扩展点） |
 | [docs/04-desktop.md](docs/04-desktop.md) | Windows 桌面版构建与体积优化 |
 
@@ -245,7 +245,7 @@ EvoResearch 只做「科研化」扩展（记忆、项目、团队、调度、�
 **Q：界面是 DSH 自带的吗？**
 不是。`@evoresearch/dsh-app` 是**自定义浏览器表面**：host 引擎与传输完全复用官方
 （会话、模型、工具、审批……），但浏览器端不加载官方 `ui-*` 外壳，界面是
-EvoResearch 自己的工作台（视觉复刻，含真实多轮对话、会话历史、浅/深主题）。
+EvoResearch 自己的工作台（暖色纸面设计、浅/深双主题，含真实多轮对话与会话历史）。
 
 **Q：数据存在哪里？**
 每个科研项目一个独立目录 `projects/<name>/`，内部 `.evoresearch-data/` 存放

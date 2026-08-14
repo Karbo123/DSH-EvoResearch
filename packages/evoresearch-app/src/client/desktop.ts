@@ -1,16 +1,14 @@
 /**
- * 桌面版自绘标题栏（无边框窗口）—— 移植自 EvoScientist 桌面壳
- * （EvoScientist/desktop/titlebar.py）的视觉与交互规范：
+ * 桌面版自绘标题栏（无边框窗口）—— 视觉与交互规范：
  *
  * - 36px 高，fixed top；深色 #18181b/#3f3f46/#d4d4d8，浅色 #f4f4f5/#e4e4e7/#52525b
  * - 左：品牌（R logo + 名称，点击回首页）
  * - 左组（tools）：sidebar、new-chat
  * - 右组（actions）：health 状态、side-chats、language、theme、inspector、settings
  * - 最右（controls）：最小化 / 最大化(还原) / 关闭（hover 红 #e81123）
- * - 空白区拖拽移动窗口（Tauri data-tauri-drag-region），双击最大化
+ * - 空白区拖拽移动窗口（阈值后调 Tauri start_dragging），双击最大化
  *
- * 与 EvoScientist 的差异：本实现不注入 data-desktop-action 代理 —— 标题栏与
- * 网页顶栏是同一 React 应用，直接调用同一批 handler。
+ * 实现说明：标题栏与网页顶栏是同一 React 应用，直接调用同一批 handler。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 
@@ -39,7 +37,7 @@ function callWindow(method: string): void {
 
 const DRAG_THRESHOLD = 4
 
-/** 标题栏 JS 拖拽（移植 EvoScientist titlebar.py：阈值后 begin_drag，此处为 start_dragging）。 */
+/** 标题栏 JS 拖拽（阈值后调 Tauri start_dragging）。 */
 function useTitlebarDrag(): { onPointerDown(e: PointerEvent): void } {
   let state: { pointerId: number; startX: number; startY: number; active: boolean } | null = null
 

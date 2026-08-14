@@ -1,5 +1,5 @@
 /**
- * 左侧栏（复刻 WebUI ThreadList 视觉）：
+ * 左侧栏（会话历史）：
  * 标题 + New Chat + 导航菜单（Import Project / Research Skills / EvoMemory /
  * Scheduled）+ 搜索框 + Recents 会话列表。
  * 数据来自 framework kit 的 useSessions（DSH client-runtime 镜像）。

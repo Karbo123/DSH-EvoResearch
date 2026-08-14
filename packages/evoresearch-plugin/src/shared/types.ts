@@ -1,7 +1,7 @@
 /**
  * EvoResearch 插件共享类型（Host 与 Client 两侧共用的纯 JSON 数据模型）。
  *
- * 与 D:\EvoScientist 的 Python 实现保持字段级语义一致：
+ * 字段级语义约定：
  * - 七类科研记忆分类（idea/method/experiment/related_work/reproduction/project/general）；
  * - Turn Catalog（research_turns）、Topic State（category_states）、Observation、Goal Contract；
  * - 项目工作区（projects/<name>/.evoresearch-data/ 隔离）。

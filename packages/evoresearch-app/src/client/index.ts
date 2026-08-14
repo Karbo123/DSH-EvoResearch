@@ -1,12 +1,12 @@
 /**
- * EvoResearch 工作台（browser half）—— 阶段 1：视觉复刻 EvoScientist WebUI。
+ * EvoResearch 工作台（browser half）。
  *
- * 结构（对照 WebUI page.tsx）：
+ * 结构：
  * - 顶栏：品牌 + 侧栏/新建 + 右侧（连接状态 / Side chats / 语言 / 主题 /
  *   inspector / 设置）；
  * - 三栏：左 ThreadList（会话历史）、中 Chat（欢迎页 + 输入面板）、
  *   右 Inspector（Workspace / Agents / Side chats）；
- * - 默认与 WebUI 一致：侧栏与 inspector 收起，仅顶栏 + 中间。
+ * - 默认：侧栏与 inspector 收起，仅顶栏 + 中间。
  *
  * 数据全部来自 DSH client-runtime（useSessions / sessions.open），
  * 后端能力（会话、模型、工具）由 dsh-base 提供 —— 不重复造轮子。

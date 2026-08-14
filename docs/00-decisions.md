@@ -1,6 +1,6 @@
 # 00 · 技术选型决策（Tech Decisions）
 
-> 本项目是 D:\EvoScientist（上游参照，Python）的 TypeScript 完全重写，运行于
+> 本项目基于 deepseek-harness（DSH）构建，TypeScript / Node.js 实现，运行于
 > [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）0.1.0-rc.x 平台。
 > 本文记录每项关键选型的**决策依据**与**否决项**，便于后续维护者复核。
 > 硬性约束：Node.js 后端、不使用 Python、不基于 deepagents、Windows 优先（Web + 桌面）、
@@ -60,7 +60,7 @@
 |---|---|---|
 | Electron | ~100MB+ | 否决 |
 | NW.js | ~100MB+ | 否决 |
-| PyInstaller onefile（上游 EvoScientist 原方案） | 通常 100MB+ | 本项目不用 Python |
+| PyInstaller onefile（Python 打包方案） | 通常 100MB+ | 本项目不用 Python |
 | **Tauri + Node sidecar** | **~40-60MB** | **采用**（Rust 工具链已就绪；Node 是硬约束，物理下限 ≈ node.exe 压缩后体积） |
 | Node SEA 单文件 | ~80-120MB | 备选；原生模块（node-pty 等）需外置，复杂度高，第一版不用 |
 
