@@ -34,6 +34,8 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 |---|---|
 | ![三栏工作台](docs/screenshots/workspace-dark.png) | ![浅色欢迎页](docs/screenshots/hero-light.png) |
 
+> 输入面板的状态条与底部统计条（轮·步 / LLM 耗时 / tok/s / 上下文用量 / 权限模式）已在截图中体现。
+
 ## ✨ 特性一览
 
 | | 特性 | 说明 |
@@ -48,7 +50,9 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 | 👁️ | **视觉检查工具** | `vision_check` 工具 + 截图脚本，让模型能"看见"界面并自检（OpenAI 兼容视觉模型） |
 | 💬 | **斜杠命令** | `/project` `/memory` `/schedule` `/channel` `/expert` `/autoskills` |
 | 🖥️ | **自定义工作台界面** | 自建浏览器表面（不加载官方 ui-\* 外壳）：顶栏 + 会话历史 + 真实多轮对话 + 输入面板 + 右侧检查器，浅/深双主题，中英双语 |
-| 🪟 | **Windows 桌面版** | Tauri 2 + Node sidecar，NSIS 安装包 **~45 MB**（实测），含全部后端 |
+| 📊 | **会话状态条与统计** | 输入面板实时徽章（排队消息 / 进行中目标 / 权限模式 Read-only·Write·Full effect / 当前模型 / 上下文用量%）+ 底部统计条（轮·步 \| LLM 耗时 · 工具耗时 \| 首 token 平均 · tok/s \| 缓存命中 \| 输入·输出 tokens） |
+| 🗂️ | **工作区文件浏览器** | Inspector 内目录树（懒加载）+ 文本编辑（Ctrl+S 原子保存）+ 图片/PDF/HTML 内联预览 |
+| 🪟 | **Windows 桌面版** | Tauri 2 + Node sidecar，无边框自绘标题栏，NSIS 安装包 **~45 MB**（实测），含全部后端 |
 
 ## 🚀 快速开始
 
