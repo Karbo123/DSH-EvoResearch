@@ -8,6 +8,7 @@
 多智能体团队、定时任务、多通道接入、自定义工作台界面与 Windows 桌面版**。
 
 [![Release](https://img.shields.io/github/v/release/Karbo123/DSH-EvoResearch?color=2f6bff&label=Release)](https://github.com/Karbo123/DSH-EvoResearch/releases)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-green)](https://nodejs.org/)
 [![DSH](https://img.shields.io/badge/deepseek--harness-0.1.0--rc.6-1f3a93)](https://github.com/deepseek-ai/deepseek-harness)
