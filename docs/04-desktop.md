@@ -18,22 +18,55 @@
 Node.js 是硬约束（后端必须 NodeJS），因此体积下限 ≈ node.exe 压缩后体积；
 相比 Electron 已缩小约 60%，相比原 Python 方案缩小约 50%+。
 
+## 体积实测（0.1.0-rc.1）
+
+| 项 | 体积 | 说明 |
+|---|---|---|
+| node.exe（v24.19.0 LTS） | 88.5 MB | LZMA 压缩后预计 ~30-35MB |
+| app/（node_modules + profiles） | ~137 MB | 裁剪后；LZMA 后预计 ~45-60MB |
+| 壳（Tauri + WebView2 复用） | ~5-15 MB | NSIS 安装器 |
+| **合计（预期安装包）** | **~80-110 MB** | 未压缩 225.6MB 实测；显著小于 Electron（100MB+） |
+
+**体积优化（deepseek profile 思路，已实现）**：`bundle-sidecar.mjs` 裁剪
+- 未使用的 provider SDK：`@anthropic-ai`/`@google`/`@mistralai`/`@aws-*`/`@smithy`/`@protobufjs`（-32MB）——与 EvoScientist `build.py --profile deepseek` 语义一致（适配器惰性 import，不选则不加载）；
+- 原生模块跨平台 prebuilds：node-pty 只留 win32-x64（-28MB），sharp 只留 win32；
+- 裁剪后产物已通过完整 boot 验证（DSH_HOME 隔离 + 插件激活 + BOOT 图 + bundle serve）。
+
+**关键版本约束**：sidecar 的 node.exe 必须 ≥ **Node 23**（`node:zlib` 的 zstd API 是 23.0 加入，
+`dsh-session-persistence-jsonl` 依赖它）；当前使用 Node 24 LTS（Krypton）。
+
 ## 目录结构（desktop/）
 
 ```
 desktop/
 ├── src-tauri/                 # Tauri 2（Rust）
-│   ├── src/main.rs            # 壳入口：创建窗口、加载本地 DSH web 服务 URL、sidecar 生命周期
-│   ├── tauri.conf.json        # 窗口/打包配置（NSIS 安装器、图标）
+│   ├── src/main.rs            # 壳入口：locate_sidecar 探测 + spawn + WebView2 加载
+│   ├── tauri.conf.json        # NSIS/LZMA、resources: ../sidecar/dist/**
 │   └── Cargo.toml
-├── sidecar/                   # Node 后端打包（构建时生成，不入库）
-│   ├── node.exe               # 官方 Windows x64 Node（压缩前 ~100MB，LZMA 后 ~35-45MB）
-│   └── app/                   # dsh + 插件 + profile 的 standalone 目录（npm pack / npm ci --omit=dev）
+├── sidecar/
+│   ├── launch.js              # sidecar 启动脚本（DSH_HOME=app 根、端口文件协议、防孤儿）
+│   ├── .cache/                # node.zip 缓存（--skip-download 复用）
+│   └── dist/                  # 打包产物（构建时生成，不入库）
+│       ├── node.exe           # Node 24 LTS（win-x64）
+│       ├── launch.js
+│       └── app/               # DSH_HOME 根（运行期 DSH_HOME 指向这里）
+│           ├── profiles/evoscientist/   # profile 元数据（bundle 声明）
+│           └── node_modules/            # dsh-base + dsh-web-app + dsh CLI + 插件
 ├── scripts/
-│   ├── bundle-sidecar.mjs     # 组装 sidecar（下载 node、部署依赖、写 launch 脚本）
+│   ├── bundle-sidecar.mjs     # 组装 sidecar（下载 node/安装依赖/裁剪）
 │   └── build.mjs              # 一键：npm build → bundle-sidecar → cargo tauri build
-└── icons/                     # 应用图标（.ico/.png）
+├── icons/                     # icon-source.png（gen-icon.mjs 生成）
+└── dist/index.html            # frontendDist 占位（运行期由 sidecar 提供真实服务）
 ```
+
+## sidecar 协作协议（壳 ↔ 后端）
+
+1. 壳 `locate_sidecar` 探测资源目录中的 node.exe/launch.js/app（适配 Tauri 资源复制路径）；
+2. spawn `node.exe launch.js`（cwd = app/，隐藏控制台）；
+3. launch.js 设置 `DSH_HOME = cwd`（独立数据根，不污染用户 `~/.dsh`），
+   启动 `dsh --profile evoscientist --port 0`；
+4. 端口写入 `%LOCALAPPDATA%/EvoScientist/port.json`（壳轮询 ≤30s 后加载 WebView2）；
+5. 退出清理：launch.js 在父进程消失时自动退出（tasklist 探测），防孤儿进程。
 
 ## 构建步骤
 

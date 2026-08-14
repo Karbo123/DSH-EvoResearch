@@ -21,13 +21,33 @@ fn port_file(app_data_dir: &PathBuf) -> PathBuf {
     app_data_dir.join("port.json")
 }
 
+/// 在资源目录中定位 sidecar 组件（Tauri 资源复制保留的路径结构随版本/配置变化，
+/// 因此按候选路径探测）。
+fn locate_sidecar(resource_dir: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+    for candidate in [
+        resource_dir.join(name),
+        resource_dir.join("sidecar").join(name),
+        resource_dir.join("dist").join(name),
+    ] {
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 /// 启动 sidecar 进程。
 fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
-    let node = resource_dir.join("sidecar").join("node.exe");
-    let launch = resource_dir.join("sidecar").join("launch.js");
+    let node = locate_sidecar(resource_dir, "node.exe")
+        .ok_or_else(|| std::io::Error::other("未找到 sidecar node.exe（资源未嵌入？）"))?;
+    let launch = locate_sidecar(resource_dir, "launch.js")
+        .ok_or_else(|| std::io::Error::other("未找到 sidecar launch.js"))?;
+    // sidecar 工作目录 = app 目录（DSH_HOME 根，含 profiles/ 与 node_modules/）
+    let workdir = locate_sidecar(resource_dir, "app")
+        .ok_or_else(|| std::io::Error::other("未找到 sidecar app 目录"))?;
     Command::new(&node)
         .arg(&launch)
-        .current_dir(resource_dir.join("sidecar"))
+        .current_dir(&workdir)
         .stdin(Stdio::null())
         .stdout(Stdio::null()) // 端口经端口文件传递，避免管道阻塞
         .stderr(Stdio::null())

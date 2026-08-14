@@ -25,7 +25,7 @@ import { spawnSync } from 'node:child_process'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SIDECAR = join(ROOT, 'desktop', 'sidecar')
 const DIST = join(SIDECAR, 'dist')
-const NODE_VERSION = 'v22.14.0' // 官方 LTS（与 engines 匹配：node:sqlite 需 ≥22.5）
+const NODE_VERSION = 'v24.19.0' // Node LTS（Krypton）；DSH rc.6 需要 ≥23（node:zlib zstd / node:sqlite）
 const NODE_URL = `https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip`
 const CACHE = join(SIDECAR, '.cache')
 
@@ -71,21 +71,51 @@ step('解压 node.exe', () => {
   copyFileSync(join(extractDir, inner, 'node.exe'), join(DIST, 'node.exe'))
 })
 
-step('组装 app/（standalone profile + 依赖）', () => {
+step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   const appDir = join(DIST, 'app')
-  mkdirSync(appDir, { recursive: true })
-  // 以 profiles/evoscientist 为蓝本生成 standalone package.json（dsh profile 元数据）
+  const profileDir = join(appDir, 'profiles', 'evoscientist')
+  mkdirSync(profileDir, { recursive: true })
+  // 1) 部署清单（npm install 依赖声明）：放 app 根，node_modules 供 profiles 向上解析
+  const deployPkg = {
+    name: 'evoscientist-sidecar',
+    version: '0.1.0-rc.1',
+    private: true,
+    dependencies: {
+      '@deepseek-ai/dsh': '^0.1.0-rc.6', // dsh CLI（launch.js 直接调用其 bin）
+      '@deepseek-ai/dsh-base': '^0.1.0-rc.6',
+      '@deepseek-ai/dsh-web-app': '^0.1.0-rc.6',
+      '@evoscientist/dsh-plugin': `file:${join(ROOT, 'packages', 'evoscientist-plugin')}`,
+    },
+  }
+  writeFileSync(join(appDir, 'package.json'), JSON.stringify(deployPkg, null, 2), 'utf8')
+  // 2) profile 元数据（dsh --profile evoscientist 时读取）
   const profilePkg = JSON.parse(readFileUtf8(join(ROOT, 'profiles', 'evoscientist', 'package.json')))
-  profilePkg.dependencies['@evoscientist/dsh-plugin'] = `file:${join(ROOT, 'packages', 'evoscientist-plugin')}`
-  writeFileSync(join(appDir, 'package.json'), JSON.stringify(profilePkg, null, 2), 'utf8')
-  writeFileSync(join(appDir, 'cordis.patch.yml'), readFileUtf8(join(ROOT, 'profiles', 'evoscientist', 'cordis.patch.yml')), 'utf8')
+  delete profilePkg.dependencies // 依赖由 app 根提供（profile 向上解析）
+  writeFileSync(join(profileDir, 'package.json'), JSON.stringify(profilePkg, null, 2), 'utf8')
+  writeFileSync(join(profileDir, 'cordis.patch.yml'), readFileUtf8(join(ROOT, 'profiles', 'evoscientist', 'cordis.patch.yml')), 'utf8')
+  // 3) 安装依赖
   const result = spawnSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--production'], {
     cwd: appDir,
-    stdio: 'inherit',
+    encoding: 'utf8',
+    shell: true, // Windows 下 npm 是 npm.cmd，spawnSync 需要 shell 解析
   })
-  if (result.status !== 0) throw new Error('npm install 失败')
+  if (result.status !== 0) {
+    console.error('[bundle-sidecar] npm install 失败，输出:')
+    console.error(result.stdout?.slice(-2000))
+    console.error(result.stderr?.slice(-2000))
+    throw new Error('npm install 失败')
+  }
+  // 体积裁剪（deepseek profile 思路，对应原 EvoScientist build.py 的 --profile deepseek）：
+  // 1) 删除未使用的 provider SDK（保留 openai/pi-ai 与 @deepseek-ai 核心）；
+  // 2) 原生模块只保留 win32-x64 prebuilds（node-pty/sharp 的 linux/darwin 产物占 ~65MB）。
+  const nodeModules = join(appDir, 'node_modules')
+  // provider SDK 裁剪：anthropic/google/mistral/aws 适配器按需惰性 import，
+  // 不选这些 provider 就不加载（与 EvoScientist build.py --profile deepseek 语义一致）。
+  // 保留：openai（pi-ai 用）、@deepseek-ai、@opentelemetry（遥测）、sharp（附件图片）。
+  prunePackages(nodeModules, ['@anthropic-ai', '@google', '@mistralai', '@aws-sdk', '@aws-crypto', '@smithy', '@protobufjs'])
+  pruneNativePrebuilds(nodeModules)
   // 裁剪体积：删除源码映射与文档
-  pruneDir(appDir, ['.map', 'README.md', 'LICENSE'])
+  pruneDir(appDir, ['.map', 'README.md', 'LICENSE', '.md', '.d.ts', 'debug.log'])
 })
 
 step('复制 launch.js', () => {
@@ -108,4 +138,54 @@ function pruneDir(dir, suffixes) {
       rmSync(full, { force: true })
     }
   }
+}
+
+/** 删除指定包目录（整体，含 @scope 下的子包）。 */
+function prunePackages(nodeModules, packages) {
+  for (const name of packages) {
+    const target = join(nodeModules, name)
+    if (existsSync(target)) {
+      const size = dirSize(target)
+      rmSync(target, { recursive: true, force: true })
+      console.log(`[bundle-sidecar] 裁剪 ${name}（-${Math.round(size / 1024 / 1024)} MB）`)
+    }
+  }
+}
+
+/** 原生模块 prebuilds 只保留 win32-x64（node-pty / @img/sharp 等）。 */
+function pruneNativePrebuilds(nodeModules) {
+  // node-pty prebuilds：只留 win32-x64
+  const pty = join(nodeModules, 'node-pty', 'prebuilds')
+  if (existsSync(pty)) {
+    for (const entry of readdirSync(pty)) {
+      const full = join(pty, entry)
+      if (!statSync(full).isDirectory()) continue
+      if (entry === 'win32-x64') continue
+      rmSync(full, { recursive: true, force: true })
+      console.log(`[bundle-sidecar] 裁剪 node-pty prebuild ${entry}`)
+    }
+  }
+  // @img/sharp：只删 linux/darwin 平台包（保留 win32-x64 与工具包如 colour）
+  const img = join(nodeModules, '@img')
+  if (existsSync(img)) {
+    for (const entry of readdirSync(img)) {
+      if (!/sharp.*(linux|darwin)/.test(entry)) continue
+      const full = join(img, entry)
+      if (!statSync(full).isDirectory()) continue
+      const size = dirSize(full)
+      rmSync(full, { recursive: true, force: true })
+      console.log(`[bundle-sidecar] 裁剪 @img/${entry}（-${Math.round(size / 1024 / 1024)} MB）`)
+    }
+  }
+}
+
+/** 目录总字节数。 */
+function dirSize(dir) {
+  let total = 0
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) total += dirSize(full)
+    else if (entry.isFile()) total += statSync(full).size
+  }
+  return total
 }

@@ -195,6 +195,25 @@ export const RESEARCH_MEMORY_MIGRATIONS: readonly Migration[] = [
       `)
     },
   },
+  {
+    // v3 Raw Turn Archive：原始轮次分页归档（原始历史永不清除，只裁剪活跃投影）。
+    // 对应 EvoScientist store.py 的 turn_segments 表；active 轮次在超预算时归档
+    // 到 segments 并生成 Working Summary（完整实现见 recovery 模块）。
+    version: 2,
+    up(db) {
+      db.exec(`
+        CREATE TABLE turn_segments (
+          segment_id TEXT PRIMARY KEY,
+          turn_id TEXT NOT NULL REFERENCES research_turns(turn_id),
+          seq INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_segments_turn ON turn_segments(turn_id, seq);
+      `)
+    },
+  },
 ]
 
 /** 数据库行（宽松类型，读取后立即转换为领域对象）。 */
@@ -486,6 +505,55 @@ export class ResearchMemoryStore {
       turnId: row.turn_id === null || row.turn_id === undefined ? undefined : asString(row.turn_id),
       startedAt: asNumber(row.started_at),
     }))
+  }
+
+  // ── Raw Turn Archive（v3：原始轮次分页归档） ──────────────────────────────
+
+  /** 追加一段原始轮次内容（分段归档，原始历史永不清除）。 */
+  appendSegment(input: { segmentId: string; turnId: string; kind: 'user' | 'assistant' | 'tool' | 'summary' | 'note'; payload: string }): void {
+    const nextSeq = this.nextSegmentSeq(input.turnId)
+    this.db.db
+      .prepare('INSERT INTO turn_segments (segment_id, turn_id, seq, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(input.segmentId, input.turnId, nextSeq, input.kind, input.payload, Date.now())
+  }
+
+  /** 某轮下一个 segment 序号。 */
+  private nextSegmentSeq(turnId: string): number {
+    const row = this.db.db
+      .prepare('SELECT COALESCE(MAX(seq), -1) AS max_seq FROM turn_segments WHERE turn_id = ?')
+      .get(turnId) as Row
+    return asNumber(row.max_seq) + 1
+  }
+
+  /** 读取某轮的归档分段（按 seq 升序）。 */
+  listSegments(turnId: string): Array<{ segmentId: string; seq: number; kind: string; payload: string; createdAt: number }> {
+    const rows = this.db.db
+      .prepare('SELECT * FROM turn_segments WHERE turn_id = ? ORDER BY seq ASC')
+      .all(turnId) as Row[]
+    return rows.map((row) => ({
+      segmentId: asString(row.segment_id),
+      seq: asNumber(row.seq),
+      kind: asString(row.kind),
+      payload: asString(row.payload),
+      createdAt: asNumber(row.created_at),
+    }))
+  }
+
+  /**
+   * 整轮归档：把轮次快照写入 segments（用户消息/回答/摘要/打断说明）。
+   * research_turns 记录本身保留（活跃投影），segments 为不可变原始档案。
+   */
+  archiveTurn(turn: TurnRecord): void {
+    this.appendSegment({ segmentId: `s-${turn.turnId}-u`, turnId: turn.turnId, kind: 'user', payload: turn.userText })
+    if (turn.assistantText) {
+      this.appendSegment({ segmentId: `s-${turn.turnId}-a`, turnId: turn.turnId, kind: 'assistant', payload: turn.assistantText })
+    }
+    if (turn.workingSummary) {
+      this.appendSegment({ segmentId: `s-${turn.turnId}-s`, turnId: turn.turnId, kind: 'summary', payload: turn.workingSummary })
+    }
+    if (turn.partialNote) {
+      this.appendSegment({ segmentId: `s-${turn.turnId}-n`, turnId: turn.turnId, kind: 'note', payload: turn.partialNote })
+    }
   }
 
   // ── Topic State ───────────────────────────────────────────────────────────

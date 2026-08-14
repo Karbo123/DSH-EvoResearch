@@ -17,6 +17,7 @@ import { classifyRequest, canonicalizeTopicKeys } from './classifier.js'
 import { buildMemoryPacket, DEFAULT_PACKET_TOKEN_BUDGET } from './packet.js'
 import type { MemoryPacket } from '../../shared/types.js'
 import { registerMemoryTools } from './tools.js'
+import { reconcileStore } from './recovery.js'
 import { ensureGoalContract, looksLongHorizon, type GoalRuntime } from './goals.js'
 import type { ResearchCategory } from '../../shared/types.js'
 
@@ -54,6 +55,7 @@ export class MemoryRuntime implements GoalRuntime {
   private readonly stores = new Map<string, ResearchMemoryStore>()
   private readonly packets = new Map<string, MemoryPacket>()
   private readonly activeTurns = new Map<string, ActiveTurn>()
+  private readonly reconciled = new Set<string>()
   private lastActiveSessionId: string | undefined
   /** 最近一次分类模型选择（缓存，避免每轮查询）。 */
   private cachedModel: { provider: string; model: string } | undefined
@@ -67,13 +69,25 @@ export class MemoryRuntime implements GoalRuntime {
     }
   }
 
-  /** 获取某工作区的记忆库（按项目懒打开并缓存）。 */
+  /** 获取某工作区的记忆库（按项目懒打开并缓存；首次打开执行 v3 启动对账）。 */
   storeFor(workspaceDir: string): ResearchMemoryStore {
     const key = workspaceDir || this.config.dataRoot
     let store = this.stores.get(key)
     if (!store) {
       store = Store.open(this.memoryDirFor(workspaceDir))
       this.stores.set(key, store)
+      // v3 启动对账：每项目每进程一次（quick_check/轮换备份/悬挂对账/补归档）
+      if (!this.reconciled.has(key)) {
+        this.reconciled.add(key)
+        try {
+          const result = reconcileStore(store, { backupDir: path.join(this.memoryDirFor(workspaceDir), 'backups') })
+          if (!result.skipped && (result.markedInterrupted > 0 || result.archivedMissing > 0 || result.backedUp)) {
+            console.log(`[evosci:memory] 启动对账（${path.basename(key)}）: 悬挂标记 ${result.markedInterrupted}，补归档 ${result.archivedMissing}，备份 ${result.backedUp}`)
+          }
+        } catch (error) {
+          console.error('[evosci:memory] 启动对账失败（不阻塞）:', error)
+        }
+      }
     }
     return store
   }
@@ -198,6 +212,9 @@ export class MemoryRuntime implements GoalRuntime {
       } else {
         store.updateTurn(active.turnId, { status: 'completed' })
       }
+      // v3 Raw Turn Archive：轮次收尾后把原始内容分页归档（不可变档案，活跃投影保留）
+      const settled = store.getTurn(active.turnId)
+      if (settled) store.archiveTurn(settled)
       this.activeTurns.delete(session.id)
     }
   }

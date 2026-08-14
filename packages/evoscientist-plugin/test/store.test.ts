@@ -119,4 +119,37 @@ describe('ResearchMemoryStore', () => {
     assert.equal(store.findTurnByContinuation('msg-other'), undefined)
     store.close()
   })
+
+  it('v3 Raw Turn Archive：整轮归档与分段读取', () => {
+    const store = ResearchMemoryStore.openMemory()
+    store.createPendingTurn({ turnId: 't1', sessionId: 's1', workspaceDir: '', userText: '用户问题', categories: ['idea'], topicKeys: ['idea-1'] })
+    store.updateTurn('t1', { status: 'completed', assistantText: '模型回答', workingSummary: '工作摘要' })
+    const turn = store.getTurn('t1')!
+    store.archiveTurn(turn)
+    const segments = store.listSegments('t1')
+    // user + assistant + summary 三段（无 partialNote 不写 note 段）
+    assert.equal(segments.length, 3)
+    assert.deepEqual(segments.map((s) => s.kind), ['user', 'assistant', 'summary'])
+    assert.equal(segments[0]?.payload, '用户问题')
+    assert.equal(segments[1]?.payload, '模型回答')
+    assert.equal(segments[2]?.payload, '工作摘要')
+    // 归档不删除活跃投影
+    assert.equal(store.getTurn('t1')?.status, 'completed')
+    store.close()
+  })
+
+  it('v3 Raw Turn Archive：分段 seq 递增与 note 段', () => {
+    const store = ResearchMemoryStore.openMemory()
+    store.createPendingTurn({ turnId: 't2', sessionId: 's1', workspaceDir: '', userText: 'q', categories: [], topicKeys: [] })
+    store.updateTurn('t2', { status: 'interrupted', interruptReason: 'user_stop', partialNote: '部分输出', assistantText: '半截回答' })
+    const turn = store.getTurn('t2')!
+    store.archiveTurn(turn)
+    const segments = store.listSegments('t2')
+    assert.equal(segments.length, 3)
+    assert.deepEqual(segments.map((s) => s.kind), ['user', 'assistant', 'note'])
+    assert.equal(segments[0]?.seq, 0)
+    assert.equal(segments[1]?.seq, 1)
+    assert.equal(segments[2]?.seq, 2)
+    store.close()
+  })
 })

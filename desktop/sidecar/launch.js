@@ -16,13 +16,17 @@ const portFile = join(dataDir, 'port.json')
 
 mkdirSync(dataDir, { recursive: true })
 
-/** 启动 DSH web 服务（当前目录即打包后的 sidecar/app 目录）。 */
+/** 启动 DSH web 服务（当前目录即打包后的 DSH_HOME 根：profiles/ + node_modules/）。 */
 function startDsh() {
   const dshBin = join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
   const child = spawn(process.execPath, [dshBin, '--profile', 'evoscientist', '--port', '0'], {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
+    env: {
+      ...process.env,
+      DSH_HOME: process.cwd(), // 独立数据根：profiles/ 与 node_modules 都在 sidecar 内
+    },
   })
   child.stdout.on('data', (chunk) => parseOutput(String(chunk)))
   child.stderr.on('data', (chunk) => process.stderr.write(chunk))
