@@ -1,0 +1,11 @@
+{
+  "name": "evoscientist-desktop",
+  "version": "0.1.0-rc.1",
+  "private": true,
+  "description": "EvoScientist Windows 桌面壳（Tauri 2 + Node sidecar，目标安装包 < 60MB）",
+  "scripts": {
+    "bundle:sidecar": "node scripts/bundle-sidecar.mjs",
+    "build:desktop": "node scripts/build.mjs",
+    "dev": "cargo tauri dev --manifest-path src-tauri/Cargo.toml"
+  }
+}

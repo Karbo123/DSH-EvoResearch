@@ -1,0 +1,25 @@
+# 依赖与构建产物
+node_modules/
+lib/
+dist/
+*.tsbuildinfo
+
+# 测试与临时文件
+.tmp/
+scripts/*.tmp.mjs
+
+# 桌面构建
+desktop/sidecar/dist/
+desktop/sidecar/.cache/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# 运行时数据
+.evosci-data/
+projects/
+.state/
+*.log
+
+# IDE
+.vscode/
+.idea/

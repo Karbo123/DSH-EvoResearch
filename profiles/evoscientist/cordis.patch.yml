@@ -1,0 +1,8 @@
+# EvoScientist 示例 profile 的本地补丁层。
+# 与 dsh 部署约定一致：bundles 之后应用本文件，最后是 --patch overlays。
+# 默认无需修改；如需覆盖 evosci 插件配置，可在此按 id 重写：
+#
+# - id: evosci-host
+#   config:
+#     dataRoot: D:\evoscientist
+[]
