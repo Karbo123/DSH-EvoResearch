@@ -7,8 +7,8 @@
  * - partial：流式中的 assistant 消息（光标动画）
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState, useEffect, useRef } from 'react'
-import { Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye } from 'lucide-react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye, ChevronDown, ChevronUp } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
 import { renderMarkdown } from './markdown'
@@ -18,6 +18,16 @@ const SUGGESTED_PROMPTS = [
   'Design an experiment plan',
   'Analyze workspace files',
 ]
+
+/** 历史分页（移植规范 §9）：默认每页 100 条；?pageSize=N（2..500）用于调试。 */
+const DEFAULT_PAGE_SIZE = 100
+function pageSizeFromUrl(): number {
+  if (typeof location === 'undefined') return DEFAULT_PAGE_SIZE
+  const raw = Number(new URLSearchParams(location.search).get('pageSize'))
+  if (Number.isFinite(raw) && raw >= 2) return Math.min(Math.floor(raw), 500)
+  return DEFAULT_PAGE_SIZE
+}
+const PAGE_SIZE = pageSizeFromUrl()
 
 /** 会话快照消息节点（chat legacy 形状）。 */
 export interface ChatNode {
@@ -179,22 +189,65 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const [autoApprove, setAutoApprove] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
 
-  // 新消息/流式更新时滚动到底部（用户查看历史时不强拉）
+  // ── 历史分页与滚动行为（移植规范 §9）──
+  // 默认只渲染最近 PAGE_SIZE 条；Load earlier 向前扩展并保持视觉位置；
+  // 仅在用户原本位于底部时自动跟随新消息；不在底部时显示"回到最新"按钮。
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [showJump, setShowJump] = useState(false)
+  const nearBottomRef = useRef(true)
+  const anchorRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null)
+
+  // 新消息/流式更新时：仅当位于底部才滚动到底部（§9.3）
   useEffect(() => {
     const el = listRef.current
-    if (el === null) return
+    if (el === null || !nearBottomRef.current) return
     el.scrollTop = el.scrollHeight
   }, [nodes.length, partial?.data.blocks])
 
+  // 展开更早历史后恢复原视觉位置（§9.2 滚动锚定）
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (el !== null && anchorRef.current !== null) {
+      el.scrollTop = anchorRef.current.scrollTop + (el.scrollHeight - anchorRef.current.scrollHeight)
+      anchorRef.current = null
+    }
+  }, [visibleCount])
+
+  const onListScroll = () => {
+    const el = listRef.current
+    if (el === null) return
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight <= 1
+    nearBottomRef.current = near
+    setShowJump(!near)
+  }
+
+  const loadEarlier = () => {
+    const el = listRef.current
+    if (el !== null) anchorRef.current = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight }
+    setVisibleCount((v) => v + PAGE_SIZE)
+  }
+
+  const jumpToLatest = () => {
+    const el = listRef.current
+    if (el !== null) el.scrollTop = el.scrollHeight
+    nearBottomRef.current = true
+    setShowJump(false)
+    // 回到最新后释放旧页（§9.3：位于底部时 DOM 只保留最近一页）
+    if (visibleCount > PAGE_SIZE) setVisibleCount(PAGE_SIZE)
+  }
+
   const submit = () => {
     const text = input.trim()
-    if (!text || running) return
+    if (!text) return
+    // 忙时也允许发送：消息进入 append-only 队列（§23.6），由 host 顺序消费
     onSend(text)
     setInput('')
   }
 
   const hasMessages = nodes.length > 0 || partial !== null
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)
+  const shown = ordered.slice(-visibleCount)
+  const hasMore = ordered.length > visibleCount
 
   return jsxs(Fragment, {
     children: [
@@ -204,12 +257,31 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           ? jsxs('div', {
               ref: listRef,
               className: 'evo-msg-list',
+              onScroll: onListScroll,
               children: [
                 error !== null && jsx('div', { className: 'evo-msg-error', children: `发送失败：${error}` }),
-                ...ordered.map((node) => node.kind === 'user'
+                hasMore && jsx('button', {
+                  type: 'button',
+                  className: 'evo-load-earlier',
+                  onClick: loadEarlier,
+                  children: jsxs(Fragment, {
+                    children: [jsx(ChevronUp, {}), jsx('span', { children: t('loadEarlier') })],
+                  }),
+                }),
+                ...shown.map((node) => node.kind === 'user'
                   ? jsx(UserBubble, { text: node.data.text ?? '', time: node.data.time }, node.key)
                   : jsx(AssistantBubble, { node }, node.key)),
                 partial !== null && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial }, partial.key),
+                showJump && jsx('button', {
+                  type: 'button',
+                  className: 'evo-jump-latest',
+                  title: t('jumpToLatest'),
+                  'aria-label': t('jumpToLatest'),
+                  onClick: jumpToLatest,
+                  children: jsxs(Fragment, {
+                    children: [jsx(ChevronDown, {}), jsx('span', { children: t('latest') })],
+                  }),
+                }),
               ],
             })
           : jsxs('div', {
@@ -316,7 +388,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('button', {
                     type: 'button',
                     className: 'evo-send',
-                    disabled: !input.trim() || running,
+                    disabled: !input.trim(),
                     onClick: submit,
                     children: jsxs(Fragment, {
                       children: [jsx('span', { children: t('send') }), jsx(ArrowUp, {})],

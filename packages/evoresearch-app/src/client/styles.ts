@@ -191,8 +191,15 @@ body { margin: 0; }
 .evo-insp-empty svg { width: 36px; height: 36px; color: var(--color-border); margin-bottom: 8px; }
 .evo-view { flex: 1; overflow-y: auto; }
 /* ── 消息列表 ── */
-.evo-msg-list { flex: 1; overflow-y: auto; padding: 24px 24px 8px; display: flex; flex-direction: column; gap: 18px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; }
+.evo-msg-list { flex: 1; overflow-y: auto; padding: 24px 24px 8px; display: flex; flex-direction: column; gap: 18px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; position: relative; }
 .evo-msg-error { padding: 10px 14px; border: 1px solid var(--color-error); border-radius: 10px; color: var(--color-error); font-size: 13px; background: color-mix(in srgb, var(--color-error) 8%, transparent); }
+/* 历史分页（移植规范 §9）：Load earlier / 回到最新 */
+.evo-load-earlier { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+.evo-load-earlier:hover { border-color: var(--brand); color: var(--color-text-primary); }
+.evo-load-earlier svg { width: 13px; height: 13px; }
+.evo-jump-latest { position: sticky; bottom: 12px; align-self: flex-end; display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); transition: border-color 0.15s, color 0.15s, transform 0.15s; }
+.evo-jump-latest:hover { border-color: var(--brand); color: var(--brand); transform: translateY(-1px); }
+.evo-jump-latest svg { width: 14px; height: 14px; }
 .evo-msg-row { display: flex; gap: 10px; align-items: flex-start; }
 .evo-msg-user { flex-direction: row-reverse; }
 .evo-msg-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--color-avatar-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--color-text-secondary); }
