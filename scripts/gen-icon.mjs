@@ -68,22 +68,38 @@ function crc32(table, buf) {
   return (c ^ 0xffffffff) >>> 0
 }
 
-/** 像素着色：深蓝底 + 浅色"E"形（简单几何标记）。 */
+/** 像素着色：深蓝底 + 白色 R 形标记（EvoResearch 品牌）。 */
 function pixelAt(x, y) {
   // 背景：科研深蓝
   const bg = [31, 58, 147, 255]
   // 边框
   const margin = Math.floor(SIZE * 0.08)
   if (x < margin || y < margin || x >= SIZE - margin || y >= SIZE - margin) return [18, 34, 88, 255]
-  // "E" 形：三条横杠 + 一条竖杠（近似 EvoScientist 的科研感）
-  const barH = Math.floor(SIZE * 0.12)
-  const barW = Math.floor(SIZE * 0.44)
-  const left = Math.floor(SIZE * 0.24)
+  const barW = Math.floor(SIZE * 0.1) // R 竖杠宽
+  const left = Math.floor(SIZE * 0.26) // R 左侧
   const top = Math.floor(SIZE * 0.2)
-  const gap = Math.floor(SIZE * 0.18)
-  const isHBar = (y >= top && y < top + barH) || (y >= top + gap && y < top + gap + barH) || (y >= top + 2 * gap && y < top + 2 * gap + barH)
-  const isVBar = x >= left && x < left + barH && y >= top && y < top + 2 * gap + barH
-  if ((isHBar && x >= left && x < left + barW) || isVBar) return [255, 255, 255, 255]
+  const legH = Math.floor(SIZE * 0.55) // 竖杠+斜腿总高
+  const radius = Math.floor(SIZE * 0.18) // R 上部半圆半径
+  const cx = left + barW // 半圆圆心 x
+  const cy = top + radius // 半圆圆心 y
+  const stroke = Math.floor(SIZE * 0.035) // 笔画宽度
+  const isRing = (px, py, r) => Math.abs(Math.hypot(px - cx, py - cy) - r) <= stroke
+  // 竖杠
+  const inStem = x >= left && x < left + barW && y >= top && y < top + legH
+  // 半圆环（右半）
+  const inLoop = x >= cx && isRing(x, y, radius) && y >= top && y <= top + 2 * radius
+  // 斜腿：从竖杠顶向右下到斜腿末端
+  const legStartX = left + barW
+  const legStartY = top + 2 * radius
+  const legEndX = left + barW + radius
+  const legEndY = top + legH
+  const inLeg = (() => {
+    if (x < legStartX || x > legEndX) return false
+    const t = (x - legStartX) / (legEndX - legStartX || 1)
+    const yLine = legStartY + t * (legEndY - legStartY)
+    return Math.abs(y - yLine) <= stroke
+  })()
+  if (inStem || inLoop || inLeg) return [255, 255, 255, 255]
   return bg
 }
 

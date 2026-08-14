@@ -13,13 +13,13 @@
 D:\DSH-Research\
 ├── package.json                  # npm workspaces 根
 ├── packages/
-│   └── evoscientist-plugin/      # @evoscientist/dsh-plugin（唯一插件包）
+│   └── EvoResearch-plugin/      # @evoresearch/dsh-plugin（唯一插件包）
 │       ├── src/host/             # Host 插件（Node.js 侧全部逻辑）
 │       ├── src/client/           # Client 插件（浏览器 WebUI 扩展）
 │       ├── src/shared/           # 两侧共享的纯 JSON 类型
 │       ├── test/                 # node:test 单元测试
-│       └── cordis.patch.yml      # bundle patch（插入 evosci-host / evosci-client 行）
-├── profiles/evoscientist/        # 示例 profile（dsh-base + dsh-web-app + 本插件）
+│       └── cordis.patch.yml      # bundle patch（插入 EVORESEARCH-host / EVORESEARCH-client 行）
+├── profiles/EvoResearch/        # 示例 profile（dsh-base + dsh-web-app + 本插件）
 ├── desktop/                      # Tauri 2 桌面壳 + Node sidecar 打包脚本
 ├── docs/                         # 中文文档
 └── scripts/                      # 构建/校验脚本
@@ -40,31 +40,31 @@ npm run verify         # build + test
 本插件是一个 **profile bundle**（与 `@deepseek-ai/dsh-base`、`dsh-web-app` 同机制）：
 
 1. 构建：`npm run build`；
-2. 在目标 DSH 部署的 profile 中引用本包（示例见 `profiles/evoscientist/`）：
+2. 在目标 DSH 部署的 profile 中引用本包（示例见 `profiles/EvoResearch/`）：
 
    ```jsonc
-   // profiles/evoscientist/package.json
+   // profiles/EvoResearch/package.json
    {
-     "name": "dsh-profile-evoscientist",
+     "name": "dsh-profile-EvoResearch",
      "private": true,
-     "dependencies": { "@evoscientist/dsh-plugin": "file:../../packages/evoscientist-plugin" },
+     "dependencies": { "@evoresearch/dsh-plugin": "file:../../packages/EvoResearch-plugin" },
      "dsh": { "profile": { "bundles": [
        "@deepseek-ai/dsh-base",
        "@deepseek-ai/dsh-web-app",
-       "@evoscientist/dsh-plugin"
+       "@evoresearch/dsh-plugin"
      ] } }
    }
    ```
 
-3. 启动：`npx dsh --profile evoscientist`（或 `dsh web --patch ...`）；
-   - `cordis.patch.yml` 自动插入 `evosci-host`（Host 插件）与 `evosci-client`（浏览器插件）；
+3. 启动：`npx dsh --profile EvoResearch`（或 `dsh web --patch ...`）；
+   - `cordis.patch.yml` 自动插入 `EVORESEARCH-host`（Host 插件）与 `EVORESEARCH-client`（浏览器插件）；
    - client 插件由 `dsh-client-modules` 扫描 `dsh.client` 声明纳入 `window.__DSH_BOOT__`。
 
-## 配置项（settings.yaml 的 evosci 段）
+## 配置项（settings.yaml 的 EVORESEARCH 段）
 
 ```yaml
-evosci:
-  dataRoot: D:\evoscientist        # 部署根目录（projects/ 所在），默认 $EVOSCI_DATA_ROOT 或 cwd
+EVORESEARCH:
+  dataRoot: D:\EvoResearch        # 部署根目录（projects/ 所在），默认 $EVORESEARCH_DATA_ROOT 或 cwd
   memoryTokenBudget: 6000          # 记忆包 token 预算
   auxiliaryModel:                  # 分类/Goal 提取用辅助模型（缺省取当前默认模型）
     provider: deepseek-official
@@ -87,13 +87,13 @@ evosci:
 
 ## 如何新增一个 Remote API（Client 可调）
 
-在 `src/host/api.ts` 的 `EvosciApiService` 内新增 `@Remote('methodName')` 方法；
-Client 侧以 `ctx.remote.evosci.methodName(args)` 调用（wire 为 JSON，返回必须可序列化）。
+在 `src/host/api.ts` 的 `EVORESEARCHApiService` 内新增 `@Remote('methodName')` 方法；
+Client 侧以 `ctx.remote.EVORESEARCH.methodName(args)` 调用（wire 为 JSON，返回必须可序列化）。
 
 ## 测试约定
 
 - 纯逻辑（cron/路径/SQLite/分类器/Goal 判定）全部有 node:test 覆盖；
-- 数据库测试使用内存库（`EvosciDb.openMemory` / `ResearchMemoryStore.openMemory`），不留文件残留；
+- 数据库测试使用内存库（`EVORESEARCHDb.openMemory` / `ResearchMemoryStore.openMemory`），不留文件残留；
 - 涉及真实 LLM/网络的分支保持可注入（LLM 失败走确定性回退的路径已覆盖）。
 
 ## 编码约定
@@ -101,4 +101,4 @@ Client 侧以 `ctx.remote.evosci.methodName(args)` 调用（wire 为 JSON，返�
 - 注释与文档使用中文；对外 API 描述保持中英关键词并存；
 - 顶层只 import（ESM）；不写 `require` 绕行、不用 `eval`；
 - Host 插件不 import 任何 `@deepseek-ai/dsh-client-*`；Client 插件不 import node 模块；
-- 所有时间戳为毫秒 epoch；JSON 字段命名与 EvoScientist snake_case 对齐（wire 兼容）。
+- 所有时间戳为毫秒 epoch；JSON 字段命名与 EvoResearch snake_case 对齐（wire 兼容）。

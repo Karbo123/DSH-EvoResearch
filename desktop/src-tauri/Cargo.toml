@@ -1,8 +1,8 @@
 [package]
-name = "evoscientist-desktop"
+name = "EvoResearch-desktop"
 version = "0.1.0-rc.1"
-description = "EvoScientist Windows 桌面壳（WebView2 + Node sidecar）"
-authors = ["EvoScientist TS 项目组"]
+description = "EvoResearch Windows 桌面壳（WebView2 + Node sidecar）"
+authors = ["EvoResearch TS 项目组"]
 edition = "2021"
 
 [build-dependencies]

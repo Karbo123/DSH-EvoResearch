@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "EvoScientist",
+  "productName": "EvoResearch",
   "version": "0.1.0",
-  "identifier": "com.evoscientist.desktop",
+  "identifier": "com.EvoResearch.desktop",
   "build": {
     "beforeDevCommand": "",
     "devUrl": "http://localhost:1420",
@@ -19,8 +19,8 @@
     "active": true,
     "targets": ["nsis"],
     "category": "DeveloperTool",
-    "shortDescription": "EvoScientist 科研 Agent（deepseek-harness 桌面版）",
-    "longDescription": "EvoScientist 的 DSH 插件桌面壳：科研记忆、项目工作区、多智能体团队（Node sidecar 提供后端，WebView2 渲染 UI）",
+    "shortDescription": "EvoResearch 科研 Agent（deepseek-harness 桌面版）",
+    "longDescription": "EvoResearch 的 DSH 插件桌面壳：科研记忆、项目工作区、多智能体团队（Node sidecar 提供后端，WebView2 渲染 UI）",
     "resources": ["../sidecar/dist/**/*"],
     "icon": ["icons/icon.ico"],
     "windows": {

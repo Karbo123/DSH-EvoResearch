@@ -1,10 +1,10 @@
-//! EvoScientist 桌面壳：spawn Node sidecar（DSH web 服务）→ 读取端口 → WebView2 加载。
+//! EvoResearch 桌面壳：spawn Node sidecar（DSH web 服务）→ 读取端口 → WebView2 加载。
 //!
 //! 协作协议：
 //! 1. 壳在资源目录中定位 sidecar（node.exe + app/ + launch.js，由 bundle-sidecar.mjs 组装）；
 //! 2. 以隐藏控制台方式 spawn `node.exe launch.js`；
-//! 3. launch.js 启动 DSH web profile（evoscientist）后，把端口写入端口文件
-//!    （%LOCALAPPDATA%/EvoScientist/port.json）并打印一行 JSON 到 stdout；
+//! 3. launch.js 启动 DSH web profile（EvoResearch）后，把端口写入端口文件
+//!    （%LOCALAPPDATA%/EvoResearch/port.json）并打印一行 JSON 到 stdout；
 //! 4. 壳轮询端口文件（≤30s）后加载 `http://127.0.0.1:<port>`；
 //! 5. 壳退出时终止 sidecar 进程树（Node 侧 process.on('exit') 兜底）。
 
@@ -47,10 +47,10 @@ fn locate_sidecar(resource_dir: &std::path::Path, name: &str) -> Option<PathBuf>
     None
 }
 
-/// 应用本地数据目录：%LOCALAPPDATA%/com.evoscientist.desktop（与 launch.js 端口文件约定一致）。
+/// 应用本地数据目录：%LOCALAPPDATA%/com.EvoResearch.desktop（与 launch.js 端口文件约定一致）。
 fn app_local_data_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().display().to_string());
-    let dir = PathBuf::from(base).join("com.evoscientist.desktop");
+    let dir = PathBuf::from(base).join("com.EvoResearch.desktop");
     let _ = fs::create_dir_all(&dir);
     dir
 }
@@ -66,12 +66,12 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
         .ok_or_else(|| std::io::Error::other("未找到 sidecar app 目录"))?;
     // 端口文件路径经环境变量传给 launch.js（避免两侧路径约定漂移）
     let port_file_env = app_local_data_dir().join("port.json");
-    let stderr_log = std::env::temp_dir().join("evosci-sidecar.err.log");
+    let stderr_log = std::env::temp_dir().join("EVORESEARCH-sidecar.err.log");
     let stderr_file = std::fs::File::create(&stderr_log)?;
     Command::new(&node)
         .arg(&launch)
         .current_dir(&workdir)
-        .env("EVOSCI_PORT_FILE", &port_file_env)
+        .env("EVORESEARCH_PORT_FILE", &port_file_env)
         .stdin(Stdio::null())
         .stdout(Stdio::null()) // 端口经端口文件传递，避免管道阻塞
         .stderr(Stdio::from(stderr_file))
@@ -98,9 +98,9 @@ fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<u16> {
     None
 }
 
-/// 诊断日志（%TEMP%/evosci-shell.log）；发布版可移除。
+/// 诊断日志（%TEMP%/EVORESEARCH-shell.log）；发布版可移除。
 fn log(msg: &str) {
-    let log_path = std::env::temp_dir().join("evosci-shell.log");
+    let log_path = std::env::temp_dir().join("EVORESEARCH-shell.log");
     let _ = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -118,7 +118,7 @@ fn main() {
         .setup(|app| {
             let handle = app.handle();
             let resource_dir = handle.path().resource_dir().unwrap_or_default();
-            let app_data_dir = app_local_data_dir(); // %LOCALAPPDATA%/com.evoscientist.desktop
+            let app_data_dir = app_local_data_dir(); // %LOCALAPPDATA%/com.EvoResearch.desktop
             log(&format!("[shell] resource_dir={}", resource_dir.display()));
             log(&format!("[shell] app_data_dir={}", app_data_dir.display()));
             fs::create_dir_all(&app_data_dir).ok();
@@ -154,7 +154,7 @@ fn main() {
                 "main",
                 WebviewUrl::External(url.parse().expect("合法 URL")),
             )
-            .title("EvoScientist")
+            .title("EvoResearch")
             .inner_size(1280.0, 820.0)
             .min_inner_size(960.0, 600.0)
             .build()?;

@@ -1,16 +1,16 @@
 {
-  "name": "dsh-evoscientist",
+  "name": "dsh-EvoResearch",
   "version": "0.1.0-rc.1",
   "private": true,
-  "description": "基于 deepseek-harness 的 EvoScientist TypeScript 复刻 —— DSH 插件（科研记忆 / 项目工作区 / 多智能体团队 / 定时任务 / 多通道 / WebUI 扩展 / Windows 桌面版）",
+  "description": "基于 deepseek-harness 的 EvoResearch TypeScript 复刻 —— DSH 插件（科研记忆 / 项目工作区 / 多智能体团队 / 定时任务 / 多通道 / WebUI 扩展 / Windows 桌面版）",
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @evoscientist/dsh-plugin",
-    "typecheck": "npm run typecheck -w @evoscientist/dsh-plugin",
-    "test": "npm run test -w @evoscientist/dsh-plugin",
+    "build": "npm run build -w @evoresearch/dsh-plugin",
+    "typecheck": "npm run typecheck -w @evoresearch/dsh-plugin",
+    "test": "npm run test -w @evoresearch/dsh-plugin",
     "verify": "npm run build && npm test && node scripts/verify-bundle.mjs && node scripts/check-docs.mjs",
     "docs": "node scripts/check-docs.mjs"
   },

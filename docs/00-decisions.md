@@ -1,6 +1,6 @@
 # 00 · 技术选型决策（Tech Decisions）
 
-> 本项目是 D:\EvoScientist（Python）的 TypeScript 完全重写，运行于
+> 本项目是 D:\EvoScientist（上游参照，Python）的 TypeScript 完全重写，运行于
 > [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）0.1.0-rc.x 平台。
 > 本文记录每项关键选型的**决策依据**与**否决项**，便于后续维护者复核。
 > 硬性约束：Node.js 后端、不使用 Python、不基于 deepagents、Windows 优先（Web + 桌面）、
@@ -16,7 +16,7 @@
 | 维度 | 分析 |
 |---|---|
 | 桌面端硬约束 | PostgreSQL 需要独立服务进程 + 安装/初始化/运维，直接违背"打包体积最小、零依赖"；SQLite 是嵌入式单文件，零服务。 |
-| EvoScientist 核心哲学：项目即目录 | 数据模型是 `projects/<name>/.evosci-data/`，记忆/观测/会话数据随项目目录走，项目本身是 git 仓库。SQLite 文件天然跟随目录、可导入/导出/迁移/备份；PostgreSQL 集中式存储会摧毁这套哲学。 |
+| EvoResearch 核心哲学：项目即目录 | 数据模型是 `projects/<name>/.evoresearch-data/`，记忆/观测/会话数据随项目目录走，项目本身是 git 仓库。SQLite 文件天然跟随目录、可导入/导出/迁移/备份；PostgreSQL 集中式存储会摧毁这套哲学。 |
 | 检索 | 已实测 Node 26 内置 `node:sqlite` **自带 FTS5**（unicode61 tokenizer），零原生依赖；向量检索可用 `sqlite-vec` 扩展或退化纯 FTS。PostgreSQL 中文分词（pg_jieba）维护成本高且桌面不可用。 |
 | 与平台一致 | DSH 自身会话查询层（`dsh-session-query-sqlite`）就是 SQLite + FTS5。 |
 | 否决 PostgreSQL 的补充 | 多用户/并发/集中备份是它唯一优势，但 DSH 定位本地优先 harness，第一版单用户。 |
@@ -27,7 +27,7 @@
 
 1. **远端 embedding API**（OpenAI 兼容 `/embeddings`）：零本地模型、体积最小，用户已有 API key 时首选；
 2. **本地 transformers.js**（`multilingual-e5-small`，~0.47GB 首次下载）：离线/隐私场景，后台线程预热度量；
-3. **纯 FTS5 保底**：模型未就绪/不可用时自动退化，不阻塞主回答（与 EvoScientist 的退化逻辑一致）。
+3. **纯 FTS5 保底**：模型未就绪/不可用时自动退化，不阻塞主回答（与 EvoResearch 的退化逻辑一致）。
 
 第一版交付 FTS5 + 接口预留；`docs/02-feature-map.md` 中标注 v2 接入项。
 
@@ -54,7 +54,7 @@
 
 **决策**：WebUI 扩展注册到 DSH 现有 Web GUI 的 Slots（`sidebar.footer.action`、
 `shell.overlay`、`conversation.input.dock` 等），Client→Host 通信走平台 Typert Gateway
-（`ctx.remote.evosci.*`）。不写独立 SPA，不新增 HTTP 层 —— 与"DSH 插件"定位一致，
+（`ctx.remote.EVORESEARCH.*`）。不写独立 SPA，不新增 HTTP 层 —— 与"DSH 插件"定位一致，
 避免与平台 UI 割裂。
 
 ## 6. 桌面壳：Tauri 2（Rust）+ Node sidecar
@@ -67,7 +67,7 @@
 |---|---|---|
 | Electron | ~100MB+ | 否决 |
 | NW.js | ~100MB+ | 否决 |
-| PyInstaller onefile（EvoScientist 原方案） | 通常 100MB+ | 本项目不用 Python |
+| PyInstaller onefile（EvoResearch 原方案） | 通常 100MB+ | 本项目不用 Python |
 | **Tauri + Node sidecar** | **~40-60MB** | **采用**（Rust 工具链已就绪；Node 是硬约束，物理下限 ≈ node.exe 压缩后体积） |
 | Node SEA 单文件 | ~80-120MB | 备选；原生模块（node-pty 等）需外置，复杂度高，第一版不用 |
 
