@@ -267,4 +267,36 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-model-item { text-align: left; padding: 6px 10px; border: none; background: none; border-radius: 8px; color: var(--color-text-secondary); font-size: 13px; cursor: pointer; }
 .evo-model-item:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-model-item[data-active] { background: var(--hover-bg); color: var(--color-text-primary); font-weight: 600; }
+/* ── 业务面板（记忆/调度/团队/通道/技能）── */
+.evo-panel { max-width: 760px; margin: 0 auto; padding: 28px 28px 40px; }
+.evo-panel-head { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; color: var(--color-text-primary); margin-bottom: 20px; }
+.evo-panel-head svg { width: 19px; height: 19px; color: var(--brand); }
+.evo-panel-body { display: flex; flex-direction: column; gap: 16px; }
+.evo-panel-row { display: flex; flex-direction: column; gap: 8px; }
+.evo-panel-row-label { font-size: 12px; font-weight: 600; color: var(--color-text-tertiary); letter-spacing: 0.4px; text-transform: uppercase; }
+.evo-panel-hint { font-size: 13px; color: var(--color-text-tertiary); }
+.evo-panel-error { padding: 8px 12px; border: 1px solid var(--color-error); border-radius: 8px; color: var(--color-error); font-size: 12.5px; }
+.evo-panel-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.evo-panel-tag { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: 999px; font-size: 12.5px; color: var(--color-text-secondary); background: var(--color-surface); }
+.evo-panel-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.evo-panel-stat { flex: 1; min-width: 88px; padding: 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); text-align: center; }
+.evo-panel-stat-num { font-size: 20px; font-weight: 700; color: var(--color-text-primary); }
+.evo-panel-stat-label { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+.evo-panel-list { display: flex; flex-direction: column; gap: 6px; }
+.evo-panel-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); }
+.evo-panel-item svg { width: 15px; height: 15px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-panel-item-main { flex: 1; font-size: 13.5px; color: var(--color-text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-panel-item-code { font-size: 11.5px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
+.evo-panel-item-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--hover-bg); color: var(--color-text-secondary); }
+.evo-panel-item-num { font-size: 12px; font-weight: 600; color: var(--brand); }
+.evo-panel-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.evo-panel-input { flex: 1; min-width: 140px; padding: 7px 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); color: var(--color-text-primary); font-size: 13px; outline: none; }
+.evo-panel-input:focus { border-color: var(--brand); }
+.evo-panel-input-cron { flex: 0 0 130px; min-width: 0; font-family: ui-monospace, Consolas, monospace; }
+.evo-panel-add { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border: none; border-radius: 9px; background: var(--brand-solid); color: var(--brand-foreground); font-size: 13px; font-weight: 600; cursor: pointer; }
+.evo-panel-add:disabled { opacity: 0.5; cursor: default; }
+.evo-panel-add svg { width: 14px; height: 14px; }
+.evo-panel-del { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.evo-panel-del:hover { color: var(--color-error); background: var(--hover-bg); }
+.evo-panel-del svg { width: 14px; height: 14px; }
 `
