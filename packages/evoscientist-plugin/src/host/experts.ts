@@ -9,6 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { findTeamRole, TEAM_ROLES } from './teams.js'
 
 /** 活跃专家记录。 */
 export interface ActiveTeam {
@@ -53,8 +54,14 @@ export class ExpertService {
     fs.renameSync(tmp, this.file)
   }
 
-  /** 列出活跃专家。 */
+  /** 列出活跃专家（内置团队 + 已邀请技能）。 */
   async list(ctx?: Context): Promise<ActiveTeam[]> {
+    // 内置团队始终可见（未邀请时不在 activeTeams，但可作为候选）
+    const builtin = TEAM_ROLES.map((role) => ({
+      name: role.id,
+      description: role.description,
+      invitedAt: 0,
+    }))
     if (ctx) {
       // 与已安装技能对账：已卸载的专家自动移除
       const skills = ctx.get('skills')
@@ -62,15 +69,32 @@ export class ExpertService {
         const summaries = await skills.list()
         const names = new Set(summaries.map((s: { name?: string }) => s.name))
         const before = this.teams.length
-        this.teams = this.teams.filter((team) => names.has(team.name))
+        this.teams = this.teams.filter((team) => names.has(team.name) || findTeamRole(team.name) !== undefined)
         if (this.teams.length !== before) this.save()
       }
     }
-    return [...this.teams]
+    // 内置团队（已邀请的排在前面）
+    const invitedBuiltin = this.teams
+      .filter((team) => findTeamRole(team.name) !== undefined)
+      .map((team) => ({
+        ...team,
+        description: findTeamRole(team.name)?.description ?? team.description,
+      }))
+    const invitedSkills = this.teams.filter((team) => findTeamRole(team.name) === undefined)
+    return [...invitedBuiltin, ...invitedSkills, ...builtin.filter((b) => !this.teams.some((t) => t.name === b.name))]
   }
 
-  /** 邀请一位专家（技能名）。 */
+  /** 邀请一位专家：优先内置团队（无需技能目录），否则查已安装技能。 */
   async invite(ctx: Context, name: string): Promise<boolean> {
+    // 内置团队直接邀请（角色预设总是可用）
+    if (findTeamRole(name)) {
+      if (!this.teams.some((team) => team.name === name)) {
+        const role = findTeamRole(name)!
+        this.teams.push({ name, description: role.description, invitedAt: Date.now() })
+        this.save()
+      }
+      return true
+    }
     const skills = ctx.get('skills')
     if (skills) {
       const summaries = await skills.list()

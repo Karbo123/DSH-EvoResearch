@@ -423,6 +423,14 @@ export class ResearchMemoryStore {
       )
   }
 
+  /** 按会话与用户消息文本查询轮次（backfill 幂等检查）。 */
+  findTurnBySessionText(sessionId: string, userText: string): TurnRecord | undefined {
+    const row = this.db.db
+      .prepare('SELECT * FROM research_turns WHERE session_id = ? AND user_text = ? ORDER BY created_at DESC LIMIT 1')
+      .get(sessionId, cleanForIndex(userText)) as Row | undefined
+    return row ? turnFromRow(row) : undefined
+  }
+
   /** 按 id 读取一轮对话。 */
   getTurn(turnId: string): TurnRecord | undefined {
     const row = this.db.db.prepare('SELECT * FROM research_turns WHERE turn_id = ?').get(turnId) as Row | undefined

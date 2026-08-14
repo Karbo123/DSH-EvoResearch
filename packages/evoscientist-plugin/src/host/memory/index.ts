@@ -56,6 +56,8 @@ export class MemoryRuntime implements GoalRuntime {
   private readonly packets = new Map<string, MemoryPacket>()
   private readonly activeTurns = new Map<string, ActiveTurn>()
   private readonly reconciled = new Set<string>()
+  private readonly backfilled = new Set<string>()
+  private ctxRef: Context | undefined
   private lastActiveSessionId: string | undefined
   /** 最近一次分类模型选择（缓存，避免每轮查询）。 */
   private cachedModel: { provider: string; model: string } | undefined
@@ -88,6 +90,13 @@ export class MemoryRuntime implements GoalRuntime {
           console.error('[evosci:memory] 启动对账失败（不阻塞）:', error)
         }
       }
+      // v2 回填：既有会话历史后台 newest-first 索引进 Turn Catalog（每项目每进程一次）
+      if (!this.backfilled.has(key)) {
+        this.backfilled.add(key)
+        void this.runBackfill(workspaceDir).catch((error) => {
+          console.error('[evosci:memory] 历史回填失败（不阻塞）:', error)
+        })
+      }
     }
     return store
   }
@@ -98,6 +107,21 @@ export class MemoryRuntime implements GoalRuntime {
       ? workspaceDir
       : this.config.dataRoot
     return path.join(base, '.evosci-data', 'memories')
+  }
+
+  /** 后台回填：从 DSH sessionQuery 拉取该项目的历史会话事件并索引进 Turn Catalog。 */
+  private async runBackfill(workspaceDir: string): Promise<void> {
+    // sessionQuery 由 DSH 平台提供（web profile 挂载）；缺失时静默跳过
+    const sessionQuery = this.ctxRef?.get('sessionQuery') as
+      | { listSessions?: () => Promise<unknown[]>; listEvents?: (sessionId: string) => Promise<readonly unknown[]> }
+      | undefined
+    if (!sessionQuery?.listSessions || !sessionQuery.listEvents) return
+    const store = this.storeFor(workspaceDir)
+    const { backfillFromSessionQuery } = await import('./backfill.js')
+    const created = await backfillFromSessionQuery(store, sessionQuery, workspaceDir)
+    if (created > 0) {
+      console.log(`[evosci:memory] 历史回填完成（${path.basename(workspaceDir || this.config.dataRoot)}）: 新增 ${created} 轮`)
+    }
   }
 
   /** 观测目录。 */
@@ -139,6 +163,7 @@ export class MemoryRuntime implements GoalRuntime {
   /** 挂载全部副作用（事件订阅、prompt 注入、工具注册）。 */
   attach(ctx: Context): () => void {
     if (!this.config.enabled) return () => {}
+    this.ctxRef = ctx
     const disposers: Array<() => void> = []
 
     // 1) 会话事件订阅：新用户消息 → Turn Catalog；turn 结束 → 归档
@@ -169,6 +194,7 @@ export class MemoryRuntime implements GoalRuntime {
       for (const dispose of disposers) dispose()
       for (const store of this.stores.values()) store.close()
       this.stores.clear()
+      this.ctxRef = undefined
     }
   }
 
@@ -216,11 +242,27 @@ export class MemoryRuntime implements GoalRuntime {
       const settled = store.getTurn(active.turnId)
       if (settled) store.archiveTurn(settled)
       this.activeTurns.delete(session.id)
+      return
+    }
+    // v3 工具收据：模型请求的工具调用生命周期（started → completed）
+    const workspaceDir = (session.header as { cwd?: string }).cwd ?? this.config.dataRoot
+    if (event.type === 'tool/call') {
+      const data = event.data as SessionEvent<'tool/call'>['data']
+      const active = this.activeTurns.get(session.id)
+      this.storeFor(workspaceDir).recordToolStarted(String(data.callId), active?.turnId)
+      return
+    }
+    if (event.type === 'tool/result') {
+      const data = event.data as SessionEvent<'tool/result'>['data']
+      const message = data.message as { source?: { callId?: unknown } }
+      const callId = message?.source?.callId
+      if (callId !== undefined) {
+        this.storeFor(workspaceDir).recordToolCompleted(String(callId))
+      }
     }
   }
 
-  /** 后台：分类 + topic state 更新 + 记忆包构建（不 await，失败静默）。 */
-  private async processTurnBackground(
+  /** 后台：分类 + topic state 更新 + 记忆包构建（不 await，失败静默）。 */  private async processTurnBackground(
     ctx: Context,
     sessionId: string,
     turnId: string,

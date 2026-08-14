@@ -29,8 +29,7 @@
 | Observation 增强（frontmatter + create/update/supersede/noop） | `store.ts` writeObservation/supersede + `tools.ts` | ✅ |
 | 检索默认只出 ACTIVE | `searchObservationsFts` status='active' | ✅ |
 | search_research_history / read_research_turn 工具 | `tools.ts` | ✅ |
-| 记忆包注入记录（record_retrieval） | packet 缓存（packets Map） | 🟡 |
-| backfill 断点续做（source_version 指纹） | `research_index_progress` 表 + get/setIndexProgress | 🟡（后台回填 🔲） |
+| backfill 断点续做（source_version 指纹） | `backfill.ts`（幂等 + 进度记录）+ MemoryRuntime 后台接线 | ✅ |
 | 缓存观测（hit/miss/token） | 🔲（依赖 provider cost 元数据） | 🔲 |
 
 ## C. EvoMemory v3（主38、W32）
@@ -40,9 +39,9 @@
 | Turn interrupted 状态 + turn_attempts | `store.ts`（status/interrupted、recordAttempt） | ✅ |
 | 中断原因（user_stop / api_failure）+ Partial Turn Note | `updateTurn`（interruptReason/partialNote） | ✅ |
 | turn_continuation_messages 幂等映射 | `linkContinuation` / `findTurnByContinuation` | ✅ |
-| Raw Turn Archive（原始消息永不清除） | 🔲（turn_segments 分页归档） | 🔲 |
-| 工具收据（started → completed/unknown） | `recordToolStarted` / `recordToolCompleted` / `listUnknownTools` | ✅（钩子接入 🟡） |
-| 启动对账（quick_check/轮换备份/悬挂清理） | 🔲 | 🔲 |
+| Raw Turn Archive（原始消息永不清除） | `turn_segments` 表 + archiveTurn + turn/end 自动归档 | ✅ |
+| 工具收据（started → completed/unknown） | `recordToolStarted/Completed` + **session/event 钩子接入**（tool/call → tool/result） | ✅ |
+| 启动对账（quick_check/轮换备份/悬挂清理/补归档） | `recovery.ts` + storeFor 首次接线 | ✅ |
 | Goal Control：长程检测 → 合同 → slice → 四轴判定 | `goals.ts`（全部核心逻辑） | ✅ |
 | propose_goal_contract_update 提案 → 用户确认 → version | `appendGoalEvent` + 提案事件（确认流 🔲） | 🟡 |
 | Active Goal Projection / Turn Envelope 注入 | `renderGoalProjection`（注入接线 🟡） | 🟡 |
@@ -56,6 +55,7 @@
 | 提案审核 UI（WebUI 面板） | client 科研面板「技能提案」tab | ✅ |
 | 批准写入技能目录（可被 dsh-skill 挂载） | SKILL.md 写入 | ✅（真实挂载 🔲） |
 | Expert 专家邀请（active_teams 随 run 注入） | `experts.ts` + /expert 命令 | ✅（随 run 注入接线 🟡） |
+| **多智能体团队（6 子代理）** | `teams.ts`：planner/research/code/debug/data_analysis/writing 角色预设（中文 system prompt），`/expert invite <id>` 内置可邀 | ✅ |
 
 ## E. 定时任务（主29）
 
