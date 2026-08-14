@@ -101,8 +101,6 @@ body { margin: 0; }
 /* ── 左侧栏 ── */
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-tl-head { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 2px; }
-.evo-tl-title { display: flex; align-items: center; gap: 10px; padding: 4px 6px 8px; }
-.evo-tl-title-name { font-size: 17px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; }
 .evo-tl-newchat {
   display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px;
   border: none; background: none; border-radius: 8px; color: var(--color-text-primary);

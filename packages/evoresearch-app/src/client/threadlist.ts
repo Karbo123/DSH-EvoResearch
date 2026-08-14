@@ -71,13 +71,6 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
       jsxs('div', {
         className: 'evo-tl-head',
         children: [
-          jsxs('div', {
-            className: 'evo-tl-title',
-            children: [
-              jsx('img', { className: 'evo-brand-logo', src: '/favicon.svg', alt: 'EvoResearch', width: 28, height: 28 }),
-              jsx('div', { className: 'evo-tl-title-name', children: 'EvoResearch' }),
-            ],
-          }),
           jsx('button', {
             type: 'button',
             className: 'evo-tl-newchat',
