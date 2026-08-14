@@ -8,7 +8,11 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const BUNDLE = join(ROOT, 'packages', 'evoresearch-plugin', 'lib', 'client', 'index.js')
+/** 参与加载校验的 client bundle（每个有 dsh.client 声明的包）。 */
+const BUNDLES = [
+  join(ROOT, 'packages', 'evoresearch-plugin', 'lib', 'client', 'index.js'),
+  join(ROOT, 'packages', 'evoresearch-app', 'lib', 'client', 'index.js'),
+]
 
 // 模拟浏览器全局（ModuleLoader 的 load 语义：factory 自声明 module/exports 并返回）
 globalThis.window = {
@@ -36,6 +40,8 @@ globalThis.window = {
   },
 }
 
-if (!process.env.CI) console.log(`[verify-bundle] 读取 ${BUNDLE}`)
-new Function(readFileSync(BUNDLE, 'utf8'))()
-console.log('[verify-bundle] 通过：client bundle 可被浏览器 ModuleLoader 加载')
+for (const bundle of BUNDLES) {
+  if (!process.env.CI) console.log(`[verify-bundle] 读取 ${bundle}`)
+  new Function(readFileSync(bundle, 'utf8'))()
+}
+console.log('[verify-bundle] 通过：全部 client bundle 可被浏览器 ModuleLoader 加载')

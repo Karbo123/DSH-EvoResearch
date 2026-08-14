@@ -83,7 +83,8 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
     dependencies: {
       '@deepseek-ai/dsh': '^0.1.0-rc.6', // dsh CLI（launch.js 直接调用其 bin）
       '@deepseek-ai/dsh-base': '^0.1.0-rc.6',
-      '@deepseek-ai/dsh-web-app': '^0.1.0-rc.6',
+      '@deepseek-ai/dsh-web-app': '^0.1.0-rc.6', // 表面行复用其 /startup（web-startup 行）
+      '@evoresearch/dsh-app': `file:${join(ROOT, 'packages', 'evoresearch-app')}`,
       '@evoresearch/dsh-plugin': `file:${join(ROOT, 'packages', 'evoresearch-plugin')}`,
     },
   }

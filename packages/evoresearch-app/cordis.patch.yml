@@ -1,0 +1,148 @@
+# EvoResearch 自定义浏览器表面 bundle patch。
+#
+# 本 bundle 替代官方 dsh-web-app 的浏览器表面：host 行全部复用官方包
+# （webserver / api-gateway / connection / client-runtime / modules ...），
+# 但【不加载】任何官方 ui-* 外壳行（ui-layout / ui-sidebar / ui-conversation /
+# ui-settings ...）；浏览器端只加载本包的 evoresearch-ui 行，注册 root slot
+# 渲染 EvoResearch 工作台。
+#
+# 与官方 web 表面（dsh-web-app）的关键差别：
+# 1. 官方把 agent 平面工具行（tool-*）全部 disabled、改由 agent preset 挂载；
+#    本表面【不禁用】它们 —— 保持 dsh-base 的完整工具集（TUI 式），
+#    不依赖 agent preset。
+# 2. 官方 web-runtime 行 serve 官方前端 dist（@deepseek-ai/dsh-web-frontend）；
+#    本表面的 app-runtime 行（本包 node half）serve 本包自己的 dist。
+# 3. 官方 ui-layout 提供 app-shell 硬依赖的 layout 服务 —— 本表面的
+#    evoresearch-ui 行自己提供 layout 服务并注册 root slot。
+
+# ── base 行的配置覆盖（与官方 web 表面一致的决策）───────────────────────────
+- id: system-prompt
+  config:
+    persona: >-
+      你是 EvoResearch，面向科研的自主智能体，基于 deepseek-harness（DSH）构建。
+      你的工作目录是 {{cwd}}。
+
+- id: hmr
+  disabled: true
+
+# 全文本会话搜索默认关闭（openAt: never），首次搜索才打开内存索引。
+- id: session-query-sqlite
+  config:
+    path: ':memory:'
+    openAt: never
+
+- id: tools
+  config:
+    # 与官方 web 表面相同的工具呈现模式开关。
+    mode: !!js process.env.DSH_TOOLS_MODE
+
+# ── 表面 host 行、传输层与浏览器 roster ─────────────────────────────────────
+- insert:
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+    - id: storage
+      name: '@deepseek-ai/dsh-storage'
+
+    - id: storage-json
+      name: '@deepseek-ai/dsh-storage-json'
+      config:
+        root: !!js dshHomePath('storages')
+
+    - id: storage-domain
+      name: '@deepseek-ai/dsh-storage-domain'
+      config:
+        backend: json
+
+    - id: message-feedback
+      name: '@deepseek-ai/dsh-message-feedback'
+      disabled: true
+      config:
+        maxNoteBytes: 8192
+
+    - id: session-log-download
+      name: '@deepseek-ai/dsh-session-log-export'
+      disabled: true
+
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+
+    - id: session-projection-cache
+      name: '@deepseek-ai/dsh-session-projection-cache'
+      config:
+        writeEveryEvents: 200
+        writeIntervalMs: 5000
+
+    - id: session-stats
+      name: '@deepseek-ai/dsh-session-stats'
+
+    # 目录选择：官方 auto 包（win32 回环挂 native 后端）的 client 面依赖
+    # ui-workspace 外壳，自定义表面不加载 —— 用本包的桩服务替代
+    # （capability kind: 'none'，消费方隐藏选择 UI；阶段 1 接入 browse 后端）。
+    - id: directory-picker
+      name: '@evoresearch/dsh-app/directory-picker'
+
+    - id: plugin-inventory
+      name: '@deepseek-ai/dsh-host-plugin-inventory'
+
+    # API gateway：所有客户端形态共享的中立分发面（官方注释原话）。
+    - id: api-gateway
+      name: '@deepseek-ai/dsh-host-apiproxy'
+
+    - id: cordis-host-runner
+      name: '@deepseek-ai/dsh-cordis-host-runner'
+
+    # 解析 --host / --port / --trusted-host 旗标（官方 web app 的 startup 提供者）。
+    - id: web-startup
+      name: '@deepseek-ai/dsh-web-app/startup'
+
+    - id: webserver
+      name: '@deepseek-ai/dsh-host-webserver'
+      inject: [webStartup]
+      config:
+        host: !!js ctx.webStartup.host ?? '127.0.0.1'
+        port: !!js ctx.webStartup.port ?? 3080
+
+    # EvoResearch 运行时：serve 本包 dist（frontend-static 回退席位）、
+    # 注册表面提示段与 DSH_WEB_URL 变量、打印 URL 行。
+    # 行名指向 ./runtime 子路径：包根保持空 apply（官方 ui-* 同构），
+    # 避免与 evoresearch-ui 行的 host 侧 apply 冲突。
+    - id: app-runtime
+      name: '@evoresearch/dsh-app/runtime'
+      inject: [webStartup]
+      config:
+        printUrl: true
+        surfaceContext: true
+        trustedHosts: !!js ctx.webStartup.trustedHosts
+
+    # ── 浏览器插件 roster（dsh.client 行）──────────────────────────────────
+    - id: modules
+      name: '@deepseek-ai/dsh-client-modules'
+
+    - id: connection
+      name: '@deepseek-ai/dsh-client-connection'
+      inject: [webRuntime]
+      config:
+        trustedHosts: !!js ctx.webRuntime.trustedHosts
+
+    - id: api-remotes
+      name: '@deepseek-ai/dsh-api-remotes'
+
+    - id: client-runtime
+      name: '@deepseek-ai/dsh-client-runtime'
+
+    - id: cordis-client-runner
+      name: '@deepseek-ai/dsh-cordis-client-runner'
+
+    - id: ui-theme
+      name: '@deepseek-ai/dsh-client-ui-theme'
+
+    - id: locale
+      name: '@deepseek-ai/dsh-client-locale'
+
+    - id: ui-settings
+      name: '@deepseek-ai/dsh-client-ui-settings'
+
+    # EvoResearch 工作台：提供 layout 服务（app-shell 硬依赖）并注册 root slot。
+    - id: evoresearch-ui
+      name: '@evoresearch/dsh-app'

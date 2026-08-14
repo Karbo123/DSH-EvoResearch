@@ -2,17 +2,17 @@
   "name": "dsh-profile-evoresearch",
   "version": "0.1.0-rc.1",
   "private": true,
-  "description": "EvoResearch 示例 profile：dsh-base + dsh-web-app + @evoresearch/dsh-plugin",
+  "description": "EvoResearch profile：dsh-base（DSH 引擎）+ @evoresearch/dsh-app（自定义浏览器表面）+ @evoresearch/dsh-plugin（科研记忆/调度/通道/团队等 host 服务）",
   "dependencies": {
     "@deepseek-ai/dsh-base": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-web-app": "^0.1.0-rc.6",
+    "@evoresearch/dsh-app": "file:../../packages/evoresearch-app",
     "@evoresearch/dsh-plugin": "file:../../packages/evoresearch-plugin"
   },
   "dsh": {
     "profile": {
       "bundles": [
         "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
+        "@evoresearch/dsh-app",
         "@evoresearch/dsh-plugin"
       ]
     }

@@ -2,11 +2,10 @@
 
 # 🔬 EvoResearch
 
-**面向科研的自主智能体 —— deepseek-harness（DSH）插件**
+**面向科研的自主智能体 —— 基于 deepseek-harness（DSH）0.1.0-rc.6 构建**
 
-基于 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) **0.1.0-rc.6** 构建，
 用 TypeScript / Node.js 从零实现的科研智能体能力套件：**自进化科研记忆、项目工作区、
-多智能体团队、定时任务、多通道接入与 Windows 桌面版**。
+多智能体团队、定时任务、多通道接入、自定义工作台界面与 Windows 桌面版**。
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-green)](https://nodejs.org/)
@@ -33,7 +32,7 @@
 | ⏰ | **定时任务** | 自研 cron 解析（Vixie 语义），结果直达结果线程，支持「Report to main chat」 |
 | 🌐 | **多通道接入** | Telegram 可用；Slack / QQ / 微信 / 飞书 / Signal 适配器框架就绪 |
 | 💬 | **斜杠命令** | `/project` `/memory` `/schedule` `/channel` `/expert` `/autoskills` |
-| 🖥️ | **WebUI 扩展 + i18n** | 侧栏科研入口、科研面板（项目/记忆/任务/通道/提案）、会话记忆提示条，中英双语 |
+| 🖥️ | **自定义工作台界面** | 自建浏览器表面（不加载官方 ui-\* 外壳）：EvoResearch 工作台（科研导航/会话/业务面板），中英双语 |
 | 🪟 | **Windows 桌面版** | Tauri 2 + Node sidecar，NSIS 安装包 **44 MB**（实测），含全部后端 |
 
 ## 🚀 快速开始
@@ -73,20 +72,23 @@ npm run verify        # 可选：70 个单元测试 + bundle/docs 校验
   "private": true,
   "dependencies": {
     "@deepseek-ai/dsh-base": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-web-app": "^0.1.0-rc.6",
+    "@evoresearch/dsh-app": "file:path/to/DSH-EvoResearch/packages/evoresearch-app",
     "@evoresearch/dsh-plugin": "file:path/to/DSH-EvoResearch/packages/evoresearch-plugin"
   },
   "dsh": {
     "profile": {
       "bundles": [
         "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
+        "@evoresearch/dsh-app",
         "@evoresearch/dsh-plugin"
       ]
     }
   }
 }
 ```
+
+> `@evoresearch/dsh-app` 是自定义浏览器表面 bundle：复用 DSH host 引擎与官方传输/运行时，
+> 但**不加载**官方 `ui-*` 外壳 —— 打开即是 EvoResearch 自己的工作台界面。
 
 ```bash
 npm install            # 在 profile 目录安装依赖
@@ -96,9 +98,8 @@ npx @deepseek-ai/dsh --profile <profile名>
 插件启动后会打印：
 
 ```
-[evoresearch] client node half apply() 已执行
 [evoresearch] host 插件激活（dataRoot: ...）
-dsh web: http://127.0.0.1:3080
+evoresearch: http://127.0.0.1:3080
 ```
 
 ## 🧪 建议：使用独立 DSH 环境测试（避免与现有环境冲突）
@@ -186,11 +187,15 @@ npm run verify       # build + test + bundle 校验 + docs 校验
 ```
 
 ```
-packages/evoresearch-plugin/   # @evoresearch/dsh-plugin —— 唯一插件包
+packages/evoresearch-plugin/   # @evoresearch/dsh-plugin —— 科研能力插件（host 服务）
   ├── src/host/                # Host 插件（workspace/memory/scheduler/channels/...）
-  ├── src/client/              # Client 插件（WebUI 科研面板）
-  └── cordis.patch.yml         # bundle patch（插入 evoresearch-host / evoresearch-client）
-profiles/evoresearch/          # 示例 DSH profile
+  └── cordis.patch.yml         # bundle patch（evoresearch-host 服务行）
+packages/evoresearch-app/      # @evoresearch/dsh-app —— 自定义浏览器表面 bundle
+  ├── src/runtime.ts           # app-runtime（serve 前端 dist / 表面提示 / URL 打印）
+  ├── src/client.ts            # 工作台 UI 插件（root slot + layout 服务）
+  ├── frontend/                # 前端外壳入口（AppWebEntry 内核）
+  └── vendor/                  # vendored 官方 client-modules 源码（构建时 alias）
+profiles/evoresearch/          # 示例 DSH profile（三个 bundle）
 desktop/                       # Tauri 2 桌面壳 + Node sidecar 打包脚本
 docs/                          # 中文文档（架构/功能映射/开发/桌面）
 ```

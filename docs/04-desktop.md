@@ -53,7 +53,7 @@ desktop/
 │       ├── launch.js
 │       └── app/               # DSH_HOME 根（运行期 DSH_HOME 指向这里）
 │           ├── profiles/evoresearch/   # profile 元数据（bundle 声明）
-│           └── node_modules/            # dsh-base + dsh-web-app + dsh CLI + 插件
+│           └── node_modules/            # dsh CLI + dsh-base + 表面/插件（file: link）
 ├── scripts/
 │   ├── bundle-sidecar.mjs     # 组装 sidecar（下载 node/安装依赖/裁剪）
 │   └── build.mjs              # 一键：npm build → bundle-sidecar → cargo tauri build
@@ -69,7 +69,7 @@ desktop/
 3. launch.js 设置 `DSH_HOME = cwd`（独立数据根，不污染用户 `~/.dsh`），
    启动 `dsh --profile evoresearch --port 0`；
 4. 端口文件路径经环境变量 `EVORESEARCH_PORT_FILE` 传入（默认 `%LOCALAPPDATA%/com.evoresearch.desktop/port.json`），
-   端口从 dsh stdout 解析（`dsh web: http://127.0.0.1:PORT` / `{"port":N}` / Listening 行）；
+   端口从 dsh stdout 解析（`evoresearch: http://127.0.0.1:PORT` / `{"port":N}` / Listening 行）；
 5. 壳轮询端口文件（≤60s，首次冷启动较慢）后加载 WebView2；
 6. 退出清理：launch.js 在父进程消失时自动退出（tasklist 探测），防孤儿进程。
 
@@ -79,7 +79,7 @@ desktop/
 |---|---|
 | release exe 启动（窗口 + WebView2） | ✅ 进程存活、无错误 |
 | sidecar spawn（node.exe launch.js） | ✅ 隐藏控制台、stderr 落盘 |
-| DSH web 后端启动 | ✅ `dsh web: http://127.0.0.1:<port>` |
+| DSH web 后端启动 | ✅ `evoresearch: http://127.0.0.1:<port>`（自定义表面，无官方外壳） |
 | 端口文件协议 | ✅ `{"port":9430}` 写入 LOCALAPPDATA |
 | 壳 → WebView2 加载后端 | ✅ 页面 200、BOOT 图含插件、client bundle 200 |
 | 安装包 | ✅ `EvoResearch_0.1.0_x64-setup.exe` = 43.7MB（NSIS/LZMA） |

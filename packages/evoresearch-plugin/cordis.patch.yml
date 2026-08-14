@@ -13,5 +13,9 @@
 
     # client 行指向包的 node half（根导出）；浏览器 half 由 dsh-client-modules
     # 经 package.json 的 dsh.client 声明读取 exports["./client"]。
+    # 注意：EvoResearch 自定义表面（@evoresearch/dsh-app）下官方 ui-* 外壳
+    # 不加载，本行的 slot UI（sidebar.footer.action 等）没有宿主 slot，
+    # 因此默认 disabled；需要 DSH 官方表面时再启用。
     - id: evoresearch-client
       name: '@evoresearch/dsh-plugin'
+      disabled: true

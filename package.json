@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @evoresearch/dsh-plugin",
+    "build": "npm run build -w @evoresearch/dsh-plugin && npm run build -w @evoresearch/dsh-app",
     "typecheck": "npm run typecheck -w @evoresearch/dsh-plugin",
     "test": "npm run test -w @evoresearch/dsh-plugin",
     "verify": "npm run build && npm test && node scripts/verify-bundle.mjs && node scripts/check-docs.mjs",

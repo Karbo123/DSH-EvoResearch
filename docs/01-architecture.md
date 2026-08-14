@@ -2,10 +2,10 @@
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│                        浏览器（DSH Web GUI）                         │
-│  dsh-client-ui-*（平台）   +   @evoresearch/dsh-plugin/client     │
-│    侧栏「🔬 科研」入口 / 科研面板(overlay) / 会话记忆提示条(dock)     │
-│    └── ctx.remote.evoresearch.*（Typert Gateway / JSON RPC）            │
+│                   浏览器（EvoResearch 工作台，自定义表面）             │
+│  @evoresearch/dsh-app（自建前端 dist + UI 插件，不加载官方 ui-*）    │
+│    AppWebEntry 内核 → root slot → EvoFrame（导航/会话/业务面板）      │
+│    └── ctx.remote.evoresearch.*（Typert Gateway / JSON RPC）        │
 └──────────────────────────────┬─────────────────────────────────────┘
                                │
 ┌──────────────────────────────▼─────────────────────────────────────┐
@@ -62,13 +62,31 @@
 | `commands.ts` | 斜杠命令注册（平台命令体系） | `commands/implementation/*` |
 | `index.ts` | 插件入口：配置解析 + 组装 + 副作用管理 | `EvoScientist.py` 接线层（上游参照） |
 
-### Client 插件（`src/client/`）
+### 浏览器表面（`packages/evoresearch-app/`）
 
-| Slot | 用途 | 对应上游 EvoScientist WebUI |
-|---|---|---|
-| `sidebar.footer.action` | 侧栏「🔬 科研」入口 | 顶部 Logo/工具入口 |
-| `shell.overlay` | 科研面板（项目/记忆/任务/通道/提案 5 个标签） | WebUI 各面板 |
-| `conversation.input.dock` | 会话记忆提示条（Memory · N sources） | ChatMessage 记忆徽标 |
+自定义表面 bundle `@evoresearch/dsh-app`，替代官方 `dsh-web-app`：host 行全部复用官方包
+（webserver / api-gateway / connection / client-runtime / modules / ui-theme / locale /
+ui-settings），**不加载**任何官方 `ui-*` 外壳行；浏览器端只加载本包的 UI 插件。
+
+| 组成 | 说明 |
+|---|---|
+| `src/runtime.ts` | app-runtime 行（`@evoresearch/dsh-app/runtime`）：serve 本包 `dist/`、提供 `webRuntime` 服务、注册表面提示段与 `DSH_WEB_URL`、打印 URL |
+| `src/client.ts` | evoresearch-ui 行（包根空 apply + `exports["./client"]`）：提供 `layout` 服务（app-shell 硬依赖）+ 注册 `root` slot → EvoFrame 工作台 |
+| `src/directory-picker.ts` | `directoryPicker` 服务桩（`kind: 'none'`）：官方 auto 包的 client 面依赖 ui-workspace 外壳，自定义表面改用桩，消费方隐藏选择 UI |
+| `frontend/` | 前端外壳入口：`AppWebEntry` 内核（@deepseek-ai/dsh-client-web）+ 我们的 `index.html`，构建为 `dist/` |
+| `vendor/` | vendored 官方 `dsh-client-modules/client` 源码（MIT）：发布形态是 ModuleLoader 包装，内核静态 import 必须用源码形态（与官方 vite alias 同构） |
+
+关键机制（与官方设计文档一致的约定）：
+
+- **app-shell 组装**（web 内核内部）inject `slots/sessions/layout` 并渲染 `root` slot ——
+  官方由 ui-layout 提供 `layout` 服务并注册 root slot，自定义表面由 `evoresearch-ui` 自给自足；
+- **官方 client 行的 inject 是"加载拓扑包名"**（factory require 依赖），不是 cordis 服务依赖 ——
+  自定义表面必须保留依赖闭包内的行：`cordis-client-runner → ui-theme → {locale, ui-settings}`；
+  会话导出（`dsh-session-log-export`）与目录选择（`dsh-host-directory-picker-auto`）的 client 面
+  会拖入 ui-conversation/ui-workspace 等外壳，故在 patch 中禁用/替换；
+- **行名解析**：`app-runtime` 与 `directory-picker` 行指向包子路径（`./runtime`、`./directory-picker`），
+  包根保持空 apply（与官方 ui-\* 的 node half 同构），避免同一包多行的 host 侧 apply 冲突；
+  modules 按**行名**解析包并扫描 `dsh.client`，子路径行天然不产生 client 面。
 
 ## 数据流：一轮对话的科研记忆闭环
 

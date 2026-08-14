@@ -1,0 +1,57 @@
+{
+  "name": "@evoresearch/dsh-app",
+  "version": "0.1.0-rc.1",
+  "description": "EvoResearch 自定义浏览器表面 bundle：复用 DSH host 引擎（dsh-base 的全部服务与工具），自建前端工作台（不加载官方 ui-* 外壳，替换官方 dsh-web-app 表面）",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./runtime": "./lib/runtime.js",
+    "./directory-picker": "./lib/directory-picker.js",
+    "./client": "./lib/client/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "dist",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build-app.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-host-frontend-static": "^0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
+    "@deepseek-ai/dsh-client-modules": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-schema-form": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-attachment": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-theme": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-web": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-web-react": "^0.1.0-rc.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web"
+    }
+  },
+  "license": "MIT"
+}
