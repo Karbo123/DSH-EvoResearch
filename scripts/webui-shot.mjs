@@ -37,6 +37,10 @@ const scripts = []
 for (let i = 0; i < process.argv.length; i += 1) {
   if (process.argv[i] === '--script') scripts.push(process.argv[i + 1])
 }
+const evals = []
+for (let i = 0; i < process.argv.length; i += 1) {
+  if (process.argv[i] === '--eval') evals.push(process.argv[i + 1])
+}
 const width = Number(arg('width', '1440'))
 const height = Number(arg('height', '900'))
 const waitMs = Number(arg('wait-ms', '6000'))
@@ -128,6 +132,12 @@ async function main() {
   await cdp.send('Page.navigate', { url })
   await Promise.race([loaded, new Promise((r) => setTimeout(r, 30000))])
   await new Promise((r) => setTimeout(r, waitMs))
+  for (const js of evals) {
+    const res = await cdp.send('Runtime.evaluate', { expression: js, returnByValue: true, awaitPromise: true })
+    if (res.result?.value !== undefined) console.log(`[webui-shot] eval →`, JSON.stringify(res.result.value).slice(0, 200))
+    if (res.exceptionDetails) console.error('[webui-shot] eval 异常:', res.exceptionDetails.text)
+  }
+  if (evals.length > 0) await new Promise((r) => setTimeout(r, 1500))
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
   writeFileSync(out, Buffer.from(shot.data, 'base64'))
   cdp.close()

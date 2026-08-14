@@ -12,7 +12,7 @@
  * 后端能力（会话、模型、工具）由 dsh-base 提供 —— 不重复造轮子。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import {
   PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, SquarePen,
   MessagesSquare, Moon, Sun, Settings, Languages,
@@ -20,13 +20,18 @@ import {
 import { CSS } from './styles'
 import { applyTheme, resolvedTheme, toggleTheme } from './theme'
 import { ThreadList, type SideView } from './threadlist'
-import { ChatArea } from './chat'
+import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
+import { registerConversation } from './conversation'
 
-const inject = ['slots', 'sessions']
+const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews']
 
 /** 插件激活时由 apply 写入的会话服务（组件经闭包使用）。 */
-let sessionsService: { open(id: string): void } | null = null
+let sessionsService: {
+  open(id: string): void
+  binding(id: string): { session: any } | undefined
+  create(opts?: { cwd?: string; workspaceId?: string }): Promise<string>
+} | null = null
 
 /** 注入样式（data-plugin-css 模式，可被 HMR 清理）。 */
 function installCss() {
@@ -87,8 +92,34 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const currentTitle = currentTitleOf(sessions)
   const running = current !== undefined && sessions.byId[current]?.running === true
 
+  // ── 会话快照订阅：notifier → snapshotCache（chat legacy 节点 + promptError）──
+  const sessionSnapshot = useSyncExternalStore(
+    (onChange) => {
+      const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
+      return s === undefined ? () => {} : s.notifier.subscribe(onChange)
+    },
+    () => {
+      const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
+      return s === undefined ? null : s.snapshotCache
+    },
+  )
+  const chatLegacy = sessionSnapshot?.chat?.legacy
+  const nodes: ChatNode[] = (chatLegacy?.nodes ?? []).filter((n: any) => n !== null && n.visibility === 'visible')
+  const partial: ChatNode | null = chatLegacy?.partial ?? null
+  const promptError: string | null = sessionSnapshot?.promptError?.error?.message ?? null
+
   const openSession = (id: string) => { sessionsService?.open(id) }
-  const startNewChat = () => { setView(null) }
+  const startNewChat = () => {
+    setView(null)
+    // 创建空白会话并打开（host 侧默认工作目录；目录选择接入后经 pickDirectory）
+    void sessionsService?.create({}).then((id) => sessionsService?.open(id))
+  }
+  const sendMessage = (text: string) => {
+    const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
+    if (s === undefined || text.trim() === '') return
+    // content 是内容块数组，mode 必填（queue = 追加到当前轮次之后）
+    void s.prompt([{ type: 'text', text }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+  }
 
   const persistPanels = (p: { left: number; right: number }) => {
     setPanels(p)
@@ -242,7 +273,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                     ],
                   }),
                 })
-              : jsx(ChatArea, { currentTitle, running, onSend: () => {} }),
+              : jsx(ChatArea, {
+                  nodes,
+                  partial,
+                  running,
+                  error: promptError,
+                  currentTitle,
+                  onSend: sendMessage,
+                }),
           }),
           inspector && jsxs(Fragment, {
             children: [
@@ -275,6 +313,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
 function apply(ctx: any) {
   installCss()
   applyTheme()
+  registerConversation(ctx)
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
     const disposeService = ctx.reflect.provide('layout', {

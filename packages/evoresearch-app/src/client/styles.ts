@@ -192,4 +192,24 @@ body { margin: 0; }
 .evo-insp-empty { padding: 40px 20px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-insp-empty svg { width: 36px; height: 36px; color: var(--color-border); margin-bottom: 8px; }
 .evo-view { flex: 1; overflow-y: auto; }
+/* ── 消息列表（ChatMessage 复刻）── */
+.evo-msg-list { flex: 1; overflow-y: auto; padding: 24px 24px 8px; display: flex; flex-direction: column; gap: 18px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; }
+.evo-msg-error { padding: 10px 14px; border: 1px solid var(--color-error); border-radius: 10px; color: var(--color-error); font-size: 13px; background: color-mix(in srgb, var(--color-error) 8%, transparent); }
+.evo-msg-row { display: flex; gap: 10px; align-items: flex-start; }
+.evo-msg-user { flex-direction: row-reverse; }
+.evo-msg-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--color-avatar-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--color-text-secondary); }
+.evo-msg-avatar svg { width: 15px; height: 15px; }
+.evo-msg-body { min-width: 0; max-width: 78%; display: flex; flex-direction: column; gap: 6px; }
+.evo-msg-user-body { min-width: 0; max-width: 78%; }
+.evo-msg-bubble { padding: 9px 13px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.evo-msg-bubble-user { background: var(--color-user-message-bg); color: var(--color-user-message); border-bottom-right-radius: 4px; }
+.evo-msg-bubble-assistant { background: var(--color-surface); border: 1px solid var(--color-border-light); border-bottom-left-radius: 4px; color: var(--color-text-primary); }
+.evo-msg-text { white-space: pre-wrap; word-break: break-word; }
+.evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 3px; text-align: right; }
+.evo-msg-cursor { display: inline-block; width: 7px; height: 15px; margin-left: 2px; background: var(--brand); vertical-align: -2px; animation: evo-blink 1s steps(2) infinite; }
+@keyframes evo-blink { 50% { opacity: 0; } }
+.evo-tool-card { display: flex; align-items: flex-start; gap: 8px; padding: 7px 11px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); font-size: 12.5px; color: var(--color-text-secondary); }
+.evo-tool-card svg { width: 14px; height: 14px; margin-top: 1px; flex-shrink: 0; color: var(--color-text-tertiary); }
+.evo-tool-name { font-weight: 600; color: var(--color-text-primary); font-family: var(--font-mono, ui-monospace, Consolas, monospace); flex-shrink: 0; }
+.evo-tool-args { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-tertiary); font-family: var(--font-mono, ui-monospace, Consolas, monospace); }
 `
