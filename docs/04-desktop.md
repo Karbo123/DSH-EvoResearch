@@ -57,7 +57,7 @@ desktop/
 ├── scripts/
 │   ├── bundle-sidecar.mjs     # 组装 sidecar（下载 node/安装依赖/裁剪）
 │   └── build.mjs              # 一键：npm build → bundle-sidecar → cargo tauri build
-├── icons/                     # icon-source.png（gen-icon.mjs 生成）
+├── icons/                     # 源图存档 icon-source.svg（= WebUI favicon.svg 的拷贝）
 └── dist/index.html            # frontendDist 占位（运行期由 sidecar 提供真实服务）
 ```
 
