@@ -374,4 +374,18 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-btn-danger:hover { background: color-mix(in srgb, var(--color-error) 24%, transparent); }
 .evo-btn-run { background: var(--brand-solid); color: var(--brand-foreground); }
 .evo-btn-run:hover { background: var(--brand-hover); }
+/* ── Channels / Team ── */
+.evo-channel-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-tertiary); flex-shrink: 0; text-transform: capitalize; }
+.evo-channel-badge.online { background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }
+.evo-channel-counts { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.evo-channel-toggle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; }
+.evo-channel-toggle:hover { border-color: var(--brand); color: var(--brand); }
+.evo-channel-toggle.stop { color: var(--color-error); }
+.evo-channel-toggle.stop:hover { border-color: var(--color-error); color: var(--color-error); }
+.evo-channel-toggle:disabled { opacity: 0.5; cursor: default; }
+.evo-channel-toggle svg { width: 13px; height: 13px; }
+.evo-team-row { align-items: flex-start; }
+.evo-team-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.evo-team-name { font-size: 13px; font-weight: 600; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; }
+.evo-team-desc { font-size: 12px; color: var(--color-text-tertiary); line-height: 1.5; }
 `

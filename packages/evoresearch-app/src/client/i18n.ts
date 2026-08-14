@@ -35,6 +35,8 @@ const DICT: Record<string, [string, string]> = {
   researchSkills: ['Research Skills', '科研技能'],
   evomemory: ['EvoMemory', '科研记忆'],
   scheduled: ['Scheduled', '定时任务'],
+  channels: ['Channels', '消息通道'],
+  team: ['Team', '科研团队'],
   searchResearch: ['Search research...', '搜索科研记录...'],
   recents: ['Recents', '最近'],
   noResearchYet: ['No research yet', '暂无科研记录'],

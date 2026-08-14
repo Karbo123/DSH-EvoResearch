@@ -310,6 +310,40 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── Channels：状态 / 启动 / 停止 ──
+        if (method === 'channels-status') {
+          if (evoresearch?.channelsStatus === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.channelsStatus as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'channel-start' || method === 'channel-stop') {
+          const serviceMethod = method === 'channel-start' ? 'channelStart' : 'channelStop'
+          const fn = evoresearch?.[serviceMethod] as ((a: { id: string }) => Promise<{ ok: boolean }>) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = await fn({ id: requireString(payload, 'id') })
+          writeOk(res, { ok: result.ok === true })
+          return
+        }
+
+        // ── 专家团队：列表 / 邀请 / 清空 ──
+        if (method === 'experts') {
+          if (evoresearch?.expertsList === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.expertsList as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'expert-invite') {
+          if (evoresearch?.expertInvite === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = await (evoresearch.expertInvite as (a: { name: string }) => Promise<{ ok: boolean }>)({ name: requireString(payload, 'name') })
+          writeOk(res, { ok: result.ok === true })
+          return
+        }
+        if (method === 'expert-clear') {
+          if (evoresearch?.expertClear === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = await (evoresearch.expertClear as () => Promise<{ ok: boolean }>)()
+          writeOk(res, { ok: result.ok === true })
+          return
+        }
+
         writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown method ${method ?? ''}` } })
       } catch (error) {
         writeError(res, error)

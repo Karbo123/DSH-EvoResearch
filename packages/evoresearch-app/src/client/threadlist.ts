@@ -6,17 +6,19 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, SquarePen, Search, MessageSquare } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
-export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace'
+export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace' | 'channels' | 'team'
 
 const MENU = [
   { key: 'import', label: t('importProject'), icon: FolderGit2 },
   { key: 'skills', label: t('researchSkills'), icon: GraduationCap },
   { key: 'memory', label: t('evomemory'), icon: BrainCircuit },
   { key: 'schedule', label: t('scheduled'), icon: Clock },
+  { key: 'channels', label: t('channels'), icon: Cable },
+  { key: 'team', label: t('team'), icon: Users },
 ] as const
 
 /**
@@ -63,6 +65,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
     (key === 'skills' && view === 'skills') ||
     (key === 'memory' && view === 'memory') ||
     (key === 'schedule' && view === 'schedule') ||
+    (key === 'channels' && view === 'channels') ||
+    (key === 'team' && view === 'team') ||
     (key === 'import' && view === 'workspace')
 
   return jsxs('div', {

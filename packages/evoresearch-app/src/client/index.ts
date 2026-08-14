@@ -26,7 +26,7 @@ import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
-import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel } from './panels'
+import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
 
@@ -327,7 +327,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         ? jsx(SkillsPanel, {})
                         : view === 'workspace'
                           ? jsx(WorkspacePanel, {})
-                          : null,
+                          : view === 'channels'
+                            ? jsx(ChannelsPanel, {})
+                            : view === 'team'
+                              ? jsx(TeamPanel, {})
+                              : null,
                 })
               : jsx(ChatArea, {
                   nodes,

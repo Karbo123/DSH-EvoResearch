@@ -9,7 +9,8 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
-  Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw,
+  Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
+  UserPlus, Power, PowerOff, Ban,
 } from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -421,6 +422,181 @@ export function WorkspacePanel() {
                   }),
                 }, p.name)),
               }),
+      ],
+    }),
+  })
+}
+
+interface ChannelRow {
+  id: string
+  name: string
+  online: boolean
+  received: number
+  sent: number
+  error?: string
+}
+
+/** Channels 面板：消息通道状态 + 启动/停止。 */
+export function ChannelsPanel() {
+  const [channels, setChannels] = useState<ChannelRow[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const load = () => {
+    setChannels(null)
+    void api<ChannelRow[]>('channels-status').then(setChannels).catch((e: any) => setError(String(e?.message ?? e)))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const toggle = (row: ChannelRow) => {
+    setBusy(row.id)
+    setError(null)
+    void api<{ ok: boolean }>(row.online ? 'channel-stop' : 'channel-start', { id: row.id })
+      .then((result) => {
+        setBusy(null)
+        if (result.ok) load()
+        else setError('操作失败')
+      })
+      .catch((e: any) => { setBusy(null); setError(String(e?.message ?? e)) })
+  }
+
+  return jsx(PanelShell, {
+    icon: Cable,
+    title: 'Channels',
+    children: jsxs(Fragment, {
+      children: [
+        jsxs('div', {
+          className: 'evo-panel-row',
+          children: [
+            jsx('span', { className: 'evo-panel-row-label', children: 'Messaging channels' }),
+            jsx('span', { style: { flex: 1 } }),
+            jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: load, children: jsx(RefreshCw, {}) }),
+          ],
+        }),
+        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        channels === null
+          ? jsx(LoadingRow, {})
+          : (channels ?? []).length === 0
+            ? jsx('span', { className: 'evo-panel-hint', children: 'No messaging channels are available' })
+            : jsx('div', {
+                className: 'evo-panel-list',
+                children: (channels ?? []).map((c) => jsxs('div', {
+                  className: 'evo-panel-item evo-channel-row',
+                  children: [
+                    jsx(Cable, {}),
+                    jsx('span', { className: 'evo-panel-item-main', children: c.name }),
+                    jsx('span', { className: `evo-channel-badge${c.online ? ' online' : ''}`, children: c.online ? 'online' : 'offline' }),
+                    c.received + c.sent > 0 && jsx('span', { className: 'evo-channel-counts', children: `↓${c.received} ↑${c.sent}` }),
+                    jsx('button', {
+                      type: 'button',
+                      className: `evo-channel-toggle${c.online ? ' stop' : ''}`,
+                      disabled: busy !== null,
+                      title: c.online ? 'Stop channel' : 'Start channel',
+                      onClick: () => toggle(c),
+                      children: c.online ? jsx(PowerOff, {}) : jsx(Power, {}),
+                    }),
+                  ],
+                }, c.id)),
+              }),
+        channels !== null && (channels ?? []).some((c) => c.error !== undefined)
+          && jsx('div', { className: 'evo-panel-hint', children: (channels ?? []).filter((c) => c.error !== undefined).map((c) => `${c.name}: ${c.error}`).join(' · ') }),
+      ],
+    }),
+  })
+}
+
+interface ExpertRow {
+  name: string
+  description?: string
+  invitedAt: number
+}
+
+/** Team 面板：科研角色团队 + 邀请/清空。 */
+export function TeamPanel() {
+  const [experts, setExperts] = useState<ExpertRow[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const load = () => {
+    setExperts(null)
+    void api<ExpertRow[]>('experts').then(setExperts).catch((e: any) => setError(String(e?.message ?? e)))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const invite = (name: string) => {
+    setBusy(name)
+    void api<{ ok: boolean }>('expert-invite', { name })
+      .then((result) => {
+        setBusy(null)
+        if (result.ok) load()
+        else setError('邀请失败')
+      })
+      .catch((e: any) => { setBusy(null); setError(String(e?.message ?? e)) })
+  }
+
+  const clearAll = () => {
+    setBusy('__clear__')
+    void api<{ ok: boolean }>('expert-clear')
+      .then((result) => {
+        setBusy(null)
+        if (result.ok) load()
+        else setError('清空失败')
+      })
+      .catch((e: any) => { setBusy(null); setError(String(e?.message ?? e)) })
+  }
+
+  const invitedCount = (experts ?? []).filter((e) => e.invitedAt !== 0).length
+
+  return jsx(PanelShell, {
+    icon: Users,
+    title: 'Team',
+    children: jsxs(Fragment, {
+      children: [
+        jsxs('div', {
+          className: 'evo-panel-row',
+          children: [
+            jsx('span', { className: 'evo-panel-row-label', children: 'Research experts' }),
+            jsx('span', { style: { flex: 1 } }),
+            invitedCount > 0 && jsx('button', {
+              type: 'button',
+              className: 'evo-btn evo-btn-danger',
+              disabled: busy !== null,
+              onClick: clearAll,
+              children: jsxs(Fragment, { children: [jsx(Ban, {}), jsx('span', { children: 'Clear' })] }),
+            }),
+            jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: load, children: jsx(RefreshCw, {}) }),
+          ],
+        }),
+        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        experts === null
+          ? jsx(LoadingRow, {})
+          : jsx('div', {
+              className: 'evo-panel-list',
+              children: (experts ?? []).map((e) => jsxs('div', {
+                className: 'evo-panel-item evo-team-row',
+                children: [
+                  jsx(Users, {}),
+                  jsxs('div', {
+                    className: 'evo-team-info',
+                    children: [
+                      jsx('div', { className: 'evo-team-name', children: e.name }),
+                      e.description !== undefined && e.description !== '' && jsx('div', { className: 'evo-team-desc', children: e.description }),
+                    ],
+                  }),
+                  e.invitedAt !== 0
+                    ? jsx('span', { className: 'evo-channel-badge online', children: 'invited' })
+                    : jsx('button', {
+                        type: 'button',
+                        className: 'evo-btn evo-btn-ok',
+                        disabled: busy !== null,
+                        onClick: () => invite(e.name),
+                        children: jsxs(Fragment, { children: [jsx(UserPlus, {}), jsx('span', { children: 'Invite' })] }),
+                      }),
+                ],
+              }, e.name)),
+            }),
       ],
     }),
   })
