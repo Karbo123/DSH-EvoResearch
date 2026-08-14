@@ -10,16 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "EvoScientist",
-        "width": 1280,
-        "height": 820,
-        "minWidth": 960,
-        "minHeight": 600,
-        "resizable": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }

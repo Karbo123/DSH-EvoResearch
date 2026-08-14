@@ -258,9 +258,13 @@ export class MemoryRuntime implements GoalRuntime {
           updatedAt: Date.now(),
         })
       }
-      // 长程目标检测（v3）：仅当文本看起来像长期任务
+      // 长程目标检测（v3）：仅当文本看起来像长期任务；失败不影响记忆包构建
       if (looksLongHorizon(text)) {
-        await ensureGoalContract(ctx, this, { provider, model }, store, text, sessionId)
+        try {
+          await ensureGoalContract(ctx, this, { provider, model }, store, text, sessionId)
+        } catch (error) {
+          console.error('[evosci:memory] Goal 提取失败（不影响记忆包）:', error)
+        }
       }
       // 记忆包（以当前轮文本为查询）
       const packet = await buildMemoryPacket(store, {

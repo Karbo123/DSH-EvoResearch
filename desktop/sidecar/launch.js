@@ -11,9 +11,11 @@ const { join } = require('node:path')
 const { platform } = require('node:os')
 
 const APP_NAME = 'EvoScientist'
-// 端口文件路径与 Tauri 壳的 app_data_dir 对齐：%LOCALAPPDATA%/<identifier>
-const dataDir = join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'com.evoscientist.desktop')
-const portFile = join(dataDir, 'port.json')
+// 端口文件路径：优先取壳通过环境变量传入的路径，回退到 %LOCALAPPDATA%/<identifier>
+const dataDir = process.env.EVOSCI_PORT_FILE
+  ? require('node:path').dirname(process.env.EVOSCI_PORT_FILE)
+  : join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'com.evoscientist.desktop')
+const portFile = process.env.EVOSCI_PORT_FILE || join(dataDir, 'port.json')
 
 mkdirSync(dataDir, { recursive: true })
 
@@ -34,20 +36,30 @@ function startDsh() {
   return child
 }
 
-/** 从 dsh stdout 解析监听端口（JSON 行 {"port": N} 或 "Listening on ...:N"）。 */
+/** 从 dsh stdout 解析监听端口（JSON 行 {"port": N}、"Listening on ...:N" 或 "dsh web: http://127.0.0.1:N"）。 */
 function parseOutput(chunk) {
   for (const line of chunk.split(/\r?\n/)) {
     const json = /{"port":\s*(\d+)}/.exec(line)
     if (json) {
-      writeFileSync(portFile, JSON.stringify({ port: Number(json[1]) }), 'utf8')
-      console.log(`EvoScientist ready on port ${json[1]}`)
+      writePortFile(json[1])
+      continue
+    }
+    const urlMatch = /http:\/\/127\.0\.0\.1:(\d+)/.exec(line)
+    if (urlMatch) {
+      writePortFile(urlMatch[1])
       continue
     }
     const listening = /:(\d{4,5})/.exec(line)
     if (listening && line.toLowerCase().includes('listen')) {
-      writeFileSync(portFile, JSON.stringify({ port: Number(listening[1]) }), 'utf8')
+      writePortFile(listening[1])
     }
   }
+}
+
+/** 写端口文件（幂等）。 */
+function writePortFile(port) {
+  writeFileSync(portFile, JSON.stringify({ port: Number(port) }), 'utf8')
+  console.log(`EvoScientist ready on port ${port}`)
 }
 
 const child = startDsh()

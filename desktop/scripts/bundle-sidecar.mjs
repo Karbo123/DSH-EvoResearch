@@ -105,6 +105,13 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
     console.error(result.stderr?.slice(-2000))
     throw new Error('npm install 失败')
   }
+  // 4) 清理 npm 嵌套安装生成的 profiles/node_modules（dsh 的 healProfilesModuleFallback
+  //    要求该路径不存在或为它管理的 symlink；真实目录会导致启动报错）
+  const nestedProfilesModules = join(appDir, 'profiles', 'node_modules')
+  if (existsSync(nestedProfilesModules)) {
+    rmSync(nestedProfilesModules, { recursive: true, force: true })
+    console.log('[bundle-sidecar] 已清理 profiles/node_modules（嵌套安装产物）')
+  }
   // 体积裁剪（deepseek profile 思路，对应原 EvoScientist build.py 的 --profile deepseek）：
   // 1) 删除未使用的 provider SDK（保留 openai/pi-ai 与 @deepseek-ai 核心）；
   // 2) 原生模块只保留 win32-x64 prebuilds（node-pty/sharp 的 linux/darwin 产物占 ~65MB）。

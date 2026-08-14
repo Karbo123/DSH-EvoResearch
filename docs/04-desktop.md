@@ -63,12 +63,39 @@ desktop/
 
 ## sidecar 协作协议（壳 ↔ 后端）
 
-1. 壳 `locate_sidecar` 探测资源目录中的 node.exe/launch.js/app（适配 Tauri 资源复制路径）；
-2. spawn `node.exe launch.js`（cwd = app/，隐藏控制台）；
+1. 壳 `locate_sidecar` 探测资源目录中的 node.exe/launch.js/app
+   （Tauri 把 `../sidecar/dist/**/*` 复制为 `<exe目录>/_up_/sidecar/dist/...`，`_up_` 是 `..` 的映射）；
+2. spawn `node.exe launch.js`（cwd = app/，隐藏控制台，stderr 写入 `%TEMP%/evosci-sidecar.err.log`）；
 3. launch.js 设置 `DSH_HOME = cwd`（独立数据根，不污染用户 `~/.dsh`），
    启动 `dsh --profile evoscientist --port 0`；
-4. 端口写入 `%LOCALAPPDATA%/EvoScientist/port.json`（壳轮询 ≤30s 后加载 WebView2）；
-5. 退出清理：launch.js 在父进程消失时自动退出（tasklist 探测），防孤儿进程。
+4. 端口文件路径经环境变量 `EVOSCI_PORT_FILE` 传入（默认 `%LOCALAPPDATA%/com.evoscientist.desktop/port.json`），
+   端口从 dsh stdout 解析（`dsh web: http://127.0.0.1:PORT` / `{"port":N}` / Listening 行）；
+5. 壳轮询端口文件（≤60s，首次冷启动较慢）后加载 WebView2；
+6. 退出清理：launch.js 在父进程消失时自动退出（tasklist 探测），防孤儿进程。
+
+## 桌面壳端到端验证（0.1.0-rc.1）
+
+| 验证项 | 结果 |
+|---|---|
+| release exe 启动（窗口 + WebView2） | ✅ 进程存活、无错误 |
+| sidecar spawn（node.exe launch.js） | ✅ 隐藏控制台、stderr 落盘 |
+| DSH web 后端启动 | ✅ `dsh web: http://127.0.0.1:<port>` |
+| 端口文件协议 | ✅ `{"port":9430}` 写入 LOCALAPPDATA |
+| 壳 → WebView2 加载后端 | ✅ 页面 200、BOOT 图含插件、client bundle 200 |
+| 安装包 | ✅ `EvoScientist_0.1.0_x64-setup.exe` = 43.7MB（NSIS/LZMA） |
+
+### 调试过程中修复的问题（对 Tauri 桌面开发有普适参考价值）
+
+| 问题 | 根因 | 修复 |
+|---|---|---|
+| build.rs 栈溢出 | Windows build script 主线程 1MB 栈，embed-resource 递归溢出 | 16MB 栈线程执行 tauri_build::build() |
+| resources 未进安装包 | glob 模式 `**` 结尾不匹配文件（需 `**/*`） | tauri.conf resources 用 `../sidecar/dist/**/*` |
+| 资源路径未知 | tauri-build 把 `../sidecar/**` 复制为 `<target>/_up_/sidecar/**` | main.rs 候选路径探测 + `\\?\` 前缀剥离 |
+| 壳读端口文件失败 | Tauri `app_data_dir()` 是 Roaming，launch.js 写 LOCALAPPDATA | 统一为 `%LOCALAPPDATA%/com.evoscientist.desktop`，路径经 `EVOSCI_PORT_FILE` 环境变量传递 |
+| sidecar 崩溃 `lstat 'D:'` | 壳 `resource_dir` 带 `\\?\` 长路径前缀，Node 模块解析失败 | `simplified()` 剥离前缀 |
+| 端口一直未就绪 | dsh 输出 `dsh web: http://127.0.0.1:PORT` 不含 "listen"，旧正则不匹配 | 新增 URL 正则；等待放宽到 60s |
+| 窗口创建 panic | tauri.conf 已声明 `main` 窗口，setup 又建同名 | tauri.conf `windows: []`，窗口由 setup 全权创建 |
+| sidecar 启动报错 | npm 嵌套安装生成 `profiles/node_modules`（真实目录），dsh heal 要求 symlink 或不存在 | bundle-sidecar 清理该目录；build.mjs 构建前清理 `_up_` 残留 |
 
 ## 构建步骤
 

@@ -24,19 +24,35 @@ fn port_file(app_data_dir: &PathBuf) -> PathBuf {
     app_data_dir.join("port.json")
 }
 
-/// 在资源目录中定位 sidecar 组件（Tauri 资源复制保留的路径结构随版本/配置变化，
-/// 因此按候选路径探测）。
-fn locate_sidecar(resource_dir: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+/// 去掉 Windows 长路径前缀（`\\?\`）：Node 模块解析无法处理该前缀的 cwd/文件路径。
+fn simplified(path: &std::path::Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    let stripped = text.strip_prefix("\\\\?\\").unwrap_or(&text);
+    PathBuf::from(stripped.to_string())
+}
+
+/// 在资源目录中定位 sidecar 组件。
+/// tauri-build 把 `../sidecar/dist/**/*` 资源复制为 `<target>/_up_/sidecar/dist/...`
+/// （`_up_` 是相对路径中 `..` 部分的映射），因此按候选路径探测。
+fn locate_sidecar(resource_dir: &std::path::Path, name: &str) -> Option<PathBuf> {
     for candidate in [
+        resource_dir.join("_up_").join("sidecar").join("dist").join(name),
+        resource_dir.join("sidecar").join("dist").join(name),
         resource_dir.join(name),
-        resource_dir.join("sidecar").join(name),
-        resource_dir.join("dist").join(name),
     ] {
         if candidate.exists() {
-            return Some(candidate);
+            return Some(simplified(&candidate));
         }
     }
     None
+}
+
+/// 应用本地数据目录：%LOCALAPPDATA%/com.evoscientist.desktop（与 launch.js 端口文件约定一致）。
+fn app_local_data_dir() -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().display().to_string());
+    let dir = PathBuf::from(base).join("com.evoscientist.desktop");
+    let _ = fs::create_dir_all(&dir);
+    dir
 }
 
 /// 启动 sidecar 进程。
@@ -48,12 +64,17 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
     // sidecar 工作目录 = app 目录（DSH_HOME 根，含 profiles/ 与 node_modules/）
     let workdir = locate_sidecar(resource_dir, "app")
         .ok_or_else(|| std::io::Error::other("未找到 sidecar app 目录"))?;
+    // 端口文件路径经环境变量传给 launch.js（避免两侧路径约定漂移）
+    let port_file_env = app_local_data_dir().join("port.json");
+    let stderr_log = std::env::temp_dir().join("evosci-sidecar.err.log");
+    let stderr_file = std::fs::File::create(&stderr_log)?;
     Command::new(&node)
         .arg(&launch)
         .current_dir(&workdir)
+        .env("EVOSCI_PORT_FILE", &port_file_env)
         .stdin(Stdio::null())
         .stdout(Stdio::null()) // 端口经端口文件传递，避免管道阻塞
-        .stderr(Stdio::null())
+        .stderr(Stdio::from(stderr_file))
         .creation_flags(0x0800_0000) // CREATE_NO_WINDOW：隐藏控制台
         .spawn()
 }
@@ -77,34 +98,52 @@ fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<u16> {
     None
 }
 
+/// 诊断日志（%TEMP%/evosci-shell.log）；发布版可移除。
+fn log(msg: &str) {
+    let log_path = std::env::temp_dir().join("evosci-shell.log");
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .and_then(|mut f| {
+            use std::io::Write;
+            writeln!(f, "{}", msg)
+        });
+}
+
 fn main() {
+    log(&format!("[shell] 启动，PID={}", std::process::id()));
+
     let app = tauri::Builder::default()
         .setup(|app| {
             let handle = app.handle();
             let resource_dir = handle.path().resource_dir().unwrap_or_default();
-            let app_data_dir = handle.path().app_data_dir().unwrap_or_default();
+            let app_data_dir = app_local_data_dir(); // %LOCALAPPDATA%/com.evoscientist.desktop
+            log(&format!("[shell] resource_dir={}", resource_dir.display()));
+            log(&format!("[shell] app_data_dir={}", app_data_dir.display()));
             fs::create_dir_all(&app_data_dir).ok();
             // 清掉旧端口文件（避免读到上次运行的残留）
             fs::remove_file(port_file(&app_data_dir)).ok();
 
             // 1) 启动 Node sidecar
             match spawn_sidecar(&resource_dir) {
-                Ok(_child) => {
-                    // 注意：child 句柄保存在 setup 闭包中，进程生命周期由 Node 侧
-                    // 'exit' 钩子与系统任务管理器兜底；壳进程退出时由 OS 回收。
-                    // （更完整的进程树管理后续接入 tauri-plugin-shell）
+                Ok(child) => {
+                    log(&format!("[shell] sidecar 已启动，pid={}", child.id()));
                 }
                 Err(error) => {
-                    eprintln!("sidecar 启动失败: {error}");
+                    log(&format!("[shell] sidecar 启动失败: {error}"));
                 }
             }
 
-            // 2) 等待端口并加载 WebUI
-            let port = wait_for_port(&app_data_dir, Duration::from_secs(30));
+            // 2) 等待端口并加载 WebUI（首次启动 sidecar 冷启动较慢，放宽到 60s）
+            let port = wait_for_port(&app_data_dir, Duration::from_secs(60));
             let url = match port {
-                Some(port) => format!("http://127.0.0.1:{port}"),
+                Some(port) => {
+                    log(&format!("[shell] 后端就绪，端口={port}"));
+                    format!("http://127.0.0.1:{port}")
+                }
                 None => {
-                    eprintln!("sidecar 未在 30s 内就绪，加载失败页");
+                    log("[shell] sidecar 未在 30s 内就绪，加载失败页");
                     "about:blank".to_string()
                 }
             };
