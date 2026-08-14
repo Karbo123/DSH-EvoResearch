@@ -124,6 +124,12 @@ export function registerWorkspaceApi(ctx: any): void {
           res.end(buffer)
           return
         }
+        // GET /evoresearch/fs/mode → 当前默认权限预设
+        if (req.method === 'GET' && method === 'mode') {
+          const permission = ctx.get('permissionPresets')
+          writeOk(res, { preset: permission?.defaultPreset ?? null })
+          return
+        }
         if (req.method !== 'POST') {
           writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
           return
@@ -168,6 +174,49 @@ export function registerWorkspaceApi(ctx: any): void {
           const text = requireString(payload, 'text')
           await writeFile(target, text, 'utf8')
           writeOk(res, { path: target })
+          return
+        }
+
+        // POST /evoresearch/plugins → 插件清单（loader entries 快照）
+        if (method === 'plugins') {
+          const entries = []
+          for (const entry of ctx.get('loader')?.entries?.() ?? []) {
+            entries.push({
+              id: entry.options?.name ?? entry.name ?? String(entry),
+              state: entry.fiber === undefined ? 'loading' : String(entry.fiber.state ?? ''),
+            })
+          }
+          writeOk(res, { plugins: entries })
+          return
+        }
+
+        // POST /evoresearch/models → 当前默认模型；/models/select → 保存默认模型
+        if (method === 'models') {
+          const agentDefaultModel = ctx.get('agentDefaultModel')
+          writeOk(res, agentDefaultModel?.currentSelection?.() ?? { provider: null, model: null })
+          return
+        }
+        if (method === 'models/select') {
+          const agentDefaultModel = ctx.get('agentDefaultModel')
+          if (agentDefaultModel?.saveSelection === undefined) throw httpError(400, 'method-error', 'agentDefaultModel 不可用')
+          await agentDefaultModel.saveSelection({
+            provider: requireString(payload, 'provider'),
+            model: requireString(payload, 'model'),
+          })
+          writeOk(res, { saved: true })
+          return
+        }
+
+        // /evoresearch/fs/mode：POST {sessionId, preset} → 切换权限预设
+        if (method === 'mode') {
+          const permission = ctx.get('permissionPresets')
+          if (permission === undefined) throw httpError(400, 'method-error', 'permission 服务不可用')
+          const sessionId = requireString(payload, 'sessionId')
+          const preset = requireString(payload, 'preset')
+          const session = ctx.get('sessions')?.get?.(sessionId)
+          if (session === undefined) throw httpError(400, 'bad-request', `会话不存在: ${sessionId}`)
+          permission.set(session, preset)
+          writeOk(res, { preset })
           return
         }
 

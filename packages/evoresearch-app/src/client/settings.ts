@@ -1,21 +1,131 @@
 /**
- * 设置弹窗：主题 / 语言 / 模型（只读指引）/ 关于。
- *
- * - 主题：light / dark / system（html.dark 驱动）
- * - 语言：中 / 英（localStorage，切换后刷新）
- * - 模型：由 DSH 设置管理（模型选择在官方设置面；此处给指引）
+ * 设置弹窗：主题 / 语言 / 权限模式 / 模型 / 插件清单 / 关于。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState } from 'react'
-import { X, Palette, Languages, Cpu, Info } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Palette, Languages, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon } from 'lucide-react'
 import { t, readLang } from './i18n'
 import { readPreference, applyTheme } from './theme'
 
 export interface SettingsDialogProps {
   onClose: () => void
+  /** 当前会话 id（权限切换目标；无会话时为 null）。 */
+  sessionId: string | null
 }
 
-export function SettingsDialog({ onClose }: SettingsDialogProps) {
+interface PluginRow { id: string; state: string }
+
+/** 权限模式选择（写 host permission 预设）。 */
+function PermissionSection({ sessionId }: { sessionId: string | null }) {
+  const [current, setCurrent] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/evoresearch/fs/mode').then((res) => res.json()).then((json) => {
+      if (!cancelled && json.ok) setCurrent(json.value.preset)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const switchMode = (preset: string) => {
+    if (sessionId === null) { setError('打开一个会话后可切换权限模式'); return }
+    void fetch('/evoresearch/fs/mode', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId, preset }),
+    }).then((res) => res.json()).then((json) => {
+      if (json.ok) {
+        setCurrent(preset)
+        window.dispatchEvent(new CustomEvent('evo-mode-changed'))
+      } else setError(json.error?.message ?? '切换失败')
+    }).catch((e) => setError(String(e)))
+  }
+
+  const modes = [
+    { key: 'read-only', label: 'Read-only' },
+    { key: 'workspace-write', label: 'Write' },
+    { key: 'danger-full-access', label: 'Full effect' },
+  ]
+
+  return jsxs('div', {
+    className: 'evo-setting',
+    children: [
+      jsxs('div', {
+        className: 'evo-setting-label',
+        children: [jsx(ShieldCheckIcon, {}), jsx('span', { children: 'Permission' })],
+      }),
+      error !== null && jsx('div', { className: 'evo-setting-hint evo-setting-error', children: error }),
+      jsxs('div', {
+        className: 'evo-setting-options',
+        children: modes.map((m) => jsx('button', {
+          type: 'button',
+          className: 'evo-setting-option',
+          'data-active': current === m.key || undefined,
+          onClick: () => switchMode(m.key),
+          children: m.label,
+        }, m.key)),
+      }),
+    ],
+  })
+}
+
+/** 插件清单（host loader entries 快照，经 /evoresearch/plugins）。 */
+function PluginListSection() {
+  const [plugins, setPlugins] = useState<PluginRow[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/evoresearch/fs/plugins', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    }).then((res) => res.json()).then((json) => {
+      if (cancelled) return
+      if (json.ok) setPlugins(json.value.plugins)
+      else setError(json.error?.message ?? '加载失败')
+    }).catch((e) => { if (!cancelled) setError(String(e)) })
+    return () => { cancelled = true }
+  }, [])
+
+  const stateLabel = (state: string): string => {
+    if (state === '2') return 'active'
+    if (state === '3') return 'failed'
+    if (state === '1') return 'loading'
+    return state
+  }
+
+  return jsxs('div', {
+    className: 'evo-setting',
+    children: [
+      jsxs('div', {
+        className: 'evo-setting-label',
+        children: [jsx(Puzzle, {}), jsx('span', { children: 'Plugins' })],
+      }),
+      error !== null && jsx('div', { className: 'evo-setting-hint evo-setting-error', children: error }),
+      plugins === null
+        ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+        : jsxs('div', {
+            className: 'evo-plugin-list',
+            children: (plugins ?? []).map((p) => jsx('div', {
+              className: 'evo-plugin-row',
+              children: jsxs(Fragment, {
+                children: [
+                  jsx('span', { className: 'evo-plugin-id', children: p.id }),
+                  jsx('span', {
+                    className: `evo-plugin-state${p.state === '2' ? ' evo-plugin-ok' : ''}`,
+                    children: stateLabel(p.state),
+                  }),
+                ],
+              }),
+            }, p.id)),
+          }),
+    ],
+  })
+}
+
+export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
   const [themePref, setThemePref] = useState(readPreference())
   const [lang, setLangState] = useState(localStorage.getItem('evoresearch-lang') === 'zh' ? 'zh' : 'en')
 
@@ -95,6 +205,10 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
                     jsx('div', { className: 'evo-setting-hint', children: '由 DSH 设置管理（settings.yaml 的 llm-deepseek / llm-pi-ai 段）。' }),
                   ],
                 }),
+                // ── 权限模式 ──
+                jsx(PermissionSection, { sessionId }),
+                // ── 插件清单 ──
+                jsx(PluginListSection, {}),
                 // ── 关于 ──
                 jsxs('div', {
                   className: 'evo-setting',

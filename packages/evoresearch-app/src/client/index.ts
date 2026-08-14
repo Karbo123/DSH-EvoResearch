@@ -124,6 +124,15 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const partial: ChatNode | null = chatLegacy?.partial ?? null
   const promptError: string | null = sessionSnapshot?.promptError?.error?.message ?? null
 
+  // 会话对象（投影/排队数据读取入口）
+  const sessionObj = current === undefined ? null : (sessionsService?.binding(current)?.session ?? null)
+  // 投影订阅：sessionStats/tokenUsage/contextPressure/permissions/goal 变化时重渲染
+  const [, setProjTick] = useState(0)
+  useEffect(() => {
+    const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
+    return s === undefined ? undefined : s.projections?.subscribeAny(() => setProjTick((v) => v + 1))
+  }, [current])
+
   const openSession = (id: string) => { sessionsService?.open(id) }
   const startNewChat = () => {
     setView(null)
@@ -315,6 +324,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   running,
                   error: promptError,
                   currentTitle,
+                  session: sessionObj,
                   onSend: sendMessage,
                 }),
           }),
@@ -341,6 +351,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
           settingsOpen && jsx(SettingsDialog, {
             onClose: () => setSettingsOpen(false),
+            sessionId: current ?? null,
           }),
         ],
       }),

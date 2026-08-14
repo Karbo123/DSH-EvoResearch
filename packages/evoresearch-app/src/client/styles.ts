@@ -321,4 +321,19 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-fs-editor { flex: 1; min-height: 0; padding: 10px 12px; border: none; outline: none; resize: none; background: var(--color-surface); color: var(--color-text-primary); font-size: 12.5px; line-height: 1.6; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 .evo-fs-image { max-width: 100%; object-fit: contain; padding: 10px; }
 .evo-fs-frame { flex: 1; min-height: 0; border: none; background: var(--color-surface); }
+/* ── 会话状态条 / 统计条 ── */
+.evo-composer-status { display: flex; align-items: center; gap: 7px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); flex-wrap: wrap; }
+.evo-status-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: var(--hover-bg); color: var(--color-text-secondary); font-size: 11px; }
+.evo-status-chip svg { width: 11px; height: 11px; }
+.evo-status-goal { color: var(--brand); }
+.evo-status-ro { color: var(--color-warning); }
+.evo-status-full { color: var(--color-error); }
+.evo-stats-line { display: flex; align-items: center; gap: 8px; padding: 6px 14px 9px; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evo-stats-sep { color: var(--color-border); margin-right: 8px; }
+/* ── 插件清单 ── */
+.evo-plugin-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.evo-plugin-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); }
+.evo-plugin-id { font-size: 12px; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-plugin-state { font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-plugin-ok { color: var(--color-success); }
 `

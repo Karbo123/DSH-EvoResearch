@@ -10,6 +10,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
 import { Paperclip, ShieldCheck, ArrowUp, Wrench, User } from 'lucide-react'
 import { t } from './i18n'
+import { SessionStatusLine, SessionStatsLine } from './session-dock'
 
 const SUGGESTED_PROMPTS = [
   'Survey recent papers on a topic',
@@ -45,6 +46,8 @@ export interface ChatAreaProps {
   error: string | null
   /** 当前会话标题（无会话时为 null）。 */
   currentTitle: string | null
+  /** 会话对象（投影/排队数据；无会话时为 null）。 */
+  session: any | null
   onSend: (text: string) => void
 }
 
@@ -120,7 +123,7 @@ function AssistantBubble({ node }: { node: ChatNode }) {
   })
 }
 
-export function ChatArea({ nodes, partial, running, error, currentTitle, onSend }: ChatAreaProps) {
+export function ChatArea({ nodes, partial, running, error, currentTitle, session, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [autoApprove, setAutoApprove] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
@@ -186,6 +189,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, onSend 
                 children: [
                   jsx('span', { className: 'evo-composer-dot', 'data-busy': running || undefined }),
                   jsx('span', { children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
+                  jsx(SessionStatusLine, { session }),
                 ],
               }),
               jsx('textarea', {
@@ -235,6 +239,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, onSend 
                   }),
                 ],
               }),
+              jsx(SessionStatsLine, { session }),
             ],
           }),
         ],
