@@ -7,6 +7,7 @@
 用 TypeScript / Node.js 从零实现的科研智能体能力套件：**自进化科研记忆、项目工作区、
 多智能体团队、定时任务、多通道接入、自定义工作台界面与 Windows 桌面版**。
 
+[![Release](https://img.shields.io/github/v/release/Karbo123/DSH-EvoResearch?color=2f6bff&label=Release)](https://github.com/Karbo123/DSH-EvoResearch/releases)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-green)](https://nodejs.org/)
 [![DSH](https://img.shields.io/badge/deepseek--harness-0.1.0--rc.6-1f3a93)](https://github.com/deepseek-ai/deepseek-harness)
@@ -14,26 +15,39 @@
 [![Windows](https://img.shields.io/badge/Platform-Windows-0078d6)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-**安装包仅 44 MB**（WebView2 复用系统组件）· 零 Python · 不依赖 deepagents
+**安装包仅 ~45 MB**（WebView2 复用系统组件）· 零 Python · 不依赖 deepagents
+
+![EvoResearch 聊天界面](docs/screenshots/chat-dark.png)
 
 </div>
 
 ---
 
+## 🖼️ 界面一览
+
+EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，不加载官方 DSH 外壳）：
+暖色"纸面"设计、青色品牌色，浅/深双主题，三栏可拖拽布局 —— 对话、会话历史、右侧
+工作区检查器一屏尽览。
+
+| 深色主题 · 三栏工作台 | 浅色主题 · 欢迎页 |
+|---|---|
+| ![三栏工作台](docs/screenshots/workspace-dark.png) | ![浅色欢迎页](docs/screenshots/hero-light.png) |
+
 ## ✨ 特性一览
 
 | | 特性 | 说明 |
 |---|---|---|
-| 🧠 | **科研记忆 科研记忆** | 每轮对话自动进入 Turn Catalog，七类多标签分类（idea/method/experiment/related_work/reproduction/project/general），FTS5 + RRF 混合检索，每轮注入 ≤6000 token 记忆包 |
+| 🧠 | **科研记忆** | 每轮对话自动进入 Turn Catalog，七类多标签分类（idea/method/experiment/related_work/reproduction/project/general），FTS5 + RRF 混合检索，每轮注入 ≤6000 token 记忆包 |
 | 🎯 | **Goal Contract 长程目标控制** | 长期任务自动生成目标合同，四轴保守判定（目标/范围/证据/完成），证据链可审计推进 |
 | 📂 | **科研项目工作区** | `projects/<name>/.evoresearch-data/` 数据随项目目录隔离，项目即 git 仓库，支持导入与 AI 自动命名创建 |
 | 🤖 | **多智能体团队** | 6 个科研角色预设（规划/调研/编码/调试/数据分析/写作），`/expert invite` 一键邀请 |
 | 🛠️ | **AutoSkills 技能蒸馏** | 从记忆观测自动聚类生成可复用技能提案，审核通过后写入技能目录 |
 | ⏰ | **定时任务** | 自研 cron 解析（Vixie 语义），结果直达结果线程，支持「Report to main chat」 |
 | 🌐 | **多通道接入** | Telegram 可用；Slack / QQ / 微信 / 飞书 / Signal 适配器框架就绪 |
+| 👁️ | **视觉检查工具** | `vision_check` 工具 + 截图脚本，让模型能"看见"界面并自检（OpenAI 兼容视觉模型） |
 | 💬 | **斜杠命令** | `/project` `/memory` `/schedule` `/channel` `/expert` `/autoskills` |
-| 🖥️ | **自定义工作台界面** | 自建浏览器表面（不加载官方 ui-\* 外壳）：EvoResearch 工作台（科研导航/会话/业务面板），中英双语 |
-| 🪟 | **Windows 桌面版** | Tauri 2 + Node sidecar，NSIS 安装包 **44 MB**（实测），含全部后端 |
+| 🖥️ | **自定义工作台界面** | 自建浏览器表面（不加载官方 ui-\* 外壳）：顶栏 + 会话历史 + 真实多轮对话 + 输入面板 + 右侧检查器，浅/深双主题，中英双语 |
+| 🪟 | **Windows 桌面版** | Tauri 2 + Node sidecar，NSIS 安装包 **~45 MB**（实测），含全部后端 |
 
 ## 🚀 快速开始
 
@@ -45,20 +59,25 @@
 
 ### 方式一：Windows 桌面版（开箱即用）
 
-下载发布页的 `EvoResearch_0.1.0_x64-setup.exe`（**44 MB**），双击安装：
-窗口内是完整 WebUI，后端（Node sidecar）自动启动、随窗口退出自动清理，无需手动配置。
+从 [GitHub Releases](https://github.com/Karbo123/DSH-EvoResearch/releases) 下载
+`EvoResearch_0.1.0_x64-setup.exe`（**~45 MB**），双击安装：
+窗口内是完整工作台界面，后端（Node sidecar）自动启动、随窗口退出自动清理，无需手动配置。
 
-### 方式二：网页版（构建后挂载）
+### 方式二：网页版（构建后运行）
 
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/Karbo123/DSH-EvoResearch.git
 cd DSH-EvoResearch
 
-# 2. 构建插件（tsc 双配置 + client bundle）
+# 2. 构建（插件 + 自定义表面）
 npm install
 npm run build
 npm run verify        # 可选：70 个单元测试 + bundle/docs 校验
+
+# 3. 用示例 profile 启动（独立端口，避免与现有 DSH 冲突）
+npx @deepseek-ai/dsh --profile profiles/evoresearch --port 3081
+# 浏览器打开 http://127.0.0.1:3081
 ```
 
 ### 方式三：作为 DSH profile bundle 挂载
@@ -95,7 +114,7 @@ npm install            # 在 profile 目录安装依赖
 npx @deepseek-ai/dsh --profile <profile名>
 ```
 
-插件启动后会打印：
+启动后打印：
 
 ```
 [evoresearch] host 插件激活（dataRoot: ...）
@@ -135,6 +154,7 @@ evoresearch:
     model: deepseek-v4-flash
   autoStartChannels: false        # 启动时自动启动已配置通道（如 Telegram）
   memoryEnabled: true
+  visionEnabled: true             # 是否注册 vision_check 视觉检查工具（模型未配置时自动跳过）
 ```
 
 ## 🧠 科研记忆怎么工作
@@ -164,7 +184,7 @@ evoresearch:
 
 | 项 | 值 |
 |---|---|
-| 安装包 | `EvoResearch_0.1.0_x64-setup.exe`，**43.7 MB**（NSIS/LZMA） |
+| 安装包 | `EvoResearch_0.1.0_x64-setup.exe`，**~45 MB**（NSIS/LZMA） |
 | 运行时 | 复用系统 WebView2（Win10/11 内置） |
 | 后端 | Node 24 LTS sidecar（独立 DSH_HOME，不污染用户环境） |
 | 体积优化 | provider SDK 裁剪（deepseek profile 思路）、node-pty/sharp 仅 win32-x64 |
@@ -180,7 +200,7 @@ node desktop/scripts/build.mjs
 
 ```bash
 npm install          # 安装 workspace 依赖
-npm run build        # tsc 构建（host + client）+ client bundle 打包
+npm run build        # 插件（tsc + client bundle）+ 自定义表面（node half + client + frontend dist）
 npm run typecheck    # 严格类型检查
 npm test             # 70 个单元测试（node:test）
 npm run verify       # build + test + bundle 校验 + docs 校验
@@ -192,7 +212,13 @@ packages/evoresearch-plugin/   # @evoresearch/dsh-plugin —— 科研能力插�
   └── cordis.patch.yml         # bundle patch（evoresearch-host 服务行）
 packages/evoresearch-app/      # @evoresearch/dsh-app —— 自定义浏览器表面 bundle
   ├── src/runtime.ts           # app-runtime（serve 前端 dist / 表面提示 / URL 打印）
-  ├── src/client.ts            # 工作台 UI 插件（root slot + layout 服务）
+  ├── src/client/              # 工作台 UI 插件（root slot + layout + 会话消息管线）
+  │   ├── index.ts             #   顶栏 + 三栏布局 + 会话订阅/发送
+  │   ├── conversation.ts      #   消息 Definition（官方语义裁剪）+ chat view
+  │   ├── chat.ts              #   消息气泡渲染 + 输入面板
+  │   ├── threadlist.ts        #   会话历史侧栏
+  │   ├── inspector.ts         #   右侧工作区检查器
+  │   └── styles.ts            #   设计系统（暖色纸面 + 青色品牌，浅/深主题）
   ├── frontend/                # 前端外壳入口（AppWebEntry 内核）
   └── vendor/                  # vendored 官方 client-modules 源码（构建时 alias）
 profiles/evoresearch/          # 示例 DSH profile（三个 bundle）
@@ -214,7 +240,12 @@ docs/                          # 中文文档（架构/功能映射/开发/桌�
 
 **Q：为什么基于 deepseek-harness 而不是自己写框架？**
 DSH（0.1.0-rc.6）提供会话、模型路由、子代理、审批、技能、MCP 等完整平台能力，
-EvoResearch 只做「科研化」扩展（记忆、项目、团队、调度、通道），避免重复造轮子。
+EvoResearch 只做「科研化」扩展（记忆、项目、团队、调度、通道、界面），避免重复造轮子。
+
+**Q：界面是 DSH 自带的吗？**
+不是。`@evoresearch/dsh-app` 是**自定义浏览器表面**：host 引擎与传输完全复用官方
+（会话、模型、工具、审批……），但浏览器端不加载官方 `ui-*` 外壳，界面是
+EvoResearch 自己的工作台（视觉复刻，含真实多轮对话、会话历史、浅/深主题）。
 
 **Q：数据存在哪里？**
 每个科研项目一个独立目录 `projects/<name>/`，内部 `.evoresearch-data/` 存放
@@ -229,7 +260,7 @@ Telegram 已提供完整实现（长轮询，仅需 `EVORESEARCH_TELEGRAM_TOKEN`
 
 ## 🤝 贡献
 
-欢迎 PR 与 Issue：完善通道适配器、接入本地/远端 Embedding、增强 Research History 面板等。
+欢迎 PR 与 Issue：完善通道适配器、接入本地/远端 Embedding、增强业务面板（记忆/调度/团队）等。
 代码风格：TypeScript 严格模式、中文注释、`node:test` 单测覆盖。
 
 ## 📄 License
