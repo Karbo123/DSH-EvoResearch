@@ -220,6 +220,45 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── 业务面板数据（直连插件 EvoResearchApiService，绕开 Remote $mount）──
+        const evoresearch = ctx.get('evoresearch') as Record<string, (args?: unknown) => unknown> | undefined
+        if (method === 'projects') {
+          if (evoresearch?.projectsList === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.projectsList as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'memory-catalog') {
+          if (evoresearch?.memoryCatalog === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.memoryCatalog as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))
+          return
+        }
+        if (method === 'memory-goals') {
+          if (evoresearch?.memoryGoals === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.memoryGoals as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))
+          return
+        }
+        if (method === 'scheduler-list') {
+          if (evoresearch?.schedulerList === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.schedulerList as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'scheduler-add') {
+          if (evoresearch?.schedulerAdd === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = await (evoresearch.schedulerAdd as (a: { name: string; cron: string; prompt: string }) => Promise<{ taskId: string }>)({
+            name: requireString(payload, 'name'),
+            cron: requireString(payload, 'cron'),
+            prompt: requireString(payload, 'prompt'),
+          })
+          writeOk(res, { ok: true, task: result })
+          return
+        }
+        if (method === 'scheduler-remove') {
+          if (evoresearch?.schedulerRemove === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = await (evoresearch.schedulerRemove as (a: { taskId: string }) => Promise<{ ok: boolean }>)({ taskId: requireString(payload, 'taskId') })
+          writeOk(res, { ok: result.ok === true })
+          return
+        }
+
         writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown method ${method ?? ''}` } })
       } catch (error) {
         writeError(res, error)

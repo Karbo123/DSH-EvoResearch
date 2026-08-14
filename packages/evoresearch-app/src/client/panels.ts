@@ -1,22 +1,12 @@
 /**
  * 业务面板（阶段 2）：EvoMemory 记忆面板 + Scheduled 定时任务面板。
  *
- * 数据经 ctx.remote.evoresearch.*（Typert Remote，host 插件 EvoResearchApiService）。
+ * 数据经 /evoresearch/fs/* HTTP API（host 侧直连插件 EvoResearchApiService，
+ * 绕开浏览器 Remote $mount 通道）。
  */
-
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { BrainCircuit, Clock, Plus, Trash2, ListChecks, Target } from 'lucide-react'
-
-/** Remote 命名空间（apply 注入）。 */
-export interface EvoRemote {
-  projectsList(): Promise<Array<{ name: string; path?: string }>>
-  memoryCatalog(args: { workspaceDir?: string }): Promise<Array<{ category: string; count: number }>>
-  memoryGoals(args: { workspaceDir?: string }): Promise<Array<{ id?: string; title?: string; status?: string; progress?: number }>>
-  schedulerList(): Promise<Array<{ id: string; name?: string; cron?: string; enabled?: boolean; lastRunAt?: string; lastResult?: string }>>
-  schedulerAdd(args: { name: string; cron: string; command: string }): Promise<{ ok: boolean }>
-  schedulerRemove(args: { id: string }): Promise<{ ok: boolean }>
-}
 
 const CATEGORY_LABELS: Record<string, string> = {
   idea: 'Idea', method: 'Method', experiment: 'Experiment',
@@ -41,8 +31,20 @@ function LoadingRow() {
   return jsx('div', { className: 'evo-panel-hint', children: 'Loading…' })
 }
 
+/** 简单 POST JSON 封装。 */
+async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
+  const res = await fetch(`/evoresearch/fs/${method}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json()
+  if (!json.ok) throw new Error(json.error?.message ?? '请求失败')
+  return json.value as T
+}
+
 /** EvoMemory 面板：项目 + 分类统计 + 目标。 */
-export function MemoryPanel({ remote }: { remote: EvoRemote }) {
+export function MemoryPanel() {
   const [projects, setProjects] = useState<Array<{ name: string; path?: string }> | null>(null)
   const [catalog, setCatalog] = useState<Array<{ category: string; count: number }> | null>(null)
   const [goals, setGoals] = useState<Array<{ id?: string; title?: string; status?: string; progress?: number }> | null>(null)
@@ -51,17 +53,17 @@ export function MemoryPanel({ remote }: { remote: EvoRemote }) {
   useEffect(() => {
     let cancelled = false
     void Promise.all([
-      remote.projectsList().catch((e: any) => { if (!cancelled) setError(String(e?.message ?? e)); return [] }),
-      remote.memoryCatalog({}).catch(() => []),
-      remote.memoryGoals({}).catch(() => []),
+      api<Array<{ name: string; path?: string }>>('projects').catch((e: any) => { if (!cancelled) setError(String(e?.message ?? e)); return [] }),
+      api<Array<{ category: string; count: number }>>('memory-catalog', {}).catch(() => []),
+      api<Array<{ id?: string; title?: string; status?: string; progress?: number }>>('memory-goals', {}).catch(() => []),
     ]).then(([p, c, g]) => {
       if (cancelled) return
-      setProjects(p as any)
-      setCatalog(c as any)
-      setGoals(g as any)
+      setProjects(p)
+      setCatalog(c)
+      setGoals(g)
     })
     return () => { cancelled = true }
-  }, [remote])
+  }, [])
 
   const totalTurns = (catalog ?? []).reduce((sum, item) => sum + item.count, 0)
 
@@ -140,34 +142,36 @@ export function MemoryPanel({ remote }: { remote: EvoRemote }) {
   })
 }
 
+interface ScheduledTask { id?: string; taskId?: string; name?: string; cron?: string; enabled?: boolean }
+
 /** Scheduled 面板：任务列表 + 添加/删除。 */
-export function SchedulePanel({ remote }: { remote: EvoRemote }) {
-  const [tasks, setTasks] = useState<Array<{ id: string; name?: string; cron?: string; enabled?: boolean }> | null>(null)
+export function SchedulePanel() {
+  const [tasks, setTasks] = useState<ScheduledTask[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [cron, setCron] = useState('0 9 * * *')
-  const [command, setCommand] = useState('')
+  const [prompt, setPrompt] = useState('')
 
   const load = () => {
     setTasks(null)
-    void remote.schedulerList().then((list) => setTasks(list)).catch((e: any) => setError(String(e?.message ?? e)))
+    void api<ScheduledTask[]>('scheduler-list').then(setTasks).catch((e: any) => setError(String(e?.message ?? e)))
   }
 
-  useEffect(() => { load() }, [remote])
+  useEffect(() => { load() }, [])
 
   const addTask = () => {
-    if (!name.trim() || !cron.trim()) return
+    if (!name.trim() || !cron.trim() || !prompt.trim()) return
     setAdding(true)
-    void remote.schedulerAdd({ name: name.trim(), cron: cron.trim(), command: command.trim() || '/memory' }).then((result) => {
+    void api<{ ok: boolean }>('scheduler-add', { name: name.trim(), cron: cron.trim(), prompt: prompt.trim() }).then((result) => {
       setAdding(false)
-      if (result.ok) { setName(''); setCron('0 9 * * *'); setCommand(''); load() }
+      if (result.ok) { setName(''); setCron('0 9 * * *'); setPrompt(''); load() }
       else setError('添加失败')
     }).catch((e: any) => { setAdding(false); setError(String(e?.message ?? e)) })
   }
 
   const removeTask = (id: string) => {
-    void remote.schedulerRemove({ id }).then((result) => {
+    void api<{ ok: boolean }>('scheduler-remove', { taskId: id }).then((result) => {
       if (result.ok) load()
     }).catch((e: any) => setError(String(e?.message ?? e)))
   }
@@ -183,8 +187,8 @@ export function SchedulePanel({ remote }: { remote: EvoRemote }) {
           children: [
             jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: 'Task name', value: name, onInput: (e) => setName(e.currentTarget.value) }),
             jsx('input', { type: 'text', className: 'evo-panel-input evo-panel-input-cron', placeholder: 'cron (5 fields)', value: cron, onInput: (e) => setCron(e.currentTarget.value) }),
-            jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: 'Command (default /memory)', value: command, onInput: (e) => setCommand(e.currentTarget.value) }),
-            jsx('button', { type: 'button', className: 'evo-panel-add', disabled: adding || !name.trim(), onClick: addTask, children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: 'Add' })] }) }),
+            jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: 'Prompt (executed at cron time)', value: prompt, onInput: (e) => setPrompt(e.currentTarget.value) }),
+            jsx('button', { type: 'button', className: 'evo-panel-add', disabled: adding || !name.trim() || !prompt.trim(), onClick: addTask, children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: 'Add' })] }) }),
           ],
         }),
         tasks === null
@@ -198,12 +202,12 @@ export function SchedulePanel({ remote }: { remote: EvoRemote }) {
                   children: jsxs(Fragment, {
                     children: [
                       jsx(ListChecks, {}),
-                      jsx('span', { className: 'evo-panel-item-main', children: task.name ?? task.id }),
+                      jsx('span', { className: 'evo-panel-item-main', children: task.name ?? task.taskId ?? task.id }),
                       task.cron !== undefined && jsx('code', { className: 'evo-panel-item-code', children: task.cron }),
-                      jsx('button', { type: 'button', className: 'evo-panel-del', title: 'Remove', onClick: () => removeTask(task.id), children: jsx(Trash2, {}) }),
+                      jsx('button', { type: 'button', className: 'evo-panel-del', title: 'Remove', onClick: () => removeTask(task.taskId ?? task.id), children: jsx(Trash2, {}) }),
                     ],
                   }),
-                }, task.id)),
+                }, task.taskId ?? task.id)),
               }),
       ],
     }),

@@ -26,13 +26,9 @@ import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t } from './i18n'
-import { MemoryPanel, SchedulePanel, type EvoRemote } from './panels'
-import { EVORESEARCH_REMOTE_CONTRIBUTION } from './remote'
+import { MemoryPanel, SchedulePanel } from './panels'
 
-const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'remote']
-
-/** 插件 Remote 命名空间（业务面板用；经 apply 写入）。 */
-let evoresearchRemote: EvoRemote | null = null
+const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews']
 
 /** 桌面模式（无边框窗口 + 自绘标题栏）：由 Tauri 壳以 ?desktop=1 加载。 */
 function isDesktop(): boolean {
@@ -304,19 +300,17 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             children: view !== null
               ? jsx('div', {
                   className: 'evo-view',
-                  children: evoresearchRemote === null
-                    ? jsx('div', { className: 'evo-panel-hint', style: { padding: 28 }, children: 'Loading…' })
-                    : view === 'memory'
-                      ? jsx(MemoryPanel, { remote: evoresearchRemote as EvoRemote })
-                      : view === 'schedule'
-                        ? jsx(SchedulePanel, { remote: evoresearchRemote as EvoRemote })
-                        : jsxs('div', {
-                            className: 'evo-insp-empty',
-                            children: [
-                              jsx('div', { children: `View: ${view}` }),
-                              jsx('div', { children: '（Skills / Workspace 面板规划中）' }),
-                            ],
-                          }),
+                  children: view === 'memory'
+                    ? jsx(MemoryPanel, {})
+                    : view === 'schedule'
+                      ? jsx(SchedulePanel, {})
+                      : jsxs('div', {
+                          className: 'evo-insp-empty',
+                          children: [
+                            jsx('div', { children: `View: ${view}` }),
+                            jsx('div', { children: '（Skills / Workspace 面板规划中）' }),
+                          ],
+                        }),
                 })
               : jsx(ChatArea, {
                   nodes,
@@ -366,14 +360,6 @@ function apply(ctx: any) {
   registerConversation(ctx)
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
-    // 挂载 evoresearch Remote 命名空间（异步完成后面板可用）
-    if (ctx.remote?.$mount) {
-      void ctx.remote.$mount(EVORESEARCH_REMOTE_CONTRIBUTION).then(() => {
-        if (ctx.remote?.evoresearch !== undefined) evoresearchRemote = ctx.remote.evoresearch
-      }).catch((error: any) => {
-        console.error('[evoresearch] Remote 挂载失败:', error?.message ?? error)
-      })
-    }
     const disposeService = ctx.reflect.provide('layout', {
       toggleSidebar() {},
       openDetails() {},
