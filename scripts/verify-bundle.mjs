@@ -8,7 +8,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const BUNDLE = join(ROOT, 'packages', 'EvoResearch-plugin', 'lib', 'client', 'index.js')
+const BUNDLE = join(ROOT, 'packages', 'evoresearch-plugin', 'lib', 'client', 'index.js')
 
 // 模拟浏览器全局（ModuleLoader 的 load 语义：factory 自声明 module/exports 并返回）
 globalThis.window = {

@@ -52,7 +52,7 @@ desktop/
 │       ├── node.exe           # Node 24 LTS（win-x64）
 │       ├── launch.js
 │       └── app/               # DSH_HOME 根（运行期 DSH_HOME 指向这里）
-│           ├── profiles/EvoResearch/   # profile 元数据（bundle 声明）
+│           ├── profiles/evoresearch/   # profile 元数据（bundle 声明）
 │           └── node_modules/            # dsh-base + dsh-web-app + dsh CLI + 插件
 ├── scripts/
 │   ├── bundle-sidecar.mjs     # 组装 sidecar（下载 node/安装依赖/裁剪）
@@ -67,8 +67,8 @@ desktop/
    （Tauri 把 `../sidecar/dist/**/*` 复制为 `<exe目录>/_up_/sidecar/dist/...`，`_up_` 是 `..` 的映射）；
 2. spawn `node.exe launch.js`（cwd = app/，隐藏控制台，stderr 写入 `%TEMP%/EVORESEARCH-sidecar.err.log`）；
 3. launch.js 设置 `DSH_HOME = cwd`（独立数据根，不污染用户 `~/.dsh`），
-   启动 `dsh --profile EvoResearch --port 0`；
-4. 端口文件路径经环境变量 `EVORESEARCH_PORT_FILE` 传入（默认 `%LOCALAPPDATA%/com.EvoResearch.desktop/port.json`），
+   启动 `dsh --profile evoresearch --port 0`；
+4. 端口文件路径经环境变量 `EVORESEARCH_PORT_FILE` 传入（默认 `%LOCALAPPDATA%/com.evoresearch.desktop/port.json`），
    端口从 dsh stdout 解析（`dsh web: http://127.0.0.1:PORT` / `{"port":N}` / Listening 行）；
 5. 壳轮询端口文件（≤60s，首次冷启动较慢）后加载 WebView2；
 6. 退出清理：launch.js 在父进程消失时自动退出（tasklist 探测），防孤儿进程。
@@ -91,7 +91,7 @@ desktop/
 | build.rs 栈溢出 | Windows build script 主线程 1MB 栈，embed-resource 递归溢出 | 16MB 栈线程执行 tauri_build::build() |
 | resources 未进安装包 | glob 模式 `**` 结尾不匹配文件（需 `**/*`） | tauri.conf resources 用 `../sidecar/dist/**/*` |
 | 资源路径未知 | tauri-build 把 `../sidecar/**` 复制为 `<target>/_up_/sidecar/**` | main.rs 候选路径探测 + `\\?\` 前缀剥离 |
-| 壳读端口文件失败 | Tauri `app_data_dir()` 是 Roaming，launch.js 写 LOCALAPPDATA | 统一为 `%LOCALAPPDATA%/com.EvoResearch.desktop`，路径经 `EVORESEARCH_PORT_FILE` 环境变量传递 |
+| 壳读端口文件失败 | Tauri `app_data_dir()` 是 Roaming，launch.js 写 LOCALAPPDATA | 统一为 `%LOCALAPPDATA%/com.evoresearch.desktop`，路径经 `EVORESEARCH_PORT_FILE` 环境变量传递 |
 | sidecar 崩溃 `lstat 'D:'` | 壳 `resource_dir` 带 `\\?\` 长路径前缀，Node 模块解析失败 | `simplified()` 剥离前缀 |
 | 端口一直未就绪 | dsh 输出 `dsh web: http://127.0.0.1:PORT` 不含 "listen"，旧正则不匹配 | 新增 URL 正则；等待放宽到 60s |
 | 窗口创建 panic | tauri.conf 已声明 `main` 窗口，setup 又建同名 | tauri.conf `windows: []`，窗口由 setup 全权创建 |

@@ -16,7 +16,7 @@
 | 维度 | 分析 |
 |---|---|
 | 桌面端硬约束 | PostgreSQL 需要独立服务进程 + 安装/初始化/运维，直接违背"打包体积最小、零依赖"；SQLite 是嵌入式单文件，零服务。 |
-| EvoResearch 核心哲学：项目即目录 | 数据模型是 `projects/<name>/.evoresearch-data/`，记忆/观测/会话数据随项目目录走，项目本身是 git 仓库。SQLite 文件天然跟随目录、可导入/导出/迁移/备份；PostgreSQL 集中式存储会摧毁这套哲学。 |
+| 上游 EvoScientist 核心哲学：项目即目录 | 数据模型是 `projects/<name>/.evoresearch-data/`，记忆/观测/会话数据随项目目录走，项目本身是 git 仓库。SQLite 文件天然跟随目录、可导入/导出/迁移/备份；PostgreSQL 集中式存储会摧毁这套哲学。 |
 | 检索 | 已实测 Node 26 内置 `node:sqlite` **自带 FTS5**（unicode61 tokenizer），零原生依赖；向量检索可用 `sqlite-vec` 扩展或退化纯 FTS。PostgreSQL 中文分词（pg_jieba）维护成本高且桌面不可用。 |
 | 与平台一致 | DSH 自身会话查询层（`dsh-session-query-sqlite`）就是 SQLite + FTS5。 |
 | 否决 PostgreSQL 的补充 | 多用户/并发/集中备份是它唯一优势，但 DSH 定位本地优先 harness，第一版单用户。 |
@@ -67,7 +67,7 @@
 |---|---|---|
 | Electron | ~100MB+ | 否决 |
 | NW.js | ~100MB+ | 否决 |
-| PyInstaller onefile（EvoResearch 原方案） | 通常 100MB+ | 本项目不用 Python |
+| PyInstaller onefile（上游 EvoScientist 原方案） | 通常 100MB+ | 本项目不用 Python |
 | **Tauri + Node sidecar** | **~40-60MB** | **采用**（Rust 工具链已就绪；Node 是硬约束，物理下限 ≈ node.exe 压缩后体积） |
 | Node SEA 单文件 | ~80-120MB | 备选；原生模块（node-pty 等）需外置，复杂度高，第一版不用 |
 

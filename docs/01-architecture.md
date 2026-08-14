@@ -40,7 +40,7 @@
 
 ### Host 插件（`src/host/`）
 
-| 模块 | 职责 | 与 EvoResearch 对应 |
+| 模块 | 职责 | 与上游 EvoScientist 对应 |
 |---|---|---|
 | `core/paths.ts` | 项目名/路径/工作区安全校验（Windows normcase） | `paths.py` |
 | `core/db.ts` | node:sqlite 封装（WAL/FULL 同步/迁移/FTS5） | `memory/research/store.py` 基础层 |
@@ -64,7 +64,7 @@
 
 ### Client 插件（`src/client/`）
 
-| Slot | 用途 | 对应 EvoResearch WebUI |
+| Slot | 用途 | 对应上游 EvoScientist WebUI |
 |---|---|---|
 | `sidebar.footer.action` | 侧栏「🔬 科研」入口 | 顶部 Logo/工具入口 |
 | `shell.overlay` | 科研面板（项目/记忆/任务/通道/提案 5 个标签） | WebUI 各面板 |

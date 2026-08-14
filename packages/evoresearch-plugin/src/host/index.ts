@@ -13,7 +13,7 @@
  * 配置（settings.yaml 的 EVORESEARCH 段，或环境变量）：
  * ```yaml
  * EVORESEARCH:
- *   dataRoot: D:\EvoResearch      # 部署根目录（projects/ 所在目录），默认 $EVORESEARCH_DATA_ROOT 或 cwd
+ *   dataRoot: D:\evoresearch      # 部署根目录（projects/ 所在目录），默认 $EVORESEARCH_DATA_ROOT 或 cwd
  *   memoryTokenBudget: 6000
  *   auxiliaryModel: { provider: deepseek-official, model: deepseek-v4-flash }
  * ```

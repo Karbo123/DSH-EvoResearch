@@ -2,7 +2,7 @@
  * EvoResearch API 服务：Client（浏览器插件）通过 Typert Gateway 调用的 Remote 方法。
  *
  * 所有方法返回纯 JSON（wire 序列化安全）。命名空间默认 EVORESEARCH，
- * 对应 EvoResearch WebUI 的 /api/* 路由群（projects/memory/scheduler/channels/autoskills/experts/threads）。
+ * 对应上游 EvoScientist WebUI 的 /api/* 路由群（projects/memory/scheduler/channels/autoskills/experts/threads）。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'

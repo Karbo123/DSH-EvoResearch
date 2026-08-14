@@ -1,7 +1,7 @@
 /**
  * sidecar 启动脚本（由桌面壳 spawn；CommonJS，node.exe 直接运行）：
- * 1. 启动 DSH web profile（evoscientist），绑定 127.0.0.1 随机端口；
- * 2. 将端口写入 %LOCALAPPDATA%/EvoScientist/port.json（壳轮询读取）；
+ * 1. 启动 DSH web profile（evoresearch），绑定 127.0.0.1 随机端口；
+ * 2. 将端口写入 %LOCALAPPDATA%/EvoResearch/port.json（壳轮询读取）；
  * 3. 进程退出时清理端口文件；Windows 下父进程消失时自动退出（防孤儿）。
  */
 'use strict'
@@ -10,19 +10,19 @@ const { writeFileSync, rmSync, mkdirSync } = require('node:fs')
 const { join } = require('node:path')
 const { platform } = require('node:os')
 
-const APP_NAME = 'EvoScientist'
+const APP_NAME = 'EvoResearch'
 // 端口文件路径：优先取壳通过环境变量传入的路径，回退到 %LOCALAPPDATA%/<identifier>
-const dataDir = process.env.EVOSCI_PORT_FILE
-  ? require('node:path').dirname(process.env.EVOSCI_PORT_FILE)
-  : join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'com.evoscientist.desktop')
-const portFile = process.env.EVOSCI_PORT_FILE || join(dataDir, 'port.json')
+const dataDir = process.env.EVORESEARCH_PORT_FILE
+  ? require('node:path').dirname(process.env.EVORESEARCH_PORT_FILE)
+  : join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'com.evoresearch.desktop')
+const portFile = process.env.EVORESEARCH_PORT_FILE || join(dataDir, 'port.json')
 
 mkdirSync(dataDir, { recursive: true })
 
 /** 启动 DSH web 服务（当前目录即打包后的 DSH_HOME 根：profiles/ + node_modules/）。 */
 function startDsh() {
   const dshBin = join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
-  const child = spawn(process.execPath, [dshBin, '--profile', 'evoscientist', '--port', '0'], {
+  const child = spawn(process.execPath, [dshBin, '--profile', 'evoresearch', '--port', '0'], {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -59,7 +59,7 @@ function parseOutput(chunk) {
 /** 写端口文件（幂等）。 */
 function writePortFile(port) {
   writeFileSync(portFile, JSON.stringify({ port: Number(port) }), 'utf8')
-  console.log(`EvoScientist ready on port ${port}`)
+  console.log(`EvoResearch ready on port ${port}`)
 }
 
 const child = startDsh()

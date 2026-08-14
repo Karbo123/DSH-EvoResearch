@@ -1,5 +1,5 @@
 [package]
-name = "EvoResearch-desktop"
+name = "evoresearch-desktop"
 version = "0.1.0-rc.1"
 description = "EvoResearch Windows 桌面壳（WebView2 + Node sidecar）"
 authors = ["EvoResearch TS 项目组"]

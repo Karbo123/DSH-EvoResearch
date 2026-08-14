@@ -14,9 +14,9 @@ const REQUIRED = [
   'docs/02-feature-map.md',
   'docs/03-development.md',
   'docs/04-desktop.md',
-  'packages/EvoResearch-plugin/package.json',
-  'packages/EvoResearch-plugin/cordis.patch.yml',
-  'profiles/EvoResearch/package.json',
+  'packages/evoresearch-plugin/package.json',
+  'packages/evoresearch-plugin/cordis.patch.yml',
+  'profiles/evoresearch/package.json',
   'desktop/src-tauri/tauri.conf.json',
 ]
 
@@ -29,7 +29,7 @@ for (const file of REQUIRED) {
 }
 
 // 交叉引用校验：docs 中的相对链接目标必须存在
-for (const dir of ['docs', 'README.md', 'packages/EvoResearch-plugin/README.md']) {
+for (const dir of ['docs', 'README.md', 'packages/evoresearch-plugin/README.md']) {
   const file = join(ROOT, dir)
   if (!existsSync(file) || statSync(file).isDirectory()) continue
   const content = readFileSync(file, 'utf8')

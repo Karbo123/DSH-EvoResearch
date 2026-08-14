@@ -1,12 +1,12 @@
 {
-  "name": "dsh-profile-EvoResearch",
+  "name": "dsh-profile-evoresearch",
   "version": "0.1.0-rc.1",
   "private": true,
   "description": "EvoResearch 示例 profile：dsh-base + dsh-web-app + @evoresearch/dsh-plugin",
   "dependencies": {
     "@deepseek-ai/dsh-base": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-web-app": "^0.1.0-rc.6",
-    "@evoresearch/dsh-plugin": "file:../../packages/EvoResearch-plugin"
+    "@evoresearch/dsh-plugin": "file:../../packages/evoresearch-plugin"
   },
   "dsh": {
     "profile": {

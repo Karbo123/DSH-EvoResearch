@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const PKG = join(ROOT, 'packages', 'EvoResearch-plugin')
+const PKG = join(ROOT, 'packages', 'evoresearch-plugin')
 const ENTRY = join(PKG, 'src', 'client', 'index.ts')
 const OUT = join(PKG, 'lib', 'client', 'index.js')
 const TMP = join(PKG, 'lib', 'client', '.bundle.tmp.js')

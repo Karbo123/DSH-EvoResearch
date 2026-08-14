@@ -1,5 +1,5 @@
 {
-  "name": "EvoResearch-desktop",
+  "name": "evoresearch-desktop",
   "version": "0.1.0-rc.1",
   "private": true,
   "description": "EvoResearch Windows 桌面壳（Tauri 2 + Node sidecar，目标安装包 < 60MB）",

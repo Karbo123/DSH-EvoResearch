@@ -4,7 +4,7 @@
 //! 1. 壳在资源目录中定位 sidecar（node.exe + app/ + launch.js，由 bundle-sidecar.mjs 组装）；
 //! 2. 以隐藏控制台方式 spawn `node.exe launch.js`；
 //! 3. launch.js 启动 DSH web profile（EvoResearch）后，把端口写入端口文件
-//!    （%LOCALAPPDATA%/EvoResearch/port.json）并打印一行 JSON 到 stdout；
+//!    （%LOCALAPPDATA%/com.evoresearch.desktop/port.json）并打印一行 JSON 到 stdout；
 //! 4. 壳轮询端口文件（≤30s）后加载 `http://127.0.0.1:<port>`；
 //! 5. 壳退出时终止 sidecar 进程树（Node 侧 process.on('exit') 兜底）。
 
@@ -47,10 +47,10 @@ fn locate_sidecar(resource_dir: &std::path::Path, name: &str) -> Option<PathBuf>
     None
 }
 
-/// 应用本地数据目录：%LOCALAPPDATA%/com.EvoResearch.desktop（与 launch.js 端口文件约定一致）。
+/// 应用本地数据目录：%LOCALAPPDATA%/com.evoresearch.desktop（与 launch.js 端口文件约定一致）。
 fn app_local_data_dir() -> PathBuf {
     let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| std::env::temp_dir().display().to_string());
-    let dir = PathBuf::from(base).join("com.EvoResearch.desktop");
+    let dir = PathBuf::from(base).join("com.evoresearch.desktop");
     let _ = fs::create_dir_all(&dir);
     dir
 }
@@ -118,7 +118,7 @@ fn main() {
         .setup(|app| {
             let handle = app.handle();
             let resource_dir = handle.path().resource_dir().unwrap_or_default();
-            let app_data_dir = app_local_data_dir(); // %LOCALAPPDATA%/com.EvoResearch.desktop
+            let app_data_dir = app_local_data_dir(); // %LOCALAPPDATA%/com.evoresearch.desktop
             log(&format!("[shell] resource_dir={}", resource_dir.display()));
             log(&format!("[shell] app_data_dir={}", app_data_dir.display()));
             fs::create_dir_all(&app_data_dir).ok();

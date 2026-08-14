@@ -111,7 +111,7 @@
 | 启动懒加载 + 数据库索引 | node:sqlite WAL + 覆盖索引（idx_*） | ✅ |
 | WSL/运行稳定性 | 本项目仅 Windows（文档注明） | ✅ |
 
-## 已知取舍（相对 EvoResearch 有意为之）
+## 已知取舍（相对上游 EvoScientist 有意为之）
 
 1. **不重写聊天主界面**：复用 DSH Web GUI（会话/输入/审批/工具卡片），仅做科研化扩展——避免两套 UI 割裂；
 2. **Embedding 第一版不内置本地模型**：FTS5 保底 + 远端 embedding API 接口预留（体积与隐私权衡）；

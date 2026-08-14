@@ -10,7 +10,7 @@
  * 步骤：
  * 1. 下载官方 Node Windows x64 zip（可用镜像），解压出 node.exe；
  * 2. 用 `npm ci --omit=dev --production` 在临时目录安装
- *    dsh-base + dsh-web-app + @evoresearch/dsh-plugin（含 profiles/EvoResearch 的 bundle 声明）；
+ *    dsh-base + dsh-web-app + @evoresearch/dsh-plugin（含 profiles/evoresearch 的 bundle 声明）；
  * 3. 裁剪：删除 SDK 测试套件、*.map、文档（对应上游 EvoScientist build.py 的 deepseek profile 思路）；
  * 4. 复制 launch.js。
  *
@@ -73,26 +73,26 @@ step('解压 node.exe', () => {
 
 step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   const appDir = join(DIST, 'app')
-  const profileDir = join(appDir, 'profiles', 'EvoResearch')
+  const profileDir = join(appDir, 'profiles', 'evoresearch')
   mkdirSync(profileDir, { recursive: true })
   // 1) 部署清单（npm install 依赖声明）：放 app 根，node_modules 供 profiles 向上解析
   const deployPkg = {
-    name: 'EvoResearch-sidecar',
+    name: 'evoresearch-sidecar',
     version: '0.1.0-rc.1',
     private: true,
     dependencies: {
       '@deepseek-ai/dsh': '^0.1.0-rc.6', // dsh CLI（launch.js 直接调用其 bin）
       '@deepseek-ai/dsh-base': '^0.1.0-rc.6',
       '@deepseek-ai/dsh-web-app': '^0.1.0-rc.6',
-      '@evoresearch/dsh-plugin': `file:${join(ROOT, 'packages', 'EvoResearch-plugin')}`,
+      '@evoresearch/dsh-plugin': `file:${join(ROOT, 'packages', 'evoresearch-plugin')}`,
     },
   }
   writeFileSync(join(appDir, 'package.json'), JSON.stringify(deployPkg, null, 2), 'utf8')
-  // 2) profile 元数据（dsh --profile EvoResearch 时读取）
-  const profilePkg = JSON.parse(readFileUtf8(join(ROOT, 'profiles', 'EvoResearch', 'package.json')))
+  // 2) profile 元数据（dsh --profile evoresearch 时读取）
+  const profilePkg = JSON.parse(readFileUtf8(join(ROOT, 'profiles', 'evoresearch', 'package.json')))
   delete profilePkg.dependencies // 依赖由 app 根提供（profile 向上解析）
   writeFileSync(join(profileDir, 'package.json'), JSON.stringify(profilePkg, null, 2), 'utf8')
-  writeFileSync(join(profileDir, 'cordis.patch.yml'), readFileUtf8(join(ROOT, 'profiles', 'EvoResearch', 'cordis.patch.yml')), 'utf8')
+  writeFileSync(join(profileDir, 'cordis.patch.yml'), readFileUtf8(join(ROOT, 'profiles', 'evoresearch', 'cordis.patch.yml')), 'utf8')
   // 3) 安装依赖
   const result = spawnSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--production'], {
     cwd: appDir,
@@ -117,7 +117,7 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   // 2) 原生模块只保留 win32-x64 prebuilds（node-pty/sharp 的 linux/darwin 产物占 ~65MB）。
   const nodeModules = join(appDir, 'node_modules')
   // provider SDK 裁剪：anthropic/google/mistral/aws 适配器按需惰性 import，
-  // 不选这些 provider 就不加载（与 EvoResearch build.py --profile deepseek 语义一致）。
+  // 不选这些 provider 就不加载（与上游 EvoScientist build.py --profile deepseek 语义一致）。
   // 保留：openai（pi-ai 用）、@deepseek-ai、@opentelemetry（遥测）、sharp（附件图片）。
   prunePackages(nodeModules, ['@anthropic-ai', '@google', '@mistralai', '@aws-sdk', '@aws-crypto', '@smithy', '@protobufjs'])
   pruneNativePrebuilds(nodeModules)
