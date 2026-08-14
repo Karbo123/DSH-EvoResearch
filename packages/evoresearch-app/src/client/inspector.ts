@@ -5,8 +5,9 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
-import { FolderOpen, Bot, MessagesSquare, X, Download, RefreshCw, Files } from 'lucide-react'
+import { FolderOpen, Bot, MessagesSquare, X, Download, RefreshCw } from 'lucide-react'
 import { t } from './i18n'
+import { WorkspaceFiles } from './workspace-files'
 
 export type InspectorTab = 'workspace' | 'agents' | 'chats'
 
@@ -14,8 +15,8 @@ export interface InspectorProps {
   tab: InspectorTab
   onTab: (t: InspectorTab) => void
   onClose: () => void
-  /** 会话上下文（workspace 视图可显示当前工作区） */
-  workspaceName: string | null
+  /** 工作区根目录（当前会话 cwd；无会话时为 null）。 */
+  cwd: string | null
 }
 
 const TABS = [
@@ -24,7 +25,7 @@ const TABS = [
   { key: 'chats', label: t('sideChats'), icon: MessagesSquare },
 ] as const
 
-export function Inspector({ tab, onTab, onClose, workspaceName }: InspectorProps) {
+export function Inspector({ tab, onTab, onClose, cwd }: InspectorProps) {
   const [subTab, setSubTab] = useState<'tree' | 'bytype'>('tree')
 
   return jsxs('div', {
@@ -79,13 +80,7 @@ export function Inspector({ tab, onTab, onClose, workspaceName }: InspectorProps
                     jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Download', children: jsx(Download, {}) }),
                   ],
                 }),
-                jsxs('div', {
-                  className: 'evo-insp-empty',
-                  children: [
-                    jsx(Files, {}),
-                    jsx('div', { children: workspaceName === null ? t('noFilesYet') : `Workspace: ${workspaceName}` }),
-                  ],
-                }),
+                jsx(WorkspaceFiles, { root: cwd }),
               ],
             })
           : jsxs('div', {

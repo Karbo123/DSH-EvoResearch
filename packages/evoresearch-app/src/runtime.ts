@@ -12,6 +12,7 @@ import { networkInterfaces } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import z from '@deepseek-ai/schemastery'
 import * as FrontendStatic from '@deepseek-ai/dsh-host-frontend-static'
+import { registerWorkspaceApi } from './workspace-api.js'
 
 /** 稳定插件名（行 id 由 cordis.patch.yml 决定）。 */
 const name = 'evoresearch-app'
@@ -77,6 +78,7 @@ function apply(ctx, config) {
   const runtime = resolveLanTrust(ctx.webServer.host, config.trustedHosts)
   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
+  registerWorkspaceApi(ctx)
   if (config.surfaceContext) {
     ctx.inject(['systemPrompt'], (promptCtx) => {
       promptCtx.systemPrompt.section({

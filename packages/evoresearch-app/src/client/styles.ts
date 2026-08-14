@@ -299,4 +299,26 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-del { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
 .evo-panel-del:hover { color: var(--color-error); background: var(--hover-bg); }
 .evo-panel-del svg { width: 14px; height: 14px; }
+/* ── 工作区文件浏览器（Inspector → Workspace）── */
+.evo-fs { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.evo-fs-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px 4px; }
+.evo-fs-crumb { flex: 1; min-width: 0; font-size: 11.5px; color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.evo-fs-tree { flex: 1; overflow-y: auto; padding: 4px 6px 12px; min-height: 0; }
+.evo-fs-row { display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 8px; border: none; background: none; border-radius: 7px; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; text-align: left; }
+.evo-fs-row:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-fs-row svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--color-text-tertiary); }
+.evo-fs-row svg.lucide-folder { color: var(--brand); }
+.evo-fs-arrow { width: 14px; flex-shrink: 0; }
+.evo-fs-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-fs-hidden .evo-fs-name { opacity: 0.55; }
+.evo-fs-empty { font-size: 11.5px; color: var(--color-text-tertiary); padding: 4px 8px; }
+.evo-fs-viewer { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.evo-fs-viewer-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px 6px; border-bottom: 1px solid var(--color-border-light); }
+.evo-fs-viewer-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-fs-save { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border: none; border-radius: 7px; background: var(--brand-solid); color: var(--brand-foreground); font-size: 12px; font-weight: 600; cursor: pointer; }
+.evo-fs-save:disabled { opacity: 0.5; cursor: default; }
+.evo-fs-save svg { width: 13px; height: 13px; }
+.evo-fs-editor { flex: 1; min-height: 0; padding: 10px 12px; border: none; outline: none; resize: none; background: var(--color-surface); color: var(--color-text-primary); font-size: 12.5px; line-height: 1.6; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.evo-fs-image { max-width: 100%; object-fit: contain; padding: 10px; }
+.evo-fs-frame { flex: 1; min-height: 0; border: none; background: var(--color-surface); }
 `

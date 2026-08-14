@@ -334,7 +334,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   tab: inspectorTab,
                   onTab: setInspectorTab,
                   onClose: () => setInspector(false),
-                  workspaceName: null,
+                  cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
                 }),
               }),
             ],

@@ -1,0 +1,192 @@
+/**
+ * 工作区文件 API（HTTP 路由，/evoresearch/fs/*）。
+ *
+ * 与官方 Remote 通道（$mount）解耦：参照 dsh-better-sidebar 的模式，
+ * 经 ctx.webServer.register 提供 JSON API 与媒体路由，浏览器 fetch 调用。
+ * 所有操作带信任栅栏（回环 + webRuntime.trustedHosts），写操作限制在
+ * 请求声明的根目录内（isWithin 校验）。
+ */
+import { opendir, readFile, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+
+const MEDIA_TYPES: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp', '.ico': 'image/x-icon', '.avif': 'image/avif',
+  '.pdf': 'application/pdf', '.html': 'text/html', '.htm': 'text/html',
+  '.md': 'text/markdown', '.txt': 'text/plain', '.json': 'application/json',
+  '.ts': 'text/plain', '.tsx': 'text/plain', '.js': 'text/plain', '.mjs': 'text/plain',
+  '.css': 'text/css', '.yml': 'text/plain', '.yaml': 'text/plain', '.rs': 'text/plain',
+}
+
+const MAX_READ_BYTES = 1 << 22 // 4 MiB 文本上限
+const MAX_BODY_BYTES = 1 << 21 // 2 MiB 写请求上限
+
+interface FsEntry { name: string; path: string; isDir: boolean; hidden: boolean }
+
+/** 目录优先、大小写不敏感排序（VSCode explorer 顺序）。 */
+function compareEntries(a: FsEntry, b: FsEntry): number {
+  if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
+  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+}
+
+/** 规范化调用方路径为绝对路径（非绝对 → fs-error）。 */
+function requireAbsolute(path: string): string {
+  if (!path.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(path)) throw httpError(400, 'fs-error', `"${path}" 不是绝对路径`)
+  return resolve(path)
+}
+
+/** target 是否位于 base 下（含相等；容忍分隔符与 Windows 大小写）。 */
+function isWithin(target: string, base: string): boolean {
+  const t = target.toLowerCase().replace(/\//g, '\\')
+  const b = base.toLowerCase().replace(/\//g, '\\')
+  return t === b || t.startsWith(b.endsWith('\\') ? b : `${b}\\`)
+}
+
+function httpError(status: number, code: string, message: string): Error {
+  const error = new Error(message) as Error & { status: number; code: string }
+  error.status = status
+  error.code = code
+  return error
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = []
+  let total = 0
+  for await (const chunk of req) {
+    const buffer = Buffer.from(chunk as Buffer)
+    total += buffer.length
+    if (total > MAX_BODY_BYTES) throw httpError(400, 'bad-request', '请求体过大')
+    chunks.push(buffer)
+  }
+  const text = Buffer.concat(chunks).toString('utf8')
+  if (text.trim() === '') return {}
+  try { return JSON.parse(text) as Record<string, unknown> } catch { throw httpError(400, 'bad-request', 'JSON 解析失败') }
+}
+
+function writeJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  res.end(JSON.stringify(body))
+}
+
+function writeOk(res: ServerResponse, value: unknown): void {
+  writeJson(res, 200, { ok: true, value })
+}
+
+function writeError(res: ServerResponse, error: unknown): void {
+  const err = error as Error & { status?: number; code?: string }
+  writeJson(res, err.status ?? 500, { ok: false, error: { code: err.code ?? 'internal', message: err.message ?? String(error) } })
+}
+
+function requireString(payload: Record<string, unknown>, key: string): string {
+  const value = payload[key]
+  if (typeof value !== 'string' || value === '') throw httpError(400, 'bad-request', `缺少或非法 "${key}"`)
+  return value
+}
+
+/** 信任栅栏：回环 Host 或 webRuntime.trustedHosts 允许的权威。 */
+function trusted(req: IncomingMessage, trustedHosts: string[]): boolean {
+  const host = req.headers.host ?? ''
+  const hostname = host.split(':')[0].toLowerCase()
+  if (hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1') return true
+  return trustedHosts.some((authority) => {
+    const a = authority.split(':')[0].toLowerCase()
+    return a === hostname
+  })
+}
+
+/** 注册 /evoresearch/fs/* 路由。 */
+export function registerWorkspaceApi(ctx: any): void {
+  const webServer = ctx.get('webServer')
+  if (webServer === undefined) return
+
+  ctx.effect(() => webServer.register({
+    kind: 'prefix',
+    path: '/evoresearch/fs',
+    handler: async (req: IncomingMessage, res: ServerResponse) => {
+      const trustedHosts: string[] = ctx.get('webRuntime')?.trustedHosts ?? []
+      if (!trusted(req, trustedHosts)) {
+        writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
+        return
+      }
+      const url = new URL(req.url ?? '/', 'http://dsh.internal')
+      const pathname = url.pathname
+      const method = pathname.startsWith('/evoresearch/fs/') ? pathname.slice('/evoresearch/fs/'.length) : undefined
+
+      try {
+        // GET /evoresearch/fs/file?path= → 媒体/文本文件流
+        if (req.method === 'GET' && method === 'file') {
+          const target = requireAbsolute(url.searchParams.get('path') ?? '')
+          const buffer = await readFile(target)
+          const type = MEDIA_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream'
+          res.writeHead(200, { 'content-type': type, 'content-length': String(buffer.length) })
+          res.end(buffer)
+          return
+        }
+        if (req.method !== 'POST') {
+          writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
+          return
+        }
+        const payload = await readJsonBody(req)
+
+        // POST /evoresearch/fs/list {root} → 单层目录
+        if (method === 'list') {
+          const root = requireAbsolute(requireString(payload, 'root'))
+          let level
+          try { level = await opendir(root) } catch (error) {
+            throw httpError(400, 'fs-error', `无法列出 "${root}": ${(error as Error).message}`)
+          }
+          const entries: FsEntry[] = []
+          for await (const dirent of level) {
+            entries.push({
+              name: dirent.name,
+              path: join(root, dirent.name),
+              isDir: dirent.isDirectory(),
+              hidden: dirent.name.startsWith('.'),
+            })
+          }
+          entries.sort(compareEntries)
+          writeOk(res, { root, entries })
+          return
+        }
+
+        // POST /evoresearch/fs/read {path} → 文本内容
+        if (method === 'read') {
+          const target = requireAbsolute(requireString(payload, 'path'))
+          const buffer = await readFile(target)
+          if (buffer.length > MAX_READ_BYTES) throw httpError(400, 'fs-error', '文件过大（>4MiB）')
+          writeOk(res, { path: target, text: buffer.toString('utf8') })
+          return
+        }
+
+        // POST /evoresearch/fs/write {root, path, text} → 写文件（限制在 root 内）
+        if (method === 'write') {
+          const root = requireAbsolute(requireString(payload, 'root'))
+          const target = requireAbsolute(requireString(payload, 'path'))
+          if (!isWithin(target, root)) throw httpError(403, 'forbidden', `写入路径超出根目录: ${target}`)
+          const text = requireString(payload, 'text')
+          await writeFile(target, text, 'utf8')
+          writeOk(res, { path: target })
+          return
+        }
+
+        writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown method ${method ?? ''}` } })
+      } catch (error) {
+        writeError(res, error)
+      }
+    },
+  }), 'evoresearch: workspace fs api')
+}
+
+/** 根目录标签（面包屑/树根显示）。 */
+export function rootLabel(path: string): string {
+  const base = basename(path)
+  return base !== '' ? base : path
+}
+
+/** 父目录（文件系统根返回 undefined）。 */
+export function parentOf(path: string): string | undefined {
+  const parent = dirname(path)
+  return parent === path ? undefined : parent
+}
