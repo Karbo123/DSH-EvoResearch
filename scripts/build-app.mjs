@@ -65,7 +65,7 @@ async function buildClient() {
   const tmp = join(PKG, 'lib', 'client', '.bundle.tmp.js')
   const out = join(PKG, 'lib', 'client', 'index.js')
   await build({
-    entryPoints: [join(PKG, 'src', 'client.ts')],
+    entryPoints: [join(PKG, 'src', 'client', 'index.ts')],
     outfile: tmp,
     bundle: true,
     format: 'cjs',
