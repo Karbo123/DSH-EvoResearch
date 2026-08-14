@@ -22,10 +22,12 @@ Node.js 是硬约束（后端必须 NodeJS），因此体积下限 ≈ node.exe 
 
 | 项 | 体积 | 说明 |
 |---|---|---|
-| node.exe（v24.19.0 LTS） | 88.5 MB | LZMA 压缩后预计 ~30-35MB |
-| app/（node_modules + profiles） | ~137 MB | 裁剪后；LZMA 后预计 ~45-60MB |
-| 壳（Tauri + WebView2 复用） | ~5-15 MB | NSIS 安装器 |
-| **合计（预期安装包）** | **~80-110 MB** | 未压缩 225.6MB 实测；显著小于 Electron（100MB+） |
+| **NSIS 安装包（实测）** | **44 MB** | `EvoScientist_0.1.0_x64-setup.exe`（LZMA，225.6MB 未压缩 → 44MB） |
+| 壳 exe | 2.9 MB | Tauri release + strip |
+| node.exe（v24.19.0 LTS） | 88.5 MB | 未压缩；LZMA 后约 30-35MB |
+| app/（node_modules + profiles） | ~137 MB | 裁剪后 |
+| 对比 Electron 典型 | 100MB+ | **本方案缩小 56%+** |
+| 对比原 EvoScientist（PyInstaller） | 100MB+ | 本方案缩小 50%+ |
 
 **体积优化（deepseek profile 思路，已实现）**：`bundle-sidecar.mjs` 裁剪
 - 未使用的 provider SDK：`@anthropic-ai`/`@google`/`@mistralai`/`@aws-*`/`@smithy`/`@protobufjs`（-32MB）——与 EvoScientist `build.py --profile deepseek` 语义一致（适配器惰性 import，不选则不加载）；

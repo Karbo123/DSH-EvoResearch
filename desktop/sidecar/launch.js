@@ -11,7 +11,8 @@ const { join } = require('node:path')
 const { platform } = require('node:os')
 
 const APP_NAME = 'EvoScientist'
-const dataDir = join(process.env.LOCALAPPDATA || process.env.HOME || '.', APP_NAME)
+// 端口文件路径与 Tauri 壳的 app_data_dir 对齐：%LOCALAPPDATA%/<identifier>
+const dataDir = join(process.env.LOCALAPPDATA || process.env.HOME || '.', 'com.evoscientist.desktop')
 const portFile = join(dataDir, 'port.json')
 
 mkdirSync(dataDir, { recursive: true })

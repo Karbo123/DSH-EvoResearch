@@ -14,6 +14,9 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// 应用数据目录（端口文件位置）。

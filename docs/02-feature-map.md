@@ -97,9 +97,10 @@
 
 | EvoScientist 功能 | 本实现 | 状态 |
 |---|---|---|
-| 单文件桌面应用 | Tauri 2 + Node sidecar（desktop/） | 🟡（骨架） |
-| 无边框标题栏/窗口控制 | Tauri 配置（骨架） | 🟡 |
-| 最小打包体积 | node.exe LZMA + WebView2 复用，目标 <60MB | 🟡 |
+| 单文件桌面应用 | Tauri 2 + Node sidecar（desktop/）—— **安装包实测 44MB**（NSIS/LZMA） | ✅ |
+| 无边框标题栏/窗口控制 | Tauri 配置（NSIS 中文安装器 + 最小窗口 960×600） | ✅（基础版） |
+| 最小打包体积 | 44MB 实测（Node 24 LTS + WebView2 复用 + provider SDK/prebuilds 裁剪） | ✅ |
+| sidecar 协作协议 | DSH_HOME 隔离布局 + 端口文件协议 + 防孤儿进程；**裁剪产物完整 boot 验证通过** | ✅ |
 | web 模式（无 GUI 服务器模式） | DSH 原生 web profile | ✅（平台） |
 
 ## I. 运维（主3）
