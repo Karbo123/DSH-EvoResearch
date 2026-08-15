@@ -56,6 +56,8 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const [goals, setGoals] = useState<GoalRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [expandedGoal, setExpandedGoal] = useState<string | null>(null)
+  const [proposals, setProposals] = useState<Record<string, GoalProposalRow[]>>({})
+  const [responding, setResponding] = useState<string | null>(null)
   const [tab, setTab] = useState<'overview' | 'history' | 'identity' | 'knowledge'>('overview')
   // History 时间线（§26.5）
   const [turns, setTurns] = useState<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }> | null>(null)
@@ -93,7 +95,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
     void Promise.all([
       api<Array<{ name: string; path?: string }>>('projects').catch((e: any) => { if (!cancelled) setError(String(e?.message ?? e)); return [] }),
       api<Array<{ category: string; count: number }>>('memory-catalog', {}).catch(() => []),
-      api<Array<{ id?: string; title?: string; status?: string; progress?: number }>>('memory-goals', {}).catch(() => []),
+      api<GoalRow[]>('memory-goals', {}).catch(() => []),
     ]).then(([p, c, g]) => {
       if (cancelled) return
       setProjects(p)
@@ -102,6 +104,35 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
     })
     return () => { cancelled = true }
   }, [])
+
+  // 展开目标时加载其提案（§19.6）
+  useEffect(() => {
+    if (expandedGoal === null) return
+    let cancelled = false
+    void api<GoalProposalRow[]>('memory-goal-proposals', { goalId: expandedGoal }).then((list) => {
+      if (!cancelled) setProposals((prev) => ({ ...prev, [expandedGoal]: list }))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [expandedGoal])
+
+  const respondProposal = (proposalId: string, decision: 'approve' | 'reject') => {
+    if (responding !== null) return
+    setResponding(proposalId)
+    setError(null)
+    void api<{ proposal: GoalProposalRow; goal?: GoalRow }>('memory-goal-proposal-respond', { proposalId, decision })
+      .then((result) => {
+        setResponding(null)
+        if (result.proposal !== undefined) {
+          // 刷新提案 + 目标列表（接受后合同版本变化）
+          setProposals((prev) => ({
+            ...prev,
+            [result.proposal.goalId]: (prev[result.proposal.goalId] ?? []).map((p) => (p.proposalId === proposalId ? { ...p, status: result.proposal.status } : p)),
+          }))
+          void api<GoalRow[]>('memory-goals', {}).then(setGoals).catch(() => {})
+        }
+      })
+      .catch((e: any) => { setResponding(null); setError(String(e?.message ?? e)) })
+  }
 
   const totalTurns = (catalog ?? []).reduce((sum, item) => sum + item.count, 0)
 
@@ -152,7 +183,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
           : jsx('div', {
               className: 'evo-panel-list',
               children: (goals ?? []).map((g) => {
-                const key = g.id ?? g.title ?? ''
+                const key = g.goalId ?? g.id ?? g.title ?? ''
                 const expanded = expandedGoal === key
                 const criteria = g.criteria ?? []
                 const satisfied = criteria.filter((c) => c.satisfied).length
@@ -167,7 +198,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                       onClick: () => setExpandedGoal((v) => (v === key ? null : key)),
                       children: [
                         jsx(Target, {}),
-                        jsx('span', { className: 'evo-panel-item-main', children: g.title ?? g.id ?? t('goal') }),
+                        jsx('span', { className: 'evo-panel-item-main', children: g.title ?? g.goalId ?? g.id ?? t('goal') }),
                         g.status !== undefined && jsx('span', { className: 'evo-panel-item-badge', children: g.status }),
                         g.progress !== undefined && jsx('span', { className: 'evo-panel-item-num', children: `${Math.round(g.progress * 100)}%` }),
                         criteria.length > 0 && jsx('span', { className: 'evo-goal-criteria-count', children: `${satisfied}/${criteria.length}` }),
@@ -209,6 +240,46 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                           children: [
                             g.version !== undefined && jsx('span', { children: `${t('version')} ${g.version}` }),
                             g.updatedAt !== undefined && jsx('span', { children: `${t('updatedAt')} ${new Date(g.updatedAt).toLocaleString()}` }),
+                          ],
+                        }),
+                        jsxs('div', {
+                          className: 'evo-goal-detail-block',
+                          children: [
+                            jsx('span', { className: 'evo-goal-detail-label', children: t('proposals') }),
+                            (proposals[key] ?? []).filter((p) => p.status === 'pending').length === 0
+                              ? jsx('span', { className: 'evo-panel-hint', children: t('noProposals') })
+                              : jsx('div', { className: 'evo-goal-proposals', children: (proposals[key] ?? []).filter((p) => p.status === 'pending').map((p) => jsxs('div', {
+                                  className: 'evo-goal-proposal',
+                                  children: [
+                                    jsxs('div', {
+                                      className: 'evo-goal-proposal-head',
+                                      children: [
+                                        jsx('span', { className: 'evo-goal-proposal-title', children: p.title }),
+                                        jsx('span', { className: 'evo-goal-proposal-time', children: new Date(p.createdAt).toLocaleString() }),
+                                      ],
+                                    }),
+                                    p.summary !== '' && jsx('div', { className: 'evo-goal-proposal-summary', children: p.summary }),
+                                    jsxs('div', {
+                                      className: 'evo-goal-proposal-acts',
+                                      children: [
+                                        jsx('button', {
+                                          type: 'button',
+                                          className: 'evo-btn evo-btn-ok evo-btn-sm',
+                                          disabled: responding !== null,
+                                          onClick: () => respondProposal(p.proposalId, 'approve'),
+                                          children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: t('accept') })] }),
+                                        }),
+                                        jsx('button', {
+                                          type: 'button',
+                                          className: 'evo-btn evo-btn-danger evo-btn-sm',
+                                          disabled: responding !== null,
+                                          onClick: () => respondProposal(p.proposalId, 'reject'),
+                                          children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: t('reject') })] }),
+                                        }),
+                                      ],
+                                    }),
+                                  ],
+                                }, p.proposalId)) }),
                           ],
                         }),
                       ],
@@ -839,6 +910,7 @@ export function SkillsPanel() {
 }
 
 interface GoalRow {
+  goalId?: string
   id?: string
   title?: string
   status?: string
@@ -848,6 +920,16 @@ interface GoalRow {
   constraints?: readonly string[]
   version?: number
   updatedAt?: number
+}
+
+interface GoalProposalRow {
+  proposalId: string
+  goalId: string
+  title: string
+  summary: string
+  changes: Record<string, unknown>
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt: number
 }
 
 interface ProjectRow { name: string; path?: string }

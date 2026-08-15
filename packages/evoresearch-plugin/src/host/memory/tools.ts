@@ -15,7 +15,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { ResearchMemoryStore } from './store.js'
 import { parseObservationFile } from './store.js'
-import type { ResearchCategory } from '../../shared/types.js'
+import type { ResearchCategory, GoalProposal } from '../../shared/types.js'
 
 /** 工具上下文：MemoryRuntime 提供的存储门面。 */
 export interface MemoryToolHost {
@@ -250,6 +250,56 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       const store = host.storeFor(workspace)
       store.supersedeObservation(host.observationsDirFor(workspace), input.observation_id, input.superseded_by)
       return { ok: true }
+    },
+  })
+
+  // ── propose_goal_contract_update（§19.6 / §21.5） ─────────────────────────
+  // 只创建待确认 Proposal，不直接修改合同；用户在 Goal 面板接受/拒绝后生效。
+  register({
+    name: 'propose_goal_contract_update',
+    description:
+      '为长程目标合同提出修改提案（§19.6）。不直接修改合同——生成待确认 Proposal，' +
+      '用户在界面接受后才应用为新版本。适合在目标推进中需要调整目标/成功标准/约束时使用。',
+    parameters: paramsSchema(
+      {
+        goal_id: { type: 'string', description: '目标合同 id（来自 memory-goals 列表）' },
+        title: { type: 'string', description: '提案标题（一句话概括修改）' },
+        summary: { type: 'string', description: '修改理由与说明' },
+        changes: {
+          type: 'object',
+          description: '待应用的部分合同字段（可只提供要修改的字段）',
+          properties: {
+            title: { type: 'string', description: '新目标标题（可选）' },
+            objective: { type: 'string', description: '新目标原文（可选）' },
+            criteria: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' }, satisfied: { type: 'boolean' }, evidence: { type: 'array', items: { type: 'string' } } } }, description: '新成功标准列表（可选，整体替换）' },
+            constraints: { type: 'array', items: { type: 'string' }, description: '新约束列表（可选，整体替换）' },
+          },
+        },
+      },
+      ['goal_id', 'title', 'changes'],
+    ),
+    output: {
+      schema: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          proposal_id: { type: 'string' },
+          status: { type: 'string' },
+        },
+      },
+      render: textRender,
+    },
+    execute: async (args, exec) => {
+      const input = args as { goal_id: string; title: string; summary?: string; changes: GoalProposal['changes'] }
+      const workspace = workspaceOf(exec)
+      const store = host.storeFor(workspace)
+      const proposal = store.createGoalProposal({
+        goalId: input.goal_id,
+        title: input.title,
+        summary: input.summary ?? '',
+        changes: input.changes ?? {},
+      })
+      return { ok: true, proposal_id: proposal.proposalId, status: proposal.status }
     },
   })
 

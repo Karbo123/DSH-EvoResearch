@@ -155,6 +155,8 @@ const DICT: Record<string, [string, string]> = {
   constraintsLabel: ['Constraints', '约束'],
   evidenceLabel: ['Evidence', '证据'],
   updatedAt: ['Updated', '更新于'],
+  accept: ['Accept', '接受'],
+  noProposals: ['No proposals', '暂无提案'],
   overview: ['Overview', '概览'],
   history: ['History', '历史'],
   identity: ['Identity', '身份'],

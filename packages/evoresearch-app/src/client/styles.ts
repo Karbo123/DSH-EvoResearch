@@ -385,6 +385,14 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-goal-evidence { flex-shrink: 0; font-size: 11px; color: var(--color-text-tertiary); padding: 1px 7px; border-radius: 999px; background: var(--hover-bg); }
 .evo-goal-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .evo-goal-detail-meta { display: flex; gap: 12px; font-size: 11px; color: var(--color-text-tertiary); }
+.evo-btn-sm { padding: 3px 10px; font-size: 12px; border-radius: 8px; }
+.evo-goal-proposals { display: flex; flex-direction: column; gap: 7px; }
+.evo-goal-proposal { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; border: 1px solid var(--color-border-light); border-radius: 9px; background: var(--color-surface); }
+.evo-goal-proposal-head { display: flex; align-items: baseline; gap: 8px; }
+.evo-goal-proposal-title { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); min-width: 0; }
+.evo-goal-proposal-time { flex-shrink: 0; font-size: 10.5px; color: var(--color-text-tertiary); }
+.evo-goal-proposal-summary { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; white-space: pre-wrap; }
+.evo-goal-proposal-acts { display: flex; gap: 7px; }
 .evo-panel-form { display: flex; gap: 8px; flex-wrap: wrap; }
 .evo-panel-input { flex: 1; min-width: 140px; padding: 7px 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); color: var(--color-text-primary); font-size: 13px; outline: none; }
 .evo-panel-input:focus { border-color: var(--brand); }

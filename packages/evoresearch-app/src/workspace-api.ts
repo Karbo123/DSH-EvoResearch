@@ -398,6 +398,26 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.memoryGoals as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))
           return
         }
+        // Goal 修改提案（§19.6）：列表 / 接受·拒绝
+        if (method === 'memory-goal-proposals') {
+          if (evoresearch?.goalProposals === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const goalId = requireString(payload, 'goalId')
+          writeOk(res, await (evoresearch.goalProposals as (a: { workspaceDir?: string; goalId: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined, goalId }))
+          return
+        }
+        if (method === 'memory-goal-proposal-respond') {
+          if (evoresearch?.goalProposalRespond === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const proposalId = requireString(payload, 'proposalId')
+          const decision = payload.decision
+          if (decision !== 'approve' && decision !== 'reject') throw httpError(400, 'bad-decision', 'decision 必须是 approve 或 reject')
+          try {
+            const result = await (evoresearch.goalProposalRespond as (a: { workspaceDir?: string; proposalId: string; decision: 'approve' | 'reject' }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined, proposalId, decision })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         if (method === 'scheduler-list') {
           if (evoresearch?.schedulerList === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.schedulerList as () => Promise<unknown>)())

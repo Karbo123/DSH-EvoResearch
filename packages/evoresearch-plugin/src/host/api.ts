@@ -14,7 +14,7 @@ import type { SchedulerService } from './scheduler.js'
 import type { ChannelManager } from './channels/index.js'
 import type { AutoSkillsService } from './autoskills.js'
 import type { ExpertService } from './experts.js'
-import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, ScheduledTask, AutoSkillProposal } from '../shared/types.js'
+import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal } from '../shared/types.js'
 
 /** 各服务集合（host 入口注入）。 */
 export interface HostServices {
@@ -186,6 +186,16 @@ export class EvoResearchApiService extends TypertRemoteService {
   @Remote('memoryGoalContract')
   memoryGoalContract(args: { workspaceDir?: string; goalId: string }): GoalContract | null {
     return this.services.memory.storeFor(args.workspaceDir ?? '').getGoal(args.goalId) ?? null
+  }
+
+  @Remote('goalProposals')
+  goalProposals(args: { workspaceDir?: string; goalId: string }): GoalProposal[] {
+    return this.services.memory.storeFor(args.workspaceDir ?? '').listGoalProposals(args.goalId)
+  }
+
+  @Remote('goalProposalRespond')
+  goalProposalRespond(args: { workspaceDir?: string; proposalId: string; decision: 'approve' | 'reject' }): { proposal: GoalProposal; goal?: GoalContract } {
+    return this.services.memory.storeFor(args.workspaceDir ?? '').respondGoalProposal(args.proposalId, args.decision)
   }
 
   // ── 定时任务 ──────────────────────────────────────────────────────────────

@@ -147,6 +147,19 @@ export interface GoalContract {
   readonly updatedAt: number
 }
 
+/** Goal Contract 修改提案（§19.6：propose_goal_contract_update 只建待确认提案，不直接改合同）。 */
+export interface GoalProposal {
+  readonly proposalId: string
+  readonly goalId: string
+  readonly title: string
+  /** 修改理由。 */
+  readonly summary: string
+  /** 待应用的部分合同字段（title/objective/criteria/constraints 子集）。 */
+  readonly changes: Readonly<Partial<Pick<GoalContract, 'title' | 'objective' | 'criteria' | 'constraints'>>>
+  readonly status: 'pending' | 'approved' | 'rejected'
+  readonly createdAt: number
+}
+
 /** AutoSkills 提案。存储模型字段可变（审核状态流转）。 */
 export interface AutoSkillProposal {
   proposalId: string

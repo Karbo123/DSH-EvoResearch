@@ -19,6 +19,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { evoresearchDb, type Migration, cleanForIndex } from '../core/db.js'
 import {
   type TurnRecord,
@@ -27,6 +28,7 @@ import {
   type TopicState,
   type ObservationMeta,
   type GoalContract,
+  type GoalProposal,
   RESEARCH_CATEGORIES,
 } from '../../shared/types.js'
 
@@ -214,6 +216,24 @@ export const RESEARCH_MEMORY_MIGRATIONS: readonly Migration[] = [
       `)
     },
   },
+  {
+    // §19.6：Goal Contract 修改提案（只建待确认提案；接受时应用为新版本合同）。
+    version: 3,
+    up(db) {
+      db.exec(`
+        CREATE TABLE goal_proposals (
+          proposal_id TEXT PRIMARY KEY,
+          goal_id TEXT NOT NULL REFERENCES research_goals(goal_id),
+          title TEXT NOT NULL,
+          summary TEXT NOT NULL DEFAULT '',
+          changes TEXT NOT NULL DEFAULT '{}',
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_goal_proposals ON goal_proposals(goal_id, status, created_at);
+      `)
+    },
+  },
 ]
 
 /** 数据库行（宽松类型，读取后立即转换为领域对象）。 */
@@ -233,6 +253,15 @@ function parseJsonArray<T>(value: unknown): T[] {
     return Array.isArray(parsed) ? (parsed as T[]) : []
   } catch {
     return []
+  }
+}
+
+function parseJsonObject<T>(value: unknown): T {
+  try {
+    const parsed = JSON.parse(asString(value, '{}')) as unknown
+    return typeof parsed === 'object' && parsed !== null ? (parsed as T) : ({} as T)
+  } catch {
+    return {} as T
   }
 }
 
@@ -887,6 +916,87 @@ export class ResearchMemoryStore {
     return rows
       .map((row) => this.getGoal(asString(row.goal_id)))
       .filter((goal): goal is GoalContract => goal !== undefined)
+  }
+
+  // ── Goal 修改提案（§19.6） ────────────────────────────────────────────────
+
+  /** 读取单个提案。 */
+  getGoalProposal(proposalId: string): GoalProposal | undefined {
+    const row = this.db.db.prepare('SELECT * FROM goal_proposals WHERE proposal_id = ?').get(proposalId) as Row | undefined
+    if (!row) return undefined
+    return {
+      proposalId: asString(row.proposal_id),
+      goalId: asString(row.goal_id),
+      title: asString(row.title),
+      summary: asString(row.summary),
+      changes: parseJsonObject<GoalProposal['changes']>(row.changes),
+      status: asString(row.status) as GoalProposal['status'],
+      createdAt: asNumber(row.created_at),
+    }
+  }
+
+  /** 列出某合同的提案（最新优先）。 */
+  listGoalProposals(goalId: string): GoalProposal[] {
+    const rows = this.db.db
+      .prepare('SELECT * FROM goal_proposals WHERE goal_id = ? ORDER BY created_at DESC')
+      .all(goalId) as Row[]
+    return rows
+      .map((row) => this.getGoalProposal(asString(row.proposal_id)))
+      .filter((p): p is GoalProposal => p !== undefined)
+  }
+
+  /** 创建待确认提案（§19.6：不直接修改合同）。 */
+  createGoalProposal(args: { goalId: string; title: string; summary?: string; changes: GoalProposal['changes'] }): GoalProposal {
+    const goal = this.getGoal(args.goalId)
+    if (!goal) throw new Error(`目标合同不存在: ${args.goalId}`)
+    const proposal: GoalProposal = {
+      proposalId: randomUUID(),
+      goalId: args.goalId,
+      title: args.title,
+      summary: args.summary ?? '',
+      changes: args.changes,
+      status: 'pending',
+      createdAt: Date.now(),
+    }
+    this.db.db
+      .prepare(
+        `INSERT INTO goal_proposals (proposal_id, goal_id, title, summary, changes, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(proposal.proposalId, proposal.goalId, proposal.title, proposal.summary, JSON.stringify(proposal.changes), proposal.status, proposal.createdAt)
+    return proposal
+  }
+
+  /**
+   * 接受/拒绝提案。接受时把 changes 合并进当前合同并生成新版本（version+1）；
+   * 拒绝仅标记状态。返回更新后的提案与（接受时的）新合同。
+   */
+  respondGoalProposal(proposalId: string, decision: 'approve' | 'reject'): { proposal: GoalProposal; goal?: GoalContract } {
+    const proposal = this.getGoalProposal(proposalId)
+    if (!proposal) throw new Error(`提案不存在: ${proposalId}`)
+    if (proposal.status !== 'pending') throw new Error(`提案已处理（${proposal.status}）`)
+    const goal = this.getGoal(proposal.goalId)
+    if (!goal) throw new Error(`目标合同不存在: ${proposal.goalId}`)
+    const now = Date.now()
+    let updatedGoal: GoalContract | undefined
+    if (decision === 'approve') {
+      const changes = proposal.changes
+      updatedGoal = {
+        goalId: goal.goalId,
+        title: changes.title ?? goal.title,
+        objective: changes.objective ?? goal.objective,
+        criteria: changes.criteria ?? goal.criteria,
+        constraints: changes.constraints ?? goal.constraints,
+        version: goal.version + 1,
+        createdAt: goal.createdAt,
+        updatedAt: now,
+      }
+      this.saveGoal(updatedGoal)
+    }
+    this.db.db
+      .prepare(`UPDATE goal_proposals SET status = ?, created_at = created_at WHERE proposal_id = ?`)
+      .run(decision === 'approve' ? 'approved' : 'rejected', proposalId)
+    return { proposal: { ...proposal, status: decision === 'approve' ? 'approved' : 'rejected' }, goal: updatedGoal }
   }
 
   /** 追加一条 Goal 事件（幂等：同 goalId+event+时间戳去重）。 */
