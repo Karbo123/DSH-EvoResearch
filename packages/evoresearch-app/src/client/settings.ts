@@ -3,7 +3,7 @@
  * （主题与语言在顶栏/标题栏切换，不在弹窗内重复。）
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon } from 'lucide-react'
 import { t } from './i18n'
 
@@ -144,18 +144,30 @@ function PluginListSection() {
 }
 
 export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  // §30.2：打开聚焦首个可操作元素，关闭恢复触发按钮焦点
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    const el = shellRef.current?.querySelector<HTMLElement>('button, input, textarea, [tabindex]')
+    el?.focus()
+    return () => { previous?.focus?.() }
+  }, [])
   return jsxs('div', {
     className: 'evo-modal-mask',
+    ref: shellRef,
     onPointerDown: (e: { target: HTMLElement; currentTarget: HTMLElement }) => { if (e.target === e.currentTarget) onClose() },
     children: [
       jsxs('div', {
         className: 'evo-modal',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-label': t('settings'),
         children: [
           jsxs('div', {
             className: 'evo-modal-head',
             children: [
               jsx('div', { className: 'evo-modal-title', children: t('settings') }),
-              jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onClose, title: t('close'), children: jsx(X, {}) }),
+              jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onClose, title: t('close'), 'aria-label': t('close'), children: jsx(X, {}) }),
             ],
           }),
           jsx('div', {

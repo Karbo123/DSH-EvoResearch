@@ -1149,6 +1149,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 placeholder: t('askAnything'),
                 rows: 1,
                 value: input,
+                role: 'combobox',
+                'aria-expanded': candidates.length > 0 || undefined,
+                'aria-autocomplete': 'list',
+                'aria-activedescendant': candidates.length > 0 && activeIndex < candidates.length ? `evo-cand-${activeIndex}` : undefined,
                 style: composerHeight !== null ? { height: `${composerHeight}px`, maxHeight: 'none' } : undefined,
                 onInput: (e) => {
                   setInput(e.currentTarget.value)

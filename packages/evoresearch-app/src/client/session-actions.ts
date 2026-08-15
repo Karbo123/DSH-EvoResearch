@@ -6,24 +6,35 @@
  * - Shortcuts 弹窗：键盘规则表（§23.2）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { X, Search, Keyboard, FileText, Eraser, Copy, Check } from 'lucide-react'
 import { toast } from './toast'
 
-/** 模态外壳（与设置弹窗同视觉）。 */
+/** 模态外壳（与设置弹窗同视觉）。§30.2：打开聚焦首个可操作元素，关闭恢复触发按钮焦点。 */
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: any }) {
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    const el = shellRef.current?.querySelector<HTMLElement>('button, input, textarea, [tabindex]')
+    el?.focus()
+    return () => { previous?.focus?.() }
+  }, [])
   return jsxs('div', {
     className: 'evo-modal-mask',
+    ref: shellRef,
     onPointerDown: (e: { target: HTMLElement; currentTarget: HTMLElement }) => { if (e.target === e.currentTarget) onClose() },
     children: [
       jsxs('div', {
         className: 'evo-modal',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-label': title,
         children: [
           jsxs('div', {
             className: 'evo-modal-head',
             children: [
               jsx('div', { className: 'evo-modal-title', children: title }),
-              jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onClose, title: 'Close', children: jsx(X, {}) }),
+              jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onClose, title: 'Close', 'aria-label': 'Close', children: jsx(X, {}) }),
             ],
           }),
           jsx('div', { className: 'evo-modal-body', children }),

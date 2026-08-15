@@ -563,6 +563,14 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-toast-success { border-color: color-mix(in srgb, var(--color-success) 55%, var(--color-border)); }
 .evo-toast-error { border-color: color-mix(in srgb, var(--color-error) 55%, var(--color-border)); color: var(--color-error); }
 @keyframes evo-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* 无障碍（§30.2）：reduced-motion 时动画/过渡降到约 0.01ms */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 /* ── 页面级错误（§33.4）── */
 .evo-fatal { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--color-background); color: var(--color-text-primary); z-index: 2000; }
 .evo-fatal h2 { margin: 0; font-size: 20px; }
