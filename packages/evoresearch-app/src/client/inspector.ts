@@ -80,14 +80,14 @@ function AgentsPanel({ sessionId }: { sessionId: string | null }) {
       jsxs('div', {
         className: 'evo-insp-subtabs',
         children: [
-          jsx('span', { className: 'evo-insp-subtab-title', children: sessionId === null ? t('noActiveConversation') : 'Agents' }),
+          jsx('span', { className: 'evo-insp-subtab-title', children: sessionId === null ? t('noActiveConversation') : t('agents') }),
           jsx('span', { style: { flex: 1 } }),
-          jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: load, children: jsx(RefreshCw, {}) }),
+          jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('refresh'), onClick: load, children: jsx(RefreshCw, {}) }),
         ],
       }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
       agents === null
-        ? jsx('div', { className: 'evo-insp-empty', children: jsx('div', { children: 'Loading…' }) })
+        ? jsx('div', { className: 'evo-insp-empty', children: jsx('div', { children: t('loading') }) })
         : agents.length === 0
           ? jsxs('div', {
               className: 'evo-insp-empty',
@@ -106,7 +106,7 @@ function AgentsPanel({ sessionId }: { sessionId: string | null }) {
                     jsx('span', { className: `evo-agent-dot${a.activity === 'running' ? ' running' : ''}` }),
                     jsx('span', { className: 'evo-agent-name', children: a.label ?? shortId(a.id) }),
                     jsx('span', { className: `evo-agent-mode${a.mode === 'continuable' ? ' continuable' : ''}`, children: a.mode }),
-                    a.activity === 'running' && jsx('span', { className: 'evo-agent-activity', children: 'running' }),
+                    a.activity === 'running' && jsx('span', { className: 'evo-agent-activity', children: t('runningDot') }),
                   ],
                 }),
               }, a.id)),
@@ -149,7 +149,7 @@ export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNe
             type: 'button',
             className: 'evo-icon-btn evo-insp-close',
             onClick: onClose,
-            title: 'Close inspector',
+            title: t('hideInspector'),
             children: jsx(X, {}),
           }),
         ],
@@ -167,18 +167,18 @@ export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNe
                       className: 'evo-insp-subtab',
                       'data-active': subTab === 'tree' || undefined,
                       onClick: () => setSubTab('tree'),
-                      children: 'Tree',
+                      children: t('tree'),
                     }),
                     jsx('button', {
                       type: 'button',
                       className: 'evo-insp-subtab',
                       'data-active': subTab === 'bytype' || undefined,
                       onClick: () => setSubTab('bytype'),
-                      children: 'By type',
+                      children: t('byType'),
                     }),
                     jsx('span', { style: { flex: 1 } }),
-                    jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', children: jsx(RefreshCw, {}) }),
-                    jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Download', children: jsx(Download, {}) }),
+                    jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('refresh'), children: jsx(RefreshCw, {}) }),
+                    jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('download'), children: jsx(Download, {}) }),
                   ],
                 }),
                 jsx(WorkspaceFiles, { root: cwd }),
@@ -196,38 +196,38 @@ export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNe
                         type: 'button',
                         className: 'evo-insp-subtab evo-sidechat-new',
                         disabled: sessionId === null,
-                        title: 'New side chat（继承当前会话历史）',
+                        title: t('newSideChatInherit'),
                         onClick: () => onNewSideChat('inherit'),
-                        children: jsxs(Fragment, { children: [jsx(GitBranch, {}), jsx('span', { children: 'Inherit' })] }),
+                        children: jsxs(Fragment, { children: [jsx(GitBranch, {}), jsx('span', { children: t('inherit') })] }),
                       }),
                       jsx('button', {
                         type: 'button',
                         className: 'evo-insp-subtab evo-sidechat-new',
                         disabled: sessionId === null,
-                        title: 'New blank side chat（仅继承 workspace）',
+                        title: t('newSideChatBlank'),
                         onClick: () => onNewSideChat('blank'),
-                        children: jsxs(Fragment, { children: [jsx(FilePlus2, {}), jsx('span', { children: 'Blank' })] }),
+                        children: jsxs(Fragment, { children: [jsx(FilePlus2, {}), jsx('span', { children: t('blank') })] }),
                       }),
                       jsx('span', { style: { flex: 1 } }),
-                      jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: () => { window.dispatchEvent(new CustomEvent('evo-sidechats-refresh')) }, children: jsx(RefreshCw, {}) }),
+                      jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('refresh'), onClick: () => { window.dispatchEvent(new CustomEvent('evo-sidechats-refresh')) }, children: jsx(RefreshCw, {}) }),
                       // 删除当前 workspace 全部 Side Chat（§22.4，两段式确认）
                       (sideChats ?? []).length > 0 && (confirmDeleteAll
                         ? jsx('button', {
                             type: 'button',
                             className: 'evo-icon-btn evo-del-confirm',
-                            title: 'Confirm delete all side chats — cannot be undone',
-                            'aria-label': 'Confirm delete all side chats',
+                            title: t('confirmDeleteAllTitle'),
+                            'aria-label': t('confirmDeleteAllTitle'),
                             onClick: () => {
                               setConfirmDeleteAll(false)
                               for (const sc of sideChats ?? []) void onDeleteSideChat(sc.id)
                             },
-                            children: 'Delete all?',
+                            children: t('deleteAllQ'),
                           })
                         : jsx('button', {
                             type: 'button',
                             className: 'evo-icon-btn evo-del',
-                            title: 'Delete all side chats',
-                            'aria-label': 'Delete all side chats',
+                            title: t('deleteAllSideChats'),
+                            'aria-label': t('deleteAllSideChats'),
                             onClick: () => { setConfirmDeleteAll(true); setTimeout(() => setConfirmDeleteAll(false), 5000) },
                             children: jsx(Trash2, {}),
                           })),
@@ -254,16 +254,16 @@ export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNe
                               ? jsx('button', {
                                   type: 'button',
                                   className: 'evo-icon-btn evo-del-confirm',
-                                  title: 'Confirm delete — this cannot be undone',
-                                  'aria-label': 'Confirm delete side chat',
+                                  title: t('confirmDeleteTitle'),
+                                  'aria-label': t('deleteSideChat'),
                                   onClick: () => runDelete(sc.id),
-                                  children: 'Delete?',
+                                  children: t('deleteQ'),
                                 })
                               : jsx('button', {
                                   type: 'button',
                                   className: 'evo-icon-btn evo-del',
-                                  title: 'Delete side chat',
-                                  'aria-label': 'Delete side chat',
+                                  title: t('deleteSideChat'),
+                                  'aria-label': t('deleteSideChat'),
                                   onClick: () => armDelete(sc.id),
                                   children: jsx(Trash2, {}),
                                 }),

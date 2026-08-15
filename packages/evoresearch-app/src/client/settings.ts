@@ -61,9 +61,9 @@ function PermissionSection({ sessionId }: { sessionId: string | null }) {
   }
 
   const modes = [
-    { key: 'read-only', label: 'Read-only' },
-    { key: 'workspace-write', label: 'Write' },
-    { key: 'danger-full-access', label: 'Full effect' },
+    { key: 'read-only', label: t('readOnly') },
+    { key: 'workspace-write', label: t('permWrite') },
+    { key: 'danger-full-access', label: t('fullEffect') },
   ]
 
   return jsxs('div', {
@@ -71,7 +71,7 @@ function PermissionSection({ sessionId }: { sessionId: string | null }) {
     children: [
       jsxs('div', {
         className: 'evo-setting-label',
-        children: [jsx(ShieldCheckIcon, {}), jsx('span', { children: 'Permission' })],
+        children: [jsx(ShieldCheckIcon, {}), jsx('span', { children: t('permission') })],
       }),
       error !== null && jsx('div', { className: 'evo-setting-hint evo-setting-error', children: error }),
       jsxs('div', {
@@ -119,11 +119,11 @@ function PluginListSection() {
     children: [
       jsxs('div', {
         className: 'evo-setting-label',
-        children: [jsx(Puzzle, {}), jsx('span', { children: 'Plugins' })],
+        children: [jsx(Puzzle, {}), jsx('span', { children: t('plugins') })],
       }),
       error !== null && jsx('div', { className: 'evo-setting-hint evo-setting-error', children: error }),
       plugins === null
-        ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+        ? jsx('div', { className: 'evo-setting-hint', children: t('loading') })
         : jsxs('div', {
             className: 'evo-plugin-list',
             children: (plugins ?? []).map((p) => jsx('div', {

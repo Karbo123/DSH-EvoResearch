@@ -8,6 +8,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
 import { Folder, FileText, Command } from 'lucide-react'
+import { t } from './i18n'
 
 export interface Candidate {
   key: string
@@ -214,7 +215,7 @@ export function buildCandidates(trigger: Trigger, catalog: CommandEntry[], tree:
     const items: Candidate[] = tree.map((entry) => ({
       key: entry.path,
       title: entry.path,
-      subtitle: entry.isDir ? 'folder' : undefined,
+      subtitle: entry.isDir ? t('folder') : undefined,
       kind: 'file' as const,
       insert: `@${entry.path}`,
     }))

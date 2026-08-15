@@ -12,6 +12,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { ListTodo, Target, ShieldCheck, ShieldOff, Cpu, Gauge } from 'lucide-react'
+import { t } from './i18n'
 
 /** 时长格式化（官方 formatDuration 语义）。 */
 function formatDuration(ms: number): string {
@@ -32,10 +33,10 @@ function formatTokens(n: number): string {
 
 /** 模式徽章文案。 */
 function modeLabel(preset: string | undefined): string | null {
-  if (preset === 'read-only') return 'Read-only'
-  if (preset === 'workspace-write') return 'Write'
-  if (preset === 'danger-full-access') return 'Full effect'
-  if (preset === 'custom') return 'Custom'
+  if (preset === 'read-only') return t('readOnly')
+  if (preset === 'workspace-write') return t('permWrite')
+  if (preset === 'danger-full-access') return t('fullEffect')
+  if (preset === 'custom') return t('custom')
   return preset ?? null
 }
 
@@ -88,29 +89,29 @@ export function SessionStatusLine({ session }: SessionDockData) {
     children: [
       queue.length > 0 && jsxs('span', {
         className: 'evo-status-chip',
-        title: 'Queued messages',
+        title: t('queuedMessages'),
         children: [jsx(ListTodo, {}), jsx('span', { children: String(queue.length) })],
       }),
       goal != null && jsxs('span', {
         className: 'evo-status-chip evo-status-goal',
-        title: goal.title ?? 'Active goal',
-        children: [jsx(Target, {}), jsx('span', { children: goal.title ?? 'Goal' })],
+        title: goal.title ?? t('activeGoal'),
+        children: [jsx(Target, {}), jsx('span', { children: goal.title ?? t('goal') })],
       }),
       modeLabelValue !== null && jsxs('span', {
         className: `evo-status-chip${effectivePreset === 'read-only' ? ' evo-status-ro' : effectivePreset === 'danger-full-access' ? ' evo-status-full' : ''}`,
-        title: `Permission: ${effectivePreset ?? ''}`,
+        title: `${t('permission')}: ${effectivePreset ?? ''}`,
         children: [effectivePreset === 'read-only' ? jsx(ShieldOff, {}) : jsx(ShieldCheck, {}), jsx('span', { children: modeLabelValue })],
       }),
       model?.model != null && jsxs('button', {
         type: 'button',
         className: 'evo-status-chip evo-status-model',
-        title: `Model: ${model.provider ?? ''} / ${model.model}（点击切换）`,
+        title: `${t('model')}: ${model.provider ?? ''} / ${model.model}（点击切换）`,
         onClick: () => window.dispatchEvent(new CustomEvent('evo-open-model-selector')),
         children: [jsx(Cpu, {}), jsx('span', { children: model.model })],
       }),
       occupancy !== null && jsxs('span', {
         className: 'evo-status-chip',
-        title: `Context: ${formatTokens(occupancy.used)} / ${formatTokens(occupancy.total)}`,
+        title: `${t('contextLabel')}: ${formatTokens(occupancy.used)} / ${formatTokens(occupancy.total)}`,
         children: [jsx(Gauge, {}), jsx('span', { children: `${occupancy.percent}%` })],
       }),
     ],

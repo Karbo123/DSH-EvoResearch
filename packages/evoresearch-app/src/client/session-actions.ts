@@ -9,6 +9,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState, useRef } from 'react'
 import { X, Search, Keyboard, FileText, Eraser, Copy, Check } from 'lucide-react'
 import { toast } from './toast'
+import { t } from './i18n'
 
 /** 模态外壳（与设置弹窗同视觉）。§30.2：打开聚焦首个可操作元素，关闭恢复触发按钮焦点。 */
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: any }) {
@@ -34,7 +35,7 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
             className: 'evo-modal-head',
             children: [
               jsx('div', { className: 'evo-modal-title', children: title }),
-              jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onClose, title: 'Close', 'aria-label': 'Close', children: jsx(X, {}) }),
+              jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onClose, title: t('close'), 'aria-label': t('close'), children: jsx(X, {}) }),
             ],
           }),
           jsx('div', { className: 'evo-modal-body', children }),
@@ -73,8 +74,8 @@ function CopyCell({ text }: { text: string }) {
   return jsx('button', {
     type: 'button',
     className: 'evo-info-copy',
-    title: copied ? 'Copied' : 'Copy',
-    'aria-label': copied ? 'Copied' : 'Copy',
+    title: copied ? t('copied') : t('copy'),
+    'aria-label': copied ? t('copied') : t('copy'),
     onClick: (e: { stopPropagation(): void }) => {
       e.stopPropagation()
       try { void navigator.clipboard?.writeText(text) } catch { /* 忽略 */ }
@@ -122,21 +123,21 @@ export function CurrentDialog({
     : '—'
 
   return jsx(ModalShell, {
-    title: 'Current session',
+    title: t('currentSession'),
     onClose,
     children: jsxs('div', {
       className: 'evo-info',
       children: [
-        jsx(Row, { label: 'Thread ID', mono: true, children: jsxs(Fragment, { children: [jsx('span', { children: sessionId }), jsx(CopyCell, { text: sessionId })] }) }),
-        jsx(Row, { label: 'Workspace', mono: true, children: cwd ?? '—' }),
-        jsx(Row, { label: 'Model / Provider', children: model?.model != null ? `${model.model}（${model.provider ?? '?'}）` : '—' }),
-        jsx(Row, { label: 'Permission', children: mode ?? '—' }),
-        jsx(Row, { label: 'Tokens · Context', children: contextText }),
-        jsx(Row, { label: 'Input · Output', children: `${fmtTokens(usage?.inputTokens ?? 0)} · ${fmtTokens(usage?.outputTokens ?? 0)}` }),
-        jsx(Row, { label: 'Active Experts', children: (experts ?? []).length === 0 ? 'none' : (experts ?? []).map((e) => e.name).join(', ') }),
-        jsx(Row, { label: 'Session events', children: info?.events != null ? String(info.events) : '—' }),
+        jsx(Row, { label: t('threadId'), mono: true, children: jsxs(Fragment, { children: [jsx('span', { children: sessionId }), jsx(CopyCell, { text: sessionId })] }) }),
+        jsx(Row, { label: t('workspace'), mono: true, children: cwd ?? '—' }),
+        jsx(Row, { label: t('modelProvider'), children: model?.model != null ? `${model.model}（${model.provider ?? '?'}）` : '—' }),
+        jsx(Row, { label: t('permission'), children: mode ?? '—' }),
+        jsx(Row, { label: t('tokensContext'), children: contextText }),
+        jsx(Row, { label: t('inputOutput'), children: `${fmtTokens(usage?.inputTokens ?? 0)} · ${fmtTokens(usage?.outputTokens ?? 0)}` }),
+        jsx(Row, { label: t('activeExperts'), children: (experts ?? []).length === 0 ? t('none') : (experts ?? []).map((e) => e.name).join(', ') }),
+        jsx(Row, { label: t('sessionEvents'), children: info?.events != null ? String(info.events) : '—' }),
         info?.file != null
-          ? jsx(Row, { label: 'Session file', mono: true, children: jsxs(Fragment, { children: [jsx('span', { className: 'evo-info-path', children: info.file }), jsx('span', { children: `（${fmtBytes(info.bytes)}）` })] }) })
+          ? jsx(Row, { label: t('sessionFile'), mono: true, children: jsxs(Fragment, { children: [jsx('span', { className: 'evo-info-path', children: info.file }), jsx('span', { children: `（${fmtBytes(info.bytes)}）` })] }) })
           : null,
         jsxs('div', {
           className: 'evo-info-actions',
@@ -145,8 +146,8 @@ export function CurrentDialog({
               type: 'button',
               className: 'evo-btn evo-btn-danger',
               onClick: onClearView,
-              title: 'Clear view 仅清空当前展示，不删除数据；刷新即可恢复',
-              children: jsxs(Fragment, { children: [jsx(Eraser, {}), jsx('span', { children: 'Clear view' })] }),
+              title: t('clearViewTitle'),
+              children: jsxs(Fragment, { children: [jsx(Eraser, {}), jsx('span', { children: t('clearView') })] }),
             }),
           ],
         }),
@@ -179,7 +180,7 @@ export function SearchDialog({
       const idx = text.toLowerCase().indexOf(needle)
       if (idx !== -1) {
         const start = Math.max(0, idx - 30)
-        hits.push({ key: node.key, snippet: `${node.kind === 'user' ? 'You' : 'Evo'}: ${text.slice(start, idx + needle.length + 60)}` })
+        hits.push({ key: node.key, snippet: `${node.kind === 'user' ? t('you') : 'Evo'}: ${text.slice(start, idx + needle.length + 60)}` })
         if (hits.length >= 20) break
       }
     }
@@ -201,7 +202,7 @@ export function SearchDialog({
   }
 
   return jsx(ModalShell, {
-    title: 'Search',
+    title: t('search'),
     onClose,
     children: jsxs('div', {
       className: 'evo-search',
@@ -213,7 +214,7 @@ export function SearchDialog({
             jsx('input', {
               type: 'text',
               className: 'evo-search-input',
-              placeholder: 'Search current view…',
+              placeholder: t('searchCurrentView'),
               value: query,
               onInput: (e) => { setQuery(e.currentTarget.value); searchDom(e.currentTarget.value) },
             }),
@@ -222,14 +223,14 @@ export function SearchDialog({
               className: 'evo-btn evo-btn-run',
               disabled: query.trim() === '' || searching,
               onClick: searchFull,
-              children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: searching ? 'Searching…' : 'Full history' })] }),
+              children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: searching ? t('searching') : t('fullHistory') })] }),
             }),
           ],
         }),
         domHits.length > 0 && jsxs('div', {
           className: 'evo-search-section',
           children: [
-            jsx('div', { className: 'evo-search-section-title', children: `Current view（${domHits.length}）` }),
+            jsx('div', { className: 'evo-search-section-title', children: `${t('currentView')}（${domHits.length}）` }),
             jsx('div', {
               className: 'evo-search-results',
               children: domHits.map((hit) => jsx('button', {
@@ -246,7 +247,7 @@ export function SearchDialog({
           children: [
             jsx('div', { className: 'evo-search-section-title', children: `Full history（${historyHits.length}）` }),
             historyHits.length === 0
-              ? jsx('div', { className: 'evo-search-empty', children: 'No matches in full history' })
+              ? jsx('div', { className: 'evo-search-empty', children: t('noMatches') })
               : jsx('div', {
                   className: 'evo-search-results',
                   children: historyHits.map((hit, i) => jsx('button', {
@@ -277,7 +278,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
     ['Esc', '关闭候选；运行中打开停止确认'],
   ]
   return jsx(ModalShell, {
-    title: 'Keyboard shortcuts',
+    title: t('shortcuts'),
     onClose,
     children: jsx('div', {
       className: 'evo-shortcuts',
@@ -330,16 +331,16 @@ export function ModelSelectorDialog({ onClose }: { onClose: () => void }) {
   }
 
   return jsx(ModalShell, {
-    title: 'Select model',
+    title: t('selectModel'),
     onClose,
     children: jsxs('div', {
       className: 'evo-models',
       children: [
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
         groups === null
-          ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+          ? jsx('div', { className: 'evo-setting-hint', children: t('loading') })
           : groups.length === 0
-            ? jsx('div', { className: 'evo-setting-hint', children: 'No models available' })
+            ? jsx('div', { className: 'evo-setting-hint', children: t('noModels') })
             : jsx('div', {
                 className: 'evo-model-list',
                 children: groups.map((group) => jsxs('div', {
@@ -387,7 +388,7 @@ export function ConfirmDialog({
         jsxs('div', {
           className: 'evo-confirm-actions',
           children: [
-            jsx('button', { type: 'button', className: 'evo-btn', onClick: onClose, children: 'Cancel' }),
+            jsx('button', { type: 'button', className: 'evo-btn', onClick: onClose, children: t('cancel') }),
             jsx('button', {
               type: 'button',
               className: danger ? 'evo-btn evo-btn-danger' : 'evo-btn evo-btn-run',

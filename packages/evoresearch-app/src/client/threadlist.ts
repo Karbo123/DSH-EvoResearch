@@ -197,7 +197,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                         className: 'evo-tl-rename-input',
                         value: renameValue,
                         autoFocus: true,
-                        placeholder: 'Rename session',
+                        placeholder: t('renameSession'),
                         onInput: (e) => setRenameValue(e.currentTarget.value),
                         onKeyDown: (e) => {
                           if (e.key === 'Enter') {
@@ -209,8 +209,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                       jsx('button', {
                         type: 'button',
                         className: 'evo-tl-row-act',
-                        title: 'Save',
-                        'aria-label': 'Save',
+                        title: t('save'),
+                        'aria-label': t('save'),
                         onClick: () => { void onRename(s.id, renameValue.trim()).then((ok) => { if (ok) setRenaming(null) }) },
                         children: jsx(Check, {}),
                       }),
@@ -230,9 +230,9 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                           jsxs('div', {
                             className: 'evo-tl-row-title',
                             children: [
-                              runningIds.has(s.id) && jsx('span', { className: 'evo-tl-running', title: 'Running' }),
-                              tagColors[s.id] !== undefined && jsx('span', { className: 'evo-tl-color-dot', style: { background: tagColors[s.id] }, title: 'Tagged' }),
-                              pinnedIds.has(s.id) && jsx('span', { className: 'evo-tl-pin-badge', title: 'Pinned', children: jsx(Pin, {}) }),
+                              runningIds.has(s.id) && jsx('span', { className: 'evo-tl-running', title: t('runningDot') }),
+                              tagColors[s.id] !== undefined && jsx('span', { className: 'evo-tl-color-dot', style: { background: tagColors[s.id] }, title: t('tagged') }),
+                              pinnedIds.has(s.id) && jsx('span', { className: 'evo-tl-pin-badge', title: t('pinned'), children: jsx(Pin, {}) }),
                               jsx('span', { className: 'evo-tl-title-text', children: s.displayTitle ?? s.id.slice(0, 12) }),
                             ],
                           }),
@@ -247,8 +247,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                         className: 'evo-tl-color-swatch',
                         'data-active': tagColors[s.id] === color || undefined,
                         style: { background: color },
-                        title: tagColors[s.id] === color ? 'Remove tag' : 'Tag',
-                        'aria-label': tagColors[s.id] === color ? 'Remove tag color' : 'Set tag color',
+                        title: tagColors[s.id] === color ? t('removeTag') : t('tag'),
+                        'aria-label': tagColors[s.id] === color ? t('removeTagColor') : t('setTagColor'),
                         onClick: (e: { stopPropagation(): void }) => {
                           e.stopPropagation()
                           onSetTagColor(s.id, tagColors[s.id] === color ? null : color)
@@ -262,8 +262,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                         jsx('button', {
                           type: 'button',
                           className: 'evo-tl-row-act',
-                          title: 'Tag color',
-                          'aria-label': 'Tag color',
+                          title: t('tagColor'),
+                          'aria-label': t('tagColor'),
                           'data-on': colorFor === s.id || undefined,
                           onClick: (e: { stopPropagation(): void }) => {
                             e.stopPropagation()
@@ -274,8 +274,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                         jsx('button', {
                           type: 'button',
                           className: 'evo-tl-row-act',
-                          title: pinnedIds.has(s.id) ? 'Unpin' : 'Pin',
-                          'aria-label': pinnedIds.has(s.id) ? 'Unpin' : 'Pin',
+                          title: pinnedIds.has(s.id) ? t('unpin') : t('pin'),
+                          'aria-label': pinnedIds.has(s.id) ? t('unpin') : t('pin'),
                           'data-on': pinnedIds.has(s.id) || undefined,
                           onClick: (e: { stopPropagation(): void }) => {
                             e.stopPropagation()
@@ -286,16 +286,16 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                         jsx('button', {
                           type: 'button',
                           className: 'evo-tl-row-act',
-                          title: 'Rename',
-                          'aria-label': 'Rename',
+                          title: t('rename'),
+                          'aria-label': t('rename'),
                           onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); setRenameValue(s.displayTitle ?? ''); setRenaming(s.id) },
                           children: jsx(Pencil, {}),
                         }),
                         jsx('button', {
                           type: 'button',
                           className: 'evo-tl-row-act',
-                          title: 'Side chat from this session',
-                          'aria-label': 'Side chat',
+                          title: t('sideChatFromThis'),
+                          'aria-label': t('sideChatFromThis'),
                           onClick: (e: { stopPropagation(): void }) => {
                             e.stopPropagation()
                             forkRow(s.id)
@@ -305,8 +305,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                         jsx('button', {
                           type: 'button',
                           className: 'evo-tl-row-act',
-                          title: 'Export JSON',
-                          'aria-label': 'Export JSON',
+                          title: t('exportJson'),
+                          'aria-label': t('exportJson'),
                           onClick: (e: { stopPropagation(): void }) => {
                             e.stopPropagation()
                             onExport(s.id, 'json', s.displayTitle ?? s.id.slice(0, 12))
@@ -316,8 +316,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                         jsx('button', {
                           type: 'button',
                           className: 'evo-tl-row-act',
-                          title: 'Export Markdown',
-                          'aria-label': 'Export Markdown',
+                          title: t('exportMarkdown'),
+                          'aria-label': t('exportMarkdown'),
                           onClick: (e: { stopPropagation(): void }) => {
                             e.stopPropagation()
                             onExport(s.id, 'markdown', s.displayTitle ?? s.id.slice(0, 12))
@@ -328,19 +328,19 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                           ? jsx('button', {
                               type: 'button',
                               className: 'evo-tl-row-act evo-tl-del-confirm',
-                              title: 'Confirm delete — this cannot be undone',
-                              'aria-label': 'Confirm delete',
+                              title: t('confirmDeleteTitle'),
+                              'aria-label': t('confirmDeleteTitle'),
                               onClick: (e: { stopPropagation(): void }) => {
                                 e.stopPropagation()
                                 runDelete(s.id)
                               },
-                              children: 'Delete?',
+                              children: t('deleteQ'),
                             })
                           : jsx('button', {
                               type: 'button',
                               className: 'evo-tl-row-act evo-tl-del',
-                              title: 'Delete session',
-                              'aria-label': 'Delete session',
+                              title: t('deleteSession'),
+                              'aria-label': t('deleteSession'),
                               onClick: (e: { stopPropagation(): void }) => {
                                 e.stopPropagation()
                                 armDelete(s.id)

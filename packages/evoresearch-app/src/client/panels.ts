@@ -7,6 +7,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
+import { t } from './i18n'
 import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
   Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
@@ -14,8 +15,8 @@ import {
 } from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {
-  idea: 'Idea', method: 'Method', experiment: 'Experiment',
-  related_work: 'Related Work', reproduction: 'Reproduction', project: 'Project', general: 'General',
+  idea: '想法', method: '方法', experiment: '实验',
+  related_work: '相关工作', reproduction: '复现', project: '项目', general: '通用',
 }
 
 /** 面板外壳（标题 + 内容）。 */
@@ -33,7 +34,7 @@ function PanelShell({ icon, title, children }: { icon: any; title: string; child
 }
 
 function LoadingRow() {
-  return jsx('div', { className: 'evo-panel-hint', children: 'Loading…' })
+  return jsx('div', { className: 'evo-panel-hint', children: t('loading') })
 }
 
 /** 简单 POST JSON 封装。 */
@@ -106,11 +107,11 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const projectsRow = jsxs('div', {
     className: 'evo-panel-row',
     children: [
-      jsx('span', { className: 'evo-panel-row-label', children: 'Projects' }),
+      jsx('span', { className: 'evo-panel-row-label', children: t('projects') }),
       projects === null
         ? jsx(LoadingRow, {})
         : (projects ?? []).length === 0
-          ? jsx('span', { className: 'evo-panel-hint', children: 'No projects yet' })
+          ? jsx('span', { className: 'evo-panel-hint', children: t('noProjectsYet') })
           : jsx('div', {
               className: 'evo-panel-tags',
               children: (projects ?? []).map((p) => jsx('span', { className: 'evo-panel-tag', children: p.name }, p.name)),
@@ -121,13 +122,13 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const catalogRow = jsxs('div', {
     className: 'evo-panel-row',
     children: [
-      jsx('span', { className: 'evo-panel-row-label', children: 'Turn Catalog' }),
+      jsx('span', { className: 'evo-panel-row-label', children: t('turnCatalog') }),
       catalog === null
         ? jsx(LoadingRow, {})
         : jsx('div', {
             className: 'evo-panel-stats',
             children: [
-              jsx('div', { className: 'evo-panel-stat', children: jsxs(Fragment, { children: [jsx('div', { className: 'evo-panel-stat-num', children: totalTurns }), jsx('div', { className: 'evo-panel-stat-label', children: 'turns' })] }) }),
+              jsx('div', { className: 'evo-panel-stat', children: jsxs(Fragment, { children: [jsx('div', { className: 'evo-panel-stat-num', children: totalTurns }), jsx('div', { className: 'evo-panel-stat-label', children: t('turns') })] }) }),
               ...(catalog ?? []).map((item) => jsx('div', {
                 className: 'evo-panel-stat',
                 children: jsxs(Fragment, {
@@ -142,11 +143,11 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const goalsRow = jsxs('div', {
     className: 'evo-panel-row',
     children: [
-      jsx('span', { className: 'evo-panel-row-label', children: 'Goals' }),
+      jsx('span', { className: 'evo-panel-row-label', children: t('goals') }),
       goals === null
         ? jsx(LoadingRow, {})
         : (goals ?? []).length === 0
-          ? jsx('span', { className: 'evo-panel-hint', children: 'No active goals' })
+          ? jsx('span', { className: 'evo-panel-hint', children: t('noActiveGoals') })
           : jsx('div', {
               className: 'evo-panel-list',
               children: (goals ?? []).map((g) => jsx('div', {
@@ -154,7 +155,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                 children: jsxs(Fragment, {
                   children: [
                     jsx(Target, {}),
-                    jsx('span', { className: 'evo-panel-item-main', children: g.title ?? g.id ?? 'Goal' }),
+                    jsx('span', { className: 'evo-panel-item-main', children: g.title ?? g.id ?? t('goal') }),
                     g.status !== undefined && jsx('span', { className: 'evo-panel-item-badge', children: g.status }),
                     g.progress !== undefined && jsx('span', { className: 'evo-panel-item-num', children: `${Math.round(g.progress * 100)}%` }),
                   ],
@@ -172,10 +173,10 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
         jsxs('div', {
           className: 'evo-skill-tabs',
           children: [
-            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'overview' || undefined, onClick: () => setTab('overview'), children: 'Overview' }),
-            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'history' || undefined, onClick: () => setTab('history'), children: 'History' }),
-            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'identity' || undefined, onClick: () => setTab('identity'), children: 'Identity' }),
-            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'knowledge' || undefined, onClick: () => setTab('knowledge'), children: 'Knowledge' }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'overview' || undefined, onClick: () => setTab('overview'), children: t('overview') }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'history' || undefined, onClick: () => setTab('history'), children: t('history') }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'identity' || undefined, onClick: () => setTab('identity'), children: t('identity') }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'knowledge' || undefined, onClick: () => setTab('knowledge'), children: t('knowledge') }),
           ],
         }),
         tab === 'knowledge'
@@ -195,7 +196,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                 observations === null
                   ? jsx(LoadingRow, {})
                   : observations.length === 0
-                    ? jsx('span', { className: 'evo-panel-hint', children: 'No observations yet' })
+                    ? jsx('span', { className: 'evo-panel-hint', children: t('noObservationsYet') })
                     : jsx('div', {
                         className: 'evo-panel-list',
                         children: observations.map((o) => jsxs('div', {
@@ -205,7 +206,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                               className: 'evo-skill-head',
                               children: [
                                 jsx('span', { className: 'evo-panel-item-main', children: o.title }),
-                                o.status === 'superseded' && jsx('span', { className: 'evo-skill-status rejected', children: 'superseded' }),
+                                o.status === 'superseded' && jsx('span', { className: 'evo-skill-status rejected', children: t('superseded') }),
                               ],
                             }),
                             o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: `superseded by ${o.supersededBy.slice(0, 18)}` }),
@@ -250,7 +251,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                 turns === null
                   ? jsx(LoadingRow, {})
                   : turns.length === 0
-                    ? jsx('span', { className: 'evo-panel-hint', children: 'No research turns yet' })
+                    ? jsx('span', { className: 'evo-panel-hint', children: t('noResearchTurnsYet') })
                     : jsx('div', {
                         className: 'evo-panel-list',
                         children: turns.map((turn) => jsxs('div', {
@@ -270,8 +271,8 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                             jsx('button', {
                               type: 'button',
                               className: 'evo-panel-act',
-                              title: 'Open thread',
-                              'aria-label': 'Open thread',
+                              title: t('openThread'),
+                              'aria-label': t('openThread'),
                               onClick: () => onOpenThread(turn.sessionId),
                               children: jsx(ExternalLink, {}),
                             }),
@@ -282,7 +283,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                   type: 'button',
                   className: 'evo-btn evo-btn-run',
                   onClick: () => loadTurns(turnOffset + TURN_PAGE),
-                  children: 'Load earlier',
+                  children: t('loadEarlier'),
                 }),
               ],
             })
@@ -396,58 +397,58 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
 
   return jsx(PanelShell, {
     icon: Clock,
-    title: 'Scheduled',
+    title: t('scheduled'),
     children: jsxs(Fragment, {
       children: [
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
         jsx('div', {
           className: 'evo-panel-form',
           children: [
-            jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: 'Task name', value: name, onInput: (e) => setName(e.currentTarget.value) }),
+            jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: t('taskName'), value: name, onInput: (e) => setName(e.currentTarget.value) }),
             // §42.2 Schedule Builder：daily/weekly/monthly/custom
-            jsx('div', { className: 'evo-sched-modes', role: 'group', 'aria-label': 'Schedule mode', children: (['daily', 'weekly', 'monthly', 'custom'] as const).map((m) => jsx('button', {
+            jsx('div', { className: 'evo-sched-modes', role: 'group', 'aria-label': t('scheduleMode'), children: (['daily', 'weekly', 'monthly', 'custom'] as const).map((m) => jsx('button', {
               type: 'button',
               className: 'evo-insp-subtab',
               'data-active': mode === m || undefined,
               onClick: () => setMode(m),
-              children: m === 'daily' ? 'Daily' : m === 'weekly' ? 'Weekly' : m === 'monthly' ? 'Monthly' : 'Custom',
+              children: m === 'daily' ? t('daily') : m === 'weekly' ? t('weekly') : m === 'monthly' ? t('monthly') : t('custom'),
             }, m)) }),
             jsx('div', { className: 'evo-sched-fields', children: [
               mode !== 'custom' && jsx('select', {
                 className: 'evo-panel-input evo-sched-select',
                 value: String(hour),
                 onChange: (e) => setHour(Number(e.currentTarget.value)),
-                'aria-label': 'Hour',
+                'aria-label': t('hour'),
                 children: Array.from({ length: 24 }, (_, i) => jsx('option', { value: String(i), children: `${String(i).padStart(2, '0')}:00` }, i)),
               }),
               mode !== 'custom' && jsx('select', {
                 className: 'evo-panel-input evo-sched-select',
                 value: String(minute),
                 onChange: (e) => setMinute(Number(e.currentTarget.value)),
-                'aria-label': 'Minute',
+                'aria-label': t('minute'),
                 children: [0, 15, 30, 45].map((m) => jsx('option', { value: String(m), children: `${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')}` }, m)),
               }),
               mode === 'weekly' && jsx('select', {
                 className: 'evo-panel-input evo-sched-select',
                 value: String(weekday),
                 onChange: (e) => setWeekday(Number(e.currentTarget.value)),
-                'aria-label': 'Weekday',
-                children: [['Mon', 1], ['Tue', 2], ['Wed', 3], ['Thu', 4], ['Fri', 5], ['Sat', 6], ['Sun', 0]].map(([label, v]) => jsx('option', { value: String(v), children: label }, v)),
+                'aria-label': t('weekday'),
+                children: [[t('weekdayMon'), 1], [t('weekdayTue'), 2], [t('weekdayWed'), 3], [t('weekdayThu'), 4], [t('weekdayFri'), 5], [t('weekdaySat'), 6], [t('weekdaySun'), 0]].map(([label, v]) => jsx('option', { value: String(v), children: label }, v)),
               }),
               mode === 'monthly' && jsx('select', {
                 className: 'evo-panel-input evo-sched-select',
                 value: String(dayOfMonth),
                 onChange: (e) => setDayOfMonth(Number(e.currentTarget.value)),
-                'aria-label': 'Day of month',
-                children: Array.from({ length: 28 }, (_, i) => jsx('option', { value: String(i + 1), children: `Day ${i + 1}` }, i + 1)),
+                'aria-label': t('dayOfMonth'),
+                children: Array.from({ length: 28 }, (_, i) => jsx('option', { value: String(i + 1), children: `${t('day')} ${i + 1}` }, i + 1)),
               }),
               mode === 'custom' && jsx('input', {
                 type: 'text',
                 className: 'evo-panel-input evo-panel-input-cron',
-                placeholder: 'cron (5 fields)',
+                placeholder: t('cronHint'),
                 value: cronInput,
                 onInput: (e) => setCronInput(e.currentTarget.value),
-                'aria-label': 'Custom cron',
+                'aria-label': t('customCron'),
               }),
               jsx('code', { className: 'evo-sched-preview', children: cronPreview }),
             ] }),
@@ -458,14 +459,14 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
               onClick: () => applyTemplate(t),
               children: t.name,
             }, t.name)) }),
-            jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: 'Prompt (executed at cron time)', value: prompt, onInput: (e) => setPrompt(e.currentTarget.value) }),
-            jsx('button', { type: 'button', className: 'evo-panel-add', disabled: adding || !name.trim() || !prompt.trim(), onClick: addTask, children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: 'Add' })] }) }),
+            jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: t('promptHint'), value: prompt, onInput: (e) => setPrompt(e.currentTarget.value) }),
+            jsx('button', { type: 'button', className: 'evo-panel-add', disabled: adding || !name.trim() || !prompt.trim(), onClick: addTask, children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: t('add') })] }) }),
           ],
         }),
         tasks === null
           ? jsx(LoadingRow, {})
           : (tasks ?? []).length === 0
-            ? jsx('span', { className: 'evo-panel-hint', children: 'No scheduled tasks' })
+            ? jsx('span', { className: 'evo-panel-hint', children: t('noScheduledTasks') })
             : jsx('div', {
                 className: 'evo-panel-list',
                 children: (tasks ?? []).map((task) => {
@@ -478,20 +479,20 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
                         jsx(ListChecks, {}),
                         jsx('span', { className: 'evo-panel-item-main', children: task.name ?? taskId }),
                         task.cron !== undefined && jsx('code', { className: 'evo-panel-item-code', children: task.cron }),
-                        nextAt !== null && jsx('span', { className: 'evo-panel-item-num', title: 'Next run', children: nextAt }),
+                        nextAt !== null && jsx('span', { className: 'evo-panel-item-num', title: t('nextRun'), children: nextAt }),
                         task.lastResultThreadId !== undefined && jsx('button', {
                           type: 'button',
                           className: 'evo-panel-act',
-                          title: 'Open result thread',
-                          'aria-label': 'Open result thread',
+                          title: t('openResultThread'),
+                          'aria-label': t('openResultThread'),
                           onClick: () => onOpenThread(task.lastResultThreadId as string),
                           children: jsx(ExternalLink, {}),
                         }),
                         jsx('button', {
                           type: 'button',
                           className: 'evo-panel-act',
-                          title: 'Run now',
-                          'aria-label': 'Run now',
+                          title: t('runNow'),
+                          'aria-label': t('runNow'),
                           disabled: runningNow === taskId,
                           onClick: () => runNow(taskId),
                           children: jsx(Play, {}),
@@ -499,13 +500,13 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
                         jsx('button', {
                           type: 'button',
                           className: 'evo-panel-act',
-                          title: 'Report to main chat',
-                          'aria-label': 'Report to main chat',
+                          title: t('reportToChat'),
+                          'aria-label': t('reportToChat'),
                           disabled: reporting === taskId,
                           onClick: () => reportToChat(taskId),
                           children: jsx(Send, {}),
                         }),
-                        jsx('button', { type: 'button', className: 'evo-panel-del', title: 'Remove', onClick: () => removeTask(taskId), children: jsx(Trash2, {}) }),
+                        jsx('button', { type: 'button', className: 'evo-panel-del', title: t('remove'), onClick: () => removeTask(taskId), children: jsx(Trash2, {}) }),
                       ],
                     }),
                   }, taskId)
@@ -561,10 +562,10 @@ function MarketplaceView() {
           jsx('input', {
             type: 'text',
             className: 'evo-panel-input',
-            placeholder: 'Search skills…',
+            placeholder: t('searchSkills'),
             value: query,
             onInput: (e) => setQuery(e.currentTarget.value),
-            'aria-label': 'Search skills',
+            'aria-label': t('searchSkills'),
           }),
           jsx('span', { className: 'evo-panel-hint', children: `${rows.length} skills` }),
         ],
@@ -572,7 +573,7 @@ function MarketplaceView() {
       skills === null
         ? jsx(LoadingRow, {})
         : rows.length === 0
-          ? jsx('span', { className: 'evo-panel-hint', children: 'No skills found' })
+          ? jsx('span', { className: 'evo-panel-hint', children: t('noSkillsFound') })
           : jsx('div', {
               className: 'evo-panel-list',
               children: rows.map((s) => jsxs('div', {
@@ -594,7 +595,7 @@ function MarketplaceView() {
                   expanded === s.name && jsxs('div', {
                     className: 'evo-skill-detail',
                     children: [
-                      s.whenToUse !== undefined && s.whenToUse !== '' && jsx('div', { children: jsxs(Fragment, { children: [jsx('b', { children: 'When to use: ' }), jsx('span', { children: s.whenToUse })] }) }),
+                      s.whenToUse !== undefined && s.whenToUse !== '' && jsx('div', { children: jsxs(Fragment, { children: [jsx('b', { children: t('whenToUse') }), jsx('span', { children: s.whenToUse })] }) }),
                       s.invocation !== undefined && jsx('div', { className: 'evo-skill-src', children: `model ${s.invocation.modelInvocable ? '✓' : '✗'} · user ${s.invocation.userInvocable ? '✓' : '✗'}` }),
                     ],
                   }),
@@ -666,32 +667,32 @@ export function SkillsPanel() {
       }),
       // §42.9 AutoSkills 调度设置：enabled / mode / cadence / time（保存时 reconcile scheduler）
       jsx('div', { className: 'evo-panel-form', children: [
-        jsx('div', { className: 'evo-panel-label', children: 'AutoSkills schedule' }),
+        jsx('div', { className: 'evo-panel-label', children: t('autoskillsSchedule') }),
         jsxs('div', { className: 'evo-sched-fields', children: [
           jsx('label', { className: 'evo-panel-check', children: jsxs(Fragment, { children: [
             jsx('input', { type: 'checkbox', checked: asEnabled, onChange: (e) => setAsEnabled(e.currentTarget.checked) }),
-            jsx('span', { children: 'Enabled' }),
+            jsx('span', { children: t('enabled') }),
           ] }) }),
           jsx('select', {
             className: 'evo-panel-input evo-sched-select',
             value: asMode,
             onChange: (e) => setAsMode(e.currentTarget.value),
-            'aria-label': 'AutoSkills mode',
-            children: [jsx('option', { value: 'review', children: 'Review' }, 'review'), jsx('option', { value: 'auto', children: 'Auto' }, 'auto')],
+            'aria-label': t('autoskillsMode'),
+            children: [jsx('option', { value: 'review', children: t('review') }, 'review'), jsx('option', { value: 'auto', children: t('auto') }, 'auto')],
           }),
           jsx('select', {
             className: 'evo-panel-input evo-sched-select',
             value: asCadence,
             onChange: (e) => setAsCadence(e.currentTarget.value),
-            'aria-label': 'AutoSkills cadence',
-            children: [['nightly', 'Nightly'], ['weekly', 'Weekly'], ['monthly', 'Monthly']].map(([v, label]) => jsx('option', { value: v, children: label }, v)),
+            'aria-label': t('autoskillsCadence'),
+            children: [['nightly', t('nightly')], ['weekly', t('weekly')], ['monthly', t('monthly')]].map(([v, label]) => jsx('option', { value: v, children: label }, v)),
           }),
           jsx('input', {
             type: 'time',
             className: 'evo-panel-input evo-sched-select',
             value: asTime,
             onChange: (e) => setAsTime(e.currentTarget.value),
-            'aria-label': 'AutoSkills time',
+            'aria-label': t('autoskillsTime'),
           }),
           jsx('button', {
             type: 'button',
@@ -703,7 +704,7 @@ export function SkillsPanel() {
                 .then((r) => { setAsSaving(false); setAsCron(r.cron ?? null); setError(r.saved === true ? null : '保存失败') })
                 .catch((e: any) => { setAsSaving(false); setError(String(e?.message ?? e)) })
             },
-            children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: asSaving ? 'Saving…' : 'Save' })] }),
+            children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: asSaving ? t('saving') : t('save') })] }),
           }),
         ] }),
         asCron !== null && jsx('code', { className: 'evo-sched-preview', children: `cron ${asCron}` }),
@@ -712,7 +713,7 @@ export function SkillsPanel() {
       proposals === null
         ? jsx(LoadingRow, {})
         : proposals.length === 0
-          ? jsx('span', { className: 'evo-panel-hint', children: 'No skill proposals yet' })
+          ? jsx('span', { className: 'evo-panel-hint', children: t('noSkillProposals') })
           : jsx('div', {
               className: 'evo-panel-list',
               children: proposals.map((p) => jsxs('div', {
@@ -737,14 +738,14 @@ export function SkillsPanel() {
                         className: 'evo-btn evo-btn-ok',
                         disabled: busy !== null,
                         onClick: () => act(p.proposalId, 'approve'),
-                        children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: 'Approve' })] }),
+                        children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: t('approve') })] }),
                       }),
                       jsx('button', {
                         type: 'button',
                         className: 'evo-btn evo-btn-danger',
                         disabled: busy !== null,
                         onClick: () => act(p.proposalId, 'reject'),
-                        children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: 'Reject' })] }),
+                        children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: t('reject') })] }),
                       }),
                     ],
                   }),
@@ -755,7 +756,7 @@ export function SkillsPanel() {
                       className: 'evo-btn evo-btn-run',
                       disabled: busy !== null,
                       onClick: () => act(p.proposalId, 'run'),
-                      children: jsxs(Fragment, { children: [jsx(Play, {}), jsx('span', { children: 'Run' })] }),
+                      children: jsxs(Fragment, { children: [jsx(Play, {}), jsx('span', { children: t('run') })] }),
                     }),
                   }),
                 ],
@@ -766,14 +767,14 @@ export function SkillsPanel() {
 
   return jsx(PanelShell, {
     icon: GraduationCap,
-    title: 'Research Skills',
+    title: t('researchSkills'),
     children: jsxs(Fragment, {
       children: [
         jsxs('div', {
           className: 'evo-skill-tabs',
           children: [
-            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': view === 'proposals' || undefined, onClick: () => setView('proposals'), children: 'Proposals' }),
-            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': view === 'marketplace' || undefined, onClick: () => setView('marketplace'), children: 'Marketplace' }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': view === 'proposals' || undefined, onClick: () => setView('proposals'), children: t('proposals') }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': view === 'marketplace' || undefined, onClick: () => setView('marketplace'), children: t('marketplace') }),
           ],
         }),
         view === 'marketplace' ? jsx(MarketplaceView, {}) : proposalsView,
@@ -815,7 +816,7 @@ export function WorkspacePanel() {
 
   return jsx(PanelShell, {
     icon: FolderGit2,
-    title: 'Workspace',
+    title: t('workspace'),
     children: jsxs(Fragment, {
       children: [
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
@@ -825,14 +826,14 @@ export function WorkspacePanel() {
             jsx('input', {
               type: 'text',
               className: 'evo-panel-input',
-              placeholder: 'Project source path (folder)',
+              placeholder: t('projectPathHint'),
               value: sourcePath,
               onInput: (e) => setSourcePath(e.currentTarget.value),
             }),
             jsx('input', {
               type: 'text',
               className: 'evo-panel-input',
-              placeholder: 'Project name (optional)',
+              placeholder: t('projectNameHint'),
               value: name,
               onInput: (e) => setName(e.currentTarget.value),
             }),
@@ -841,22 +842,22 @@ export function WorkspacePanel() {
               className: 'evo-panel-add',
               disabled: importing || !sourcePath.trim(),
               onClick: doImport,
-              children: jsxs(Fragment, { children: [jsx(FolderUp, {}), jsx('span', { children: 'Import' })] }),
+              children: jsxs(Fragment, { children: [jsx(FolderUp, {}), jsx('span', { children: t('importProject') })] }),
             }),
           ],
         }),
         jsxs('div', {
           className: 'evo-panel-row',
           children: [
-            jsx('span', { className: 'evo-panel-row-label', children: 'Projects' }),
+            jsx('span', { className: 'evo-panel-row-label', children: t('projects') }),
             jsx('span', { style: { flex: 1 } }),
-            jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: load, children: jsx(RefreshCw, {}) }),
+            jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('refresh'), onClick: load, children: jsx(RefreshCw, {}) }),
           ],
         }),
         projects === null
           ? jsx(LoadingRow, {})
           : (projects ?? []).length === 0
-            ? jsx('span', { className: 'evo-panel-hint', children: 'No projects yet' })
+            ? jsx('span', { className: 'evo-panel-hint', children: t('noProjectsYet') })
             : jsx('div', {
                 className: 'evo-panel-list',
                 children: (projects ?? []).map((p) => jsx('div', {
@@ -911,22 +912,22 @@ export function ChannelsPanel() {
 
   return jsx(PanelShell, {
     icon: Cable,
-    title: 'Channels',
+    title: t('channels'),
     children: jsxs(Fragment, {
       children: [
         jsxs('div', {
           className: 'evo-panel-row',
           children: [
-            jsx('span', { className: 'evo-panel-row-label', children: 'Messaging channels' }),
+            jsx('span', { className: 'evo-panel-row-label', children: t('messagingChannels') }),
             jsx('span', { style: { flex: 1 } }),
-            jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: load, children: jsx(RefreshCw, {}) }),
+            jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('refresh'), onClick: load, children: jsx(RefreshCw, {}) }),
           ],
         }),
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
         channels === null
           ? jsx(LoadingRow, {})
           : (channels ?? []).length === 0
-            ? jsx('span', { className: 'evo-panel-hint', children: 'No messaging channels are available' })
+            ? jsx('span', { className: 'evo-panel-hint', children: t('noChannels') })
             : jsx('div', {
                 className: 'evo-panel-list',
                 children: (channels ?? []).map((c) => jsxs('div', {
@@ -934,13 +935,13 @@ export function ChannelsPanel() {
                   children: [
                     jsx(Cable, {}),
                     jsx('span', { className: 'evo-panel-item-main', children: c.name }),
-                    jsx('span', { className: `evo-channel-badge${c.online ? ' online' : ''}`, children: c.online ? 'online' : 'offline' }),
+                    jsx('span', { className: `evo-channel-badge${c.online ? ' online' : ''}`, children: c.online ? t('online') : t('offline') }),
                     c.received + c.sent > 0 && jsx('span', { className: 'evo-channel-counts', children: `↓${c.received} ↑${c.sent}` }),
                     jsx('button', {
                       type: 'button',
                       className: `evo-channel-toggle${c.online ? ' stop' : ''}`,
                       disabled: busy !== null,
-                      title: c.online ? 'Stop channel' : 'Start channel',
+                      title: c.online ? t('stopChannel') : t('startChannel'),
                       onClick: () => toggle(c),
                       children: c.online ? jsx(PowerOff, {}) : jsx(Power, {}),
                     }),
@@ -999,22 +1000,22 @@ export function TeamPanel() {
 
   return jsx(PanelShell, {
     icon: Users,
-    title: 'Team',
+    title: t('team'),
     children: jsxs(Fragment, {
       children: [
         jsxs('div', {
           className: 'evo-panel-row',
           children: [
-            jsx('span', { className: 'evo-panel-row-label', children: 'Research experts' }),
+            jsx('span', { className: 'evo-panel-row-label', children: t('researchExperts') }),
             jsx('span', { style: { flex: 1 } }),
             invitedCount > 0 && jsx('button', {
               type: 'button',
               className: 'evo-btn evo-btn-danger',
               disabled: busy !== null,
               onClick: clearAll,
-              children: jsxs(Fragment, { children: [jsx(Ban, {}), jsx('span', { children: 'Clear' })] }),
+              children: jsxs(Fragment, { children: [jsx(Ban, {}), jsx('span', { children: t('clear') })] }),
             }),
-            jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: load, children: jsx(RefreshCw, {}) }),
+            jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('refresh'), onClick: load, children: jsx(RefreshCw, {}) }),
           ],
         }),
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
@@ -1034,13 +1035,13 @@ export function TeamPanel() {
                     ],
                   }),
                   e.invitedAt !== 0
-                    ? jsx('span', { className: 'evo-channel-badge online', children: 'invited' })
+                    ? jsx('span', { className: 'evo-channel-badge online', children: t('invited') })
                     : jsx('button', {
                         type: 'button',
                         className: 'evo-btn evo-btn-ok',
                         disabled: busy !== null,
                         onClick: () => invite(e.name),
-                        children: jsxs(Fragment, { children: [jsx(UserPlus, {}), jsx('span', { children: 'Invite' })] }),
+                        children: jsxs(Fragment, { children: [jsx(UserPlus, {}), jsx('span', { children: t('invite') })] }),
                       }),
                 ],
               }, e.name)),

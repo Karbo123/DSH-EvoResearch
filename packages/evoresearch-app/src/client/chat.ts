@@ -116,8 +116,8 @@ function CopyButton({ text }: { text: string }) {
   return jsx('button', {
     type: 'button',
     className: 'evo-msg-copy',
-    title: copied ? 'Copied' : 'Copy',
-    'aria-label': copied ? 'Copied' : 'Copy',
+    title: copied ? t('copied') : t('copy'),
+    'aria-label': copied ? t('copied') : t('copy'),
     onClick: (e: { stopPropagation(): void }) => {
       e.stopPropagation()
       copyText(text)
@@ -187,7 +187,7 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
         className: 'evo-tool-head',
         children: [
           status === 'running'
-            ? jsx('span', { className: 'evo-tool-spinner', 'aria-label': 'running' })
+            ? jsx('span', { className: 'evo-tool-spinner', 'aria-label': t('runningDot') })
             : status === 'error'
               ? jsx(XCircle, {})
               : jsx(CheckCircle2, {}),
@@ -199,7 +199,7 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
         type: 'button',
         className: 'evo-tool-args',
         onClick: () => setArgsOpen((v) => !v),
-        title: argsOpen ? 'Collapse arguments' : 'Expand arguments',
+        title: argsOpen ? t('collapseArguments') : t('expandArguments'),
         children: jsxs(Fragment, {
           children: [
             jsx(ChevronRight, { className: argsOpen ? 'evo-tool-chev open' : 'evo-tool-chev' }),
@@ -211,10 +211,10 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
         type: 'button',
         className: 'evo-tool-result',
         onClick: () => setResultOpen((v) => !v),
-        title: resultOpen ? 'Collapse result' : 'Expand result',
+        title: resultOpen ? t('collapseResult') : t('expandResult'),
         children: jsxs(Fragment, {
           children: [
-            jsx('span', { className: 'evo-tool-result-label', children: tool.isError ? 'error' : 'result' }),
+            jsx('span', { className: 'evo-tool-result-label', children: tool.isError ? t('toolError') : t('toolResult') }),
             jsx('span', { className: 'evo-tool-result-text', children: resultOpen || !resultTruncated ? tool.result : `${(tool.result ?? '').slice(0, 160)}…` }),
           ],
         }),
@@ -241,8 +241,8 @@ function UserBubble({ text, time, nodeKey, highlight, onEdit }: { text: string; 
               onEdit !== undefined && jsx('button', {
                 type: 'button',
                 className: 'evo-msg-copy',
-                title: 'Edit（回填输入框）',
-                'aria-label': 'Edit message',
+                title: t('editMsg'),
+                'aria-label': t('editMsg'),
                 onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onEdit(text) },
                 children: jsx(PenLine, {}),
               }),
@@ -286,7 +286,7 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: Chat
                 children: jsxs(Fragment, {
                   children: [
                     jsx(ChevronRight, { className: `evo-tool-chev${thinkingOpen ? ' open' : ''}` }),
-                    jsx('span', { children: 'Thinking' }),
+                    jsx('span', { children: t('thinking') }),
                   ],
                 }),
               }),
@@ -317,9 +317,9 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: Chat
                 children: jsxs(Fragment, {
                   children: [
                     jsx(ChevronRight, { className: `evo-tool-chev${toolsOpen ? ' open' : ''}` }),
-                    anyRunning ? jsx('span', { className: 'evo-tool-spinner', 'aria-label': 'running' }) : jsx(Wrench, {}),
+                    anyRunning ? jsx('span', { className: 'evo-tool-spinner', 'aria-label': t('runningDot') }) : jsx(Wrench, {}),
                     jsx('span', { children: `Tools · ${tools.length}` }),
-                    jsx('span', { className: 'evo-tool-group-state', children: anyRunning ? 'running' : 'done' }),
+                    jsx('span', { className: 'evo-tool-group-state', children: anyRunning ? t('runningDot') : t('done') }),
                   ],
                 }),
               }),
@@ -362,13 +362,13 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
   }, [cwd])
   if (stats === null) return null
   const cards = [
-    { label: 'Memory turns', value: stats.turns },
-    { label: 'Categories', value: stats.categories },
-    { label: 'Active goals', value: stats.goals },
+    { label: t('memoryTurns'), value: stats.turns },
+    { label: t('categories'), value: stats.categories },
+    { label: t('activeGoals'), value: stats.goals },
   ]
   return jsx('div', {
     className: 'evo-dashboard',
-    'aria-label': 'Research dashboard',
+    'aria-label': t('researchDashboard'),
     children: cards.map((card) => jsxs('div', {
       className: 'evo-dashboard-card',
       children: [
@@ -880,13 +880,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 children: jsxs('div', {
                   className: 'evo-clear-notice-box',
                   children: [
-                    jsx('div', { className: 'evo-clear-notice-title', children: 'View cleared' }),
+                    jsx('div', { className: 'evo-clear-notice-title', children: t('viewCleared') }),
                     jsx('div', { className: 'evo-clear-notice-sub', children: '仅清空了本页展示，会话数据未删除；刷新页面即可恢复全部消息。' }),
                     jsx('button', {
                       type: 'button',
                       className: 'evo-btn evo-btn-run',
                       onClick: () => setClearView(false),
-                      children: 'Restore view',
+                      children: t('restoreView'),
                     }),
                   ],
                 }),
@@ -917,7 +917,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           children: [
             jsx(Command, {}),
             jsx('code', { className: 'evo-cmd-line', children: cmdResult?.line ?? '' }),
-            cmdRunning && cmdResult === null && jsx('span', { className: 'evo-cmd-running', children: 'running…' }),
+            cmdRunning && cmdResult === null && jsx('span', { className: 'evo-cmd-running', children: t('runningLower') }),
             cmdResult !== null && (cmdResult.kind === 'success' && cmdResult.text !== ''
               ? (() => {
                   // 结果文本含 GFM 表格 → Markdown 渲染成真表格（§23.3"文本或表格"）；否则等宽文本
@@ -930,8 +930,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
             cmdResult !== null && jsx('button', {
               type: 'button',
               className: 'evo-cmd-dismiss',
-              title: 'Dismiss',
-              'aria-label': 'Dismiss',
+              title: t('dismiss'),
+              'aria-label': t('dismiss'),
               onClick: () => setCmdResult(null),
               children: jsx(XIcon, {}),
             }),
@@ -946,7 +946,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
             className: 'evo-wf-bar',
             children: [
               jsx(ListTodo, {}),
-              jsx('span', { className: 'evo-wf-name', children: latestWorkflow.data?.name ?? 'Workflow' }),
+              jsx('span', { className: 'evo-wf-name', children: latestWorkflow.data?.name ?? t('workflow') }),
               jsx('span', { className: 'evo-wf-members', children: (latestWorkflow.data?.members ?? []).map((m) => jsx('span', {
                 className: `evo-wf-member${m.status === 'completed' ? ' done' : m.status === 'running' ? ' running' : ' failed'}`,
                 title: m.phase ?? m.status,
@@ -959,8 +959,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               jsx('button', {
                 type: 'button',
                 className: 'evo-wf-clear',
-                title: 'Clear workflow',
-                'aria-label': 'Clear workflow',
+                title: t('clearWorkflow'),
+                'aria-label': t('clearWorkflow'),
                 onClick: () => setActionDialog('wf-clear'),
                 children: jsx(XIcon, {}),
               }),
@@ -982,13 +982,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   className: 'evo-approval-head',
                   children: [
                     jsx(ShieldCheckIcon, {}),
-                    jsx('span', { children: 'Tool approval required' }),
+                    jsx('span', { children: t('toolApprovalRequired') }),
                   ],
                 }),
                 jsxs('div', {
                   className: 'evo-approval-body',
                   children: [
-                    jsx('code', { className: 'evo-approval-tool', children: payload.toolName ?? 'tool' }),
+                    jsx('code', { className: 'evo-approval-tool', children: payload.toolName ?? t('tool') }),
                     payload.callId !== undefined && jsx('span', { className: 'evo-approval-callid', children: payload.callId }),
                   ],
                 }),
@@ -1000,13 +1000,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       type: 'button',
                       className: 'evo-btn evo-btn-ok',
                       onClick: () => respondApproval(wait, 'allowed-once'),
-                      children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: 'Approve' })] }),
+                      children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: t('approve') })] }),
                     }),
                     jsx('button', {
                       type: 'button',
                       className: 'evo-btn evo-btn-danger',
                       onClick: () => respondApproval(wait, 'rejected'),
-                      children: jsxs(Fragment, { children: [jsx(ShieldX, {}), jsx('span', { children: 'Reject' })] }),
+                      children: jsxs(Fragment, { children: [jsx(ShieldX, {}), jsx('span', { children: t('reject') })] }),
                     }),
                   ],
                 }),
@@ -1029,7 +1029,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   className: 'evo-approval-head',
                   children: [
                     jsx(HelpCircle, {}),
-                    jsx('span', { children: questions.length > 1 ? `Question（${questions.length}）` : 'Question' }),
+                    jsx('span', { children: questions.length > 1 ? `${t('question')}（${questions.length}）` : t('question') }),
                   ],
                 }),
                 questions.map((q) => {
@@ -1063,7 +1063,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       jsx('input', {
                         type: 'text',
                         className: 'evo-question-custom',
-                        placeholder: 'Custom answer…',
+                        placeholder: t('customAnswer'),
                         value: custom,
                         onInput: (e: { currentTarget: HTMLInputElement }) => setQuestionCustom((prev) => ({ ...prev, [key]: e.currentTarget.value })),
                         onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') submitQuestions(wait, questions) },
@@ -1078,13 +1078,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       type: 'button',
                       className: 'evo-btn evo-btn-ok',
                       onClick: () => submitQuestions(wait, questions),
-                      children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: 'Submit' })] }),
+                      children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: t('submit') })] }),
                     }),
                     jsx('button', {
                       type: 'button',
                       className: 'evo-btn evo-btn-danger',
                       onClick: () => cancelQuestion(wait),
-                      children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: 'Cancel' })] }),
+                      children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: t('cancel') })] }),
                     }),
                   ],
                 }),
@@ -1113,8 +1113,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     jsx('button', {
                       type: 'button',
                       className: 'evo-attach-remove',
-                      title: 'Remove attachment',
-                      'aria-label': 'Remove attachment',
+                      title: t('removeAttachment'),
+                      'aria-label': t('removeAttachment'),
                       onClick: () => removeImage(img.id),
                       children: jsx(XIcon, {}),
                     }),
@@ -1129,7 +1129,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               // 输入区顶部 8px 拖动热区（§23.1：hover 垂直 resize 光标，拖动改变 textarea 高度）
               jsx('div', {
                 className: 'evo-composer-resize',
-                title: 'Drag to resize',
+                title: t('dragToResize'),
                 onPointerDown: onComposerResizeStart,
                 onPointerMove: onComposerResizeMove,
                 onPointerUp: onComposerResizeEnd,
@@ -1157,7 +1157,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('div', {
                     className: 'evo-md-toggle',
                     role: 'group',
-                    'aria-label': 'Markdown preview',
+                    'aria-label': t('markdownPreview'),
                     children: [
                       jsx('button', {
                         type: 'button',
@@ -1250,7 +1250,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 onActive: setActiveIndex,
                 onApply: applyCandidate,
                 onClose: () => setTrigger(null),
-                label: trigger?.kind === 'command' ? 'Commands' : trigger?.kind === 'mention' ? 'File mentions' : 'History',
+                label: trigger?.kind === 'command' ? t('commands') : trigger?.kind === 'mention' ? t('fileMentions') : t('history'),
               }),
               jsxs('div', {
                 className: 'evo-composer-tools',
@@ -1289,8 +1289,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     type: 'button',
                     className: 'evo-composer-tool',
                     'data-on': queueItems.length > 0 || undefined,
-                    title: queueItems.length > 0 ? `Queued messages（${queueItems.length}）` : 'Queued messages',
-                    'aria-label': 'Queued messages',
+                    title: queueItems.length > 0 ? `${t('queuedMessages')}（${queueItems.length}）` : t('queuedMessages'),
+                    'aria-label': t('queuedMessages'),
                     onClick: () => setQueueOpen((v) => !v),
                     children: jsxs(Fragment, {
                       children: [jsx(ListTodo, {}), queueItems.length > 0 && jsx('span', { className: 'evo-queue-count', children: String(queueItems.length) })],
@@ -1300,8 +1300,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     type: 'button',
                     className: 'evo-composer-tool',
                     'data-on': liveJobCount > 0 || undefined,
-                    title: jobs.length > 0 ? `Background jobs（${jobs.length}${liveJobCount > 0 ? `，${liveJobCount} running` : ''}）` : 'Background jobs',
-                    'aria-label': 'Background jobs',
+                    title: jobs.length > 0 ? `${t('backgroundJobs')}（${jobs.length}${liveJobCount > 0 ? `，${liveJobCount} ${t('runningLower')}` : ''}）` : t('backgroundJobs'),
+                    'aria-label': t('backgroundJobs'),
                     onClick: () => setJobsOpen((v) => !v),
                     children: jsxs(Fragment, {
                       children: [jsx(Terminal, {}), jobs.length > 0 && jsx('span', { className: 'evo-queue-count', children: String(jobs.length) })],
@@ -1311,24 +1311,24 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-tool',
-                    title: 'Compact（摘要投影，不删历史）',
-                    'aria-label': 'Compact',
+                    title: t('compactTitle'),
+                    'aria-label': t('compact'),
                     onClick: () => setActionDialog('compact'),
                     children: jsx(Shrink, {}),
                   }),
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-tool',
-                    title: 'Current session',
-                    'aria-label': 'Current session',
+                    title: t('currentSession'),
+                    'aria-label': t('currentSession'),
                     onClick: () => setActionDialog('current'),
                     children: jsx(Info, {}),
                   }),
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-tool',
-                    title: 'Search',
-                    'aria-label': 'Search',
+                    title: t('search'),
+                    'aria-label': t('search'),
                     onClick: () => setActionDialog('search'),
                     children: jsx(Search, {}),
                   }),
@@ -1336,16 +1336,16 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     type: 'button',
                     className: 'evo-composer-tool',
                     'data-on': notifyOn || undefined,
-                    title: notifyOn ? 'Notifications on' : 'Notifications off',
-                    'aria-label': 'Notifications',
+                    title: notifyOn ? t('notificationsOn') : t('notificationsOff'),
+                    'aria-label': t('notifications'),
                     onClick: toggleNotify,
                     children: notifyOn ? jsx(Bell, {}) : jsx(BellOff, {}),
                   }),
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-tool',
-                    title: 'Keyboard shortcuts',
-                    'aria-label': 'Keyboard shortcuts',
+                    title: t('shortcuts'),
+                    'aria-label': t('shortcuts'),
                     onClick: () => setActionDialog('shortcuts'),
                     children: jsx(Keyboard, {}),
                   }),
@@ -1384,9 +1384,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       actionDialog === 'shortcuts' && jsx(ShortcutsDialog, { onClose: () => setActionDialog(null) }),
       actionDialog === 'model' && jsx(ModelSelectorDialog, { onClose: () => setActionDialog(null) }),
       actionDialog === 'compact' && jsx(ConfirmDialog, {
-        title: 'Compact',
+        title: t('compact'),
         message: 'Compact 会对较早的活跃上下文生成摘要投影（§10.3），完整聊天仍保存在数据库中。确认继续？',
-        confirmLabel: 'Compact',
+        confirmLabel: t('compact'),
         onConfirm: () => {
           // 直接执行 /compact 命令（官方 session.command，不产生模型回复回显）
           if (session?.command !== undefined) void session.command('/compact')
@@ -1395,9 +1395,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         onClose: () => setActionDialog(null),
       }),
       actionDialog === 'wf-clear' && latestWorkflow !== undefined && jsx(ConfirmDialog, {
-        title: 'Clear workflow',
+        title: t('clearWorkflow'),
         message: '清除当前 Dynamic Workflow 的展示记录（§24：仅移除浏览器持久化记录，不影响会话与执行）。确认？',
-        confirmLabel: 'Clear',
+        confirmLabel: t('clear'),
         danger: true,
         onConfirm: () => setWfCleared((list) => [...list, latestWorkflow.key]),
         onClose: () => setActionDialog(null),
@@ -1415,8 +1415,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
-                title: 'Clear queue',
-                'aria-label': 'Clear queue',
+                title: t('clearQueue'),
+                'aria-label': t('clearQueue'),
                 onClick: clearQueue,
                 children: jsx(Trash2, {}),
               }),
@@ -1444,16 +1444,16 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     jsx('button', {
                       type: 'button',
                       className: 'evo-queue-act',
-                      title: 'Save',
-                      'aria-label': 'Save',
+                      title: t('save'),
+                      'aria-label': t('save'),
                       onClick: () => saveQueueEdit(id),
                       children: jsx(Check, {}),
                     }),
                     jsx('button', {
                       type: 'button',
                       className: 'evo-queue-act',
-                      title: 'Cancel',
-                      'aria-label': 'Cancel',
+                      title: t('cancel'),
+                      'aria-label': t('cancel'),
                       onClick: () => setQueueEditId(null),
                       children: jsx(XIcon, {}),
                     }),
@@ -1476,16 +1476,16 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('button', {
                     type: 'button',
                     className: 'evo-queue-act',
-                    title: 'Edit',
-                    'aria-label': 'Edit',
+                    title: t('edit'),
+                    'aria-label': t('edit'),
                     onClick: () => { setQueueEditId(id); setQueueEditText(queueText(item)) },
                     children: jsx(PenLine, {}),
                   }),
                   jsx('button', {
                     type: 'button',
                     className: 'evo-queue-act',
-                    title: 'Remove',
-                    'aria-label': 'Remove',
+                    title: t('remove'),
+                    'aria-label': t('remove'),
                     onClick: () => applyQueueAction(id, { kind: 'remove' }),
                     children: jsx(XIcon, {}),
                   }),
@@ -1509,7 +1509,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               const live = job.status === 'running' || job.status === 'stopping'
               const end = job.finishedAt ?? Date.now()
               const dur = Math.max(0, Math.floor(((live ? end : (job.finishedAt ?? end)) - (job.startedAt ?? end)) / 1000))
-              const statusText = job.status === 'running' ? 'running' : job.status === 'stopping' ? 'stopping' : job.status === 'completed' ? 'completed' : job.status === 'killed' ? 'killed' : 'failed'
+              const statusText = job.status === 'running' ? t('runningDot') : job.status === 'stopping' ? t('jobStopping') : job.status === 'completed' ? t('jobCompleted') : job.status === 'killed' ? t('jobKilled') : t('jobFailed')
               return jsxs('div', {
                 className: 'evo-job-row',
                 children: [

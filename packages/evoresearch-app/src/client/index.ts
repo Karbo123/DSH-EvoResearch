@@ -142,12 +142,12 @@ class ErrorBoundary extends (Component as any) {
           jsxs('div', {
             className: 'evo-fatal-acts',
             children: [
-              jsx('button', { type: 'button', className: 'evo-btn evo-btn-run', onClick: () => location.reload(), children: 'Reload' }),
+              jsx('button', { type: 'button', className: 'evo-btn evo-btn-run', onClick: () => location.reload(), children: t('reload') }),
               jsx('button', {
                 type: 'button',
                 className: 'evo-btn',
                 onClick: () => { location.href = location.origin + location.pathname },
-                children: 'Go back',
+                children: t('goBack'),
               }),
             ],
           }),

@@ -7,6 +7,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
+import { t } from './i18n'
 import { ChevronRight, ChevronDown, Folder, FileText, FileCode2, Image as ImageIcon, File, RefreshCw, ArrowUp, Save, Upload, Archive } from 'lucide-react'
 
 interface FsEntry { name: string; path: string; isDir: boolean; hidden: boolean }
@@ -142,19 +143,19 @@ function FileViewer({ path, root, onBack }: { path: string; root: string; onBack
       jsxs('div', {
         className: 'evo-fs-viewer-head',
         children: [
-          jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onBack, title: 'Back', children: jsx(ArrowUp, {}) }),
+          jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onBack, title: t('back'), children: jsx(ArrowUp, {}) }),
           jsx('span', { className: 'evo-fs-viewer-name', children: name }),
           kind === 'text' && jsx('button', {
             type: 'button',
             className: 'evo-fs-save',
             disabled: !dirty || saving || text === null,
             onClick: () => void save(),
-            children: jsxs(Fragment, { children: [jsx(Save, {}), jsx('span', { children: dirty ? 'Save' : 'Saved' })] }),
+            children: jsxs(Fragment, { children: [jsx(Save, {}), jsx('span', { children: dirty ? t('save') : t('saved') })] }),
           }),
         ],
       }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-      kind === 'text' && (text === null ? jsx('div', { className: 'evo-panel-hint', children: 'Loading…' }) : jsx('textarea', {
+      kind === 'text' && (text === null ? jsx('div', { className: 'evo-panel-hint', children: t('loading') }) : jsx('textarea', {
         className: 'evo-fs-editor',
         value: text,
         spellCheck: false,
@@ -263,7 +264,7 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
   }, [base, rev])
 
   if (base === null) {
-    return jsx('div', { className: 'evo-insp-empty', children: jsx('div', { children: 'No active workspace' }) })
+    return jsx('div', { className: 'evo-insp-empty', children: jsx('div', { children: t('noActiveWorkspace') }) })
   }
 
   if (openPath !== null) {
@@ -278,14 +279,14 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
       jsxs('div', {
         className: 'evo-fs-toolbar',
         children: [
-          jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: () => setRev((v) => v + 1), title: 'Refresh', children: jsx(RefreshCw, {}) }),
+          jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: () => setRev((v) => v + 1), title: t('refresh'), children: jsx(RefreshCw, {}) }),
           jsx('button', {
             type: 'button',
             className: 'evo-icon-btn',
             onClick: () => fileInputRef.current?.click(),
             disabled: uploading,
-            title: uploading ? 'Uploading…' : 'Upload files',
-            'aria-label': 'Upload files',
+            title: uploading ? t('uploading') : t('uploadFiles'),
+            'aria-label': t('uploadFiles'),
             children: jsx(Upload, {}),
           }),
           jsx('button', {
@@ -293,8 +294,8 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
             className: 'evo-icon-btn',
             onClick: () => dirInputRef.current?.click(),
             disabled: uploading,
-            title: 'Upload folder',
-            'aria-label': 'Upload folder',
+            title: t('uploadFolder'),
+            'aria-label': t('uploadFolder'),
             children: jsx(Folder, {}),
           }),
           jsx('button', {
@@ -302,8 +303,8 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
             className: 'evo-icon-btn',
             onClick: () => void downloadZip(),
             disabled: zipBusy,
-            title: zipBusy ? 'Zipping…' : 'Download workspace ZIP',
-            'aria-label': 'Download workspace ZIP',
+            title: zipBusy ? t('zipping') : t('downloadWorkspaceZip'),
+            'aria-label': t('downloadWorkspaceZip'),
             children: jsx(Archive, {}),
           }),
           jsx('input', {
@@ -324,7 +325,7 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
         ],
       }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-      entries === null ? jsx('div', { className: 'evo-panel-hint', children: 'Loading…' }) : jsx('div', {
+      entries === null ? jsx('div', { className: 'evo-panel-hint', children: t('loading') }) : jsx('div', {
         className: 'evo-fs-tree',
         children: entries.map((entry) => jsx(TreeNode, {
           entry,
