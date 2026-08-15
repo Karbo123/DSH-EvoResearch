@@ -163,7 +163,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const workspaces = useWorkspaces((w) => w)
   const [sidebar, setSidebar] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('sidebar') === '1' : false)
   const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('inspector') === '1' : false)
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('workspace')
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() => {
+    if (typeof window === 'undefined') return 'workspace'
+    const t = new URLSearchParams(location.search).get('inspectorTab')
+    return t === 'agents' || t === 'chats' ? t : 'workspace'
+  })
   const [view, setView] = useState<SideView>(null)
   const [themeDark, setThemeDark] = useState(() => resolvedTheme() === 'dark')
   const [panels, setPanels] = useState(readPanels)
@@ -348,9 +352,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const toggleInspector = () => {
     setInspector((v) => {
-      patchUrl({ inspector: v ? null : '1' })
+      patchUrl({ inspector: v ? null : '1', inspectorTab: v ? null : inspectorTab })
       return !v
     })
+  }
+  // §43.5：Inspector 子标签写入 URL（workspace/agents/chats 可分享恢复）
+  const setInspectorTabUrl = (t: InspectorTab) => {
+    setInspectorTab(t)
+    patchUrl({ inspectorTab: t })
   }
 
   // ── Recents 操作（§26.3）与 Side Chat（§22.3）──
@@ -814,7 +823,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 style: narrow ? undefined : { width: panels.right },
                 children: jsx(Inspector, {
                   tab: inspectorTab,
-                  onTab: setInspectorTab,
+                  onTab: setInspectorTabUrl,
                   onClose: () => setInspector(false),
                   cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
                   sessionId: current ?? null,
