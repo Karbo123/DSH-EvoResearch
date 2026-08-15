@@ -522,6 +522,19 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-clear-notice-box { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px; border: 1px dashed var(--color-border); border-radius: 14px; text-align: center; }
 .evo-clear-notice-title { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
 .evo-clear-notice-sub { font-size: 12.5px; color: var(--color-text-tertiary); max-width: 420px; line-height: 1.6; }
+/* ── 附件（§23.7）── */
+.evo-chat { position: relative; }
+.evo-chat-dragover::after { content: 'Drop image(s) to attach'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--brand) 12%, var(--color-background)); color: var(--brand); font-size: 15px; font-weight: 600; border: 2px dashed var(--brand); border-radius: 12px; pointer-events: none; z-index: 5; }
+.evo-attach-strip { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 24px 0; }
+.evo-attach-error { font-size: 12px; color: var(--color-error); }
+.evo-attach-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.evo-attach-item { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); padding: 4px 8px; max-width: 260px; }
+.evo-attach-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 7px; flex-shrink: 0; }
+.evo-attach-thumb.evo-attach-loading { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; color: var(--color-text-tertiary); background: var(--hover-bg); }
+.evo-attach-name { flex: 1; min-width: 0; font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-attach-remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 5px; cursor: pointer; flex-shrink: 0; }
+.evo-attach-remove:hover { color: var(--color-error); background: var(--hover-bg); }
+.evo-attach-remove svg { width: 13px; height: 13px; }
 .evo-msg-jump { animation: evo-jump-flash 1.6s ease-out; border-radius: 10px; }
 @keyframes evo-jump-flash { 0% { background: color-mix(in srgb, var(--brand) 26%, transparent); } 100% { background: transparent; } }
 /* ── Recents 操作（§26.3）与 Side Chat（§22.3-22.4）── */

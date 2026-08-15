@@ -78,7 +78,7 @@ export interface ChatAreaProps {
   jobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
   /** 打开另一个会话（Search 全历史结果跳转）。 */
   onOpenThread: (id: string) => void
-  onSend: (text: string) => void
+  onSend: (text: string, images?: Array<{ data: string; mediaType: string; name?: string }>) => void
 }
 
 function fmtTime(t: number | undefined): string {
@@ -650,8 +650,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     const text = input.trim()
     // Pending 审批时禁用发送（§21.2：避免新消息污染待审批工具调用）
     if (!text || pendingApprovals.length > 0) return
+    // 附件未就绪（仍在读取）时禁用发送
+    if (pendingImages.some((img) => img.dataUrl === '')) return
     // 斜杠命令：单行且以 / 开头 → 直接执行（未知命令降级为普通聊天，§23.3）
-    if (text.startsWith('/') && !text.includes('\n')) {
+    if (text.startsWith('/') && !text.includes('\n') && pendingImages.length === 0) {
       const matched = await executeCommand(text)
       if (matched) {
         pushHistory(cwd, text)
@@ -665,14 +667,77 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     // @引用解析（§23.4）：小型文本文件注入内容，其余保留路径
     const resolved = await resolveMentions(text, cwd)
     // 忙时也允许发送：消息进入 append-only 队列（§23.6），由 host 顺序消费
-    onSend(resolved)
+    const images = pendingImages
+      .filter((img) => img.dataUrl !== '')
+      .map((img) => ({ data: img.dataUrl.slice(img.dataUrl.indexOf(',') + 1), mediaType: img.mediaType, name: img.name }))
+    onSend(resolved, images.length > 0 ? images : undefined)
     pushHistory(cwd, text)
     setHistory(readHistory(cwd))
     setInput('')
     setTrigger(null)
     setHistoryIndex(-1)
     setPreview(false)
+    setPendingImages([])
   }
+
+  // ── 附件（§23.7）：图片拖放/粘贴/文件选择 → prompt image 块；单文件 ≤5MB、一次 ≤20 张 ──
+  const MAX_IMAGES_PER_MESSAGE = 20
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+  const [pendingImages, setPendingImages] = useState<Array<{ id: string; name: string; mediaType: string; dataUrl: string; bytes: number }>>([])
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const attachUidRef = useRef(0)
+  const addImageFiles = async (files: Array<File>) => {
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    const others = files.filter((f) => !f.type.startsWith('image/'))
+    if (others.length > 0) {
+      setAttachError('仅支持图片附件（文本文件可用 @ 引用注入内容）')
+      setTimeout(() => setAttachError(null), 5000)
+    }
+    if (images.length === 0) return
+    if (pendingImages.length + images.length > MAX_IMAGES_PER_MESSAGE) {
+      setAttachError(`一次最多 ${MAX_IMAGES_PER_MESSAGE} 个附件`)
+      setTimeout(() => setAttachError(null), 5000)
+      return
+    }
+    const oversized = images.filter((f) => f.size > MAX_IMAGE_BYTES)
+    if (oversized.length > 0) {
+      setAttachError(`${oversized[0]!.name} 超过 5MB 限制`)
+      setTimeout(() => setAttachError(null), 5000)
+    }
+    const admitted = images.filter((f) => f.size <= MAX_IMAGE_BYTES)
+    if (admitted.length === 0) return
+    const added = admitted.map((f) => ({ id: `att-${++attachUidRef.current}-${Date.now()}`, name: f.name, mediaType: f.type || 'image/png', dataUrl: '', bytes: f.size }))
+    setPendingImages((prev) => [...prev, ...added])
+    for (let i = 0; i < admitted.length; i += 1) {
+      try {
+        const buf = new Uint8Array(await admitted[i]!.arrayBuffer())
+        let binary = ''
+        const chunk = 0x8000
+        for (let off = 0; off < buf.length; off += chunk) {
+          binary += String.fromCharCode(...buf.subarray(off, Math.min(off + chunk, buf.length)))
+        }
+        const dataUrl = `data:${added[i]!.mediaType};base64,${btoa(binary)}`
+        const id = added[i]!.id
+        setPendingImages((prev) => prev.map((img) => (img.id === id ? { ...img, dataUrl } : img)))
+      } catch { /* 读取失败则丢弃该项 */ }
+    }
+  }
+  const removeImage = (id: string) => setPendingImages((prev) => prev.filter((img) => img.id !== id))
+  const onPasteImages = (e: { clipboardData: DataTransfer | null }) => {
+    if (e.clipboardData === null) return
+    const files = Array.from(e.clipboardData.files ?? []).filter((f) => f.type.startsWith('image/'))
+    if (files.length > 0) {
+      e.preventDefault?.()
+      void addImageFiles(files)
+    }
+  }
+  const onDropFiles = (e: { preventDefault(): void; dataTransfer: DataTransfer | null }) => {
+    e.preventDefault()
+    if (e.dataTransfer === null) return
+    void addImageFiles(Array.from(e.dataTransfer.files ?? []))
+  }
+  const [dragOver, setDragOver] = useState(false)
 
   const hasMessages = nodes.length > 0 || partial !== null
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)
@@ -707,7 +772,11 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   return jsxs(Fragment, {
     children: [
       jsx('div', {
-        className: 'evo-chat',
+        className: `evo-chat${dragOver ? ' evo-chat-dragover' : ''}`,
+        'data-attachments': pendingImages.length > 0 || undefined,
+        onDragOver: (e: { preventDefault(): void }) => { e.preventDefault(); setDragOver(true) },
+        onDragLeave: () => setDragOver(false),
+        onDrop: onDropFiles,
         children: showMessages
           ? jsxs('div', {
               ref: listRef,
@@ -960,6 +1029,33 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       jsxs('div', {
         className: 'evo-composer-wrap',
         children: [
+          // 附件预览条（§23.7）：缩略图 + 名称 + 移除
+          (pendingImages.length > 0 || attachError !== null) && jsx('div', {
+            className: 'evo-attach-strip',
+            children: [
+              attachError !== null && jsx('span', { className: 'evo-attach-error', children: attachError }),
+              pendingImages.length > 0 && jsxs('div', {
+                className: 'evo-attach-list',
+                children: pendingImages.map((img) => jsxs('div', {
+                  className: 'evo-attach-item',
+                  children: [
+                    img.dataUrl !== ''
+                      ? jsx('img', { className: 'evo-attach-thumb', src: img.dataUrl, alt: img.name })
+                      : jsx('span', { className: 'evo-attach-thumb evo-attach-loading', children: '…' }),
+                    jsx('span', { className: 'evo-attach-name', title: img.name, children: img.name }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-attach-remove',
+                      title: 'Remove attachment',
+                      'aria-label': 'Remove attachment',
+                      onClick: () => removeImage(img.id),
+                      children: jsx(XIcon, {}),
+                    }),
+                  ],
+                }, img.id)),
+              }),
+            ],
+          }),
           jsxs('div', {
             className: 'evo-composer',
             children: [
@@ -1032,6 +1128,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }
                 },
                 onClick: (e) => refreshTrigger(e.currentTarget.value, e.currentTarget.selectionStart),
+                onPaste: onPasteImages,
                 onKeyDown: (e) => {
                   // 候选弹层键盘导航（§23.2：Tab 应用、上下移动、Esc 关闭）
                   if (candidates.length > 0) {
@@ -1063,8 +1160,22 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-tool',
+                    'data-on': pendingImages.length > 0 || undefined,
                     title: t('attachFiles'),
+                    onClick: () => fileInputRef.current?.click(),
                     children: jsx(Paperclip, {}),
+                  }),
+                  jsx('input', {
+                    ref: fileInputRef,
+                    type: 'file',
+                    accept: 'image/*',
+                    multiple: true,
+                    hidden: true,
+                    onChange: (e: { currentTarget: HTMLInputElement }) => {
+                      const files = Array.from(e.currentTarget.files ?? [])
+                      if (files.length > 0) void addImageFiles(files)
+                      e.currentTarget.value = ''
+                    },
                   }),
                   jsx('button', {
                     type: 'button',

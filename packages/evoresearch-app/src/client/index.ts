@@ -360,11 +360,13 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setLang(readLang() === 'zh' ? 'en' : 'zh')
     location.reload()
   }
-  const sendMessage = (text: string) => {
+  const sendMessage = (text: string, images?: Array<{ data: string; mediaType: string; name?: string }>) => {
     const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
     if (s === undefined || text.trim() === '') return
-    // content 是内容块数组，mode 必填（queue = 追加到当前轮次之后）
-    void s.prompt([{ type: 'text', text }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+    // content 是内容块数组（§23.7 附件：文本 + 图片块），mode 必填（queue = 追加到当前轮次之后）
+    const content: Array<{ type: string; text?: string; data?: string; mediaType?: string; name?: string }> = [{ type: 'text', text }]
+    for (const image of images ?? []) content.push({ type: 'image', data: image.data, mediaType: image.mediaType, ...(image.name !== undefined ? { name: image.name } : {}) })
+    void s.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
   }
 
   const persistPanels = (p: { left: number; right: number }) => {
@@ -563,8 +565,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
                   jobs: currentJobs,
                   onOpenThread: openSession,
-                  onSend: sendMessage,
-                }),
+                  onSend: sendMessage,                }),
           }),
           inspector && jsxs(Fragment, {
             children: [
