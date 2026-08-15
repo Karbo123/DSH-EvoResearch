@@ -410,6 +410,35 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
+        // 模型设置（设置面板）：读 / 写 / 应用代码档为默认模型
+        if (method === 'model-settings-get') {
+          if (evoresearch?.modelSettingsGet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.modelSettingsGet as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'model-settings-set') {
+          if (evoresearch?.modelSettingsSet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const patch = typeof payload.patch === 'object' && payload.patch !== null ? payload.patch : {}
+          try {
+            const result = await (evoresearch.modelSettingsSet as (a: { patch: Record<string, unknown> }) => Promise<{ ok: boolean }>).call(evoresearch, { patch })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+        if (method === 'model-settings-apply') {
+          if (evoresearch?.modelSettingsApply === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const tier = payload.tier
+          if (tier !== 'simple' && tier !== 'medium' && tier !== 'complex') throw httpError(400, 'bad-tier', 'tier 必须是 simple/medium/complex')
+          try {
+            const result = await (evoresearch.modelSettingsApply as (a: { tier: string }) => Promise<unknown>).call(evoresearch, { tier })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         // §12.4 Profile 文件编辑：写（新建/保存）/ 删除 / 重命名（名字严格校验）
         if (method === 'memory-profile-write' || method === 'memory-profile-delete' || method === 'memory-profile-rename') {
           const serviceName = method === 'memory-profile-write' ? 'memoryProfileWrite' : method === 'memory-profile-delete' ? 'memoryProfileDelete' : 'memoryProfileRename'

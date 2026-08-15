@@ -14,7 +14,8 @@ import type { SchedulerService } from './scheduler.js'
 import type { ChannelManager } from './channels/index.js'
 import type { AutoSkillsService } from './autoskills.js'
 import type { ExpertService } from './experts.js'
-import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal } from '../shared/types.js'
+import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings } from '../shared/types.js'
+import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 
 /** 各服务集合（host 入口注入）。 */
 export interface HostServices {
@@ -143,8 +144,65 @@ export class EvoResearchApiService extends TypertRemoteService {
     return out
   }
 
-  /** §29：会话元数据（置顶/标签色/归档）后端存储——pin/tag/archive 随项目数据迁移。 */
-  private metaFile(): string {
+  /** 模型设置（设置面板）：读/写/应用。 */
+  private modelSettingsFile(): string {
+    return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'model-settings.json')
+  }
+
+  readModelSettings(): ModelSettings {
+    try {
+      const raw = JSON.parse(readFileSync(this.modelSettingsFile(), 'utf8')) as Partial<ModelSettings>
+      const merged: ModelSettings = {
+        code: { ...DEFAULT_MODEL_SETTINGS.code, ...(raw.code ?? {}) },
+        vision: { ...DEFAULT_MODEL_SETTINGS.vision, ...(raw.vision ?? {}) },
+        image: { ...DEFAULT_MODEL_SETTINGS.image, ...(raw.image ?? {}) },
+        voice: { ...DEFAULT_MODEL_SETTINGS.voice, ...(raw.voice ?? {}) },
+      }
+      return merged
+    } catch {
+      return DEFAULT_MODEL_SETTINGS
+    }
+  }
+
+  @Remote('modelSettingsGet')
+  modelSettingsGet(): ModelSettings {
+    return this.readModelSettings()
+  }
+
+  @Remote('modelSettingsSet')
+  modelSettingsSet(args: { patch: Partial<ModelSettings> }): { ok: boolean } {
+    const file = this.modelSettingsFile()
+    mkdirSync(path.dirname(file), { recursive: true })
+    const current = this.readModelSettings()
+    const patch = args?.patch ?? {}
+    const merged: ModelSettings = {
+      code: { ...current.code, ...(patch.code ?? {}) },
+      vision: { ...current.vision, ...(patch.vision ?? {}) },
+      image: { ...current.image, ...(patch.image ?? {}) },
+      voice: { ...current.voice, ...(patch.voice ?? {}) },
+    }
+    const tmp = `${file}.tmp-${process.pid}`
+    writeFileSync(tmp, JSON.stringify(merged, null, 2), 'utf8')
+    renameSync(tmp, file)
+    return { ok: true }
+  }
+
+  /** 应用代码模型某档为当前默认模型（agentDefaultModel.saveSelection）。 */
+  @Remote('modelSettingsApply')
+  modelSettingsApply(args: { tier: 'simple' | 'medium' | 'complex' }): { ok: boolean; provider?: string; model?: string; error?: string } {
+    const tier = args?.tier
+    if (tier !== 'simple' && tier !== 'medium' && tier !== 'complex') return { ok: false, error: 'tier 必须是 simple/medium/complex' }
+    const setting = this.readModelSettings().code[tier]
+    if (!setting.model || !setting.provider) return { ok: false, error: '该档未配置模型' }
+    const agentDefaultModel = this.hostCtx?.get('agentDefaultModel')
+    if (!agentDefaultModel || typeof agentDefaultModel.saveSelection !== 'function') {
+      return { ok: false, error: 'agentDefaultModel 服务不可用' }
+    }
+    agentDefaultModel.saveSelection({ provider: setting.provider, model: setting.model })
+    return { ok: true, provider: setting.provider, model: setting.model }
+  }
+
+  /** §29：会话元数据（置顶/标签色/归档）后端存储——pin/tag/archive 随项目数据迁移。 */  private metaFile(): string {
     return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'session-meta.json')
   }
 

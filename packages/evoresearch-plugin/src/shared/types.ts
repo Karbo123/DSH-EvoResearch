@@ -182,8 +182,7 @@ export interface AutoSkillProposal {
   createdAt: number
 }
 
-/** 定时任务（cron）。存储模型字段可变（调度器内部更新运行状态）。 */
-export interface ScheduledTask {
+/** 定时任务（cron）。存储模型字段可变（调度器内部更新运行状态）。 */export interface ScheduledTask {
   taskId: string
   name: string
   /** cron 表达式（5 字段：分 时 日 月 周）。 */
@@ -205,4 +204,39 @@ export interface ChannelStatus {
   readonly received: number
   readonly sent: number
   readonly error?: string
+}
+
+/** 模型设置（设置面板，参照 ResearchOS）：代码三档 / 视觉 / 图片生成 / 语音。 */
+export interface ModelTierSetting {
+  readonly model: string
+  readonly provider: string
+  /** reasoning effort：low | medium | high。 */
+  readonly reasoningEffort?: string
+}
+
+export interface ModelSettings {
+  /** 写代码模型三档（§：lightweight/balanced/advanced）。 */
+  readonly code: {
+    readonly simple: ModelTierSetting
+    readonly medium: ModelTierSetting
+    readonly complex: ModelTierSetting
+  }
+  /** 图片识别（视觉）模型。 */
+  readonly vision: ModelTierSetting & { readonly url?: string; readonly keyEnv?: string }
+  /** 图片生成模型。 */
+  readonly image: ModelTierSetting
+  /** 语音识别：provider = api（OpenAI 兼容）/ local（预留本地引擎）。 */
+  readonly voice: ModelTierSetting & { readonly url?: string; readonly keyEnv?: string; readonly provider?: string }
+}
+
+/** 默认模型设置（与 ResearchOS 三档语义对齐）。 */
+export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
+  code: {
+    simple: { model: 'deepseek-v4-flash', provider: 'deepseek-official', reasoningEffort: 'low' },
+    medium: { model: 'deepseek-v4', provider: 'deepseek-official', reasoningEffort: 'medium' },
+    complex: { model: 'deepseek-v4', provider: 'deepseek-official', reasoningEffort: 'high' },
+  },
+  vision: { model: '', provider: '', url: '', keyEnv: 'VISION_API_KEY' },
+  image: { model: '', provider: '' },
+  voice: { model: '', provider: 'api', url: '', keyEnv: 'VOICE_API_KEY' },
 }

@@ -482,6 +482,31 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-stats-sep { color: var(--color-border); margin-right: 8px; }
 /* ── 插件清单 ── */
 .evo-plugin-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.evo-settings-modal { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.evo-settings-head { padding: 10px 14px; border-bottom: 1px solid var(--color-border-light); }
+.evo-btn-back { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: transparent; color: var(--color-text-primary); font-size: 13px; cursor: pointer; font: inherit; }
+.evo-btn-back:hover { background: var(--hover-bg); }
+.evo-btn-back svg { width: 15px; height: 15px; }
+.evo-settings-body { display: flex; flex: 1; min-height: 0; }
+.evo-settings-nav { width: 176px; flex-shrink: 0; border-right: 1px solid var(--color-border-light); padding: 10px 8px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+.evo-settings-tab { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: none; border-radius: 9px; background: transparent; color: var(--color-text-secondary); font-size: 13.5px; cursor: pointer; text-align: left; font: inherit; }
+.evo-settings-tab:hover { background: var(--hover-bg); }
+.evo-settings-tab[data-active] { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand); font-weight: 600; }
+.evo-settings-tab svg { width: 16px; height: 16px; flex-shrink: 0; }
+.evo-settings-content { flex: 1; min-width: 0; overflow-y: auto; padding: 14px 16px; }
+.evo-tier-grid { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
+.evo-tier-card { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
+.evo-tier-head { display: flex; align-items: baseline; gap: 10px; }
+.evo-tier-name { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); }
+.evo-tier-desc { font-size: 12px; color: var(--color-text-tertiary); }
+.evo-setting-field { display: flex; flex-direction: column; gap: 4px; }
+.evo-setting-field-label { font-size: 12px; color: var(--color-text-tertiary); }
+.evo-mode-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.evo-mode-chip { padding: 5px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; font: inherit; }
+.evo-mode-chip:hover { border-color: var(--brand); }
+.evo-mode-chip[data-active] { border-color: var(--brand); color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); font-weight: 600; }
+.evo-plugin-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--color-text-secondary); }
+.evo-plugin-state { color: var(--color-text-tertiary); font-size: 11.5px; }
 .evo-plugin-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); }
 .evo-plugin-id { font-size: 12px; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-plugin-state { font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
