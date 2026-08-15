@@ -739,6 +739,26 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   const [dragOver, setDragOver] = useState(false)
 
+  // ── 输入框高度拖动（§23.1）：顶边缘 8px 热区，垂直 resize，范围视口 1/4 ~ 2/3 ──
+  const [composerHeight, setComposerHeight] = useState<number | null>(null)
+  const composerResizeRef = useRef<{ startY: number; startH: number } | null>(null)
+  const composerMinHeight = () => Math.max(80, Math.round((typeof window !== 'undefined' ? window.innerHeight : 900) / 4))
+  const composerMaxHeight = () => Math.round((typeof window !== 'undefined' ? window.innerHeight : 900) * 2 / 3)
+  const onComposerResizeStart = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void }) => {
+    e.preventDefault()
+    const el = taRef.current
+    if (el === null) return
+    composerResizeRef.current = { startY: e.clientY, startH: composerHeight ?? el.offsetHeight }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onComposerResizeMove = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number }) => {
+    const ref = composerResizeRef.current
+    if (ref === null || !e.currentTarget.hasPointerCapture(e.pointerId)) return
+    const next = ref.startH + (e.clientY - ref.startY)
+    setComposerHeight(Math.min(composerMaxHeight(), Math.max(composerMinHeight(), next)))
+  }
+  const onComposerResizeEnd = () => { composerResizeRef.current = null }
+
   const hasMessages = nodes.length > 0 || partial !== null
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)
 
@@ -1059,6 +1079,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           jsxs('div', {
             className: 'evo-composer',
             children: [
+              // 输入区顶部 8px 拖动热区（§23.1：hover 垂直 resize 光标，拖动改变 textarea 高度）
+              jsx('div', {
+                className: 'evo-composer-resize',
+                title: 'Drag to resize',
+                onPointerDown: onComposerResizeStart,
+                onPointerMove: onComposerResizeMove,
+                onPointerUp: onComposerResizeEnd,
+                onPointerCancel: onComposerResizeEnd,
+              }),
               jsxs('div', {
                 className: 'evo-composer-status',
                 children: [
@@ -1116,10 +1145,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 placeholder: t('askAnything'),
                 rows: 1,
                 value: input,
+                style: composerHeight !== null ? { height: `${composerHeight}px`, maxHeight: 'none' } : undefined,
                 onInput: (e) => {
                   setInput(e.currentTarget.value)
-                  e.currentTarget.style.height = 'auto'
-                  e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 220)}px`
+                  // 手动拖动设定高度后不再自动伸缩（§23.1）
+                  if (composerHeight === null) {
+                    e.currentTarget.style.height = 'auto'
+                    e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 220)}px`
+                  }
                   refreshTrigger(e.currentTarget.value, e.currentTarget.selectionStart)
                 },
                 onKeyUp: (e) => {

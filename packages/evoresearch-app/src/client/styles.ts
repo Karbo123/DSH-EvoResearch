@@ -376,6 +376,9 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-fs-image { max-width: 100%; object-fit: contain; padding: 10px; }
 .evo-fs-frame { flex: 1; min-height: 0; border: none; background: var(--color-surface); }
 /* ── 会话状态条 / 统计条 ── */
+.evo-composer { position: relative; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; }
+.evo-composer-resize { height: 8px; cursor: ns-resize; border-radius: 12px 12px 0 0; flex-shrink: 0; touch-action: none; }
+.evo-composer-resize:hover { background: color-mix(in srgb, var(--brand) 10%, transparent); }
 .evo-composer-status { display: flex; align-items: center; gap: 7px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); flex-wrap: wrap; }
 .evo-status-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: var(--hover-bg); color: var(--color-text-secondary); font-size: 11px; }
 .evo-status-model { border: none; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
