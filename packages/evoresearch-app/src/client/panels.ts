@@ -49,11 +49,23 @@ async function api<T>(method: string, body: Record<string, unknown> = {}): Promi
 }
 
 /** EvoMemory 面板：项目 + 分类统计 + 目标。 */
-export function MemoryPanel() {
+export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => void }) {
   const [projects, setProjects] = useState<Array<{ name: string; path?: string }> | null>(null)
   const [catalog, setCatalog] = useState<Array<{ category: string; count: number }> | null>(null)
   const [goals, setGoals] = useState<Array<{ id?: string; title?: string; status?: string; progress?: number }> | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<'overview' | 'history'>('overview')
+  // History 时间线（§26.5）
+  const [turns, setTurns] = useState<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }> | null>(null)
+  const [turnOffset, setTurnOffset] = useState(0)
+  const TURN_PAGE = 30
+
+  const loadTurns = (offset: number) => {
+    void api<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }>>('memory-turns', { limit: TURN_PAGE, offset })
+      .then((list) => { setTurns(list); setTurnOffset(offset) })
+      .catch((e: any) => setError(String(e?.message ?? e)))
+  }
+  useEffect(() => { if (tab === 'history') loadTurns(0) }, [tab])
 
   useEffect(() => {
     let cancelled = false
@@ -138,10 +150,64 @@ export function MemoryPanel() {
     title: 'EvoMemory',
     children: jsxs(Fragment, {
       children: [
-        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-        projectsRow,
-        catalogRow,
-        goalsRow,
+        jsxs('div', {
+          className: 'evo-skill-tabs',
+          children: [
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'overview' || undefined, onClick: () => setTab('overview'), children: 'Overview' }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'history' || undefined, onClick: () => setTab('history'), children: 'History' }),
+          ],
+        }),
+        tab === 'history'
+          ? jsxs(Fragment, {
+              children: [
+                error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+                turns === null
+                  ? jsx(LoadingRow, {})
+                  : turns.length === 0
+                    ? jsx('span', { className: 'evo-panel-hint', children: 'No research turns yet' })
+                    : jsx('div', {
+                        className: 'evo-panel-list',
+                        children: turns.map((turn) => jsxs('div', {
+                          className: 'evo-history-row',
+                          children: [
+                            jsx('span', { className: 'evo-history-dot', title: turn.status }),
+                            jsxs('div', {
+                              className: 'evo-history-main',
+                              children: [
+                                jsx('div', { className: 'evo-history-text', children: turn.userText.slice(0, 120) || '(empty prompt)' }),
+                                jsxs('div', { className: 'evo-history-meta', children: [
+                                  jsx('span', { children: new Date(turn.createdAt).toLocaleString() }),
+                                  ...(turn.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: CATEGORY_LABELS[c] ?? c }, c)),
+                                ] }),
+                              ],
+                            }),
+                            jsx('button', {
+                              type: 'button',
+                              className: 'evo-panel-act',
+                              title: 'Open thread',
+                              'aria-label': 'Open thread',
+                              onClick: () => onOpenThread(turn.sessionId),
+                              children: jsx(ExternalLink, {}),
+                            }),
+                          ],
+                        }, turn.turnId)),
+                      }),
+                (turns ?? []).length === TURN_PAGE && jsx('button', {
+                  type: 'button',
+                  className: 'evo-btn evo-btn-run',
+                  onClick: () => loadTurns(turnOffset + TURN_PAGE),
+                  children: 'Load earlier',
+                }),
+              ],
+            })
+          : jsxs(Fragment, {
+              children: [
+                error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+                projectsRow,
+                catalogRow,
+                goalsRow,
+              ],
+            }),
       ],
     }),
   })

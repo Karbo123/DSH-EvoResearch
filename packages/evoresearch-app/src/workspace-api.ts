@@ -351,6 +351,17 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.memoryCatalog as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))
           return
         }
+        // Memory History 时间线（§26.5）：research_turns 分页列表（可按 sessionId 过滤）
+        if (method === 'memory-turns') {
+          if (evoresearch?.memoryTurns === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: { workspaceDir?: string; sessionId?: string; limit?: number; offset?: number } = {}
+          if (typeof payload.workspaceDir === 'string') args.workspaceDir = payload.workspaceDir
+          if (typeof payload.sessionId === 'string') args.sessionId = payload.sessionId
+          if (typeof payload.limit === 'number') args.limit = Math.min(Math.max(Math.floor(payload.limit), 1), 200)
+          if (typeof payload.offset === 'number') args.offset = Math.max(Math.floor(payload.offset), 0)
+          writeOk(res, await (evoresearch.memoryTurns as (a: typeof args) => Promise<unknown>)(args))
+          return
+        }
         if (method === 'memory-goals') {
           if (evoresearch?.memoryGoals === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.memoryGoals as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))

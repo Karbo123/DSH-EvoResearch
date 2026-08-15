@@ -709,7 +709,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               ? jsx('div', {
                   className: 'evo-view',
                   children: view === 'memory'
-                    ? jsx(MemoryPanel, {})
+                    ? jsx(MemoryPanel, { onOpenThread: openSession })
                     : view === 'schedule'
                       ? jsx(SchedulePanel, { onOpenThread: openSession })
                       : view === 'skills'
