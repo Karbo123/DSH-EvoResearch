@@ -165,12 +165,12 @@ function FileViewer({ path, root, onBack }: { path: string; root: string; onBack
         },
       })),
       kind === 'image' && jsx('img', { className: 'evo-fs-image', src: `/evoresearch/fs/file?path=${encodeURIComponent(path)}`, alt: name }),
-      kind === 'pdf' && jsx('iframe', { className: 'evo-fs-frame', src: `/evoresearch/fs/file?path=${encodeURIComponent(path)}`, title: name }),
+      kind === 'pdf' && jsx('iframe', { className: 'evo-fs-frame', src: `/evoresearch/fs/file?path=${encodeURIComponent(path)}`, title: name, sandbox: '' }),
       (kind === 'html' || kind === 'other') && jsx('div', {
         className: 'evo-panel-hint',
         children: kind === 'html' ? 'HTML 预览：' : '预览不支持此文件类型',
       }),
-      (kind === 'html') && jsx('iframe', { className: 'evo-fs-frame', src: `/evoresearch/fs/file?path=${encodeURIComponent(path)}`, title: name }),
+      (kind === 'html') && jsx('iframe', { className: 'evo-fs-frame', src: `/evoresearch/fs/file?path=${encodeURIComponent(path)}`, title: name, sandbox: '' }),
     ],
   })
 }

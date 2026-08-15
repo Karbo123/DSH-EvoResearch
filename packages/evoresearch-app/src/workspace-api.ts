@@ -129,7 +129,13 @@ export function registerWorkspaceApi(ctx: any): void {
           const target = requireAbsolute(url.searchParams.get('path') ?? '')
           const buffer = await readFile(target)
           const type = MEDIA_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream'
-          res.writeHead(200, { 'content-type': type, 'content-length': String(buffer.length) })
+          // §27.2：SVG/HTML 等可执行内容预览响应必须加 sandbox CSP 与 nosniff
+          const headers: Record<string, string> = { 'content-type': type, 'content-length': String(buffer.length) }
+          if (type === 'text/html' || type === 'image/svg+xml') {
+            headers['content-security-policy'] = 'sandbox'
+            headers['x-content-type-options'] = 'nosniff'
+          }
+          res.writeHead(200, headers)
           res.end(buffer)
           return
         }
