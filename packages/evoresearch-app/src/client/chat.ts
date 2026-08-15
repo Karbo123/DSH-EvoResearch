@@ -222,8 +222,8 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
   })
 }
 
-/** 用户消息气泡。 */
-function UserBubble({ text, time, nodeKey, highlight }: { text: string; time?: number; nodeKey?: string; highlight?: boolean }) {
+/** 用户消息气泡（hover 显示复制与编辑图标，§31.6；编辑 = 回填输入框）。 */
+function UserBubble({ text, time, nodeKey, highlight, onEdit }: { text: string; time?: number; nodeKey?: string; highlight?: boolean; onEdit?: (text: string) => void }) {
   return jsxs('div', {
     className: `evo-msg-row evo-msg-user${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
@@ -235,7 +235,18 @@ function UserBubble({ text, time, nodeKey, highlight }: { text: string; time?: n
           jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
           jsx('div', {
             className: 'evo-msg-meta',
-            children: [jsx('div', { className: 'evo-msg-time', children: fmtTime(time) }), jsx(CopyButton, { text })],
+            children: [
+              jsx('div', { className: 'evo-msg-time', children: fmtTime(time) }),
+              onEdit !== undefined && jsx('button', {
+                type: 'button',
+                className: 'evo-msg-copy',
+                title: 'Edit（回填输入框）',
+                'aria-label': 'Edit message',
+                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onEdit(text) },
+                children: jsx(PenLine, {}),
+              }),
+              jsx(CopyButton, { text }),
+            ],
           }),
         ],
       }),
@@ -417,6 +428,19 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       setTimeout(() => setJumpKey(null), 1600)
     }
     setActionDialog(null)
+  }
+
+  // 用户消息编辑（§31.6 编辑图标）：回填输入框并聚焦（host 无已发消息修改 API）
+  const editUserMessage = (text: string) => {
+    setInput(text)
+    setPreview(false)
+    setTrigger(null)
+    requestAnimationFrame(() => {
+      const el = taRef.current
+      if (el === null) return
+      el.focus()
+      el.selectionStart = el.selectionEnd = el.value.length
+    })
   }
 
   // ── 输入辅助（§23.2–23.5）：斜杠命令 / @文件 / 输入历史 ──
@@ -636,7 +660,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 }),
                 ...shown.map((node) => node.kind === 'user'
-                  ? jsx(UserBubble, { text: node.data.text ?? '', time: node.data.time, nodeKey: node.key, highlight: node.key === jumpKey }, node.key)
+                  ? jsx(UserBubble, { text: node.data.text ?? '', time: node.data.time, nodeKey: node.key, highlight: node.key === jumpKey, onEdit: editUserMessage }, node.key)
                   : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults }, node.key)),
                 partial !== null && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults }, partial.key),
                 showJump && jsx('button', {

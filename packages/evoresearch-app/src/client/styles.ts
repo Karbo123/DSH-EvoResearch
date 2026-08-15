@@ -132,7 +132,10 @@ body { margin: 0; }
 }
 .evo-tl-row:hover { background: var(--hover-bg); }
 .evo-tl-row[data-active] { background: var(--hover-bg); }
-.evo-tl-row-title { font-size: 13.5px; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evo-tl-row-title { font-size: 13.5px; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+.evo-tl-pin-badge { display: inline-flex; flex-shrink: 0; color: var(--brand); }
+.evo-tl-pin-badge svg { width: 11px; height: 11px; }
+.evo-tl-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .evo-tl-row-sub { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 1px; }
 .evo-tl-empty { padding: 28px 16px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-tl-empty svg { width: 40px; height: 40px; color: var(--color-border); margin-bottom: 8px; }

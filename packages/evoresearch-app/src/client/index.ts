@@ -235,6 +235,25 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }).catch(() => {})
   }
 
+  // ── Recents 置顶（§26.3 Pin，client-side 持久化）──
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('evoresearch-pinned') ?? '[]')
+      return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
+    } catch {
+      return new Set()
+    }
+  })
+  const togglePin = (id: string) => {
+    setPinnedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      try { localStorage.setItem('evoresearch-pinned', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      return next
+    })
+  }
+
   // ── Side chats 列表（§22.3-22.4）：当前 workspace 的 fork 子会话 + 空白侧聊 ──
   const [, setSideTick] = useState(0)
   useEffect(() => {
@@ -426,6 +445,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   onRename: renameSession,
                   onForkSideChat: forkSideChat,
                   onExport: exportSession,
+                  pinnedIds,
+                  onTogglePin: togglePin,
                   hideIds: sideChatIds,
                 }),
               }),

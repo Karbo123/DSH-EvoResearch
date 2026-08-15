@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
@@ -54,17 +54,22 @@ export interface ThreadListProps {
   onForkSideChat: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
   /** 导出会话（json | markdown，§26.3/§41.8）。 */
   onExport: (id: string, format: 'json' | 'markdown', title: string) => void
+  /** 置顶会话 id 集合（client-side 持久化）。 */
+  pinnedIds: Set<string>
+  onTogglePin: (id: string) => void
   /** 应从 Recents 隐藏的会话 id（侧聊/内部线程，§22.1）。 */
   hideIds: Set<string>
 }
 
-export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onExport, hideIds }: ThreadListProps) {
+export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onExport, pinnedIds, onTogglePin, hideIds }: ThreadListProps) {
   const sessions = useSessions((s) => s)
   const currentId = sessions.current
   // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表）
   const rows = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
     .filter((s) => s !== undefined && s.blank !== true && s.parentSessionId === undefined && !hideIds.has(s.id))
+    // 置顶会话排最前（§26.3 Pin）
+    .sort((a, b) => (pinnedIds.has(b.id) ? 1 : 0) - (pinnedIds.has(a.id) ? 1 : 0))
   const [query, setQuery] = useState('')
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -191,7 +196,13 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                       onClick: () => onOpen(s.id),
                       children: jsxs(Fragment, {
                         children: [
-                          jsx('div', { className: 'evo-tl-row-title', children: s.displayTitle ?? s.id.slice(0, 12) }),
+                          jsxs('div', {
+                            className: 'evo-tl-row-title',
+                            children: [
+                              pinnedIds.has(s.id) && jsx('span', { className: 'evo-tl-pin-badge', title: 'Pinned', children: jsx(Pin, {}) }),
+                              jsx('span', { className: 'evo-tl-title-text', children: s.displayTitle ?? s.id.slice(0, 12) }),
+                            ],
+                          }),
                           jsx('div', { className: 'evo-tl-row-sub', children: formatWhen(s.titleTime ?? s.updatedAt) }),
                         ],
                       }),
@@ -199,6 +210,18 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                     jsx('div', {
                       className: 'evo-tl-row-acts',
                       children: [
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-tl-row-act',
+                          title: pinnedIds.has(s.id) ? 'Unpin' : 'Pin',
+                          'aria-label': pinnedIds.has(s.id) ? 'Unpin' : 'Pin',
+                          'data-on': pinnedIds.has(s.id) || undefined,
+                          onClick: (e: { stopPropagation(): void }) => {
+                            e.stopPropagation()
+                            onTogglePin(s.id)
+                          },
+                          children: jsx(Pin, {}),
+                        }),
                         jsx('button', {
                           type: 'button',
                           className: 'evo-tl-row-act',
