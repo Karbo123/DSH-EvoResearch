@@ -28,12 +28,20 @@ const RESTORE_ICON = `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidde
 const CLOSE_ICON = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`
 
 /** 调用 Tauri 窗口命令（浏览器环境静默失败）。
- *  Tauri 2 双通道：withGlobalTauri 注入的 window.__TAURI__，或内核
- *  window.__TAURI_INTERNALS__.invoke（始终存在）。 */
+ *  优先用 @tauri-apps/api/window 全局（withGlobalTauri 注入的 __TAURI__.window，
+ *  内部走 core:window:* 命令，由 capabilities/default.json 授权）；
+ *  兜底 __TAURI_INTERNALS__.invoke 直调自定义命令。 */
 function callWindow(method: string): void {
   try {
     const anyWindow = window as any
     const tauri = anyWindow.__TAURI__
+    if (tauri?.window) {
+      const win = tauri.window.getCurrentWindow()
+      if (method === 'window_minimize') { void win.minimize(); return }
+      if (method === 'window_toggle_maximize') { void win.toggleMaximize(); return }
+      if (method === 'window_close') { void win.close(); return }
+      if (method === 'window_start_drag') { void win.startDragging(); return }
+    }
     if (tauri?.core?.invoke) { void tauri.core.invoke(method); return }
     const internals = anyWindow.__TAURI_INTERNALS__
     if (internals?.invoke) { void internals.invoke(method); return }
