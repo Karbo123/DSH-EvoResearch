@@ -172,6 +172,12 @@ export interface AutoSkillProposal {
   targetSkill?: string
   content: string
   sourceObservationIds: readonly string[]
+  /** §42.7：候选簇稳定哈希（排序后 Observation IDs 生成）。 */
+  clusterHash?: string
+  /** §42.8：所属工作区 / 项目 / 批准后安装路径。 */
+  workspaceDir?: string
+  projectId?: string
+  installedPath?: string
   status: 'pending' | 'approved' | 'rejected'
   createdAt: number
 }

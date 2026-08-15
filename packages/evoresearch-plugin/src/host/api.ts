@@ -297,8 +297,9 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   @Remote('autoskillsGenerate')
   autoskillsGenerate(args: { workspaceDir?: string }): { created: number } {
-    const store = this.services.memory.storeFor(args.workspaceDir ?? '')
-    return { created: this.services.autoskills.generateFromObservations(store) }
+    const workspaceDir = args.workspaceDir ?? ''
+    const store = this.services.memory.storeFor(workspaceDir)
+    return { created: this.services.autoskills.generateFromObservations(store, workspaceDir) }
   }
 
   @Remote('autoskillsApprove')

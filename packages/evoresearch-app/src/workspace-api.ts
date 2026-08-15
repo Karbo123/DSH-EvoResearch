@@ -487,8 +487,15 @@ export function registerWorkspaceApi(ctx: any): void {
           const serviceMethod = method === 'skills/approve' ? 'autoskillsApprove' : method === 'skills/reject' ? 'autoskillsReject' : 'autoskillsRun'
           const fn = evoresearch?.[serviceMethod] as ((a: { proposalId: string }) => { ok: boolean }) | undefined
           if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
-          const result = fn({ proposalId: requireString(payload, 'proposalId') })
+          const result = fn.call(evoresearch, { proposalId: requireString(payload, 'proposalId') })
           writeOk(res, { ok: result.ok === true })
+          return
+        }
+        // 候选生成（§42.7）：从观测聚类生成提案（Auto 模式自动安装）
+        if (method === 'skills/generate') {
+          if (evoresearch?.autoskillsGenerate === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = await (evoresearch.autoskillsGenerate as (a: { workspaceDir?: string }) => Promise<{ created: number }>)({ workspaceDir: payload.workspaceDir as string | undefined })
+          writeOk(res, { created: result.created })
           return
         }
         // AutoSkills 调度配置（§42.9）：GET 读 / POST 写（写时 reconcile scheduler）

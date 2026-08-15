@@ -11,7 +11,7 @@ import { t } from './i18n'
 import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
   Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
-  UserPlus, Power, PowerOff, Ban, ExternalLink, Send,
+  UserPlus, Power, PowerOff, Ban, ExternalLink, Send, Sparkles,
 } from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -767,6 +767,20 @@ export function SkillsPanel() {
 
   useEffect(() => { load() }, [filter])
 
+  const [generating, setGenerating] = useState(false)
+  const generate = () => {
+    if (generating) return
+    setGenerating(true)
+    setError(null)
+    void api<{ created: number }>('skills/generate', {})
+      .then((result) => {
+        setGenerating(false)
+        if (result.created > 0) load()
+        else setError('没有新的候选簇（需要 ≥3 条观测且 ≥2 条方法/实验）')
+      })
+      .catch((e: any) => { setGenerating(false); setError(String(e?.message ?? e)) })
+  }
+
   const act = (proposalId: string, kind: 'approve' | 'reject' | 'run') => {
     setBusy(proposalId)
     void api<{ ok: boolean }>(`skills/${kind}`, { proposalId })
@@ -790,7 +804,19 @@ export function SkillsPanel() {
     children: [
       jsxs('div', {
         className: 'evo-skill-tabs',
-        children: [tab('all', 'All'), tab('pending', 'Pending'), tab('approved', 'Approved'), tab('rejected', 'Rejected')],
+        children: [tab('all', t('all')), tab('pending', t('pending')), tab('approved', t('approved')), tab('rejected', t('rejected'))],
+      }),
+      jsx('div', {
+        className: 'evo-panel-form',
+        children: [
+          jsx('button', {
+            type: 'button',
+            className: 'evo-panel-add',
+            disabled: generating,
+            onClick: generate,
+            children: jsxs(Fragment, { children: [jsx(Sparkles, {}), jsx('span', { children: generating ? t('generating') : t('generateProposals') })] }),
+          }),
+        ],
       }),
       // §42.9 AutoSkills 调度设置：enabled / mode / cadence / time（保存时 reconcile scheduler）
       jsx('div', { className: 'evo-panel-form', children: [
@@ -856,7 +882,7 @@ export function SkillsPanel() {
                   }),
                   p.description !== '' && p.description !== undefined && jsx('div', { className: 'evo-skill-desc', children: p.description }),
                   p.sourceObservationIds !== undefined && p.sourceObservationIds.length > 0
-                    && jsx('div', { className: 'evo-skill-src', children: `${p.sourceObservationIds.length} observations` }),
+                    && jsx('div', { className: 'evo-skill-src', children: `${p.sourceObservationIds.length} ${t('observations')}` }),
                   p.status === 'pending' && jsxs('div', {
                     className: 'evo-skill-actions',
                     children: [
