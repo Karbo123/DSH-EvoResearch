@@ -58,7 +58,7 @@
 | 批准写入 SKILL.md（frontmatter 规范）+ manifest.json（§42.8） | approve 写 skills/<name>/ + 安装路径记录 | ✅ |
 | Auto 模式自动安装（mode=auto 生成即批准） | generateFromObservations + saveConfig | ✅ |
 | Expert 专家邀请（active_teams 随 run 注入） | `experts.ts` + /expert 命令 | ✅（随 run 注入接线 🟡） |
-| **多智能体团队（6 子代理）** | `teams.ts`：planner/research/code/debug/data_analysis/writing 角色预设（中文 system prompt），`/expert invite <id>` 内置可邀 | ✅ |
+| **多智能体团队（6 子代理）** | `teams.ts`：planner/research/code/debug/data_analysis/writing 角色预设（中文 system prompt；§22.1 复查补强：planner PLAN/REFLECTION 双模式、research 搜索次数上限 + 不伪造来源、data_analysis 效应量/不确定性/不编造数字、writing 论文级报告 + TODO 占位、artifacts/ 与 experiment_log.md 产物约定），`/expert invite <id>` 内置可邀 | ✅ |
 
 ## E. 定时任务
 
