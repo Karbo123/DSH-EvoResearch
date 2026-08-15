@@ -418,6 +418,20 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── 斜杠命令直接执行（§23.3：结果以文本显示在输入区上方）──
+        if (method === 'commands-execute') {
+          const commands = ctx.get('commands')
+          if (commands?.execute === undefined) throw httpError(400, 'method-error', 'commands 服务不可用')
+          const sessionId = requireString(payload, 'sessionId')
+          const line = requireString(payload, 'line')
+          const agent = ctx.get('agents')?.get?.(sessionId)
+          if (agent === undefined) throw httpError(400, 'bad-request', `会话不存在: ${sessionId}`)
+          const signal = new AbortController().signal
+          const result = await commands.execute(agent, line, signal)
+          writeOk(res, { matched: result !== undefined, result: result ?? null })
+          return
+        }
+
         // ── 全历史搜索（§9.5；前端先搜 DOM，Full history 走这里）──
         if (method === 'threads-search') {
           if (evoresearch?.threadsSearch === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')

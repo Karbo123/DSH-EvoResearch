@@ -11,7 +11,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
-  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2,
+  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command,
 } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
@@ -502,10 +502,49 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (visibleCount > PAGE_SIZE) setVisibleCount(PAGE_SIZE)
   }
 
+  // ── 斜杠命令直接执行（§23.3）：Enter 执行，结果以文本显示在输入区上方 ──
+  const [cmdResult, setCmdResult] = useState<{ line: string; text: string; kind: string } | null>(null)
+  const [cmdRunning, setCmdRunning] = useState(false)
+  const executeCommand = async (line: string): Promise<boolean> => {
+    if (sessionId === null) return false
+    setCmdRunning(true)
+    try {
+      const res = await fetch('/evoresearch/fs/commands-execute', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, line }),
+      })
+      const json = await res.json()
+      if (json.ok && json.value?.matched === true && json.value?.result !== null) {
+        const outer = json.value.result
+        const inner = outer?.result ?? outer
+        setCmdResult({ line, text: inner?.text ?? '', kind: inner?.kind ?? 'success' })
+        return true
+      }
+      return false
+    } catch {
+      return false
+    } finally {
+      setCmdRunning(false)
+    }
+  }
+
   const submit = async () => {
     const text = input.trim()
     // Pending 审批时禁用发送（§21.2：避免新消息污染待审批工具调用）
     if (!text || pendingApprovals.length > 0) return
+    // 斜杠命令：单行且以 / 开头 → 直接执行（未知命令降级为普通聊天，§23.3）
+    if (text.startsWith('/') && !text.includes('\n')) {
+      const matched = await executeCommand(text)
+      if (matched) {
+        pushHistory(cwd, text)
+        setHistory(readHistory(cwd))
+        setInput('')
+        setTrigger(null)
+        setHistoryIndex(-1)
+        return
+      }
+    }
     // @引用解析（§23.4）：小型文本文件注入内容，其余保留路径
     const resolved = await resolveMentions(text, cwd)
     // 忙时也允许发送：消息进入 append-only 队列（§23.6），由 host 顺序消费
@@ -616,6 +655,27 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 ],
               }),
+      }),
+      // ── 命令执行结果条（§23.3：结果以文本/表格显示在输入框上方）──
+      (cmdResult !== null || cmdRunning) && jsx('div', {
+        className: 'evo-cmd-strip',
+        children: jsx('div', {
+          className: `evo-cmd-card${cmdResult !== null && cmdResult.kind === 'error' ? ' error' : ''}`,
+          children: [
+            jsx(Command, {}),
+            jsx('code', { className: 'evo-cmd-line', children: cmdResult?.line ?? '' }),
+            cmdRunning && cmdResult === null && jsx('span', { className: 'evo-cmd-running', children: 'running…' }),
+            cmdResult !== null && jsx('pre', { className: 'evo-cmd-output', children: cmdResult.text }),
+            cmdResult !== null && jsx('button', {
+              type: 'button',
+              className: 'evo-cmd-dismiss',
+              title: 'Dismiss',
+              'aria-label': 'Dismiss',
+              onClick: () => setCmdResult(null),
+              children: jsx(XIcon, {}),
+            }),
+          ],
+        }),
       }),
       // ── Dynamic Workflow 条（§24）：phase / evaluation / duration / 状态 + 清除 ──
       wfVisible && latestWorkflow !== undefined && jsxs('div', {

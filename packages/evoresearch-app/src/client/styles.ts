@@ -577,4 +577,16 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-job-detail { font-size: 11px; color: var(--color-text-tertiary); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
 .evo-job-status { font-size: 11px; color: var(--color-text-tertiary); flex-shrink: 0; }
 .evo-job-duration { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+/* ── 命令执行结果条（§23.3）── */
+.evo-cmd-strip { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 24px 0; }
+.evo-cmd-card { width: 100%; max-width: var(--chat-max-width); display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.evo-cmd-card.error { border-color: color-mix(in srgb, var(--color-error) 40%, var(--color-border)); }
+.evo-cmd-card > svg { width: 15px; height: 15px; color: var(--brand); flex-shrink: 0; margin-top: 1px; }
+.evo-cmd-card.error > svg { color: var(--color-error); }
+.evo-cmd-line { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-primary); flex-shrink: 0; }
+.evo-cmd-running { font-size: 12px; color: var(--brand); }
+.evo-cmd-output { flex: 1; min-width: 0; margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.6; color: var(--color-text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow-y: auto; }
+.evo-cmd-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
+.evo-cmd-dismiss:hover { color: var(--color-text-primary); background: var(--hover-bg); }
+.evo-cmd-dismiss svg { width: 13px; height: 13px; }
 `
