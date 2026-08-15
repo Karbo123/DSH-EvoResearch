@@ -338,6 +338,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── 会话状态条 / 统计条 ── */
 .evo-composer-status { display: flex; align-items: center; gap: 7px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); flex-wrap: wrap; }
 .evo-status-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: var(--hover-bg); color: var(--color-text-secondary); font-size: 11px; }
+.evo-status-model { border: none; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+.evo-status-model:hover { color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
 .evo-status-chip svg { width: 11px; height: 11px; }
 .evo-status-goal { color: var(--brand); }
 .evo-status-ro { color: var(--color-warning); }

@@ -20,7 +20,7 @@ import {
   resolveMentions, useCommandCatalog, useFileTree,
   type Trigger, type Candidate,
 } from './composer-assist'
-import { CurrentDialog, SearchDialog, ShortcutsDialog, ConfirmDialog } from './session-actions'
+import { CurrentDialog, SearchDialog, ShortcutsDialog, ConfirmDialog, ModelSelectorDialog } from './session-actions'
 
 const SUGGESTED_PROMPTS = [
   'Survey recent papers on a topic',
@@ -208,12 +208,19 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const taRef = useRef<HTMLTextAreaElement | null>(null)
 
   // ── 会话动作（§25.6）：Current / Search / Notify / Shortcuts / Compact / Clear view ──
-  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact'>(null)
+  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'model'>(null)
   const [clearView, setClearView] = useState(false)
   const [notifyOn, setNotifyOn] = useState(() => {
     try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
   })
   const [jumpKey, setJumpKey] = useState<string | null>(null)
+
+  // 状态条模型 chip → 打开模型选择器（§25.2：模型名本身是按钮）
+  useEffect(() => {
+    const open = () => setActionDialog('model')
+    window.addEventListener('evo-open-model-selector', open)
+    return () => window.removeEventListener('evo-open-model-selector', open)
+  }, [])
 
   // ── 忙时消息队列 UI（§23.6）：编辑 / 删除 / 清空（官方 session.updateQueue）──
   const [queueOpen, setQueueOpen] = useState(false)
@@ -666,6 +673,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         onOpenThread,
       }),
       actionDialog === 'shortcuts' && jsx(ShortcutsDialog, { onClose: () => setActionDialog(null) }),
+      actionDialog === 'model' && jsx(ModelSelectorDialog, { onClose: () => setActionDialog(null) }),
       actionDialog === 'compact' && jsx(ConfirmDialog, {
         title: 'Compact',
         message: 'Compact 会对较早的活跃上下文生成摘要投影（§10.3），完整聊天仍保存在数据库中。确认继续？',

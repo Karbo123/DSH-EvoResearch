@@ -62,9 +62,10 @@ export function SessionStatusLine({ session }: SessionDockData) {
     }).catch(() => {})
     void fetchModel()
     void fetchMode()
-    const onChange = () => { void fetchMode() }
+    const onChange = () => { void fetchMode(); void fetchModel() }
     window.addEventListener('evo-mode-changed', onChange)
-    return () => { cancelled = true; window.removeEventListener('evo-mode-changed', onChange) }
+    window.addEventListener('evo-model-changed', onChange)
+    return () => { cancelled = true; window.removeEventListener('evo-mode-changed', onChange); window.removeEventListener('evo-model-changed', onChange) }
   }, [session])
 
   if (session === null) return null
@@ -100,9 +101,11 @@ export function SessionStatusLine({ session }: SessionDockData) {
         title: `Permission: ${effectivePreset ?? ''}`,
         children: [effectivePreset === 'read-only' ? jsx(ShieldOff, {}) : jsx(ShieldCheck, {}), jsx('span', { children: modeLabelValue })],
       }),
-      model?.model != null && jsxs('span', {
-        className: 'evo-status-chip',
-        title: `Model: ${model.provider ?? ''} / ${model.model}`,
+      model?.model != null && jsxs('button', {
+        type: 'button',
+        className: 'evo-status-chip evo-status-model',
+        title: `Model: ${model.provider ?? ''} / ${model.model}（点击切换）`,
+        onClick: () => window.dispatchEvent(new CustomEvent('evo-open-model-selector')),
         children: [jsx(Cpu, {}), jsx('span', { children: model.model })],
       }),
       occupancy !== null && jsxs('span', {

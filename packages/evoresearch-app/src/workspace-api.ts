@@ -249,6 +249,31 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // POST /evoresearch/models-catalog → 模型目录（§25.2 模型选择器：
+        // llm.listProviders() + 各 adapter listModels()）
+        if (method === 'models-catalog') {
+          const llm = ctx.get('llm')
+          if (llm?.listProviders === undefined) throw httpError(400, 'method-error', 'llm 服务不可用')
+          const providers = llm.listProviders()
+          const groups: unknown[] = []
+          for (const provider of providers) {
+            let models: unknown[] = []
+            try {
+              const listed = await llm.listModels(provider.id)
+              models = (listed ?? []).map((m: { id?: string; name?: string; contextWindow?: number }) => ({
+                id: m.id ?? '',
+                name: m.name ?? m.id ?? '',
+                contextWindow: m.contextWindow ?? null,
+              }))
+            } catch { /* 该 provider 无目录 */ }
+            if (models.length > 0) {
+              groups.push({ provider: { id: provider.id, name: provider.name ?? provider.id }, models })
+            }
+          }
+          writeOk(res, { groups })
+          return
+        }
+
         // /evoresearch/fs/mode：POST {sessionId, preset} → 切换权限预设
         if (method === 'mode') {
           const permission = ctx.get('permissionPresets')

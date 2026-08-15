@@ -280,6 +280,79 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   })
 }
 
+/** 模型选择器（§25.2）：provider 分组 + 模型列表，点击即保存默认模型。 */
+export function ModelSelectorDialog({ onClose }: { onClose: () => void }) {
+  const [groups, setGroups] = useState<Array<{ provider: { id: string; name: string }; models: Array<{ id: string; name: string; contextWindow: number | null }> }> | null>(null)
+  const [current, setCurrent] = useState<{ provider: string | null; model: string | null }>({ provider: null, model: null })
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void Promise.all([
+      fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+        .then((r) => r.json()).then((j) => { if (!cancelled && j.ok) setGroups(j.value?.groups ?? []) }).catch(() => {}),
+      fetch('/evoresearch/fs/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+        .then((r) => r.json()).then((j) => { if (!cancelled && j.ok) setCurrent({ provider: j.value?.provider ?? null, model: j.value?.model ?? null }) }).catch(() => {}),
+    ])
+    return () => { cancelled = true }
+  }, [])
+
+  const select = (provider: string, model: string) => {
+    if (saving) return
+    setSaving(true)
+    setError(null)
+    void fetch('/evoresearch/fs/models/select', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider, model }),
+    }).then((r) => r.json()).then((j) => {
+      setSaving(false)
+      if (j.ok) {
+        setCurrent({ provider, model })
+        window.dispatchEvent(new CustomEvent('evo-model-changed'))
+        onClose()
+      } else setError(j.error?.message ?? '保存失败')
+    }).catch((e) => { setSaving(false); setError(String(e)) })
+  }
+
+  return jsx(ModalShell, {
+    title: 'Select model',
+    onClose,
+    children: jsxs('div', {
+      className: 'evo-models',
+      children: [
+        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        groups === null
+          ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+          : groups.length === 0
+            ? jsx('div', { className: 'evo-setting-hint', children: 'No models available' })
+            : jsx('div', {
+                className: 'evo-model-list',
+                children: groups.map((group) => jsxs('div', {
+                  className: 'evo-model-group',
+                  children: [
+                    jsx('div', { className: 'evo-model-group-name', children: group.provider.name }),
+                    group.models.map((m) => {
+                      const active = current.provider === group.provider.id && current.model === m.id
+                      return jsx('button', {
+                        type: 'button',
+                        className: 'evo-model-item',
+                        'data-active': active || undefined,
+                        disabled: saving,
+                        onClick: () => select(group.provider.id, m.id),
+                        title: m.contextWindow != null ? `context ${fmtTokens(m.contextWindow)}` : undefined,
+                        children: m.name,
+                      }, `${group.provider.id}:${m.id}`)
+                    }),
+                  ],
+                }, group.provider.id)),
+              }),
+      ],
+    }),
+  })
+}
+
 /** 二次确认弹窗（§33.1 需决策操作）。 */
 export function ConfirmDialog({
   title, message, confirmLabel, danger, onConfirm, onClose,
