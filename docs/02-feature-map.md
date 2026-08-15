@@ -10,6 +10,7 @@
 | 工作区边界校验（部署根或 projects/<n>） | `validateWorkspace`（normcase 比较） | ✅ |
 | git init + .evoresearch-data git exclude | `prepareProjectGit` / `writeGitExclude` | ✅ |
 | 导入项目文件夹（隐藏临时目录 + 原子改名 + 跳过可重建目录） | `importProject`（SKIP_DIRS） | ✅ |
+| 新建项目（§5.4：目录 + git init + README + exclude） | `createProject` + projects-create 端点 + Workspace 面板表单 | ✅ |
 | New Chat 自动创建项目（AI slug ≤20 + 确定性回退 + 碰撞后缀） | `autoCreateProject`（LLM + slugify） | ✅ |
 | 项目列表 / 创建（/project 命令 + Remote API） | `commands.ts` + `api.ts` | ✅ |
 | 按项目切换记忆与会话（workspace_dir 路由） | session header cwd + `storeFor(workspaceDir)` | ✅ |
@@ -26,6 +27,7 @@
 | 每类 1 最佳 state + 同类别高分补充 | `buildMemoryPacket`（STATES_PER_CATEGORY=3） | ✅ |
 | RRF 融合 FTS5 + E5 向量，类别加权不硬过滤 | `retrieval.ts` fuseRrf + CATEGORY_WEIGHT | ✅（向量 🟡） |
 | Observation 增强（frontmatter + create/update/supersede/noop） | `store.ts` writeObservation/supersede + `tools.ts` | ✅ |
+| Observation 关联（link_observations 双向 + 去重） | `store.ts` linkObservations（migration v4）+ Knowledge 卡片「关联」徽标 | ✅ |
 | 检索默认只出 ACTIVE | `searchObservationsFts` status='active' | ✅ |
 | search_research_history / read_research_turn 工具 | `tools.ts` | ✅ |
 | backfill 断点续做（source_version 指纹） | `backfill.ts`（幂等 + 进度记录）+ MemoryRuntime 后台接线 | ✅ |
@@ -42,17 +44,19 @@
 | 工具收据（started → completed/unknown） | `recordToolStarted/Completed` + **session/event 钩子接入**（tool/call → tool/result） | ✅ |
 | 启动对账（quick_check/轮换备份/悬挂清理/补归档） | `recovery.ts` + storeFor 首次接线 | ✅ |
 | Goal Control：长程检测 → 合同 → slice → 四轴判定 | `goals.ts`（全部核心逻辑） | ✅ |
-| propose_goal_contract_update 提案 → 用户确认 → version | `appendGoalEvent` + 提案事件（确认流 🔲） | 🟡 |
-| Active Goal Projection / Turn Envelope 注入 | `renderGoalProjection`（注入接线 🟡） | 🟡 |
+| propose_goal_contract_update 提案 → 用户确认 → version | `goals.ts`（proposal 存储/接受合并 changes 生成新版本）+ `tools.ts`（只建待确认提案）+ Goals 面板接受/拒绝 | ✅ |
+| Active Goal Projection / Turn Envelope 注入 | `renderGoalProjection`（systemPrompt.context 注入）+ judgeProgress | ✅ |
+| Goal Contract 展开审阅（目标/成功标准/约束/版本） | Goals 面板行展开（aria-expanded + 证据徽标） | ✅ |
 | 有限重试（首 chunk 前一次） | DSH `llm-retry` 已有 | ✅（平台） |
 
 ## D. AutoSkills / 专家团队
 
 | 功能 | 本实现 | 状态 |
 |---|---|---|
-| 观测聚类 → 技能提案（approve/reject/run） | `autoskills.ts` | ✅ |
-| 提案审核界面 | 工作台「技能提案」面板 | ✅ |
-| 批准写入技能目录（可被 dsh-skill 挂载） | SKILL.md 写入 | ✅（真实挂载 🔲） |
+| 观测聚类 → 技能提案（§42.7：簇 ≥3 且 ≥2 procedural + cluster hash 去重） | `autoskills.ts` generateFromObservations | ✅ |
+| 提案审核界面（生成按钮 + 状态 tab + approve/reject/run） | 工作台「技能提案」面板 | ✅ |
+| 批准写入 SKILL.md（frontmatter 规范）+ manifest.json（§42.8） | approve 写 skills/<name>/ + 安装路径记录 | ✅ |
+| Auto 模式自动安装（mode=auto 生成即批准） | generateFromObservations + saveConfig | ✅ |
 | Expert 专家邀请（active_teams 随 run 注入） | `experts.ts` + /expert 命令 | ✅（随 run 注入接线 🟡） |
 | **多智能体团队（6 子代理）** | `teams.ts`：planner/research/code/debug/data_analysis/writing 角色预设（中文 system prompt），`/expert invite <id>` 内置可邀 | ✅ |
 
@@ -61,8 +65,8 @@
 | 功能 | 本实现 | 状态 |
 |---|---|---|
 | cron 定时任务（5 字段，自研解析） | `scheduler.ts` + `core/cron.ts` | ✅ |
-| 任务结果直达结果 thread | lastResultThreadId | ✅ |
-| Report to main chat（回送主对话） | 🔲（client 侧对接 sendMessage） | 🔲 |
+| 任务结果直达结果 thread | lastResultThreadId + 打开结果按钮 | ✅ |
+| Report to main chat（回送主对话） | schedulerReport 读取结果会话事件 → 回送当前主对话 | ✅ |
 | 自然语言创建任务 | 🔲（LLM 解析 cron） | 🔲 |
 
 ## F. 多通道
@@ -88,9 +92,12 @@
 | 桌面版无边框自绘标题栏 | `?desktop=1` 模式：36px 标题栏 + 窗口控制命令 | ✅ |
 | 分页历史/加载更早/回到最新 | DSH 会话层 + 消息滚动 | ✅（基础） |
 | 斜杠命令执行与补全 | DSH `commands` 原生 + 插件命令注册 | ✅ |
-| 会话状态条 / 模型切换 / Fallback | DSH 平台已有（ui-model-selection/llm-retry） | ✅（平台） |
-| 中英双语 | 工作台 i18n（🔲 完整词典接入） | 🟡 |
-| 业务面板（记忆/调度/通道/团队） | 🔲（阶段 2 规划） | 🔲 |
+| 会话状态条 / 模型切换 / Fallback | DSH 平台已有（ui-model-selection/llm-retry）；Fallback 管理 UI 因官方 rc.6 无 API 未做 | ✅（平台） |
+| 中英双语（默认中文，~150 处 UI 字符串 i18n） | 工作台 i18n（readLang 默认 zh）+ 全面本地化 | ✅ |
+| 业务面板（记忆/调度/通道/团队/技能/工作区） | EvoMemory 四 tab / Scheduled Builder / Channels / Team / Skills（提案+市场）/ Workspace（新建+导入） | ✅ |
+| 会话行操作（重命名/置顶/标签色/导出/归档/删除） | ThreadList（localStorage 持久化 + 两段式确认 + 已归档分区） | ✅ |
+| JSON 完整诊断导出（reasoning + 工具调用/结果） | session-export（§41.8） | ✅ |
+| MCP 管理 | 官方 rc.6 配置驱动（cordis.yml mcp-client 行，无运行时管理 API）——维持配置驱动 | 🟡（平台） |
 
 ## H. 桌面端
 
@@ -115,7 +122,8 @@
 1. **界面自研而非依赖平台外壳**：自定义工作台（不加载官方 ui-*），host 引擎（会话/模型/工具/审批）完全复用 DSH 平台；
 2. **Embedding 第一版不内置本地模型**：FTS5 保底 + 远端 embedding API 接口预留（体积与隐私权衡）；
 3. **通道优先 Telegram**：其余通道骨架化（协议文档齐全后按同一接口补齐）；
-4. **Raw Turn Archive/启动对账**：依赖 DSH 会话事件日志的原始保留，插件层归档按需实现。
+4. **Raw Turn Archive/启动对账**：依赖 DSH 会话事件日志的原始保留，插件层归档按需实现；
+5. **官方 rc.6 无运行时 API 的三项保持平台受限**：Fallback chain 管理（dsh-llm-retry 内部处理）、code_interpreter（host shell 工具等价提供；dsh-code-runtime 为 TS 运行时非 Python REPL）、MCP 管理（配置驱动 cordis.yml）。
 
 ## 验证记录
 
@@ -126,7 +134,11 @@
 - ✅ 浏览器链路：`window.__DSH_BOOT__` 图包含 `@evoresearch/dsh-app`，
   `/plugins/@evoresearch/dsh-app/client.js` 以 ModuleLoader factory 格式正确 serve（200）；
 - ✅ 端到端对话：新建会话 → 发送消息 → 真实模型回复流式渲染（CDP 自动交互 + 视觉检查确认）；
-- ✅ 桌面版：无边框窗口 + 自绘标题栏（PrintWindow 截图 + 视觉检查确认）。
+- ✅ 桌面版：无边框窗口 + 自绘标题栏（PrintWindow 截图 + 视觉检查确认）；
+- ✅ 深度回归（scripts/verify-*.mjs，CDP headless，21 项）：l10n/smoke/identity/knowledge/memory-history/
+  marketplace/runnow/schedule-builder/round21/toast/md/fs-upload2/responsive/a11y/urlstate/steer-stop/
+  autoskills-config/archive/export-json/project-create/goal-detail 全部通过；
+- ✅ 真实 exe（WebView2 远程调试）：标题栏结构 + 点击关闭进程退出（verify-titlebar.mjs）。
 
 ### 开发中修复的关键问题（对插件开发者有普适参考价值）
 
