@@ -387,6 +387,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-sched-templates { display: flex; flex-wrap: wrap; gap: 5px; }
 .evo-sched-template { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); font-size: 11.5px; border-radius: 999px; padding: 3px 11px; cursor: pointer; }
 .evo-sched-template:hover { border-color: var(--brand); color: var(--brand); }
+.evo-panel-label { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+.evo-panel-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-text-secondary); cursor: pointer; }
 /* ── Skills Marketplace（§42.6）── */
 .evo-skill-name-btn { border: none; background: none; padding: 0; cursor: pointer; text-align: left; min-width: 0; }
 .evo-skill-name-btn:hover .evo-panel-item-main { color: var(--brand); }

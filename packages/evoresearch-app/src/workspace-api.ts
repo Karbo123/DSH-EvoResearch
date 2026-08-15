@@ -421,6 +421,18 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, { ok: result.ok === true })
           return
         }
+        // AutoSkills 调度配置（§42.9）：GET 读 / POST 写（写时 reconcile scheduler）
+        if (method === 'autoskills-config') {
+          const fn = evoresearch?.autoskillsConfig as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = {}
+          for (const key of ['enabled', 'mode', 'cadence', 'time']) {
+            if (payload[key] !== undefined) args[key] = payload[key]
+          }
+          // Remote 方法依赖 this.services —— 用 .call 保持 this 绑定
+          writeOk(res, await fn.call(evoresearch, args))
+          return
+        }
 
         // ── Projects：校验路径 / 导入 ──
         if (method === 'projects-validate') {

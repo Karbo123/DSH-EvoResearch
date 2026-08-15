@@ -125,9 +125,31 @@ export class AutoSkillsService {
     return true
   }
 
-  /** 更新调度配置（第一版：仅持久化占位，供 WebUI 面板展示）。 */
-  saveConfig(config: { enabled?: boolean; mode?: string; cadence?: string }): void {
+  /**
+   * 更新调度配置（§42.9）：enabled / mode(review|auto) / cadence(nightly|weekly|monthly) /
+   * time(HH:MM 本地)。返回 cron 等价式（供 scheduler reconcile）。
+   */
+  saveConfig(config: { enabled?: boolean; mode?: string; cadence?: string; time?: string }): { cron: string | null } {
     const file = path.join(this.config.dataRoot, '.evoresearch-data', 'autoskills-config.json')
-    fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf8')
+    const merged = { ...this.readConfig(), ...config }
+    fs.writeFileSync(file, JSON.stringify(merged, null, 2), 'utf8')
+    // cron 推导：nightly=每天；weekly=周日(0)；monthly=每月 1 日
+    if (merged.enabled !== true) return { cron: null }
+    const time = /^(\d{1,2}):(\d{1,2})$/.exec(String(merged.time ?? '03:00'))
+    const hour = time ? Math.min(23, Number(time[1])) : 3
+    const minute = time ? Math.min(59, Number(time[2])) : 0
+    const cadence = merged.cadence ?? 'weekly'
+    if (cadence === 'nightly') return { cron: `${minute} ${hour} * * *` }
+    if (cadence === 'monthly') return { cron: `${minute} ${hour} 1 * *` }
+    return { cron: `${minute} ${hour} * * 0` }
+  }
+
+  readConfig(): { enabled?: boolean; mode?: string; cadence?: string; time?: string } {
+    try {
+      const raw = JSON.parse(fs.readFileSync(path.join(this.config.dataRoot, '.evoresearch-data', 'autoskills-config.json'), 'utf8'))
+      return typeof raw === 'object' && raw !== null ? raw : {}
+    } catch {
+      return {}
+    }
   }
 }

@@ -242,6 +242,29 @@ export class EvoResearchApiService extends TypertRemoteService {
     return { ok: this.services.autoskills.run(args.proposalId) }
   }
 
+  /** AutoSkills 调度配置（§42.9）：读（空参数）或写；写时对 scheduler 中 AutoSkills 任务 reconcile。 */
+  @Remote('autoskillsConfig')
+  autoskillsConfig(args: { enabled?: boolean; mode?: string; cadence?: string; time?: string }): unknown {
+    if (Object.keys(args).length === 0) {
+      return this.services.autoskills.readConfig()
+    }
+    const { cron } = this.services.autoskills.saveConfig(args)
+    // reconcile：先删旧 AutoSkills 任务（禁用删除；配置变化替换；相同保留由"删除后重建"等价实现）
+    const scheduler = this.services.scheduler
+    for (const task of scheduler.list()) {
+      if (task.name === 'AutoSkills') scheduler.remove(task.taskId)
+    }
+    if (cron !== null) {
+      scheduler.add({
+        name: 'AutoSkills',
+        cron,
+        prompt: '执行 AutoSkills 技能提案生成与审核流程。',
+        workspaceDir: '',
+      })
+    }
+    return { saved: true, cron }
+  }
+
   // ── 专家团队 ──────────────────────────────────────────────────────────────
 
   @Remote('expertsList')

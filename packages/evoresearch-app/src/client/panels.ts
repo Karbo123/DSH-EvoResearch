@@ -436,6 +436,23 @@ export function SkillsPanel() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [view, setView] = useState<'proposals' | 'marketplace'>('proposals')
+  // §42.9 AutoSkills 调度配置
+  const [asEnabled, setAsEnabled] = useState(true)
+  const [asMode, setAsMode] = useState('review')
+  const [asCadence, setAsCadence] = useState('weekly')
+  const [asTime, setAsTime] = useState('03:00')
+  const [asCron, setAsCron] = useState<string | null>(null)
+  const [asSaving, setAsSaving] = useState(false)
+  useEffect(() => {
+    void api<{ enabled?: boolean; mode?: string; cadence?: string; time?: string }>('autoskills-config')
+      .then((cfg) => {
+        if (typeof cfg.enabled === 'boolean') setAsEnabled(cfg.enabled)
+        if (typeof cfg.mode === 'string') setAsMode(cfg.mode)
+        if (typeof cfg.cadence === 'string') setAsCadence(cfg.cadence)
+        if (typeof cfg.time === 'string') setAsTime(cfg.time)
+      })
+      .catch(() => {})
+  }, [])
 
   const load = () => {
     setProposals(null)
@@ -471,6 +488,50 @@ export function SkillsPanel() {
         className: 'evo-skill-tabs',
         children: [tab('all', 'All'), tab('pending', 'Pending'), tab('approved', 'Approved'), tab('rejected', 'Rejected')],
       }),
+      // §42.9 AutoSkills 调度设置：enabled / mode / cadence / time（保存时 reconcile scheduler）
+      jsx('div', { className: 'evo-panel-form', children: [
+        jsx('div', { className: 'evo-panel-label', children: 'AutoSkills schedule' }),
+        jsxs('div', { className: 'evo-sched-fields', children: [
+          jsx('label', { className: 'evo-panel-check', children: jsxs(Fragment, { children: [
+            jsx('input', { type: 'checkbox', checked: asEnabled, onChange: (e) => setAsEnabled(e.currentTarget.checked) }),
+            jsx('span', { children: 'Enabled' }),
+          ] }) }),
+          jsx('select', {
+            className: 'evo-panel-input evo-sched-select',
+            value: asMode,
+            onChange: (e) => setAsMode(e.currentTarget.value),
+            'aria-label': 'AutoSkills mode',
+            children: [jsx('option', { value: 'review', children: 'Review' }, 'review'), jsx('option', { value: 'auto', children: 'Auto' }, 'auto')],
+          }),
+          jsx('select', {
+            className: 'evo-panel-input evo-sched-select',
+            value: asCadence,
+            onChange: (e) => setAsCadence(e.currentTarget.value),
+            'aria-label': 'AutoSkills cadence',
+            children: [['nightly', 'Nightly'], ['weekly', 'Weekly'], ['monthly', 'Monthly']].map(([v, label]) => jsx('option', { value: v, children: label }, v)),
+          }),
+          jsx('input', {
+            type: 'time',
+            className: 'evo-panel-input evo-sched-select',
+            value: asTime,
+            onChange: (e) => setAsTime(e.currentTarget.value),
+            'aria-label': 'AutoSkills time',
+          }),
+          jsx('button', {
+            type: 'button',
+            className: 'evo-btn evo-btn-ok',
+            disabled: asSaving,
+            onClick: () => {
+              setAsSaving(true)
+              void api<{ saved?: boolean; cron?: string | null }>('autoskills-config', { enabled: asEnabled, mode: asMode, cadence: asCadence, time: asTime })
+                .then((r) => { setAsSaving(false); setAsCron(r.cron ?? null); setError(r.saved === true ? null : '保存失败') })
+                .catch((e: any) => { setAsSaving(false); setError(String(e?.message ?? e)) })
+            },
+            children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: asSaving ? 'Saving…' : 'Save' })] }),
+          }),
+        ] }),
+        asCron !== null && jsx('code', { className: 'evo-sched-preview', children: `cron ${asCron}` }),
+      ] }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
       proposals === null
         ? jsx(LoadingRow, {})
