@@ -57,6 +57,7 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 | 🧵 | **会话管理与 Side Chat** | Recents 行悬停操作：重命名（官方 session.rename）、导出 JSON/Markdown（§41.8 格式）、从该会话派生 Side Chat（官方 session.fork，需已完成轮次，失败透出原因）；侧聊不混入普通 Recents；Inspector Side chats 页：Blank 空白侧聊（仅继承 workspace）/Inherit 继承侧聊 + tab 列表 + 打开；忙时队列弹层：编辑/删除/清空（官方 session.updateQueue） |
 | 🤖 | **模型选择器** | 状态条模型名本身是按钮（§25.2）：点击弹出 provider 分组目录（llm 注册表动态读取 + 各 adapter listModels），选择即保存默认模型并即时生效 |
 | 🛡️ | **HITL 工具审批** | 待审批工具调用显示为卡片（工具名/调用 ID/审批理由），Approve 放行（实测沙箱升级并写入文件）/ Reject 拒绝（实测不执行）；审批期间发送按钮禁用（§21.2） |
+| 🧰 | **工具卡片** | 同一步骤的工具调用分组展示（默认折叠已完成的组，运行中自动展开 + spinner）；每张卡片：名称、状态（running/success/error 三色）、参数（点击展开）、结果（真实工具输出，截断可展开，§21.1） |
 | ⚙️ | **Dynamic Workflow** | 输入区上方阶段条：工作流名称 + 子任务标签（running/done/failed 状态色）+ 完成数（n/m）+ 实时耗时 + 结束原因；右侧 X 二次确认清除（仅移除浏览器记录，§24） |
 | ⏳ | **后台任务** | 输入面板后台任务按钮（运行中计数徽标）→ 弹层列出会话后台作业：类型/名称/详情/状态（running·stopping·completed·killed·failed 状态点）/实时耗时（官方 jobsBySession 快照，§21.6） |
 | 📊 | **会话状态条与统计** | 输入面板实时徽章（排队消息 / 进行中目标 / 权限模式 Read-only·Write·Full effect / 当前模型 / 上下文用量%）+ 底部统计条（轮·步 \| LLM 耗时 · 工具耗时 \| 首 token 平均 · tok/s \| 缓存命中 \| 输入·输出 tokens） |

@@ -99,7 +99,10 @@ function toAssistantBlockCompat(block) {
   }
 }
 
-/** 每个 step 一条 assistant 消息（流式 + 最终）。 */
+/** 每个 step 一条 assistant 消息（流式 + 最终 + 工具调用块保留）。
+ * 工具结果（§21.1 running/success/error 与结果展示）不折叠进 Definition——
+ * 引擎的已定稿节点视图不随 tool/result 更新重绘，改由渲染层按 callId 从
+ * session.events（tool/result 事件）直接关联。 */
 const assistantDefinition = {
   kind: 'assistant-step',
   target: 'chat',
@@ -114,9 +117,22 @@ const assistantDefinition = {
   update: (context, match) => {
     if (match.event.type === 'assistant/chunk') return updateChunk(context.state, match)
     if (match.event.type === 'assistant/message') {
+      const finalBlocks = toAssistantBlocks(match.event.data.message.content)
+      // 最终消息通常只含文本：保留流式期已出现的工具调用块（结果由渲染层关联），
+      // 与最终块按 callId 去重合并（§21.1 工具卡片在定稿后仍可见）
+      const byCallId = new Map(context.state.blocks.filter((b) => b.kind === 'tool-call').map((b) => [b.callId, b]))
+      const merged = finalBlocks.map((b) => {
+        if (b.kind === 'tool-call' && byCallId.has(b.callId)) {
+          const previous = byCallId.get(b.callId)
+          byCallId.delete(b.callId)
+          return previous
+        }
+        return b
+      })
+      for (const leftover of byCallId.values()) merged.push(leftover)
       return {
         ...context.state,
-        blocks: toAssistantBlocks(match.event.data.message.content),
+        blocks: merged,
         hidden: false,
         final: match,
         usage: match.event.data.usage,

@@ -222,10 +222,36 @@ body { margin: 0; }
 .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 3px; text-align: right; }
 .evo-msg-cursor { display: inline-block; width: 7px; height: 15px; margin-left: 2px; background: var(--brand); vertical-align: -2px; animation: evo-blink 1s steps(2) infinite; }
 @keyframes evo-blink { 50% { opacity: 0; } }
-.evo-tool-card { display: flex; align-items: flex-start; gap: 8px; padding: 7px 11px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); font-size: 12.5px; color: var(--color-text-secondary); }
-.evo-tool-card svg { width: 14px; height: 14px; margin-top: 1px; flex-shrink: 0; color: var(--color-text-tertiary); }
+/* ── 工具卡片分组（§21.1：running/success/error 状态 + 折叠）── */
+.evo-tool-group { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.evo-tool-group-head { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; padding: 6px 10px; border: 1px solid var(--color-border-light); border-radius: 9px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
+.evo-tool-group-head:hover { border-color: var(--color-border); }
+.evo-tool-group-head svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--color-text-tertiary); }
+.evo-tool-group-state { margin-left: auto; font-size: 11px; color: var(--color-text-tertiary); }
+.evo-tool-group-body { display: flex; flex-direction: column; gap: 4px; padding-left: 8px; }
+.evo-tool-chev { transition: transform 0.15s; }
+.evo-tool-chev.open { transform: rotate(90deg); }
+.evo-tool-card { display: flex; flex-direction: column; gap: 4px; padding: 7px 11px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); font-size: 12.5px; color: var(--color-text-secondary); }
+.evo-tool-card.running { border-color: color-mix(in srgb, var(--brand) 40%, var(--color-border)); }
+.evo-tool-card.success { border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border)); }
+.evo-tool-card.error { border-color: color-mix(in srgb, var(--color-error) 40%, var(--color-border)); }
+.evo-tool-head { display: flex; align-items: center; gap: 7px; }
+.evo-tool-head svg { width: 14px; height: 14px; flex-shrink: 0; }
+.evo-tool-card.success .evo-tool-head svg { color: var(--color-success); }
+.evo-tool-card.error .evo-tool-head svg { color: var(--color-error); }
 .evo-tool-name { font-weight: 600; color: var(--color-text-primary); font-family: var(--font-mono, ui-monospace, Consolas, monospace); flex-shrink: 0; }
-.evo-tool-args { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-tertiary); font-family: var(--font-mono, ui-monospace, Consolas, monospace); }
+.evo-tool-state { margin-left: auto; font-size: 11px; color: var(--color-text-tertiary); }
+.evo-tool-card.running .evo-tool-state { color: var(--brand); }
+.evo-tool-card.success .evo-tool-state { color: var(--color-success); }
+.evo-tool-card.error .evo-tool-state { color: var(--color-error); }
+.evo-tool-spinner { width: 11px; height: 11px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--brand) 30%, transparent); border-top-color: var(--brand); animation: evo-spin 0.8s linear infinite; flex-shrink: 0; display: inline-block; }
+@keyframes evo-spin { to { transform: rotate(360deg); } }
+.evo-tool-args, .evo-tool-result { display: flex; align-items: flex-start; gap: 7px; width: 100%; text-align: left; border: none; background: none; padding: 0; color: var(--color-text-secondary); cursor: pointer; font-size: 12px; line-height: 1.55; }
+.evo-tool-args:hover, .evo-tool-result:hover { color: var(--color-text-primary); }
+.evo-tool-args-text, .evo-tool-result-text { font-family: var(--font-mono, ui-monospace, Consolas, monospace); white-space: pre-wrap; word-break: break-word; }
+.evo-tool-result-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; margin-top: 2px; color: var(--color-text-tertiary); }
+.evo-tool-card.error .evo-tool-result-label { color: var(--color-error); }
+.evo-tool-card.success .evo-tool-result-label { color: var(--color-success); }
 /* ── 桌面自绘标题栏 ── */
 html.evo-desktop body { margin: 0 !important; }
 .evo-app[data-desktop] { height: calc(100vh - 36px); margin-top: 36px; }

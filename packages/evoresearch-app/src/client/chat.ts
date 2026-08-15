@@ -10,7 +10,8 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
-  ChevronDown, ChevronUp, Shrink, Info, Search, Bell, BellOff, Keyboard, ListTodo, X as XIcon, Trash2, Terminal,
+  ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
+  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2,
 } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
@@ -134,10 +135,83 @@ function assistantText(node: ChatNode): string {
     .join('\n')
 }
 
-function assistantTools(node: ChatNode): Array<{ name: string; args: string }> {
+function assistantTools(node: ChatNode, toolResults: Record<string, { text: string; isError: boolean }>): Array<{ name: string; args: string; result?: string; isError?: boolean }> {
   return (node.data.blocks ?? [])
     .filter((b) => b.kind === 'tool-call')
-    .map((b) => ({ name: b.name ?? 'tool', args: b.argsRaw ?? '' }))
+    .map((b) => {
+      const linked = b.callId !== undefined ? toolResults[b.callId] : undefined
+      return {
+        name: b.name ?? 'tool',
+        args: b.argsRaw ?? '',
+        ...(linked !== undefined ? { result: linked.text, isError: linked.isError } : {}),
+      }
+    })
+}
+
+/** 从会话原始事件提取工具结果（§21.1）：tool/result → callId → {text, isError}。 */
+function toolResultsOf(session: any): Record<string, { text: string; isError: boolean }> {
+  const map: Record<string, { text: string; isError: boolean }> = {}
+  for (const ev of session?.events ?? []) {
+    if (ev?.type !== 'tool/result') continue
+    const d = ev.data ?? {}
+    const block = Array.isArray(d.message?.content) ? d.message.content.find((b) => b?.type === 'tool-result') : undefined
+    const callId = d.message?.source?.callId ?? block?.toolCallId
+    if (callId === undefined || callId === '') continue
+    const content = block?.content
+    const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((c: any) => (typeof c === 'string' ? c : String(c?.text ?? ''))).join('\n') : ''
+    map[callId] = { text, isError: block?.isError === true || d.error !== undefined }
+  }
+  return map
+}
+
+/** 工具卡片（§21.1）：名称/状态/参数折叠/结果（success·error·running）。 */
+function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; args: string; result?: string; isError?: boolean }; running: boolean; defaultExpanded: boolean }) {
+  const [argsOpen, setArgsOpen] = useState(defaultExpanded)
+  const [resultOpen, setResultOpen] = useState(false)
+  const status = running ? 'running' : tool.result === undefined ? 'running' : tool.isError ? 'error' : 'success'
+  const argsTruncated = tool.args.length > 120
+  const resultTruncated = (tool.result ?? '').length > 160
+  return jsxs('div', {
+    className: `evo-tool-card${status === 'running' ? ' running' : ''}${status === 'error' ? ' error' : ''}${status === 'success' ? ' success' : ''}`,
+    children: [
+      jsxs('div', {
+        className: 'evo-tool-head',
+        children: [
+          status === 'running'
+            ? jsx('span', { className: 'evo-tool-spinner', 'aria-label': 'running' })
+            : status === 'error'
+              ? jsx(XCircle, {})
+              : jsx(CheckCircle2, {}),
+          jsx('span', { className: 'evo-tool-name', children: tool.name }),
+          jsx('span', { className: 'evo-tool-state', children: status }),
+        ],
+      }),
+      tool.args !== '' && jsx('button', {
+        type: 'button',
+        className: 'evo-tool-args',
+        onClick: () => setArgsOpen((v) => !v),
+        title: argsOpen ? 'Collapse arguments' : 'Expand arguments',
+        children: jsxs(Fragment, {
+          children: [
+            jsx(ChevronRight, { className: argsOpen ? 'evo-tool-chev open' : 'evo-tool-chev' }),
+            jsx('span', { className: 'evo-tool-args-text', children: argsOpen || !argsTruncated ? tool.args : `${tool.args.slice(0, 120)}…` }),
+          ],
+        }),
+      }),
+      tool.result !== undefined && tool.result !== '' && jsx('button', {
+        type: 'button',
+        className: 'evo-tool-result',
+        onClick: () => setResultOpen((v) => !v),
+        title: resultOpen ? 'Collapse result' : 'Expand result',
+        children: jsxs(Fragment, {
+          children: [
+            jsx('span', { className: 'evo-tool-result-label', children: tool.isError ? 'error' : 'result' }),
+            jsx('span', { className: 'evo-tool-result-text', children: resultOpen || !resultTruncated ? tool.result : `${(tool.result ?? '').slice(0, 160)}…` }),
+          ],
+        }),
+      }),
+    ],
+  })
 }
 
 /** 用户消息气泡。 */
@@ -161,11 +235,15 @@ function UserBubble({ text, time, nodeKey, highlight }: { text: string; time?: n
   })
 }
 
-/** 助手消息（头像 + 内容 + 工具卡片）。 */
-function AssistantBubble({ node, nodeKey, highlight }: { node: ChatNode; nodeKey?: string; highlight?: boolean }) {
+/** 助手消息（头像 + 内容 + 工具卡片分组）。 */
+function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: ChatNode; nodeKey?: string; highlight?: boolean; toolResults: Record<string, { text: string; isError: boolean }> }) {
   const text = assistantText(node)
-  const tools = assistantTools(node)
+  const tools = assistantTools(node, toolResults)
   const running = node.data.status === 'running'
+  const settled = node.data.status === 'settled'
+  // 工具组：默认折叠已完成的组（§21.1），运行中自动展开
+  const [toolsOpen, setToolsOpen] = useState(!settled)
+  const anyRunning = tools.some((t) => t.result === undefined)
   return jsxs('div', {
     className: `evo-msg-row${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
@@ -187,16 +265,29 @@ function AssistantBubble({ node, nodeKey, highlight }: { node: ChatNode; nodeKey
               }),
             ],
           }),
-          tools.map((tool, i) => jsx('div', {
-            className: 'evo-tool-card',
-            children: jsxs(Fragment, {
-              children: [
-                jsx(Wrench, {}),
-                jsx('span', { className: 'evo-tool-name', children: tool.name }),
-                tool.args !== '' && jsx('span', { className: 'evo-tool-args', children: tool.args.length > 120 ? `${tool.args.slice(0, 120)}…` : tool.args }),
-              ],
-            }),
-          }, `${node.key}-tool-${i}`)),
+          tools.length > 0 && jsxs('div', {
+            className: 'evo-tool-group',
+            children: [
+              jsx('button', {
+                type: 'button',
+                className: 'evo-tool-group-head',
+                onClick: () => setToolsOpen((v) => !v),
+                'aria-expanded': toolsOpen || undefined,
+                children: jsxs(Fragment, {
+                  children: [
+                    jsx(ChevronRight, { className: `evo-tool-chev${toolsOpen ? ' open' : ''}` }),
+                    anyRunning ? jsx('span', { className: 'evo-tool-spinner', 'aria-label': 'running' }) : jsx(Wrench, {}),
+                    jsx('span', { children: `Tools · ${tools.length}` }),
+                    jsx('span', { className: 'evo-tool-group-state', children: anyRunning ? 'running' : 'done' }),
+                  ],
+                }),
+              }),
+              toolsOpen && jsx('div', {
+                className: 'evo-tool-group-body',
+                children: tools.map((tool, i) => jsx(ToolCard, { tool, running: running || tool.result === undefined, defaultExpanded: anyRunning }, `${node.key}-tool-${i}`)),
+              }),
+            ],
+          }),
         ],
       }),
     ],
@@ -436,6 +527,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const shown = messageNodes.slice(-visibleCount)
   const hasMore = messageNodes.length > visibleCount
   const showMessages = hasMessages && !clearView
+  const toolResults = toolResultsOf(session)
   const [wfCleared, setWfCleared] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(`evoresearch-dynamic-workflows:${sessionId ?? ''}`) ?? '[]') } catch { return [] }
   })
@@ -477,8 +569,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 }),
                 ...shown.map((node) => node.kind === 'user'
                   ? jsx(UserBubble, { text: node.data.text ?? '', time: node.data.time, nodeKey: node.key, highlight: node.key === jumpKey }, node.key)
-                  : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey }, node.key)),
-                partial !== null && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial }, partial.key),
+                  : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults }, node.key)),
+                partial !== null && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults }, partial.key),
                 showJump && jsx('button', {
                   type: 'button',
                   className: 'evo-jump-latest',
