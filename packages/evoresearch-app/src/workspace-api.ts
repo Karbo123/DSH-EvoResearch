@@ -696,14 +696,43 @@ export function registerWorkspaceApi(ctx: any): void {
             }
             return ''
           }
-          const messages: Array<{ role: string; text: string; time?: number }> = []
+          // §41.8：JSON 导出为完整诊断格式——先收集 tool/result（按 callId），再组装消息
+          const toolResults: Record<string, { text: string; isError: boolean }> = {}
+          for (const event of events) {
+            if (event?.type !== 'tool/result') continue
+            const d = event.data ?? {}
+            const block = Array.isArray(d.message?.content) ? d.message.content.find((b: any) => b?.type === 'tool-result') : undefined
+            const callId = d.message?.source?.callId ?? block?.toolCallId
+            if (callId === undefined || callId === '') continue
+            const content = block?.content
+            const text = typeof content === 'string'
+              ? content
+              : Array.isArray(content) ? content.map((c: any) => (typeof c === 'string' ? c : String(c?.text ?? ''))).join('\n') : ''
+            toolResults[String(callId)] = { text, isError: block?.isError === true || d.error !== undefined }
+          }
+          const messages: Array<{ role: string; text: string; time?: number; reasoning?: string; tools?: Array<{ callId: string; name: string; args: string; result?: string; isError?: boolean }> }> = []
           for (const event of events) {
             if (event?.type === 'user/message') {
               const text = textBlocks(event.data?.content)
               if (text !== '') messages.push({ role: 'user', text, time: event.time })
             } else if (event?.type === 'assistant/message') {
-              const text = textBlocks(event.data?.message?.content)
-              if (text !== '') messages.push({ role: 'assistant', text, time: event.time })
+              const content = event.data?.message?.content
+              if (!Array.isArray(content)) continue
+              const text = content.filter((b: any) => b?.type === 'text').map((b: any) => String(b.text ?? '')).join('')
+              const reasoning = content.filter((b: any) => b?.type === 'reasoning').map((b: any) => String(b.text ?? '')).join('')
+              const toolCalls = content.filter((b: any) => b?.type === 'tool-call')
+              if (text === '' && reasoning === '' && toolCalls.length === 0) continue
+              const tools = toolCalls.map((b: any) => {
+                const callId = String(b.id ?? '')
+                const r = toolResults[callId]
+                const entry: { callId: string; name: string; args: string; result?: string; isError?: boolean } = { callId, name: b.name ?? '', args: b.arguments ?? '' }
+                if (r !== undefined) { entry.result = r.text; entry.isError = r.isError }
+                return entry
+              })
+              const m: { role: string; text: string; time?: number; reasoning?: string; tools?: Array<{ callId: string; name: string; args: string; result?: string; isError?: boolean }> } = { role: 'assistant', text, time: event.time }
+              if (reasoning !== '') m.reasoning = reasoning
+              if (tools.length > 0) m.tools = tools
+              messages.push(m)
             }
           }
           const title = typeof payload.title === 'string' && payload.title !== '' ? payload.title : sessionId.slice(0, 12)
