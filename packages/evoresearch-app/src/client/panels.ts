@@ -785,13 +785,15 @@ export function SkillsPanel() {
 
 interface ProjectRow { name: string; path?: string }
 
-/** Workspace 面板：项目列表 + Import Project。 */
+/** Workspace 面板：项目列表 + 新建项目 + Import Project。 */
 export function WorkspacePanel() {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null)
   const [sourcePath, setSourcePath] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
 
   const load = () => {
     setProjects(null)
@@ -799,6 +801,17 @@ export function WorkspacePanel() {
   }
 
   useEffect(() => { load() }, [])
+
+  const doCreate = () => {
+    if (!newName.trim()) return
+    setCreating(true)
+    setError(null)
+    void api<ProjectRow>('projects-create', { name: newName.trim() }).then((project) => {
+      setCreating(false)
+      if (project?.name !== undefined) { setNewName(''); load() }
+      else setError('创建失败')
+    }).catch((e: any) => { setCreating(false); setError(String(e?.message ?? e)) })
+  }
 
   const doImport = () => {
     if (!sourcePath.trim()) return
@@ -820,6 +833,26 @@ export function WorkspacePanel() {
     children: jsxs(Fragment, {
       children: [
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        jsxs('div', {
+          className: 'evo-panel-form',
+          children: [
+            jsx('input', {
+              type: 'text',
+              className: 'evo-panel-input',
+              placeholder: t('newProjectName'),
+              value: newName,
+              onInput: (e) => setNewName(e.currentTarget.value),
+              onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') doCreate() },
+            }),
+            jsx('button', {
+              type: 'button',
+              className: 'evo-panel-add',
+              disabled: creating || !newName.trim(),
+              onClick: doCreate,
+              children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: creating ? t('creating') : t('newProject') })] }),
+            }),
+          ],
+        }),
         jsxs('div', {
           className: 'evo-panel-form',
           children: [

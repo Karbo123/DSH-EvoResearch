@@ -346,6 +346,19 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.projectsList as () => Promise<unknown>)())
           return
         }
+        // 新建项目（§5.4）：合法名直接使用，非法名自动 slug 化；目录 + git init + README
+        if (method === 'projects-create') {
+          if (evoresearch?.projectCreate === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const name = requireString(payload, 'name')
+          if (name.trim().length === 0) throw httpError(400, 'bad-name', '项目名不能为空')
+          try {
+            const project = await (evoresearch.projectCreate as (a: { name: string }) => Promise<unknown>).call(evoresearch, { name: name.trim() })
+            writeOk(res, project)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         if (method === 'memory-catalog') {
           if (evoresearch?.memoryCatalog === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.memoryCatalog as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))

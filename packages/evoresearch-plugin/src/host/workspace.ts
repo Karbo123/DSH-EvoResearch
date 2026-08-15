@@ -67,6 +67,11 @@ export class WorkspaceService {
     const dir = projectDir(this.config.dataRoot, safe)
     fs.mkdirSync(dir, { recursive: true })
     this.prepareProjectGit(dir)
+    // §5.4：创建基础 README（幂等，仅当不存在）
+    const readme = path.join(dir, 'README.md')
+    if (!fs.existsSync(readme)) {
+      fs.writeFileSync(readme, `# ${safe}\n\nEvoResearch 项目工作区。\n`, 'utf8')
+    }
     return { name: safe, path: dir, dataDir: projectDataDir(this.config.dataRoot, safe), createdAt: Date.now() }
   }
 
