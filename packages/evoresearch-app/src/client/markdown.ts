@@ -134,6 +134,11 @@ const md = new MarkdownIt({
   linkify: true,
   breaks: false,
   highlight(str: string, lang: string): string {
+    if (lang === 'mermaid') {
+      // 占位容器：流式期间不渲染，回答结束后由 renderMermaidBlocks 惰性绘制（§31.5）。
+      // 以 <pre 开头避免 markdown-it fence 渲染器再次包一层 pre/code。
+      return `<pre class="evo-mermaid">${md.utils.escapeHtml(str)}</pre>`
+    }
     if (lang !== '' && hljs.getLanguage(lang)) {
       try {
         return `<pre class="hljs"><code class="language-${lang}">${hljs.highlight(str, { language: lang, ignoreIllegals: true }).value}</code></pre>`
@@ -144,6 +149,56 @@ const md = new MarkdownIt({
 })
 md.use(taskLists, { enabled: true, label: true })
 md.use(mathPlugin)
+
+// ── Mermaid 惰性渲染（§31.5）─────────────────────────────────────────────
+let mermaidLoading: Promise<unknown> | null = null
+function loadMermaid(): Promise<unknown> {
+  if (typeof window === 'undefined') return Promise.resolve(null)
+  if ((window as any).__evoMermaid !== undefined) return Promise.resolve((window as any).__evoMermaid)
+  if (mermaidLoading !== null) return mermaidLoading
+  mermaidLoading = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = '/assets/mermaid.js'
+    script.onload = () => resolve((window as any).__evoMermaid)
+    script.onerror = () => { mermaidLoading = null; reject(new Error('mermaid 加载失败')) }
+    document.head.appendChild(script)
+  })
+  return mermaidLoading
+}
+
+let mermaidSeq = 0
+
+/**
+ * 将容器内未渲染的 .evo-mermaid 占位块绘制为 SVG。
+ * 惰性加载 /assets/mermaid.js（首屏不携带）；失败时占位替换为提示文本。
+ */
+export async function renderMermaidBlocks(root: HTMLElement): Promise<void> {
+  const blocks = [...root.querySelectorAll<HTMLElement>('.evo-mermaid:not([data-done])')]
+  if (blocks.length === 0) return
+  let mermaid: any
+  try {
+    mermaid = await loadMermaid()
+  } catch {
+    for (const block of blocks) {
+      block.setAttribute('data-done', '1')
+      block.textContent = '（Mermaid 渲染库加载失败）'
+    }
+    return
+  }
+  if (mermaid === undefined || mermaid === null) return
+  for (const block of blocks) {
+    block.setAttribute('data-done', '1')
+    const code = block.textContent ?? ''
+    if (code.trim() === '') continue
+    try {
+      mermaidSeq += 1
+      const { svg } = await mermaid.render(`evo-mmd-${mermaidSeq}-${Date.now()}`, code)
+      block.innerHTML = svg
+    } catch {
+      block.textContent = '（Mermaid 渲染失败：请检查图表语法）'
+    }
+  }
+}
 
 /**
  * DOMPurify 白名单：允许 markdown 语义标签与类名；style 属性保留

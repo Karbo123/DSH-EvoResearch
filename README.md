@@ -30,9 +30,9 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 暖色"纸面"设计、青色品牌色，浅/深双主题，三栏可拖拽布局 —— 对话、会话历史、右侧
 工作区检查器一屏尽览。
 
-| 深色主题 · 三栏工作台 | 浅色主题 · 欢迎页 | 深色主题 · Markdown 渲染 | 深色主题 · 输入预览 |
+| 深色主题 · 三栏工作台 | 浅色主题 · 欢迎页 | 深色主题 · Markdown 渲染 | 深色主题 · Mermaid 流程图 |
 |---|---|---|---|
-| ![三栏工作台](docs/screenshots/workspace-dark.png) | ![浅色欢迎页](docs/screenshots/hero-light.png) | ![消息 Markdown 渲染](docs/screenshots/markdown-chat-dark.png) | ![输入框 Markdown 预览](docs/screenshots/markdown-preview-dark.png) |
+| ![三栏工作台](docs/screenshots/workspace-dark.png) | ![浅色欢迎页](docs/screenshots/hero-light.png) | ![消息 Markdown 渲染](docs/screenshots/markdown-chat-dark.png) | ![Mermaid 流程图](docs/screenshots/mermaid-dark.png) |
 
 > 输入面板的状态条与底部统计条（轮·步 / LLM 耗时 / tok/s / 上下文用量 / 权限模式）已在截图中体现。
 
@@ -50,7 +50,7 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 | 👁️ | **视觉检查工具** | `vision_check` 工具 + 截图脚本，让模型能"看见"界面并自检（OpenAI 兼容视觉模型） |
 | 💬 | **斜杠命令** | `/project` `/memory` `/schedule` `/channel` `/expert` `/autoskills` |
 | 🖥️ | **自定义工作台界面** | 自建浏览器表面（不加载官方 ui-\* 外壳）：顶栏 + 会话历史 + 真实多轮对话 + 输入面板 + 右侧检查器，浅/深双主题，中英双语 |
-| ✍️ | **Markdown 渲染** | 消息与输入框 Write/Preview 双模式：GFM 表格、任务列表、KaTeX 数学公式（字体内联）、highlight.js 科研语言子集高亮、DOMPurify 白名单净化 |
+| ✍️ | **Markdown 渲染** | 消息与输入框 Write/Preview 双模式：GFM 表格、任务列表、KaTeX 数学公式（字体内联）、highlight.js 科研语言子集高亮、**Mermaid 流程图**（回答结束后惰性加载绘制，独立 chunk 不拖慢首屏）、DOMPurify 白名单净化 |
 | 📜 | **历史分页与滚动** | 默认只渲染最近 100 条，Load earlier 向前翻页且滚动锚定不跳动；仅在位于底部时自动跟随新消息，上滚时右下角出现「回到最新」并释放旧页；忙时消息进入队列 |
 | ⌨️ | **输入辅助** | 斜杠命令候选框（目录动态读取 dsh-commands 注册表 + 平台命令镜像，Tab/方向键/Esc 导航）、`@文件` 补全（workspace 递归树、基名优先排序、发送时小型文本自动注入内容）、每 workspace 输入历史（最近 200 条，空输入上下键浏览、前缀建议） |
 | 🎛️ | **会话动作** | 输入面板动作条：Compact（二次确认 → `/compact` 摘要投影）、Current 弹窗（Thread/workspace/模型/权限/token·context/专家/事件数/会话文件路径与大小 + Clear view 仅清展示不删数据）、Search（先搜当前视图、Full history 走全历史搜索、点击跳转高亮）、Notify（浏览器通知开关）、Shortcuts（键盘规则表） |

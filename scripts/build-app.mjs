@@ -149,9 +149,20 @@ async function buildFrontend() {
       '.gif': 'dataurl',
     },
   })
+  // Mermaid 惰性 bundle（§31.5：回答结束后按需加载绘制；独立 chunk 不拖慢首屏）
+  await build({
+    entryPoints: [join(PKG, 'frontend', 'mermaid-entry.ts')],
+    outfile: join(assets, 'mermaid.js'),
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    sourcemap: false,
+    minify: true,
+  })
   copyFileSync(join(PKG, 'frontend', 'index.html'), join(dist, 'index.html'))
   copyFileSync(join(PKG, 'frontend', 'favicon.svg'), join(dist, 'favicon.svg'))
-  console.log('[build-app] frontend → dist/（index.html + assets/index.js + favicon.svg）')
+  console.log('[build-app] frontend → dist/（index.html + assets/index.js + assets/mermaid.js + favicon.svg）')
 }
 
 async function main() {

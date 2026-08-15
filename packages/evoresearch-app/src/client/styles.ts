@@ -437,6 +437,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-md img { max-width: 100%; border-radius: 8px; }
 .evo-md .katex-display { margin: 8px 0 16px; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 .evo-md .hljs { background: transparent; }
+.evo-md .evo-mermaid { margin: 0 0 16px; padding: 12px 14px; border: 1px dashed var(--color-border); border-radius: 8px; background: var(--color-background); color: var(--color-text-tertiary); font-size: 12.5px; font-family: ui-monospace, Consolas, monospace; overflow-x: auto; white-space: pre-wrap; }
+.evo-md .evo-mermaid svg { max-width: 100%; height: auto; display: block; white-space: normal; }
 /* ── 输入框 Markdown 预览 ── */
 .evo-md-toggle { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); }
 .evo-md-toggle-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 999px; cursor: pointer; }

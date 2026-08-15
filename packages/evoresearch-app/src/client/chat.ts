@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
-import { renderMarkdown } from './markdown'
+import { renderMarkdown, renderMermaidBlocks } from './markdown'
 import {
   CandidatePopup, buildCandidates, detectTrigger, pushHistory, readHistory,
   resolveMentions, useCommandCatalog, useFileTree,
@@ -363,6 +363,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (el === null || !nearBottomRef.current) return
     el.scrollTop = el.scrollHeight
   }, [nodes.length, partial?.data.blocks])
+
+  // Mermaid 惰性渲染（§31.5）：流式期间不绘制，回答结束后按需加载 /assets/mermaid.js
+  useEffect(() => {
+    if (running) return
+    const root = listRef.current
+    if (root !== null) void renderMermaidBlocks(root)
+    const previewEl = document.querySelector<HTMLElement>('.evo-composer-preview')
+    if (previewEl !== null) void renderMermaidBlocks(previewEl)
+  }, [nodes, running, preview])
 
   // 展开更早历史后恢复原视觉位置（§9.2 滚动锚定）
   useLayoutEffect(() => {
