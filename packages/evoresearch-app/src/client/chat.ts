@@ -8,7 +8,10 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
-import { Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye, ChevronDown, ChevronUp } from 'lucide-react'
+import {
+  Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
+  ChevronDown, ChevronUp, Shrink, Info, Search, Bell, BellOff, Keyboard,
+} from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
 import { renderMarkdown } from './markdown'
@@ -17,6 +20,7 @@ import {
   resolveMentions, useCommandCatalog, useFileTree,
   type Trigger, type Candidate,
 } from './composer-assist'
+import { CurrentDialog, SearchDialog, ShortcutsDialog, ConfirmDialog } from './session-actions'
 
 const SUGGESTED_PROMPTS = [
   'Survey recent papers on a topic',
@@ -62,10 +66,14 @@ export interface ChatAreaProps {
   error: string | null
   /** 当前会话标题（无会话时为 null）。 */
   currentTitle: string | null
+  /** 当前会话 id（Current/Search 弹窗；无会话时为 null）。 */
+  sessionId: string | null
   /** 会话对象（投影/排队数据；无会话时为 null）。 */
   session: any | null
   /** 当前 workspace（@文件 补全与输入历史的根目录；无会话时为 null）。 */
   cwd: string | null
+  /** 打开另一个会话（Search 全历史结果跳转）。 */
+  onOpenThread: (id: string) => void
   onSend: (text: string) => void
 }
 
@@ -130,9 +138,10 @@ function assistantTools(node: ChatNode): Array<{ name: string; args: string }> {
 }
 
 /** 用户消息气泡。 */
-function UserBubble({ text, time }: { text: string; time?: number }) {
+function UserBubble({ text, time, nodeKey, highlight }: { text: string; time?: number; nodeKey?: string; highlight?: boolean }) {
   return jsxs('div', {
-    className: 'evo-msg-row evo-msg-user',
+    className: `evo-msg-row evo-msg-user${highlight ? ' evo-msg-jump' : ''}`,
+    'data-node-key': nodeKey,
     children: [
       jsx('div', { className: 'evo-msg-user-body' }),
       jsxs('div', {
@@ -150,12 +159,13 @@ function UserBubble({ text, time }: { text: string; time?: number }) {
 }
 
 /** 助手消息（头像 + 内容 + 工具卡片）。 */
-function AssistantBubble({ node }: { node: ChatNode }) {
+function AssistantBubble({ node, nodeKey, highlight }: { node: ChatNode; nodeKey?: string; highlight?: boolean }) {
   const text = assistantText(node)
   const tools = assistantTools(node)
   const running = node.data.status === 'running'
   return jsxs('div', {
-    className: 'evo-msg-row',
+    className: `evo-msg-row${highlight ? ' evo-msg-jump' : ''}`,
+    'data-node-key': nodeKey,
     children: [
       jsx('div', { className: 'evo-msg-avatar', children: jsx(User, {}) }),
       jsxs('div', {
@@ -190,12 +200,57 @@ function AssistantBubble({ node }: { node: ChatNode }) {
   })
 }
 
-export function ChatArea({ nodes, partial, running, error, currentTitle, session, cwd, onSend }: ChatAreaProps) {
+export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, onOpenThread, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [preview, setPreview] = useState(false)
   const [autoApprove, setAutoApprove] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
   const taRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // ── 会话动作（§25.6）：Current / Search / Notify / Shortcuts / Compact / Clear view ──
+  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact'>(null)
+  const [clearView, setClearView] = useState(false)
+  const [notifyOn, setNotifyOn] = useState(() => {
+    try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
+  })
+  const [jumpKey, setJumpKey] = useState<string | null>(null)
+
+  // 切换会话时重置 Clear view 与跳转高亮
+  useEffect(() => { setClearView(false); setJumpKey(null) }, [sessionId])
+
+  const toggleNotify = () => {
+    if (notifyOn) {
+      setNotifyOn(false)
+      try { localStorage.removeItem('evoresearch-notifications') } catch { /* 忽略 */ }
+      return
+    }
+    if (typeof Notification !== 'undefined') {
+      const permission = Notification.requestPermission()
+      if (permission instanceof Promise) {
+        void permission.then((result) => {
+          if (result === 'granted') {
+            setNotifyOn(true)
+            try { localStorage.setItem('evoresearch-notifications', '1') } catch { /* 忽略 */ }
+            try { new Notification('EvoResearch notifications enabled') } catch { /* 忽略 */ }
+          }
+        })
+      } else if (permission === 'granted') {
+        setNotifyOn(true)
+        try { localStorage.setItem('evoresearch-notifications', '1') } catch { /* 忽略 */ }
+      }
+    }
+  }
+
+  const jumpToNode = (key: string) => {
+    if (key === '') return
+    const el = listRef.current?.querySelector(`[data-node-key="${CSS.escape(key)}"]`) as HTMLElement | null
+    if (el !== null) {
+      el.scrollIntoView({ block: 'center' })
+      setJumpKey(key)
+      setTimeout(() => setJumpKey(null), 1600)
+    }
+    setActionDialog(null)
+  }
 
   // ── 输入辅助（§23.2–23.5）：斜杠命令 / @文件 / 输入历史 ──
   const commandCatalog = useCommandCatalog()
@@ -319,12 +374,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)
   const shown = ordered.slice(-visibleCount)
   const hasMore = ordered.length > visibleCount
+  const showMessages = hasMessages && !clearView
 
   return jsxs(Fragment, {
     children: [
       jsx('div', {
         className: 'evo-chat',
-        children: hasMessages
+        children: showMessages
           ? jsxs('div', {
               ref: listRef,
               className: 'evo-msg-list',
@@ -340,8 +396,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 }),
                 ...shown.map((node) => node.kind === 'user'
-                  ? jsx(UserBubble, { text: node.data.text ?? '', time: node.data.time }, node.key)
-                  : jsx(AssistantBubble, { node }, node.key)),
+                  ? jsx(UserBubble, { text: node.data.text ?? '', time: node.data.time, nodeKey: node.key, highlight: node.key === jumpKey }, node.key)
+                  : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey }, node.key)),
                 partial !== null && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial }, partial.key),
                 showJump && jsx('button', {
                   type: 'button',
@@ -355,22 +411,39 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 }),
               ],
             })
-          : jsxs('div', {
-              className: 'evo-welcome',
-              children: [
-                jsx('h1', { children: t('welcome') }),
-                jsx('p', { children: t('tagline') }),
-                jsx('div', {
-                  className: 'evo-suggest',
-                  children: SUGGESTED_PROMPTS.map((p) => jsx('button', {
-                    type: 'button',
-                    className: 'evo-suggest-card',
-                    onClick: () => onSend(p),
-                    children: p,
-                  }, p)),
+          : clearView && hasMessages
+            ? jsx('div', {
+                className: 'evo-clear-notice',
+                children: jsxs('div', {
+                  className: 'evo-clear-notice-box',
+                  children: [
+                    jsx('div', { className: 'evo-clear-notice-title', children: 'View cleared' }),
+                    jsx('div', { className: 'evo-clear-notice-sub', children: '仅清空了本页展示，会话数据未删除；刷新页面即可恢复全部消息。' }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-run',
+                      onClick: () => setClearView(false),
+                      children: 'Restore view',
+                    }),
+                  ],
                 }),
-              ],
-            }),
+              })
+            : jsxs('div', {
+                className: 'evo-welcome',
+                children: [
+                  jsx('h1', { children: t('welcome') }),
+                  jsx('p', { children: t('tagline') }),
+                  jsx('div', {
+                    className: 'evo-suggest',
+                    children: SUGGESTED_PROMPTS.map((p) => jsx('button', {
+                      type: 'button',
+                      className: 'evo-suggest-card',
+                      onClick: () => onSend(p),
+                      children: p,
+                    }, p)),
+                  }),
+                ],
+              }),
       }),
       jsxs('div', {
         className: 'evo-composer-wrap',
@@ -481,6 +554,49 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       children: [jsx(ShieldCheck, {}), jsx('span', { children: t('autoApprove') })],
                     }),
                   }),
+                  // ── 会话动作（§25.6）──
+                  jsx('span', { className: 'evo-composer-divider' }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-tool',
+                    title: 'Compact（摘要投影，不删历史）',
+                    'aria-label': 'Compact',
+                    onClick: () => setActionDialog('compact'),
+                    children: jsx(Shrink, {}),
+                  }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-tool',
+                    title: 'Current session',
+                    'aria-label': 'Current session',
+                    onClick: () => setActionDialog('current'),
+                    children: jsx(Info, {}),
+                  }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-tool',
+                    title: 'Search',
+                    'aria-label': 'Search',
+                    onClick: () => setActionDialog('search'),
+                    children: jsx(Search, {}),
+                  }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-tool',
+                    'data-on': notifyOn || undefined,
+                    title: notifyOn ? 'Notifications on' : 'Notifications off',
+                    'aria-label': 'Notifications',
+                    onClick: toggleNotify,
+                    children: notifyOn ? jsx(Bell, {}) : jsx(BellOff, {}),
+                  }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-tool',
+                    title: 'Keyboard shortcuts',
+                    'aria-label': 'Keyboard shortcuts',
+                    onClick: () => setActionDialog('shortcuts'),
+                    children: jsx(Keyboard, {}),
+                  }),
                   jsx('span', { className: 'evo-composer-spacer' }),
                   jsx('button', {
                     type: 'button',
@@ -497,6 +613,29 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
             ],
           }),
         ],
+      }),
+      // ── 会话动作弹窗（§25.6 / §26.8）──
+      actionDialog === 'current' && sessionId !== null && jsx(CurrentDialog, {
+        sessionId,
+        cwd,
+        session,
+        onClose: () => setActionDialog(null),
+        onClearView: () => setClearView(true),
+      }),
+      actionDialog === 'search' && sessionId !== null && jsx(SearchDialog, {
+        nodes: nodes as Array<{ key: string; kind: string; data: { text?: string } }>,
+        sessionId,
+        onClose: () => setActionDialog(null),
+        onJumpToNode: jumpToNode,
+        onOpenThread,
+      }),
+      actionDialog === 'shortcuts' && jsx(ShortcutsDialog, { onClose: () => setActionDialog(null) }),
+      actionDialog === 'compact' && jsx(ConfirmDialog, {
+        title: 'Compact',
+        message: 'Compact 会对较早的活跃上下文生成摘要投影（§10.3），完整聊天仍保存在数据库中。确认继续？',
+        confirmLabel: 'Compact',
+        onConfirm: () => onSend('/compact'),
+        onClose: () => setActionDialog(null),
       }),
     ],
   })

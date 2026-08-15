@@ -6,9 +6,18 @@
  * 所有操作带信任栅栏（回环 + webRuntime.trustedHosts），写操作限制在
  * 请求声明的根目录内（isWithin 校验）。
  */
-import { opendir, readFile, writeFile } from 'node:fs/promises'
+import { opendir, readFile, stat, writeFile } from 'node:fs/promises'
+import { zstdDecompressSync } from 'node:zlib'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
+import { homedir } from 'node:os'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+
+/** 统计字节流中的行数（事件数近似；超长文件在调用侧已设上限）。 */
+function countLines(buffer: Uint8Array): number {
+  let count = 0
+  for (const byte of buffer) if (byte === 10) count += 1
+  return count + (buffer.length > 0 && buffer[buffer.length - 1] !== 10 ? 1 : 0)
+}
 
 const MEDIA_TYPES: Record<string, string> = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
@@ -381,6 +390,63 @@ export function registerWorkspaceApi(ctx: any): void {
         if (method === 'commands') {
           if (evoresearch?.commandsList === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.commandsList as () => Promise<unknown>)())
+          return
+        }
+
+        // ── 全历史搜索（§9.5；前端先搜 DOM，Full history 走这里）──
+        if (method === 'threads-search') {
+          if (evoresearch?.threadsSearch === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const query = requireString(payload, 'query')
+          const limit = typeof payload.limit === 'number' ? Math.min(Math.max(Math.floor(payload.limit), 1), 50) : 50
+          writeOk(res, await (evoresearch.threadsSearch as (a: { query: string; limit?: number }) => Promise<unknown>)({ query, limit }))
+          return
+        }
+
+        // ── 会话信息（§26.8 Current 弹窗）：持久化文件路径/大小/事件数 ──
+        if (method === 'session-info') {
+          const sessionId = requireString(payload, 'sessionId')
+          const sessionsRoot = join(process.env.DSH_HOME ?? join(os.homedir(), '.dsh'), 'sessions')
+          let file: string | null = null
+          let bytes = 0
+          let events: number | null = null
+          const candidates: string[] = []
+          try {
+            const walkSessions = async (dir: string, depth: number): Promise<void> => {
+              if (depth > 4) return
+              let level
+              try { level = await opendir(dir) } catch { return }
+              for await (const dirent of level) {
+                if (dirent.isDirectory()) {
+                  if (dirent.name === sessionId) {
+                    // 会话目录内是 session.jsonl / session.jsonl.zstd
+                    for (const logName of ['session.jsonl', 'session.jsonl.zstd']) {
+                      const log = join(dir, dirent.name, logName)
+                      try { await stat(log); candidates.push(log) } catch { /* 跳过 */ }
+                    }
+                  } else {
+                    await walkSessions(join(dir, dirent.name), depth + 1)
+                  }
+                }
+              }
+            }
+            await walkSessions(sessionsRoot, 0)
+          } catch { /* 根目录不存在 */ }
+          if (candidates.length > 0) {
+            file = candidates[0]
+            try {
+              const st = await stat(file)
+              bytes = st.size
+              if (bytes <= 64 * 1024 * 1024) {
+                if (file.endsWith('.zstd')) {
+                  const raw = zstdDecompressSync(await readFile(file))
+                  events = countLines(raw)
+                } else {
+                  events = countLines(await readFile(file))
+                }
+              }
+            } catch { /* 统计失败则跳过 */ }
+          }
+          writeOk(res, { file, bytes, events, sessionsRoot })
           return
         }
 

@@ -442,4 +442,41 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-md-toggle-btn svg { width: 13px; height: 13px; }
 .evo-composer-preview { flex: 1; min-height: 84px; max-height: 220px; overflow-y: auto; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); color: var(--color-text-primary); margin: 8px 14px 0; }
 .evo-composer-preview-empty { color: var(--color-text-tertiary); font-size: 13px; }
+/* ── 会话动作（§25.6 / §26.8）：Current / Search / Shortcuts / Compact / Clear view ── */
+.evo-composer-divider { width: 1px; height: 18px; background: var(--color-border); flex-shrink: 0; }
+.evo-info { display: flex; flex-direction: column; gap: 2px; }
+.evo-info-row { display: flex; align-items: flex-start; gap: 12px; padding: 7px 2px; border-bottom: 1px solid var(--color-border-light); }
+.evo-info-row:last-of-type { border-bottom: none; }
+.evo-info-label { flex: 0 0 118px; font-size: 12px; font-weight: 600; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.3px; padding-top: 1px; }
+.evo-info-value { flex: 1; min-width: 0; font-size: 12.5px; color: var(--color-text-primary); display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; word-break: break-all; }
+.evo-info-mono { font-family: ui-monospace, Consolas, monospace; }
+.evo-info-path { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--color-text-secondary); }
+.evo-info-copy { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
+.evo-info-copy:hover { color: var(--color-text-primary); background: var(--hover-bg); }
+.evo-info-copy svg { width: 13px; height: 13px; }
+.evo-info-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; }
+.evo-search { display: flex; flex-direction: column; gap: 12px; }
+.evo-search-bar { display: flex; gap: 8px; align-items: center; }
+.evo-search-bar svg { width: 16px; height: 16px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-search-input { flex: 1; min-width: 0; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); color: var(--color-text-primary); font-size: 13px; outline: none; }
+.evo-search-input:focus { border-color: var(--brand); }
+.evo-search-section { display: flex; flex-direction: column; gap: 6px; }
+.evo-search-section-title { font-size: 11.5px; font-weight: 600; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.3px; }
+.evo-search-results { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.evo-search-hit { text-align: left; padding: 7px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; line-height: 1.5; }
+.evo-search-hit:hover { border-color: var(--brand); color: var(--color-text-primary); }
+.evo-search-empty { font-size: 12.5px; color: var(--color-text-tertiary); padding: 6px 2px; }
+.evo-shortcuts { display: flex; flex-direction: column; gap: 10px; }
+.evo-shortcut-row { display: flex; align-items: center; gap: 14px; }
+.evo-shortcut-row span { font-size: 13px; color: var(--color-text-secondary); }
+.evo-kbd { display: inline-block; min-width: 30px; padding: 4px 10px; border: 1px solid var(--color-border); border-bottom-width: 2px; border-radius: 6px; background: var(--color-background); color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; font-size: 12px; text-align: center; }
+.evo-confirm { display: flex; flex-direction: column; gap: 14px; }
+.evo-confirm-msg { font-size: 13px; color: var(--color-text-secondary); line-height: 1.7; }
+.evo-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.evo-clear-notice { flex: 1; display: flex; align-items: center; justify-content: center; }
+.evo-clear-notice-box { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px; border: 1px dashed var(--color-border); border-radius: 14px; text-align: center; }
+.evo-clear-notice-title { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
+.evo-clear-notice-sub { font-size: 12.5px; color: var(--color-text-tertiary); max-width: 420px; line-height: 1.6; }
+.evo-msg-jump { animation: evo-jump-flash 1.6s ease-out; border-radius: 10px; }
+@keyframes evo-jump-flash { 0% { background: color-mix(in srgb, var(--brand) 26%, transparent); } 100% { background: transparent; } }
 `
