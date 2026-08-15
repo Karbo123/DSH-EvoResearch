@@ -226,9 +226,68 @@ function createChatViewBuilder() {
   }
 }
 
+// ── workflow-run：Dynamic Workflow（移植规范 §24）──────────────────────────
+// 折叠 tool-workflow/* 事件族为一个 keyed chat 节点（对齐官方 ui-workflow-run）。
+
+function workflowStart(_context, match) {
+  return {
+    name: match.event.data.name ?? 'Workflow',
+    members: [],
+    stopReason: undefined,
+    startedAt: match.event.time,
+  }
+}
+
+function workflowUpdate(context, match) {
+  const state = context.state
+  if (match.event.type === 'tool-workflow/agent-start') {
+    const d = match.event.data
+    const members = state.members.filter((m) => m.seq !== d.seq)
+    members.push({ seq: d.seq, label: d.label ?? `agent-${d.seq}`, phase: d.phase ?? null, status: 'running', startedAt: match.event.time })
+    return { ...state, members }
+  }
+  if (match.event.type === 'tool-workflow/agent-end') {
+    const d = match.event.data
+    const members = state.members.map((m) => (m.seq === d.seq ? { ...m, status: d.outcome ?? 'completed' } : m))
+    return { ...state, members }
+  }
+  if (match.event.type === 'tool-workflow/run-end') {
+    return { ...state, stopReason: match.event.data.stopReason, endedAt: match.event.time }
+  }
+  return state
+}
+
+const workflowRunDefinition = {
+  kind: 'workflow-run',
+  target: 'chat',
+  match: (event) => {
+    if (event.type === 'tool-workflow/run-start') return { id: String(event.data.runId), role: 'start' }
+    if (event.type === 'tool-workflow/agent-start' || event.type === 'tool-workflow/agent-end' || event.type === 'tool-workflow/run-end') {
+      return { id: String(event.data.runId), role: 'update' }
+    }
+    return null
+  },
+  start: workflowStart,
+  update: workflowUpdate,
+  publication: () => 'immediate',
+  buildViewNode: (context) => {
+    if (context.start === undefined) return null
+    return {
+      key: context.key,
+      kind: 'workflow-run',
+      id: context.id,
+      target: 'chat',
+      anchorSeq: context.start.event.seq,
+      visibility: 'visible',
+      data: context.state,
+    }
+  },
+}
+
 /** 注册消息 Definition 与 chat view（在 client-runtime apply 之后、任何会话打开之前）。 */
 export function registerConversation(ctx) {
   ctx.conversationEvents.register(assistantDefinition)
   ctx.conversationEvents.register(messageDefinition)
+  ctx.conversationEvents.register(workflowRunDefinition)
   ctx.conversationViews.register({ target: 'chat', create: createChatViewBuilder })
 }

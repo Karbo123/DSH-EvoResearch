@@ -209,7 +209,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const taRef = useRef<HTMLTextAreaElement | null>(null)
 
   // ── 会话动作（§25.6）：Current / Search / Notify / Shortcuts / Compact / Clear view ──
-  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'model'>(null)
+  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'model' | 'wf-clear'>(null)
   const [clearView, setClearView] = useState(false)
   const [notifyOn, setNotifyOn] = useState(() => {
     try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
@@ -423,9 +423,32 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
 
   const hasMessages = nodes.length > 0 || partial !== null
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)
-  const shown = ordered.slice(-visibleCount)
-  const hasMore = ordered.length > visibleCount
+
+  // ── Dynamic Workflow（§24）：workflow-run 节点 → 输入区上方阶段条 ──
+  const workflowNodes = (nodes as Array<ChatNode & { data?: any }>).filter((n) => n.kind === 'workflow-run')
+  const messageNodes = ordered.filter((n) => n.kind !== 'workflow-run')
+  const shown = messageNodes.slice(-visibleCount)
+  const hasMore = messageNodes.length > visibleCount
   const showMessages = hasMessages && !clearView
+  const [wfCleared, setWfCleared] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`evoresearch-dynamic-workflows:${sessionId ?? ''}`) ?? '[]') } catch { return [] }
+  })
+  const [wfTick, setWfTick] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setWfTick((v) => v + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem(`evoresearch-dynamic-workflows:${sessionId ?? ''}`, JSON.stringify(wfCleared)) } catch { /* 忽略 */ }
+  }, [wfCleared, sessionId])
+  const latestWorkflow = workflowNodes[workflowNodes.length - 1] as (ChatNode & { data: { name?: string; members?: Array<{ seq: number; label: string; phase?: string | null; status: string }>; stopReason?: string; startedAt?: number; endedAt?: number } }) | undefined
+  const wfVisible = latestWorkflow !== undefined && !wfCleared.includes(latestWorkflow.key)
+  const formatDuration = (ms: number) => {
+    const s = Math.floor(ms / 1000)
+    if (s < 60) return `${s}s`
+    const m = Math.floor(s / 60)
+    return `${m}m ${s % 60}s`
+  }
 
   return jsxs(Fragment, {
     children: [
@@ -495,6 +518,36 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 ],
               }),
+      }),
+      // ── Dynamic Workflow 条（§24）：phase / evaluation / duration / 状态 + 清除 ──
+      wfVisible && latestWorkflow !== undefined && jsxs('div', {
+        className: 'evo-wf-strip',
+        children: [
+          jsxs('div', {
+            className: 'evo-wf-bar',
+            children: [
+              jsx(ListTodo, {}),
+              jsx('span', { className: 'evo-wf-name', children: latestWorkflow.data?.name ?? 'Workflow' }),
+              jsx('span', { className: 'evo-wf-members', children: (latestWorkflow.data?.members ?? []).map((m) => jsx('span', {
+                className: `evo-wf-member${m.status === 'completed' ? ' done' : m.status === 'running' ? ' running' : ' failed'}`,
+                title: m.phase ?? m.status,
+                children: m.label,
+              }, `${m.seq}:${m.label}`)) }),
+              (latestWorkflow.data?.members?.filter((m) => m.status === 'completed').length ?? 0) > 0
+                && jsx('span', { className: 'evo-wf-count', children: `${(latestWorkflow.data?.members ?? []).filter((m) => m.status === 'completed').length}/${(latestWorkflow.data?.members ?? []).length}` }),
+              jsx('span', { className: 'evo-wf-duration', children: formatDuration(((latestWorkflow.data?.endedAt ?? Date.now()) - (latestWorkflow.data?.startedAt ?? Date.now()))) }),
+              latestWorkflow.data?.stopReason !== undefined && jsx('span', { className: 'evo-wf-status', children: latestWorkflow.data.stopReason }),
+              jsx('button', {
+                type: 'button',
+                className: 'evo-wf-clear',
+                title: 'Clear workflow',
+                'aria-label': 'Clear workflow',
+                onClick: () => setActionDialog('wf-clear'),
+                children: jsx(XIcon, {}),
+              }),
+            ],
+          }),
+        ],
       }),
       // ── HITL 审批条（§21.2）：逐个显示待审批工具调用 ──
       pendingApprovals.length > 0 && jsx('div', {
@@ -749,6 +802,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           if (session?.command !== undefined) void session.command('/compact')
           else onSend('/compact')
         },
+        onClose: () => setActionDialog(null),
+      }),
+      actionDialog === 'wf-clear' && latestWorkflow !== undefined && jsx(ConfirmDialog, {
+        title: 'Clear workflow',
+        message: '清除当前 Dynamic Workflow 的展示记录（§24：仅移除浏览器持久化记录，不影响会话与执行）。确认？',
+        confirmLabel: 'Clear',
+        danger: true,
+        onConfirm: () => setWfCleared((list) => [...list, latestWorkflow.key]),
         onClose: () => setActionDialog(null),
       }),
       // ── 忙时消息队列弹层（§23.6）──

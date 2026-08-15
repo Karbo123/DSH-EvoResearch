@@ -523,4 +523,20 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-approval-callid { font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
 .evo-approval-reason { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.6; }
 .evo-approval-acts { display: flex; gap: 8px; }
+/* ── Dynamic Workflow 条（§24）── */
+.evo-wf-strip { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 24px 0; }
+.evo-wf-bar { width: 100%; max-width: var(--chat-max-width); display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.evo-wf-bar > svg { width: 15px; height: 15px; color: var(--brand); flex-shrink: 0; }
+.evo-wf-name { font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); flex-shrink: 0; }
+.evo-wf-members { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.evo-wf-member { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--hover-bg); color: var(--color-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.evo-wf-member.running { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
+.evo-wf-member.done { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
+.evo-wf-member.failed { background: color-mix(in srgb, var(--color-error) 14%, transparent); color: var(--color-error); }
+.evo-wf-count { font-size: 11px; font-weight: 600; color: var(--color-text-secondary); flex-shrink: 0; }
+.evo-wf-duration { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.evo-wf-status { font-size: 11px; color: var(--color-warning); flex-shrink: 0; }
+.evo-wf-clear { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
+.evo-wf-clear:hover { color: var(--color-error); background: var(--hover-bg); }
+.evo-wf-clear svg { width: 13px; height: 13px; }
 `
