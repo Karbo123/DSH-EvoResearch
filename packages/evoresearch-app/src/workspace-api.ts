@@ -370,6 +370,16 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.memoryProfile as (a: typeof args) => Promise<unknown>)(args))
           return
         }
+        // Knowledge（§26.5 轻量版）：Observation 列表
+        if (method === 'memory-observations') {
+          if (evoresearch?.memoryObservations === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: { status?: 'active' | 'superseded'; category?: string; limit?: number } = {}
+          if (payload.status === 'active' || payload.status === 'superseded') args.status = payload.status
+          if (typeof payload.category === 'string') args.category = payload.category
+          if (typeof payload.limit === 'number') args.limit = Math.min(Math.max(Math.floor(payload.limit), 1), 200)
+          writeOk(res, await (evoresearch.memoryObservations as (a: typeof args) => Promise<unknown>)(args))
+          return
+        }
         if (method === 'memory-goals') {
           if (evoresearch?.memoryGoals === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.memoryGoals as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))

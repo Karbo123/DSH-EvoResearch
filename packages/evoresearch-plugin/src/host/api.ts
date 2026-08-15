@@ -143,6 +143,35 @@ export class EvoResearchApiService extends TypertRemoteService {
     return out
   }
 
+  /** Knowledge（§26.5 轻量版）：Observation 列表（active/superseded + 分类筛选）。 */
+  @Remote('memoryObservations')
+  memoryObservations(args: { status?: 'active' | 'superseded'; category?: string; limit?: number }): Array<{
+    observationId: string
+    title: string
+    content: string
+    categories: readonly string[]
+    status: string
+    supersededBy?: string
+    updatedAt: number
+  }> {
+    return this.services.memory
+      .storeFor('')
+      .listObservations({
+        status: args.status,
+        limit: args.limit ?? 100,
+      })
+      .filter((o) => args.category === undefined || o.categories.includes(args.category as never))
+      .map((o) => ({
+        observationId: o.observationId,
+        title: o.title,
+        content: o.content.slice(0, 600),
+        categories: o.categories,
+        status: o.status,
+        ...(o.supersededBy === undefined ? {} : { supersededBy: o.supersededBy }),
+        updatedAt: o.updatedAt,
+      }))
+  }
+
   @Remote('memoryPacket')
   memoryPacket(args: { sessionId: string }): unknown {
     const packet = this.services.memory.packetFor(args.sessionId)

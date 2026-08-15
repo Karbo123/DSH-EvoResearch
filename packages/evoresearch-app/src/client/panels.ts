@@ -54,13 +54,16 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const [catalog, setCatalog] = useState<Array<{ category: string; count: number }> | null>(null)
   const [goals, setGoals] = useState<Array<{ id?: string; title?: string; status?: string; progress?: number }> | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'overview' | 'history' | 'identity'>('overview')
+  const [tab, setTab] = useState<'overview' | 'history' | 'identity' | 'knowledge'>('overview')
   // History 时间线（§26.5）
   const [turns, setTurns] = useState<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }> | null>(null)
   const [turnOffset, setTurnOffset] = useState(0)
   const TURN_PAGE = 30
   // Identity（§26.5）
   const [profile, setProfile] = useState<Array<{ name: string; text: string; bytes: number }> | null>(null)
+  // Knowledge（§26.5 轻量版）
+  const [observations, setObservations] = useState<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; updatedAt: number }> | null>(null)
+  const [obsFilter, setObsFilter] = useState<'all' | 'active' | 'superseded'>('all')
 
   const loadTurns = (offset: number) => {
     void api<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }>>('memory-turns', { limit: TURN_PAGE, offset })
@@ -75,6 +78,13 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
       .then(setProfile)
       .catch((e: any) => setError(String(e?.message ?? e)))
   }, [tab])
+  useEffect(() => {
+    if (tab !== 'knowledge') return
+    setObservations(null)
+    void api<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; updatedAt: number }>>('memory-observations', obsFilter === 'all' ? { limit: 100 } : { status: obsFilter, limit: 100 })
+      .then(setObservations)
+      .catch((e: any) => setError(String(e?.message ?? e)))
+  }, [tab, obsFilter])
 
   useEffect(() => {
     let cancelled = false
@@ -165,9 +175,48 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
             jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'overview' || undefined, onClick: () => setTab('overview'), children: 'Overview' }),
             jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'history' || undefined, onClick: () => setTab('history'), children: 'History' }),
             jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'identity' || undefined, onClick: () => setTab('identity'), children: 'Identity' }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'knowledge' || undefined, onClick: () => setTab('knowledge'), children: 'Knowledge' }),
           ],
         }),
-        tab === 'identity'
+        tab === 'knowledge'
+          ? jsxs(Fragment, {
+              children: [
+                error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+                jsxs('div', {
+                  className: 'evo-skill-tabs',
+                  children: [['all', 'All'], ['active', 'Active'], ['superseded', 'Superseded']].map(([key, label]) => jsx('button', {
+                    type: 'button',
+                    className: 'evo-insp-subtab',
+                    'data-active': obsFilter === key || undefined,
+                    onClick: () => setObsFilter(key as 'all' | 'active' | 'superseded'),
+                    children: label,
+                  }, key)),
+                }),
+                observations === null
+                  ? jsx(LoadingRow, {})
+                  : observations.length === 0
+                    ? jsx('span', { className: 'evo-panel-hint', children: 'No observations yet' })
+                    : jsx('div', {
+                        className: 'evo-panel-list',
+                        children: observations.map((o) => jsxs('div', {
+                          className: 'evo-skill-card',
+                          children: [
+                            jsxs('div', {
+                              className: 'evo-skill-head',
+                              children: [
+                                jsx('span', { className: 'evo-panel-item-main', children: o.title }),
+                                o.status === 'superseded' && jsx('span', { className: 'evo-skill-status rejected', children: 'superseded' }),
+                              ],
+                            }),
+                            o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: `superseded by ${o.supersededBy.slice(0, 18)}` }),
+                            o.content !== '' && jsx('div', { className: 'evo-skill-desc', children: o.content.slice(0, 220) }),
+                            (o.categories ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: CATEGORY_LABELS[c] ?? c }, c)) }),
+                          ],
+                        }, o.observationId)),
+                      }),
+              ],
+            })
+          : tab === 'identity'
           ? jsxs(Fragment, {
               children: [
                 error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
