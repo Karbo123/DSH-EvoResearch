@@ -559,6 +559,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-queue-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
 .evo-queue-act:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-queue-act svg { width: 13px; height: 13px; }
+.evo-queue-steer { color: var(--brand); }
+.evo-queue-steer:hover { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
+.evo-composer-stop { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid color-mix(in srgb, var(--color-error) 40%, var(--color-border)); border-radius: 7px; background: color-mix(in srgb, var(--color-error) 8%, transparent); color: var(--color-error); cursor: pointer; flex-shrink: 0; }
+.evo-composer-stop:hover { background: var(--color-error); color: var(--color-surface); }
+.evo-composer-stop svg { width: 12px; height: 12px; }
 /* ── HITL 审批条（§21.2）── */
 .evo-approval-strip { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 24px 0; }
 .evo-approval-list { width: 100%; max-width: var(--chat-max-width); display: flex; flex-direction: column; gap: 8px; }

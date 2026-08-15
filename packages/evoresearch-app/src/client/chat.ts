@@ -11,7 +11,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
-  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command,
+  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight,
 } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
@@ -384,6 +384,30 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     setQueueEditId(null)
   }
   const clearQueue = () => { for (const item of queueItems) applyQueueAction(queueItemId(item), { kind: 'remove' }) }
+
+  // ── 队列转向（§23.6 steer，官方 session.updateQueue kind:'steer'）──
+  // 仅 next-turn 队列消息（placement === 'queued'）且本轮运行中可转向：
+  // host 把该消息注入当前 turn（agent.steer），并从队列移除。
+  const [queueError, setQueueError] = useState<string | null>(null)
+  const steerQueue = (itemId: string) => {
+    const s = session
+    if (s?.updateQueue === undefined || itemId === '') return
+    setQueueError(null)
+    void s.updateQueue(itemId, { kind: 'steer' }).then((r: any) => {
+      if (r?.ok !== true) {
+        const message = (r?.error as { message?: string } | undefined)?.message ?? 'steer 失败'
+        setQueueError(message)
+        setTimeout(() => setQueueError(null), 5000)
+      }
+    })
+  }
+
+  // ── 停止本轮（§21.6 stop，官方 session.cancel：停止当前 turn、保留排队消息）──
+  const stopTurn = () => {
+    const s = session
+    if (s?.cancel === undefined) return
+    void s.cancel()
+  }
 
   // ── HITL 审批（§21.2）：会话待审批工具调用卡片 ──
   const pendingApprovals = (session?.snapshotCache?.pending ?? []).filter((p: any) => p?.kind === 'approval')
@@ -820,6 +844,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('span', { children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
                   jsx(SessionStatusLine, { session }),
                   jsx('span', { style: { flex: 1 } }),
+                  // 停止本轮（官方 session.cancel；host 保留排队消息）
+                  running && jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-stop',
+                    title: t('stopTurn'),
+                    'aria-label': t('stopTurn'),
+                    onClick: stopTurn,
+                    children: jsx(Square, {}),
+                  }),
                   // Markdown 输入预览：Write / Preview 切换
                   jsx('div', {
                     className: 'evo-md-toggle',
@@ -1042,6 +1075,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
             className: 'evo-queue-head',
             children: [
               jsx('span', { className: 'evo-insp-subtab-title', children: `Queued messages（${queueItems.length}）` }),
+              queueError !== null && jsx('span', { className: 'evo-tl-fork-error', children: queueError }),
               jsx('span', { style: { flex: 1 } }),
               jsx('button', {
                 type: 'button',
@@ -1095,6 +1129,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 className: 'evo-queue-row',
                 children: [
                   jsx('span', { className: 'evo-queue-text', children: queueText(item) }),
+                  // 转向本轮：仅 next-turn 排队消息（placement 'queued'）且本轮运行中
+                  running && item?.placement === 'queued' && jsx('button', {
+                    type: 'button',
+                    className: 'evo-queue-act evo-queue-steer',
+                    title: t('steerTurn'),
+                    'aria-label': t('steerTurn'),
+                    onClick: () => steerQueue(id),
+                    children: jsx(CornerUpRight, {}),
+                  }),
                   jsx('button', {
                     type: 'button',
                     className: 'evo-queue-act',

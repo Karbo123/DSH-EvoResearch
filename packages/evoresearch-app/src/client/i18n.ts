@@ -47,6 +47,8 @@ const DICT: Record<string, [string, string]> = {
   askAnything: ['Ask EvoResearch anything...', '向 EvoResearch 提问...'],
   noActiveConversation: ['No active conversation', '暂无活跃对话'],
   running: ['Running…', '运行中…'],
+  stopTurn: ['Stop', '停止'],
+  steerTurn: ['Steer into current turn', '转向本轮'],
   autoApprove: ['Auto-approve', '自动批准'],
   send: ['Send', '发送'],
   attachFiles: ['Attach files', '添加附件'],
