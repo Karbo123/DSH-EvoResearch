@@ -362,6 +362,14 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.memoryTurns as (a: typeof args) => Promise<unknown>)(args))
           return
         }
+        // Identity 记忆文件（§26.5）：memories/profile 下 Markdown
+        if (method === 'memory-profile') {
+          if (evoresearch?.memoryProfile === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: { workspaceDir?: string } = {}
+          if (typeof payload.workspaceDir === 'string') args.workspaceDir = payload.workspaceDir
+          writeOk(res, await (evoresearch.memoryProfile as (a: typeof args) => Promise<unknown>)(args))
+          return
+        }
         if (method === 'memory-goals') {
           if (evoresearch?.memoryGoals === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.memoryGoals as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))

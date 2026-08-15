@@ -395,6 +395,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-history-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .evo-history-text { font-size: 12.5px; color: var(--color-text-primary); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .evo-history-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-text-tertiary); flex-wrap: wrap; }
+.evo-identity-text { margin: 0; max-height: 160px; overflow-y: auto; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.55; color: var(--color-text-secondary); white-space: pre-wrap; word-break: break-word; }
 /* ── Skills Marketplace（§42.6）── */
 .evo-skill-name-btn { border: none; background: none; padding: 0; cursor: pointer; text-align: left; min-width: 0; }
 .evo-skill-name-btn:hover .evo-panel-item-main { color: var(--brand); }

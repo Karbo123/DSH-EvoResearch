@@ -54,11 +54,13 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const [catalog, setCatalog] = useState<Array<{ category: string; count: number }> | null>(null)
   const [goals, setGoals] = useState<Array<{ id?: string; title?: string; status?: string; progress?: number }> | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'overview' | 'history'>('overview')
+  const [tab, setTab] = useState<'overview' | 'history' | 'identity'>('overview')
   // History 时间线（§26.5）
   const [turns, setTurns] = useState<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }> | null>(null)
   const [turnOffset, setTurnOffset] = useState(0)
   const TURN_PAGE = 30
+  // Identity（§26.5）
+  const [profile, setProfile] = useState<Array<{ name: string; text: string; bytes: number }> | null>(null)
 
   const loadTurns = (offset: number) => {
     void api<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }>>('memory-turns', { limit: TURN_PAGE, offset })
@@ -66,6 +68,13 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
       .catch((e: any) => setError(String(e?.message ?? e)))
   }
   useEffect(() => { if (tab === 'history') loadTurns(0) }, [tab])
+  useEffect(() => {
+    if (tab !== 'identity') return
+    setProfile(null)
+    void api<Array<{ name: string; text: string; bytes: number }>>('memory-profile', {})
+      .then(setProfile)
+      .catch((e: any) => setError(String(e?.message ?? e)))
+  }, [tab])
 
   useEffect(() => {
     let cancelled = false
@@ -155,9 +164,37 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
           children: [
             jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'overview' || undefined, onClick: () => setTab('overview'), children: 'Overview' }),
             jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'history' || undefined, onClick: () => setTab('history'), children: 'History' }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': tab === 'identity' || undefined, onClick: () => setTab('identity'), children: 'Identity' }),
           ],
         }),
-        tab === 'history'
+        tab === 'identity'
+          ? jsxs(Fragment, {
+              children: [
+                error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+                jsx('div', { className: 'evo-panel-hint', children: 'Identity 记忆文件（memories/profile/，可经 Inspector Workspace 编辑）' }),
+                profile === null
+                  ? jsx(LoadingRow, {})
+                  : profile.length === 0
+                    ? jsx('span', { className: 'evo-panel-hint', children: '暂无 Identity 文件（SOUL.md / User.md / Taste.md 等）' })
+                    : jsx('div', {
+                        className: 'evo-panel-list',
+                        children: profile.map((f) => jsxs('div', {
+                          className: 'evo-skill-card',
+                          children: [
+                            jsxs('div', {
+                              className: 'evo-skill-head',
+                              children: [
+                                jsx('span', { className: 'evo-panel-item-main', children: f.name }),
+                                jsx('span', { className: 'evo-skill-source', children: `${Math.round(f.bytes / 1024)} KB` }),
+                              ],
+                            }),
+                            jsx('pre', { className: 'evo-identity-text', children: f.text }),
+                          ],
+                        }, f.name)),
+                      }),
+              ],
+            })
+          : tab === 'history'
           ? jsxs(Fragment, {
               children: [
                 error !== null && jsx('div', { className: 'evo-panel-error', children: error }),

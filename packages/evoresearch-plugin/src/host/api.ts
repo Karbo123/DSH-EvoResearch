@@ -6,6 +6,8 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
+import * as path from 'node:path'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import type { WorkspaceService } from './workspace.js'
 import type { MemoryRuntime } from './memory/index.js'
 import type { SchedulerService } from './scheduler.js'
@@ -117,6 +119,28 @@ export class EvoResearchApiService extends TypertRemoteService {
     return this.services.memory
       .storeFor(args.workspaceDir ?? '')
       .listTurns(args.sessionId, args.limit ?? 50, args.offset ?? 0)
+  }
+
+  /** Identity 记忆文件（§26.5）：memories/profile 下的 Markdown（SOUL.md 等）。 */
+  @Remote('memoryProfile')
+  memoryProfile(args: { workspaceDir?: string }): Array<{ name: string; text: string; bytes: number }> {
+    const base = args.workspaceDir && args.workspaceDir !== this.services.memory.config.dataRoot
+      ? args.workspaceDir
+      : this.services.memory.config.dataRoot
+    const profileDir = path.join(base, '.evoresearch-data', 'memories', 'profile')
+    const out: Array<{ name: string; text: string; bytes: number }> = []
+    try {
+      for (const entry of readdirSync(profileDir)) {
+        if (!entry.endsWith('.md')) continue
+        const full = path.join(profileDir, entry)
+        try {
+          const stat = statSync(full)
+          if (!stat.isFile() || stat.size > 64 * 1024) continue
+          out.push({ name: entry, text: readFileSync(full, 'utf8').slice(0, 4096), bytes: stat.size })
+        } catch { /* 跳过不可读 */ }
+      }
+    } catch { /* 目录不存在 */ }
+    return out
   }
 
   @Remote('memoryPacket')
