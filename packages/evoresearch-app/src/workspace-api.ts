@@ -389,6 +389,27 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.memoryProfile as (a: typeof args) => Promise<unknown>)(args))
           return
         }
+        // §29：会话元数据（置顶/标签色/归档）——后端存储，随项目数据迁移
+        if (method === 'session-meta-get') {
+          if (evoresearch?.sessionMetaGet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.sessionMetaGet as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'session-meta-set') {
+          if (evoresearch?.sessionMetaSet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const sessionId = requireString(payload, 'sessionId')
+          const patch: Record<string, unknown> = {}
+          if (typeof payload.pinned === 'boolean') patch.pinned = payload.pinned
+          if (payload.tagColor === null || typeof payload.tagColor === 'string') patch.tagColor = payload.tagColor
+          if (typeof payload.archived === 'boolean') patch.archived = payload.archived
+          try {
+            const result = await (evoresearch.sessionMetaSet as (a: { sessionId: string; patch: Record<string, unknown> }) => Promise<{ ok: boolean }>).call(evoresearch, { sessionId, patch })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         // §12.4 Profile 文件编辑：写（新建/保存）/ 删除 / 重命名（名字严格校验）
         if (method === 'memory-profile-write' || method === 'memory-profile-delete' || method === 'memory-profile-rename') {
           const serviceName = method === 'memory-profile-write' ? 'memoryProfileWrite' : method === 'memory-profile-delete' ? 'memoryProfileDelete' : 'memoryProfileRename'

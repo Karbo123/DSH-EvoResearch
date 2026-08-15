@@ -143,6 +143,54 @@ export class EvoResearchApiService extends TypertRemoteService {
     return out
   }
 
+  /** §29：会话元数据（置顶/标签色/归档）后端存储——pin/tag/archive 随项目数据迁移。 */
+  private metaFile(): string {
+    return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'session-meta.json')
+  }
+
+  private readSessionMeta(): Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }> {
+    try {
+      const raw = JSON.parse(readFileSync(this.metaFile(), 'utf8')) as Record<string, unknown>
+      return typeof raw === 'object' && raw !== null ? (raw as Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }>) : {}
+    } catch {
+      return {}
+    }
+  }
+
+  private writeSessionMeta(meta: Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }>): void {
+    const file = this.metaFile()
+    mkdirSync(path.dirname(file), { recursive: true })
+    const tmp = `${file}.tmp-${process.pid}`
+    writeFileSync(tmp, JSON.stringify(meta, null, 2), 'utf8')
+    renameSync(tmp, file)
+  }
+
+  @Remote('sessionMetaGet')
+  sessionMetaGet(): Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }> {
+    return this.readSessionMeta()
+  }
+
+  @Remote('sessionMetaSet')
+  sessionMetaSet(args: { sessionId: string; patch: { pinned?: boolean; tagColor?: string | null; archived?: boolean } }): { ok: boolean } {
+    const sessionId = String(args?.sessionId ?? '')
+    if (sessionId === '') return { ok: false }
+    const meta = this.readSessionMeta()
+    const current = meta[sessionId] ?? {}
+    const next: { pinned?: boolean; tagColor?: string | null; archived?: boolean } = { ...current }
+    const patch = args?.patch ?? {}
+    if (patch.pinned !== undefined) next.pinned = patch.pinned
+    if (patch.tagColor !== undefined) next.tagColor = patch.tagColor === null ? null : patch.tagColor
+    if (patch.archived !== undefined) next.archived = patch.archived
+    // 全空则删除该会话条目
+    if (next.pinned === undefined && next.tagColor === undefined && next.archived === undefined) {
+      delete meta[sessionId]
+    } else {
+      meta[sessionId] = next
+    }
+    this.writeSessionMeta(meta)
+    return { ok: true }
+  }
+
   /** §12.4 Profile 文件操作：写（新建/保存）、重命名、删除（名字严格限制在 profile 目录内）。 */
   private profileDirOf(workspaceDir: string | undefined): string {
     const base = workspaceDir && workspaceDir !== this.services.memory.config.dataRoot

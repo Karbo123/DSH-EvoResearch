@@ -411,7 +411,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }).catch(() => {})
   }
 
-  // ── Recents 置顶（§26.3 Pin，client-side 持久化）──
+  // ── Recents 置顶（§26.3 Pin）：后端持久化（§29 session-meta），localStorage 作启动缓存 ──
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('evoresearch-pinned') ?? '[]')
@@ -420,17 +420,20 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       return new Set()
     }
   })
+  const persistPin = (id: string, value: boolean) => {
+    try { void fetch('/evoresearch/fs/session-meta-set', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: id, pinned: value }) }).catch(() => {}) } catch { /* 忽略 */ }
+  }
   const togglePin = (id: string) => {
     setPinnedIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      const value = next.has(id) ? (next.delete(id), false) : (next.add(id), true)
       try { localStorage.setItem('evoresearch-pinned', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      persistPin(id, value)
       return next
     })
   }
 
-  // ── Recents 标签颜色（§26.3，client-side 持久化）──
+  // ── Recents 标签颜色（§26.3）：后端持久化（§29），localStorage 作启动缓存 ──
   const [tagColors, setTagColors] = useState<Record<string, string>>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('evoresearch-tagcolors') ?? '{}')
@@ -439,17 +442,21 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       return {}
     }
   })
+  const persistTagColor = (id: string, color: string | null) => {
+    try { void fetch('/evoresearch/fs/session-meta-set', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: id, tagColor: color }) }).catch(() => {}) } catch { /* 忽略 */ }
+  }
   const setTagColor = (id: string, color: string | null) => {
     setTagColors((prev) => {
       const next = { ...prev }
       if (color === null) delete next[id]
       else next[id] = color
       try { localStorage.setItem('evoresearch-tagcolors', JSON.stringify(next)) } catch { /* 忽略 */ }
+      persistTagColor(id, color)
       return next
     })
   }
 
-  // ── 会话归档（§26.3 Archive）：从 Recents 隐藏但保留数据，可恢复 ──
+  // ── 会话归档（§26.3 Archive）：后端持久化（§29），localStorage 作启动缓存 ──
   const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('evoresearch-archived') ?? '[]')
@@ -458,15 +465,42 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       return new Set()
     }
   })
+  const persistArchive = (id: string, value: boolean) => {
+    try { void fetch('/evoresearch/fs/session-meta-set', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: id, archived: value }) }).catch(() => {}) } catch { /* 忽略 */ }
+  }
   const toggleArchive = (id: string) => {
     setArchivedIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      const value = next.has(id) ? (next.delete(id), false) : (next.add(id), true)
       try { localStorage.setItem('evoresearch-archived', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      persistArchive(id, value)
       return next
     })
   }
+
+  // §29：启动时以后端 session-meta 为准合并三态（localStorage 仅作离线缓存）
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/evoresearch/fs/session-meta-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled || !json.ok) return
+        const meta = json.value as Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }>
+        const pinNext = new Set<string>()
+        const tagNext: Record<string, string> = {}
+        const archNext = new Set<string>()
+        for (const [sid, m] of Object.entries(meta)) {
+          if (m.pinned === true) pinNext.add(sid)
+          if (typeof m.tagColor === 'string') tagNext[sid] = m.tagColor
+          if (m.archived === true) archNext.add(sid)
+        }
+        setPinnedIds((prev) => (pinNext.size > 0 || Object.keys(meta).length > 0 ? pinNext : prev))
+        setTagColors((prev) => (Object.keys(tagNext).length > 0 ? tagNext : prev))
+        setArchivedIds((prev) => (archNext.size > 0 || Object.keys(meta).length > 0 ? archNext : prev))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   // ── 会话删除（附录 B-2/B-9）：host 删除持久化数据；live 残留由本集合过滤，重启后彻底消失 ──
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => {
