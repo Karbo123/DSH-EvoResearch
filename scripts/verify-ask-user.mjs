@@ -97,7 +97,7 @@ async function main() {
   report.questionTexts = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-question-text')).map(function(n){ return n.textContent.slice(0, 80) }) })()`)
   report.optionGroups = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-question')).map(function(q){ return Array.from(q.querySelectorAll('.evo-question-opt')).map(function(b){ return b.textContent.trim() }) }) })()`)
   report.hasCustom = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-question-custom').length })()`)
-  report.hasCancel = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-question-acts button')).some(function(b){ return b.textContent.includes('Cancel') }) })()`)
+  report.hasCancel = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-question-acts button')).some(function(b){ return b.textContent.includes('取消') }) })()`)
 
   if (cardSeen) {
     const shot1 = await cdp.send('Page.captureScreenshot', { format: 'png' })
@@ -138,3 +138,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

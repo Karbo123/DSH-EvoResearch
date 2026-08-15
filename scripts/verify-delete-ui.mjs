@@ -107,7 +107,7 @@ async function main() {
   report.rowsBefore = await cdp.eval(rows)
 
   // ── UI 删除 A（非当前会话：无 data-active 的第一行）──
-  const armNonActive = `(function(){ const row = Array.from(document.querySelectorAll('.evo-tl-row')).find(function(r){ return !r.hasAttribute('data-active') }); if (!row) return 'no-row'; const btn = row.querySelector('button[aria-label="Delete session"]'); if (!btn) return 'no-trash'; btn.click(); return 'armed' })()`
+  const armNonActive = `(function(){ const row = Array.from(document.querySelectorAll('.evo-tl-row')).find(function(r){ return !r.hasAttribute('data-active') }); if (!row) return 'no-row'; const btn = row.querySelector('button[aria-label="删除会话"]'); if (!btn) return 'no-trash'; btn.click(); return 'armed' })()`
   report.stepArmA = await cdp.eval(armNonActive)
   await sleep(300)
   report.stepConfirmA = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-row .evo-tl-del-confirm'); if (!btn) return 'no-confirm'; btn.click(); return 'confirmed' })()`)
@@ -117,7 +117,7 @@ async function main() {
   report.infoA = await cdp.eval(`(function(){ return fetch('/evoresearch/fs/session-info', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ sessionId: '${idA}' }) }).then(function(r){ return r.json() }) })()`)
 
   // ── UI 删除当前会话 B（data-active 行）→ 应跳到新会话 ──
-  const armActive = `(function(){ const row = document.querySelector('.evo-tl-row[data-active]'); if (!row) return 'no-row'; const btn = row.querySelector('button[aria-label="Delete session"]'); if (!btn) return 'no-trash'; btn.click(); return 'armed' })()`
+  const armActive = `(function(){ const row = document.querySelector('.evo-tl-row[data-active]'); if (!row) return 'no-row'; const btn = row.querySelector('button[aria-label="删除会话"]'); if (!btn) return 'no-trash'; btn.click(); return 'armed' })()`
   report.stepArmB = await cdp.eval(armActive)
   await sleep(300)
   report.stepConfirmB = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-row .evo-tl-del-confirm'); if (!btn) return 'no-confirm'; btn.click(); return 'confirmed' })()`)

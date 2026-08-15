@@ -84,9 +84,9 @@ async function main() {
   const id = await cdp.eval(`(function(){ return ${svc}.create({}).then(function(sid){ ${svc}.open(sid); return sid }) })()`)
   await sleep(1500)
   // 打开 Inspector Workspace
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.title === 'Side chats' }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.title === '侧边对话' }); if (btn) btn.click(); return true })()`)
   await sleep(600)
-  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('.evo-insp-tab')).find(function(x){ return x.textContent.includes('Workspace') }); if (b) b.click(); return true })()`)
+  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('.evo-insp-tab')).find(function(x){ return x.textContent.includes('工作区') }); if (b) b.click(); return true })()`)
   await sleep(1000)
   report.toolbar = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-fs-toolbar button')).map(function(b){ return b.title || b.getAttribute('aria-label') || '' }) })()`)
 
@@ -118,3 +118,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

@@ -79,7 +79,7 @@ async function main() {
 
   const report = {}
   // 打开 Scheduled 面板
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('Scheduled') }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('定时任务') }); if (btn) btn.click(); return true })()`)
   await sleep(600)
 
   report.modes = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-sched-modes button')).map(function(b){ return b.textContent }) })()`)
@@ -87,7 +87,7 @@ async function main() {
   report.previewInitial = await cdp.eval(`(function(){ return document.querySelector('.evo-sched-preview')?.textContent ?? null })()`)
 
   // Weekly 模式 → Mon 08:30
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-sched-modes button')).find(function(b){ return b.textContent === 'Weekly' }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-sched-modes button')).find(function(b){ return b.textContent === '每周' }); if (btn) btn.click(); return true })()`)
   await sleep(300)
   const setSel = (aria, value) => `(function(){ const sel = document.querySelector('select[aria-label="${aria}"]'); if (!sel) return 'no-sel'; const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set; setter.call(sel, ${JSON.stringify(value)}); sel.dispatchEvent(new Event('change', { bubbles: true })); return 'set' })()`
   report.setHour = await cdp.eval(setSel('Hour', '8'))

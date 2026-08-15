@@ -156,6 +156,8 @@ const DICT: Record<string, [string, string]> = {
   knowledge: ['Knowledge', '知识'],
   noObservationsYet: ['No observations yet', '暂无观测记录'],
   superseded: ['superseded', '已取代'],
+  all: ['All', '全部'],
+  active: ['Active', '活跃'],
   noResearchTurnsYet: ['No research turns yet', '暂无科研轮次'],
   openThread: ['Open thread', '打开对话'],
   taskName: ['Task name', '任务名称'],

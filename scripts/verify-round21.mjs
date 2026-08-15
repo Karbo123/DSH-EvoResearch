@@ -83,11 +83,11 @@ async function main() {
   await sleep(1000)
   report.id = id
   // ── 1) 经 UI 创建 2 个 blank side chat（真实路径：createBlankSideChat + recordSideChat 同 key）──
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-topbar-group button')).find(function(b){ return b.title === 'Side chats' }); if (btn) btn.click(); return btn !== undefined })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-topbar-group button')).find(function(b){ return b.title === '侧边对话' }); if (btn) btn.click(); return btn !== undefined })()`)
   await sleep(500)
   await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('.evo-insp-tab')).find(function(x){ return x.textContent.includes('Side chats') || x.textContent.includes('侧边') }); if (b) b.click(); return b !== undefined })()`)
   await sleep(500)
-  const newBlank = `(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return (b.title ?? '').startsWith('New blank side chat') }); if (!btn) return 'no-btn'; btn.click(); return 'created' })()`
+  const newBlank = `(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return (b.title ?? '').startsWith('新建空白侧边对话') }); if (!btn) return 'no-btn'; btn.click(); return 'created' })()`
   report.scCreate1 = await cdp.eval(newBlank)
   await sleep(1000)
   report.scCreate2 = await cdp.eval(newBlank)
@@ -95,7 +95,7 @@ async function main() {
   report.sidechatRowsBefore = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-sidechat-tab').length })()`)
   report.sidechatRowsBefore = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-sidechat-tab').length })()`)
   // Delete all（两段式）
-  report.deleteAllArm = await cdp.eval(`(function(){ const btn = document.querySelector('button[aria-label="Delete all side chats"]'); if (!btn) return 'no-btn'; btn.click(); return 'armed' })()`)
+  report.deleteAllArm = await cdp.eval(`(function(){ const btn = document.querySelector('button[aria-label="删除全部侧边对话"]'); if (!btn) return 'no-btn'; btn.click(); return 'armed' })()`)
   await sleep(300)
   report.deleteAllConfirm = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-del-confirm'); if (!btn) return 'no-confirm'; btn.click(); return 'confirmed' })()`)
   await sleep(1500)
@@ -104,7 +104,7 @@ async function main() {
   report.sidechatDeletedLocal = await cdp.eval(`(function(){ return JSON.parse(localStorage.getItem('evoresearch-deleted') ?? '[]') })()`)
 
   // 关闭 inspector，回到聊天（Blank 创建切换过 current；重新打开主会话）
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-icon-btn')).find(function(b){ return b.title === 'Hide inspector' || b.title === 'Show workspace' }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-icon-btn')).find(function(b){ return b.title === '隐藏检查器' || b.title === 'Show workspace' }); if (btn) btn.click(); return true })()`)
   await cdp.eval(`(function(){ ${svc}.open('${id}'); return true })()`)
   await sleep(600)
 
@@ -156,3 +156,5 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+
+

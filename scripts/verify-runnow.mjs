@@ -88,13 +88,13 @@ async function main() {
   const taskId = task?.taskId
 
   // 面板行显示（next run 文本 + Run now 按钮）
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('Scheduled') }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('定时任务') }); if (btn) btn.click(); return true })()`)
   await sleep(1000)
   report.nextRunShown = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-panel-item')).some(function(n){ return n.querySelector('.evo-panel-item-num[title="Next run"]') !== null }) })()`)
-  report.runNowBtn = await cdp.eval(`(function(){ return document.querySelectorAll('button[aria-label="Run now"]').length })()`)
+  report.runNowBtn = await cdp.eval(`(function(){ return document.querySelectorAll('button[aria-label="立即运行"]').length })()`)
 
   // Run now 点击（定位新任务行）→ lastRunAt 更新
-  report.runNowClick = await cdp.eval(`(function(){ const row = Array.from(document.querySelectorAll('.evo-panel-item')).find(function(n){ return n.textContent.includes(${JSON.stringify(taskName)}) }); const btn = row?.querySelector('button[aria-label="Run now"]'); if (!btn) return 'no-btn'; btn.click(); return 'clicked' })()`)
+  report.runNowClick = await cdp.eval(`(function(){ const row = Array.from(document.querySelectorAll('.evo-panel-item')).find(function(n){ return n.textContent.includes(${JSON.stringify(taskName)}) }); const btn = row?.querySelector('button[aria-label="立即运行"]'); if (!btn) return 'no-btn'; btn.click(); return 'clicked' })()`)
   await sleep(3000)
   const list2 = await cdp.eval(`(function(){ return fetch('/evoresearch/fs/scheduler-list', { method:'POST', headers:{'content-type':'application/json'}, body: '{}' }).then(function(r){ return r.json() }) })()`)
   const task2 = (list2?.value ?? []).find((t) => t.taskId === taskId)

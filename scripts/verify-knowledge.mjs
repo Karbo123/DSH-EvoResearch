@@ -77,15 +77,15 @@ async function main() {
   await sleep(1500)
 
   const report = {}
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('EvoMemory') }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('科研记忆') }); if (btn) btn.click(); return true })()`)
   await sleep(800)
-  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('button')).find(function(x){ return x.textContent.trim() === 'Knowledge' }); if (b) b.click(); return true })()`)
+  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('button')).find(function(x){ return x.textContent.trim() === '知识' }); if (b) b.click(); return true })()`)
   await sleep(1200)
   report.filters = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-skill-tabs button')).map(function(b){ return b.textContent.trim() }) })()`)
   report.obsCards = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-skill-card')).slice(0, 5).map(function(c){ return { title: c.querySelector('.evo-panel-item-main')?.textContent ?? '', status: c.querySelector('.evo-skill-status')?.textContent ?? null, tags: Array.from(c.querySelectorAll('.evo-panel-tag')).map(function(t){ return t.textContent }) } }) })()`)
   report.obsCount = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-skill-card').length })()`)
   // 切 Active
-  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('button')).find(function(x){ return x.textContent.trim() === 'Active' }); if (b) b.click(); return true })()`)
+  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('button')).find(function(x){ return x.textContent.trim() === '活跃' }); if (b) b.click(); return true })()`)
   await sleep(1000)
   report.activeCount = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-skill-card').length })()`)
 
@@ -102,3 +102,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

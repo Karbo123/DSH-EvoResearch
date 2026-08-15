@@ -77,10 +77,10 @@ async function main() {
 
   const report = {}
   // 打开 EvoMemory → Identity
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('EvoMemory') }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('科研记忆') }); if (btn) btn.click(); return true })()`)
   await sleep(800)
   report.tabs = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-skill-tabs button')).map(function(b){ return b.textContent.trim() }) })()`)
-  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('button')).find(function(x){ return x.textContent.trim() === 'Identity' }); if (b) b.click(); return true })()`)
+  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('button')).find(function(x){ return x.textContent.trim() === '身份' }); if (b) b.click(); return true })()`)
   await sleep(1000)
   report.profileCards = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-skill-card')).map(function(c){ return { name: c.querySelector('.evo-panel-item-main')?.textContent ?? '', text: c.querySelector('.evo-identity-text')?.textContent?.slice(0, 60) ?? '' } }) })()`)
   report.hint = await cdp.eval(`(function(){ const h = Array.from(document.querySelectorAll('.evo-panel-hint')).map(function(n){ return n.textContent }); return h })()`)
@@ -98,3 +98,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

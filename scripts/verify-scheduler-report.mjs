@@ -85,12 +85,15 @@ async function main() {
   report.mainId = mainId
 
   // 打开 Scheduled 面板
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('Scheduled') }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('定时任务') }); if (btn) btn.click(); return true })()`)
   await sleep(600)
   report.panelOpen = await cdp.eval(`(function(){ return document.querySelector('.evo-panel-form') !== null })()`)
 
   // 添加任务（每分钟）
   const name = `ReportTest-${Date.now().toString(36)}`
+  // 先切 Custom 模式：保证 .evo-panel-input 前三项均为 input（避开模式 select）
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-sched-modes button')).find(function(b){ return b.textContent.trim() === '自定义' }); if (btn) btn.click(); return !!btn })()`)
+  await sleep(300)
   await cdp.eval(`(function(){ const inputs = document.querySelectorAll('.evo-panel-input'); if (inputs.length < 3) return 'no-inputs'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(inputs[0], ${JSON.stringify(name)}); inputs[0].dispatchEvent(new Event('input', { bubbles: true })); set.call(inputs[1], '* * * * *'); inputs[1].dispatchEvent(new Event('input', { bubbles: true })); set.call(inputs[2], 'Reply with exactly: SCHED-REPORT-OK'); inputs[2].dispatchEvent(new Event('input', { bubbles: true })); return 'filled' })()`)
   await sleep(300)
   report.addClick = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-panel-add'); if (!btn) return 'no-btn'; btn.click(); return 'clicked' })()`)
@@ -99,7 +102,7 @@ async function main() {
   // 等 tick 执行（≤120s）→ 打开结果按钮出现
   let openBtn = false
   for (let i = 0; i < 120; i += 1) {
-    const n = await cdp.eval(`(function(){ return document.querySelectorAll('button[aria-label="Open result thread"]').length })()`)
+    const n = await cdp.eval(`(function(){ return document.querySelectorAll('button[aria-label="打开结果对话"]').length })()`)
     if (n > 0) { openBtn = true; break }
     await sleep(1000)
   }
@@ -130,7 +133,7 @@ async function main() {
   const nodesBefore = await cdp.eval(`(function(){ try { const s = ${svc}.binding('${mainId}').session; const c = s.snapshotCache; return (c?.chat?.legacy?.nodes ?? []).filter(function(n){return n && n.visibility === 'visible'}).length } catch(e) { return -1 } })()`)
   report.nodesBefore = nodesBefore
   if (reportEndpoint.text !== null) {
-    report.reportClick = await cdp.eval(`(function(){ const btn = document.querySelector('button[aria-label="Report to main chat"]'); if (!btn) return 'no-btn'; btn.click(); return 'clicked' })()`)
+    report.reportClick = await cdp.eval(`(function(){ const btn = document.querySelector('button[aria-label="汇报到主对话"]'); if (!btn) return 'no-btn'; btn.click(); return 'clicked' })()`)
     await sleep(2500)
   }
   const nodesAfter = await cdp.eval(`(function(){ try { const s = ${svc}.binding('${mainId}').session; const c = s.snapshotCache; return (c?.chat?.legacy?.nodes ?? []).filter(function(n){return n && n.visibility === 'visible'}).length } catch(e) { return -1 } })()`)

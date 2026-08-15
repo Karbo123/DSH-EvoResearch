@@ -185,7 +185,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                 error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
                 jsxs('div', {
                   className: 'evo-skill-tabs',
-                  children: [['all', 'All'], ['active', 'Active'], ['superseded', 'Superseded']].map(([key, label]) => jsx('button', {
+                  children: [['all', t('all')], ['active', t('active')], ['superseded', t('superseded')]].map(([key, label]) => jsx('button', {
                     type: 'button',
                     className: 'evo-insp-subtab',
                     'data-active': obsFilter === key || undefined,

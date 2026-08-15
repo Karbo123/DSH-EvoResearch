@@ -78,19 +78,19 @@ async function main() {
 
   const report = {}
   // 打开 EvoMemory 面板
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('EvoMemory') }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('科研记忆') }); if (btn) btn.click(); return true })()`)
   await sleep(800)
   report.tabs = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-skill-tabs button')).map(function(b){ return b.textContent.trim() }) })()`)
   // 切 History
-  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('button')).find(function(x){ return x.textContent.trim() === 'History' }); if (b) b.click(); return true })()`)
+  await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('button')).find(function(x){ return x.textContent.trim() === '历史' }); if (b) b.click(); return true })()`)
   await sleep(1200)
   report.historyRows = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-history-row')).map(function(r){ return { text: r.querySelector('.evo-history-text')?.textContent?.slice(0, 50) ?? '', tags: Array.from(r.querySelectorAll('.evo-panel-tag')).map(function(t){ return t.textContent }) } }) })()`)
   report.hasLoadEarlier = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('button')).some(function(b){ return b.textContent.includes('Load earlier') }) })()`)
 
   // 打开第一个 turn 的 Thread
-  report.openThread = await cdp.eval(`(function(){ const btn = document.querySelector('button[aria-label="Open thread"]'); if (!btn) return 'no-btn'; btn.click(); return 'clicked' })()`)
+  report.openThread = await cdp.eval(`(function(){ const btn = document.querySelector('button[aria-label="打开对话"]'); if (!btn) return 'no-btn'; btn.click(); return 'clicked' })()`)
   await sleep(1500)
-  report.sessionChanged = await cdp.eval(`(function(){ try { return window.__evoresearch.sessions.binding !== undefined && document.querySelector('.evo-composer-status')?.textContent.includes('EvoMemory') === false } catch(e) { return String(e) } })()`)
+  report.sessionChanged = await cdp.eval(`(function(){ try { return window.__evoresearch.sessions.binding !== undefined && document.querySelector('.evo-composer-status')?.textContent.includes('科研记忆') === false } catch(e) { return String(e) } })()`)
 
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
   const out = join(ROOT, '.tmp-port', `memhistory-${port}.png`)
@@ -105,3 +105,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

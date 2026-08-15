@@ -101,7 +101,7 @@ async function main() {
   await sleep(1500)
   report.queueBeforeSteer = await cdp.eval(mkState(id))
   // 打开队列弹层（点队列按钮）
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-composer-tool')).find(function(b){ return b.title.startsWith('Queued messages') }); if (btn) btn.click(); return btn !== undefined })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-composer-tool')).find(function(b){ return b.title.startsWith('队列消息') }); if (btn) btn.click(); return btn !== undefined })()`)
   await sleep(500)
   report.steerButtons = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-queue-steer')).length })()`)
   report.queueRowsShown = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-queue-row').length })()`)
@@ -145,3 +145,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

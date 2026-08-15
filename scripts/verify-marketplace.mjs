@@ -79,21 +79,21 @@ async function main() {
 
   const report = {}
   // 打开 Skills 面板
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('Research Skills') }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-tl-item')).find(function(b){ return b.textContent.includes('科研技能') }); if (btn) btn.click(); return true })()`)
   await sleep(600)
-  report.viewTabs = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-skill-tabs:first-child button, .evo-insp-subtab')).map(function(b){ return b.textContent.trim() }).filter(function(t){ return t === 'Proposals' || t === 'Marketplace' }) })()`)
+  report.viewTabs = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-skill-tabs:first-child button, .evo-insp-subtab')).map(function(b){ return b.textContent.trim() }).filter(function(t){ return t === '提案' || t === '市场' }) })()`)
 
   // 切 Marketplace
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim() === 'Marketplace' }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim() === '市场' }); if (btn) btn.click(); return true })()`)
   await sleep(1000)
   report.skillCards = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-skill-card')).map(function(c){ return { name: c.querySelector('.evo-panel-item-main')?.textContent ?? '', source: c.querySelector('.evo-skill-source')?.textContent ?? null } }) })()`)
   report.count = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-skill-card').length })()`)
 
   // 搜索
-  await cdp.eval(`(function(){ const input = document.querySelector('input[aria-label="Search skills"]'); if (!input) return 'no-input'; const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(input, 'zzz-nonexistent'); input.dispatchEvent(new Event('input', { bubbles: true })); return 'typed' })()`)
+  await cdp.eval(`(function(){ const input = document.querySelector('input[aria-label^="搜索技能"]'); if (!input) return 'no-input'; const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(input, 'zzz-nonexistent'); input.dispatchEvent(new Event('input', { bubbles: true })); return 'typed' })()`)
   await sleep(500)
   report.afterSearchNone = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-skill-card').length })()`)
-  await cdp.eval(`(function(){ const input = document.querySelector('input[aria-label="Search skills"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(input, ''); input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`)
+  await cdp.eval(`(function(){ const input = document.querySelector('input[aria-label^="搜索技能"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(input, ''); input.dispatchEvent(new Event('input', { bubbles: true })); return true })()`)
   await sleep(400)
 
   // 详情展开
@@ -114,3 +114,5 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+
+

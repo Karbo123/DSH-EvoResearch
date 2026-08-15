@@ -111,7 +111,7 @@ async function main() {
   // 构建指纹
   report.stampFetch = await cdp.eval(`(function(){ return fetch('/build-stamp.json').then(function(r){ return r.ok ? r.json() : { notFound: true } }).catch(function(e){ return { err: String(e) } }) })()`)
   // 设置弹窗 About
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.title === 'Settings' }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.title === '设置' }); if (btn) btn.click(); return true })()`)
   await sleep(600)
   report.aboutStamp = await cdp.eval(`(function(){ const el = Array.from(document.querySelectorAll('.evo-setting-hint div')).find(function(d){ return d.textContent.startsWith('build ') }); return el ? el.textContent : null })()`)
 
@@ -128,3 +128,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

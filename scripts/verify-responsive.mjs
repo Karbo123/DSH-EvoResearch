@@ -87,9 +87,9 @@ async function main() {
   report.narrowClosed = await cdp.eval(leftStyle)
 
   // 打开侧栏（当前 URL sidebar=1 已开 → 应该显示；先关再开验证遮罩）
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-icon-btn')).find(function(b){ return b.title === 'Hide navigation' || b.title === 'Show navigation' }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-icon-btn')).find(function(b){ return b.title === '隐藏导航' || b.title === 'Show navigation' }); if (btn) btn.click(); return true })()`)
   await sleep(300)
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-icon-btn')).find(function(b){ return b.title === 'Hide navigation' || b.title === 'Show navigation' }); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-icon-btn')).find(function(b){ return b.title === '隐藏导航' || b.title === 'Show navigation' }); if (btn) btn.click(); return true })()`)
   await sleep(800)
   report.narrowOpen = await cdp.eval(leftStyle)
   report.maskStyle = await cdp.eval(`(function(){ const m = document.querySelector('.evo-drawer-mask'); if (!m) return null; const cs = getComputedStyle(m); return { background: cs.backgroundColor, position: cs.position, zIndex: cs.zIndex } })()`)
@@ -111,3 +111,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

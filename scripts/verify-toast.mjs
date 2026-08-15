@@ -95,11 +95,11 @@ async function main() {
     if (n > 0) break
     await sleep(500)
   }
-  report.renameArm = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-row button[aria-label="Rename"]'); if (!btn) return 'no-btn'; btn.click(); return 'armed' })()`)
+  report.renameArm = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-row button[aria-label="重命名"]'); if (!btn) return 'no-btn'; btn.click(); return 'armed' })()`)
   await sleep(300)
   report.renameInput = await cdp.eval(`(function(){ const input = document.querySelector('.evo-tl-rename-input'); if (!input) return 'no-input'; const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(input, 'Toast Test Session'); input.dispatchEvent(new Event('input', { bubbles: true })); return 'typed' })()`)
   await sleep(200)
-  report.renameSave = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-row button[aria-label="Save"]'); if (!btn) return 'no-save'; btn.click(); return 'saved' })()`)
+  report.renameSave = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-row button[aria-label="保存"]'); if (!btn) return 'no-save'; btn.click(); return 'saved' })()`)
   await sleep(800)
   report.toastAfterRename = await cdp.eval(`(function(){ return Array.from(document.querySelectorAll('.evo-toast')).map(function(t){ return { text: t.textContent, kind: t.className } }) })()`)
   await sleep(3500)

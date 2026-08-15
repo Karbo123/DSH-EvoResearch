@@ -78,7 +78,7 @@ async function main() {
 
   const report = {}
   // 1) 打开设置弹窗 → 焦点进入弹窗
-  report.open = await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.title === 'Settings' }); if (!btn) return 'no-btn'; btn.focus(); btn.click(); return 'opened' })()`)
+  report.open = await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.title === '设置' }); if (!btn) return 'no-btn'; btn.focus(); btn.click(); return 'opened' })()`)
   await sleep(600)
   report.dialog = await cdp.eval(`(function(){ const d = document.querySelector('.evo-modal'); return d ? { role: d.getAttribute('role'), ariaModal: d.getAttribute('aria-modal'), label: d.getAttribute('aria-label') } : null })()`)
   report.focusInDialog = await cdp.eval(`(function(){ const d = document.querySelector('.evo-modal'); return d !== null && d.contains(document.activeElement) })()`)
@@ -109,3 +109,4 @@ main().catch((e) => { console.error('失败:', e); process.exitCode = 1 }).final
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

@@ -116,7 +116,7 @@ async function main() {
       const rows = () => [...document.querySelectorAll('.evo-queue-row')]
       // 编辑第一条
       const first = rows()[0]
-      first?.querySelector('button[aria-label="Edit"]')?.click()
+      first?.querySelector('button[aria-label="编辑"]')?.click()
       await sleep(400)
       const input = document.querySelector('.evo-queue-input')
       if (input) {
@@ -129,7 +129,7 @@ async function main() {
       const afterEdit = rows().map(r => r.querySelector('.evo-queue-text')?.textContent ?? '')
       // 删除第二条
       const second = rows().find(r => (r.querySelector('.evo-queue-text')?.textContent || '').includes('beta'))
-      second?.querySelector('button[aria-label="Remove"]')?.click()
+      second?.querySelector('button[aria-label="移除"]')?.click()
       await sleep(800)
       const afterRemove = rows().map(r => r.querySelector('.evo-queue-text')?.textContent ?? '')
       // 清空
@@ -154,7 +154,7 @@ async function main() {
       if (!firstRow) return { error: 'no rows' }
       const beforeTitle = firstRow.querySelector('.evo-tl-row-title')?.textContent
       // 重命名
-      firstRow.querySelector('button[aria-label="Rename"]')?.click()
+      firstRow.querySelector('button[aria-label="重命名"]')?.click()
       await sleep(400)
       const input = document.querySelector('.evo-tl-rename-input')
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
@@ -172,14 +172,14 @@ async function main() {
       }
       // fork 侧聊（重命名后重新查询行，避免操作已卸载的旧节点）
       const renamedRow = [...document.querySelectorAll('.evo-tl-row')].find(r => r.querySelector('.evo-tl-row-title')?.textContent === 'My Research Project')
-      renamedRow?.querySelector('button[aria-label="Side chat"]')?.click()
+      renamedRow?.querySelector('button[aria-label="由此会话创建侧边对话"]')?.click()
       await sleep(2500)
       const forkError = document.querySelector('.evo-tl-fork-error')?.textContent ?? null
       const recentTitles = [...document.querySelectorAll('.evo-tl-row-title')].map(x => x.textContent)
       // 打开 inspector Side chats 页
       ;[...document.querySelectorAll('button')].find(b => (b.textContent || '').includes('Show workspace') || (b.title || '').includes('Show workspace'))?.click()
       await sleep(600)
-      ;[...document.querySelectorAll('.evo-insp-tab')].find(b => (b.textContent || '').includes('Side chats'))?.click()
+      ;[...document.querySelectorAll('.evo-insp-tab')].find(b => (b.textContent || '').includes('侧边对话'))?.click()
       await sleep(800)
       const sideTabs = [...document.querySelectorAll('.evo-sidechat-tab-main')].map(b => b.textContent)
       const sideCount = sideTabs.length
@@ -200,7 +200,7 @@ async function main() {
   res = await cdp.send('Runtime.evaluate', {
     expression: `(async () => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms))
-      const blankBtn = [...document.querySelectorAll('button')].find(b => (b.textContent || '').includes('Blank'))
+      const blankBtn = [...document.querySelectorAll('button')].find(b => (b.textContent || '').includes('空白'))
       blankBtn?.click()
       await sleep(2500)
       const sideTabs = [...document.querySelectorAll('.evo-sidechat-tab-main')].map(b => b.textContent)

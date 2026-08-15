@@ -114,7 +114,7 @@ async function main() {
     await sleep(500)
   }
   report.recentsRows = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-tl-row').length })()`)
-  report.deleteArm = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-row button[aria-label="Delete session"]'); if (!btn) return 'no-btn'; btn.click(); return 'armed' })()`)
+  report.deleteArm = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-row button[aria-label="删除会话"]'); if (!btn) return 'no-btn'; btn.click(); return 'armed' })()`)
   await sleep(300)
   report.deleteConfirm = await cdp.eval(`(function(){ const btn = document.querySelector('.evo-tl-del-confirm'); if (!btn) return 'no-confirm'; btn.click(); return 'confirmed' })()`)
   await sleep(1200)

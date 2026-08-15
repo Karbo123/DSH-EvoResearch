@@ -170,12 +170,12 @@ async function main() {
       ;[...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === 'Keyboard shortcuts')?.click()
       await sleep(600)
       const kbdRows = [...document.querySelectorAll('.evo-shortcut-row')].map(r => r.querySelector('.evo-kbd')?.textContent)
-      ;[...document.querySelectorAll('.evo-modal-head button')].find(b => b.title === 'Close')?.click()
+      ;[...document.querySelectorAll('.evo-modal-head button')].find(b => b.title === '关闭')?.click()
       await sleep(300)
       ;[...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === 'Compact')?.click()
       await sleep(600)
       const compactDialog = !!document.querySelector('.evo-confirm')
-      ;[...document.querySelectorAll('.evo-confirm-actions button')].find(b => b.textContent === 'Cancel')?.click()
+      ;[...document.querySelectorAll('.evo-confirm-actions button')].find(b => b.textContent === '取消')?.click()
       await sleep(300)
       return { kbdRows, compactDialog, closed: !document.querySelector('.evo-modal') }
     })()`,
@@ -193,3 +193,4 @@ main().catch((e) => { console.error('失败:', e.message); process.exitCode = 1 
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+

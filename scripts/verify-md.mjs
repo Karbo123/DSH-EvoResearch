@@ -106,7 +106,7 @@ async function main() {
       setter.call(ta, md)
       ta.dispatchEvent(new Event('input', { bubbles: true }))
       await sleep(400)
-      const btn = [...document.querySelectorAll('.evo-md-toggle-btn')].find(b => b.title === 'Preview')
+      const btn = [...document.querySelectorAll('.evo-md-toggle-btn')].find(b => b.title === '预览')
       btn?.click()
       await sleep(800)
       const pv = document.querySelector('.evo-composer-preview')
@@ -139,7 +139,7 @@ async function main() {
   res = await cdp.send('Runtime.evaluate', {
     expression: `(async () => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms))
-      const writeBtn = [...document.querySelectorAll('.evo-md-toggle-btn')].find(b => b.title === 'Write')
+      const writeBtn = [...document.querySelectorAll('.evo-md-toggle-btn')].find(b => b.title === '编辑')
       writeBtn?.click()
       await sleep(300)
       const sendBtn = [...document.querySelectorAll('button')].find(b => (b.textContent || '').includes('Send'))
@@ -196,3 +196,4 @@ main().catch((e) => { console.error('失败:', e.message); process.exitCode = 1 
   try { edge.kill() } catch { /* 已退出 */ }
   setTimeout(() => { try { rmSync(userData, { recursive: true, force: true }) } catch { /* 忽略 */ } }, 500)
 })
+
