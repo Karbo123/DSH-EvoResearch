@@ -56,6 +56,7 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 | 🎛️ | **会话动作** | 输入面板动作条：Compact（二次确认 → `/compact` 摘要投影）、Current 弹窗（Thread/workspace/模型/权限/token·context/专家/事件数/会话文件路径与大小 + Clear view 仅清展示不删数据）、Search（先搜当前视图、Full history 走全历史搜索、点击跳转高亮）、Notify（浏览器通知开关）、Shortcuts（键盘规则表） |
 | 🧵 | **会话管理与 Side Chat** | Recents 行悬停操作：重命名（官方 session.rename）、从该会话派生 Side Chat（官方 session.fork，需已完成轮次，失败透出原因）；侧聊不混入普通 Recents；Inspector Side chats 页：Blank 空白侧聊（仅继承 workspace）/Inherit 继承侧聊 + tab 列表 + 打开；忙时队列弹层：编辑/删除/清空（官方 session.updateQueue） |
 | 🤖 | **模型选择器** | 状态条模型名本身是按钮（§25.2）：点击弹出 provider 分组目录（llm 注册表动态读取 + 各 adapter listModels），选择即保存默认模型并即时生效 |
+| 🛡️ | **HITL 工具审批** | 待审批工具调用显示为卡片（工具名/调用 ID/审批理由），Approve 放行（实测沙箱升级并写入文件）/ Reject 拒绝（实测不执行）；审批期间发送按钮禁用（§21.2） |
 | 📊 | **会话状态条与统计** | 输入面板实时徽章（排队消息 / 进行中目标 / 权限模式 Read-only·Write·Full effect / 当前模型 / 上下文用量%）+ 底部统计条（轮·步 \| LLM 耗时 · 工具耗时 \| 首 token 平均 · tok/s \| 缓存命中 \| 输入·输出 tokens） |
 | 🧩 | **业务面板** | EvoMemory（项目/七类统计/目标）、Scheduled（任务列表/添加/删除）、Research Skills（AutoSkills 提案审核：Approve/Reject/Run）、Channels（消息通道启停）与 Team（科研角色邀请/清空）、Workspace（项目导入）面板，经工作台侧栏菜单直达 |
 | 🗂️ | **工作区文件浏览器** | Inspector 内目录树（懒加载）+ 文本编辑（Ctrl+S 原子保存）+ 图片/PDF/HTML 内联预览 |

@@ -21,6 +21,7 @@ import {
   type Trigger, type Candidate,
 } from './composer-assist'
 import { CurrentDialog, SearchDialog, ShortcutsDialog, ConfirmDialog, ModelSelectorDialog } from './session-actions'
+import { ShieldCheck as ShieldCheckIcon, ShieldX } from 'lucide-react'
 
 const SUGGESTED_PROMPTS = [
   'Survey recent papers on a topic',
@@ -247,6 +248,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   const clearQueue = () => { for (const item of queueItems) applyQueueAction(queueItemId(item), { kind: 'remove' }) }
 
+  // ── HITL 审批（§21.2）：会话待审批工具调用卡片 ──
+  const pendingApprovals = (session?.snapshotCache?.pending ?? []).filter((p: any) => p?.kind === 'approval')
+  const respondApproval = (wait: any, outcome: 'allowed-once' | 'rejected') => {
+    try {
+      wait.respond({ ok: true, value: { sessionId: wait.sessionId, approvalId: wait.payload?.approvalId, outcome } })
+    } catch { /* 已结算 */ }
+  }
+
   // 切换会话时重置 Clear view 与跳转高亮
   useEffect(() => { setClearView(false); setJumpKey(null) }, [sessionId])
 
@@ -389,7 +398,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
 
   const submit = async () => {
     const text = input.trim()
-    if (!text) return
+    // Pending 审批时禁用发送（§21.2：避免新消息污染待审批工具调用）
+    if (!text || pendingApprovals.length > 0) return
     // @引用解析（§23.4）：小型文本文件注入内容，其余保留路径
     const resolved = await resolveMentions(text, cwd)
     // 忙时也允许发送：消息进入 append-only 队列（§23.6），由 host 顺序消费
@@ -476,6 +486,53 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 ],
               }),
+      }),
+      // ── HITL 审批条（§21.2）：逐个显示待审批工具调用 ──
+      pendingApprovals.length > 0 && jsx('div', {
+        className: 'evo-approval-strip',
+        children: jsx('div', {
+          className: 'evo-approval-list',
+          children: pendingApprovals.map((wait: any) => {
+            const payload = wait.payload ?? {}
+            return jsxs('div', {
+              className: 'evo-approval-card',
+              children: [
+                jsxs('div', {
+                  className: 'evo-approval-head',
+                  children: [
+                    jsx(ShieldCheckIcon, {}),
+                    jsx('span', { children: 'Tool approval required' }),
+                  ],
+                }),
+                jsxs('div', {
+                  className: 'evo-approval-body',
+                  children: [
+                    jsx('code', { className: 'evo-approval-tool', children: payload.toolName ?? 'tool' }),
+                    payload.callId !== undefined && jsx('span', { className: 'evo-approval-callid', children: payload.callId }),
+                  ],
+                }),
+                payload.reason !== undefined && payload.reason !== '' && jsx('div', { className: 'evo-approval-reason', children: payload.reason }),
+                jsxs('div', {
+                  className: 'evo-approval-acts',
+                  children: [
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-ok',
+                      onClick: () => respondApproval(wait, 'allowed-once'),
+                      children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: 'Approve' })] }),
+                    }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-danger',
+                      onClick: () => respondApproval(wait, 'rejected'),
+                      children: jsxs(Fragment, { children: [jsx(ShieldX, {}), jsx('span', { children: 'Reject' })] }),
+                    }),
+                  ],
+                }),
+              ],
+            }, wait.key)
+          }),
+        }),
       }),
       jsxs('div', {
         className: 'evo-composer-wrap',
@@ -644,7 +701,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('button', {
                     type: 'button',
                     className: 'evo-send',
-                    disabled: !input.trim(),
+                    disabled: !input.trim() || pendingApprovals.length > 0,
                     onClick: submit,
                     children: jsxs(Fragment, {
                       children: [jsx('span', { children: t('send') }), jsx(ArrowUp, {})],

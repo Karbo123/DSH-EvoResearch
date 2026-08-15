@@ -510,4 +510,15 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-queue-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
 .evo-queue-act:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-queue-act svg { width: 13px; height: 13px; }
+/* ── HITL 审批条（§21.2）── */
+.evo-approval-strip { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 24px 0; }
+.evo-approval-list { width: 100%; max-width: var(--chat-max-width); display: flex; flex-direction: column; gap: 8px; }
+.evo-approval-card { border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--color-warning) 7%, var(--color-surface)); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.evo-approval-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--color-warning); }
+.evo-approval-head svg { width: 15px; height: 15px; }
+.evo-approval-body { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.evo-approval-tool { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--color-text-primary); background: var(--hover-bg); padding: 3px 10px; border-radius: 7px; }
+.evo-approval-callid { font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
+.evo-approval-reason { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.6; }
+.evo-approval-acts { display: flex; gap: 8px; }
 `
