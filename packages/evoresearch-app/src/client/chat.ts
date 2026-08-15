@@ -14,6 +14,7 @@ import {
   ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle,
 } from 'lucide-react'
 import { t } from './i18n'
+import { toast } from './toast'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
 import { renderMarkdown, renderMermaidBlocks } from './markdown'
 import {
@@ -708,6 +709,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     const admitted = images.filter((f) => f.size <= MAX_IMAGE_BYTES)
     if (admitted.length === 0) return
     const added = admitted.map((f) => ({ id: `att-${++attachUidRef.current}-${Date.now()}`, name: f.name, mediaType: f.type || 'image/png', dataUrl: '', bytes: f.size }))
+    toast(`Added ${added.length} attachment${added.length > 1 ? 's' : ''}`, 'success')
     setPendingImages((prev) => [...prev, ...added])
     for (let i = 0; i < admitted.length; i += 1) {
       try {

@@ -12,7 +12,7 @@
  * 后端能力（会话、模型、工具）由 dsh-base 提供 —— 不重复造轮子。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore, Component } from 'react'
 import {
   PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, SquarePen,
   MessagesSquare, Moon, Sun, Settings, Languages,
@@ -27,6 +27,7 @@ import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
+import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
@@ -108,9 +109,44 @@ function currentTitleOf(sessions: any): string | null {
   return s === undefined ? null : (s.displayTitle ?? id.slice(0, 12))
 }
 
+/**
+ * 页面级错误边界（§33.4）：渲染失败时提供 Reload（保留 URL threadId/project）
+ * 与 Go back（回首页）。
+ */
+class ErrorBoundary extends (Component as any) {
+  state: { failed: boolean } = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(error: unknown, info: unknown) {
+    console.error('[EvoResearch] 渲染错误:', error, info)
+  }
+  render() {
+    if (this.state.failed) {
+      return jsxs('div', {
+        className: 'evo-fatal',
+        children: [
+          jsx('h2', { children: '页面无法加载' }),
+          jsx('p', { children: '渲染发生错误。Reload 将保留当前会话；Go back 返回首页。' }),
+          jsxs('div', {
+            className: 'evo-fatal-acts',
+            children: [
+              jsx('button', { type: 'button', className: 'evo-btn evo-btn-run', onClick: () => location.reload(), children: 'Reload' }),
+              jsx('button', {
+                type: 'button',
+                className: 'evo-btn',
+                onClick: () => { location.href = location.origin + location.pathname },
+                children: 'Go back',
+              }),
+            ],
+          }),
+        ],
+      })
+    }
+    return (this.props as any).children
+  }
+}
+
 /** 工作台根组件（root slot）。 */
-function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {
-  const sessions = useSessions((s) => s)
+function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = useSessions((s) => s)
   const workspaces = useWorkspaces((w) => w)
   const [sidebar, setSidebar] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('sidebar') === '1' : false)
   const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('inspector') === '1' : false)
@@ -190,6 +226,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const session = sessionsService?.binding(id)?.session
     if (session?.rename === undefined) return false
     const result = await session.rename(title)
+    if (result?.ok === true) toast('Session renamed', 'success')
     return result?.ok === true
   }
   const forkSideChat = async (id: string): Promise<{ ok: boolean; id?: string; error?: string }> => {
@@ -315,6 +352,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       if (json.ok !== true) return { ok: false, error: (json.error as { message?: string } | undefined)?.message ?? '删除失败' }
       const cwd = sessions.byId[id]?.cwd ?? null
       markDeleted(id, cwd)
+      toast('Session deleted', 'success')
       // 删除的是当前会话 → 跳到新会话
       if (sessions.current === id) startNewChat()
       window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
@@ -404,6 +442,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     className: 'evo-app',
     'data-desktop': desktop || undefined,
     children: [
+      jsx(ToastHost, {}),
       // ── 桌面模式：自绘标题栏（替代网页顶栏）；网页模式：普通顶栏 ──
       desktop
         ? jsx(DesktopTitlebar, {
@@ -620,7 +659,7 @@ function apply(ctx: any) {
       openDetails() {},
       closeDetails() {},
     })
-    const disposeRegistration = ctx.slots.register({ name: 'root' }, EvoFrame)
+    const disposeRegistration = ctx.slots.register({ name: 'root' }, (props: any) => jsx(ErrorBoundary, { children: jsx(EvoFrame, props) }))
     return () => {
       disposeRegistration()
       disposeService()

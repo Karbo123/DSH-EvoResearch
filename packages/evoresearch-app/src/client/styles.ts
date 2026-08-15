@@ -538,6 +538,17 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-attach-remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 5px; cursor: pointer; flex-shrink: 0; }
 .evo-attach-remove:hover { color: var(--color-error); background: var(--hover-bg); }
 .evo-attach-remove svg { width: 13px; height: 13px; }
+/* ── Toast（§33.2）── */
+.evo-toast-host { position: fixed; right: 18px; bottom: 18px; z-index: 1200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.evo-toast { padding: 9px 16px; border-radius: 10px; font-size: 12.5px; line-height: 1.5; color: var(--color-text-primary); background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 6px 24px rgb(0 0 0 / 18%); animation: evo-toast-in 0.18s ease-out; max-width: 340px; }
+.evo-toast-success { border-color: color-mix(in srgb, var(--color-success) 55%, var(--color-border)); }
+.evo-toast-error { border-color: color-mix(in srgb, var(--color-error) 55%, var(--color-border)); color: var(--color-error); }
+@keyframes evo-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* ── 页面级错误（§33.4）── */
+.evo-fatal { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--color-background); color: var(--color-text-primary); z-index: 2000; }
+.evo-fatal h2 { margin: 0; font-size: 20px; }
+.evo-fatal p { margin: 0; font-size: 13px; color: var(--color-text-secondary); max-width: 460px; text-align: center; line-height: 1.6; }
+.evo-fatal-acts { display: flex; gap: 10px; }
 .evo-msg-jump { animation: evo-jump-flash 1.6s ease-out; border-radius: 10px; }
 @keyframes evo-jump-flash { 0% { background: color-mix(in srgb, var(--brand) 26%, transparent); } 100% { background: transparent; } }
 /* ── Recents 操作（§26.3）与 Side Chat（§22.3-22.4）── */

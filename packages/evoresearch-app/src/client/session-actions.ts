@@ -8,6 +8,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { X, Search, Keyboard, FileText, Eraser, Copy, Check } from 'lucide-react'
+import { toast } from './toast'
 
 /** 模态外壳（与设置弹窗同视觉）。 */
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: any }) {
@@ -311,6 +312,7 @@ export function ModelSelectorDialog({ onClose }: { onClose: () => void }) {
       if (j.ok) {
         setCurrent({ provider, model })
         window.dispatchEvent(new CustomEvent('evo-model-changed'))
+        toast(`Model switched to ${model}`, 'success')
         onClose()
       } else setError(j.error?.message ?? '保存失败')
     }).catch((e) => { setSaving(false); setError(String(e)) })
