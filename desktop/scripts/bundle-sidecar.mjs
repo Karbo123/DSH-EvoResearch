@@ -95,7 +95,7 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   writeFileSync(join(profileDir, 'package.json'), JSON.stringify(profilePkg, null, 2), 'utf8')
   writeFileSync(join(profileDir, 'cordis.patch.yml'), readFileUtf8(join(ROOT, 'profiles', 'evoresearch', 'cordis.patch.yml')), 'utf8')
   // 3) 安装依赖
-  const result = spawnSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--production'], {
+  const result = spawnSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--production', '--prefer-online'], {
     cwd: appDir,
     encoding: 'utf8',
     shell: true, // Windows 下 npm 是 npm.cmd，spawnSync 需要 shell 解析
