@@ -25,6 +25,7 @@ globalThis.window = {
             get(_t, prop) {
               if (prop === 'createElement') return () => ({ __mock: true })
               if (prop === 'Fragment') return 'Fragment'
+              if (prop === 'Component') return class Component { constructor() {} }
               if (prop === 'default') return undefined
               return () => ({ __mock: true })
             },
