@@ -574,6 +574,20 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-approval-tool { font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: var(--color-text-primary); background: var(--hover-bg); padding: 3px 10px; border-radius: 7px; }
 .evo-approval-callid { font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
 .evo-approval-reason { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.6; }
+/* ── Ask User 问题卡片（§21.3）── */
+.evo-question-card { border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--brand) 7%, var(--color-surface)); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.evo-question-card .evo-approval-head { color: var(--brand); }
+.evo-question { display: flex; flex-direction: column; gap: 7px; }
+.evo-question-text { font-size: 13px; color: var(--color-text-primary); line-height: 1.6; }
+.evo-question-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.evo-question-opt { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; padding: 4px 12px; cursor: pointer; }
+.evo-question-opt:hover { border-color: var(--brand); color: var(--color-text-primary); }
+.evo-question-opt[data-on] { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, var(--color-surface)); color: var(--brand); font-weight: 600; }
+.evo-question-check { width: 13px; height: 13px; border-radius: 4px; border: 1px solid var(--brand); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; }
+.evo-question-custom { width: 100%; padding: 5px 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text-primary); font-size: 12.5px; outline: none; }
+.evo-question-custom:focus { border-color: var(--brand); }
+.evo-question-submit { display: flex; justify-content: flex-end; }
+.evo-question-acts { display: flex; justify-content: flex-end; }
 .evo-approval-acts { display: flex; gap: 8px; }
 /* ── Dynamic Workflow 条（§24）── */
 .evo-wf-strip { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 24px 0; }

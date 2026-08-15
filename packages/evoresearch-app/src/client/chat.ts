@@ -11,7 +11,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
-  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight,
+  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle,
 } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
@@ -415,6 +415,46 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     try {
       wait.respond({ ok: true, value: { sessionId: wait.sessionId, approvalId: wait.payload?.approvalId, outcome } })
     } catch { /* 已结算 */ }
+  }
+
+  // ── Ask User 问题卡片（§21.3）：模型 ask_user_question 工具 → snapshotCache.pending kind='question' ──
+  const pendingQuestions = (session?.snapshotCache?.pending ?? []).filter((p: any) => p?.kind === 'question')
+  const [questionSelections, setQuestionSelections] = useState<Record<string, string[]>>({})
+  const [questionCustom, setQuestionCustom] = useState<Record<string, string>>({})
+  const answerQuestion = (wait: any, answers: Array<{ id: string; selected: string[]; custom?: string }>) => {
+    try {
+      wait.respond({ ok: true, value: { sessionId: wait.sessionId, answer: { answers } } })
+    } catch { /* 已结算 */ }
+  }
+  const cancelQuestion = (wait: any) => {
+    try {
+      wait.respond({ ok: false, error: { code: 'cancelled', message: 'the user closed this question request', details: {} } })
+    } catch { /* 已结算 */ }
+  }
+  const toggleQuestionOption = (wait: any, question: any, optionLabel: string) => {
+    const key = `${wait.key}:${question.id}`
+    if (question.multiSelect === true) {
+      setQuestionSelections((prev) => {
+        const cur = prev[key] ?? []
+        const next = cur.includes(optionLabel) ? cur.filter((l) => l !== optionLabel) : [...cur, optionLabel]
+        return { ...prev, [key]: next }
+      })
+      return
+    }
+    // 单选：记录唯一选择（批处理提交；custom 有内容时先清空，避免冲突被 host 拒绝）
+    if ((questionCustom[key] ?? '').trim() !== '') setQuestionCustom((prev) => ({ ...prev, [key]: '' }))
+    setQuestionSelections((prev) => ({ ...prev, [key]: [optionLabel] }))
+  }
+  const submitQuestions = (wait: any, questions: Array<{ id: string }>) => {
+    // 官方要求 answers 覆盖整批问题（matchesQuestions 校验长度与 id）
+    const answers = questions.map((q) => {
+      const key = `${wait.key}:${q.id}`
+      const custom = (questionCustom[key] ?? '').trim()
+      if (custom !== '') return { id: q.id, selected: [], custom }
+      const selected = questionSelections[key] ?? []
+      return { id: q.id, selected }
+    })
+    if (answers.some((a) => a.selected.length > 0 || (a.custom ?? '') !== '')) answerQuestion(wait, answers)
   }
 
   // 切换会话时重置 Clear view 与跳转高亮
@@ -831,6 +871,84 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       className: 'evo-btn evo-btn-danger',
                       onClick: () => respondApproval(wait, 'rejected'),
                       children: jsxs(Fragment, { children: [jsx(ShieldX, {}), jsx('span', { children: 'Reject' })] }),
+                    }),
+                  ],
+                }),
+              ],
+            }, wait.key)
+          }),
+        }),
+      }),
+      // ── Ask User 问题条（§21.3）：模型 ask_user_question 的问题卡片 ──
+      pendingQuestions.length > 0 && jsx('div', {
+        className: 'evo-approval-strip',
+        children: jsx('div', {
+          className: 'evo-approval-list',
+          children: pendingQuestions.map((wait: any) => {
+            const questions: Array<{ id: string; question: string; multiSelect?: boolean; options?: Array<{ label: string; description?: string }> }> = wait.payload?.questions ?? []
+            return jsxs('div', {
+              className: 'evo-question-card',
+              children: [
+                jsxs('div', {
+                  className: 'evo-approval-head',
+                  children: [
+                    jsx(HelpCircle, {}),
+                    jsx('span', { children: questions.length > 1 ? `Question（${questions.length}）` : 'Question' }),
+                  ],
+                }),
+                questions.map((q) => {
+                  const key = `${wait.key}:${q.id}`
+                  const sel = questionSelections[key] ?? []
+                  const custom = questionCustom[key] ?? ''
+                  const options = q.options ?? []
+                  return jsxs('div', {
+                    className: 'evo-question',
+                    children: [
+                      jsx('div', { className: 'evo-question-text', children: q.question }),
+                      options.length > 0 && jsx('div', {
+                        className: 'evo-question-opts',
+                        children: options.map((opt) => {
+                          const active = sel.includes(opt.label)
+                          return jsx('button', {
+                            type: 'button',
+                            className: 'evo-question-opt',
+                            'data-on': active || undefined,
+                            title: opt.description,
+                            onClick: () => toggleQuestionOption(wait, q, opt.label),
+                            children: jsxs(Fragment, {
+                              children: [
+                                q.multiSelect === true && jsx('span', { className: 'evo-question-check', children: active ? '✓' : '' }),
+                                jsx('span', { children: opt.label }),
+                              ],
+                            }),
+                          }, opt.label)
+                        }),
+                      }),
+                      jsx('input', {
+                        type: 'text',
+                        className: 'evo-question-custom',
+                        placeholder: 'Custom answer…',
+                        value: custom,
+                        onInput: (e: { currentTarget: HTMLInputElement }) => setQuestionCustom((prev) => ({ ...prev, [key]: e.currentTarget.value })),
+                        onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') submitQuestions(wait, questions) },
+                      }),
+                    ],
+                  }, q.id)
+                }),
+                jsxs('div', {
+                  className: 'evo-question-acts',
+                  children: [
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-ok',
+                      onClick: () => submitQuestions(wait, questions),
+                      children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: 'Submit' })] }),
+                    }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-danger',
+                      onClick: () => cancelQuestion(wait),
+                      children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: 'Cancel' })] }),
                     }),
                   ],
                 }),
