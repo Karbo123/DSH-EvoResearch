@@ -621,6 +621,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tl-del:hover, .evo-tl-del-confirm { color: var(--color-error); }
 .evo-tl-del-confirm { width: auto; padding: 0 6px; font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--color-error) 14%, transparent); }
 .evo-tl-del-confirm:hover { background: var(--color-error); color: var(--color-surface); }
+.evo-tl-running { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); flex-shrink: 0; animation: evo-running-pulse 1.2s ease-in-out infinite; }
+@keyframes evo-running-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .evo-del { color: var(--color-text-tertiary); }
 .evo-del:hover { color: var(--color-error); }
 .evo-del-confirm { color: var(--color-error) !important; font-size: 11px; font-weight: 600; }

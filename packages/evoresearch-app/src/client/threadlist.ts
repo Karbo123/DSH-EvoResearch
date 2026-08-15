@@ -66,12 +66,14 @@ export interface ThreadListProps {
   deletedIds: Set<string>
   /** 删除会话（host 删除持久化数据；返回是否成功）。 */
   onDelete: (id: string) => Promise<{ ok: boolean; error?: string }>
+  /** 运行/停止中的会话 id（§26.3 行内运行状态点）。 */
+  runningIds: Set<string>
 }
 
 /** 标签调色板（§26.3）。 */
 const TAG_PALETTE = ['#e05d5d', '#e08a3c', '#d9b13b', '#5dbe85', '#3b9cb0', '#7a6fe0', '#b05dc4', '#908d83']
 
-export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete }: ThreadListProps) {
+export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, runningIds }: ThreadListProps) {
   const sessions = useSessions((s) => s)
   const currentId = sessions.current
   const [colorFor, setColorFor] = useState<string | null>(null)
@@ -228,6 +230,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                           jsxs('div', {
                             className: 'evo-tl-row-title',
                             children: [
+                              runningIds.has(s.id) && jsx('span', { className: 'evo-tl-running', title: 'Running' }),
                               tagColors[s.id] !== undefined && jsx('span', { className: 'evo-tl-color-dot', style: { background: tagColors[s.id] }, title: 'Tagged' }),
                               pinnedIds.has(s.id) && jsx('span', { className: 'evo-tl-pin-badge', title: 'Pinned', children: jsx(Pin, {}) }),
                               jsx('span', { className: 'evo-tl-title-text', children: s.displayTitle ?? s.id.slice(0, 12) }),

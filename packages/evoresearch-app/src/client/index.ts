@@ -208,6 +208,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 当前会话的后台任务（§21.6：jobsBySession 快照）
   const currentJobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
     = current === undefined ? [] : ((sessions.jobsBySession ?? {})[current] ?? [])
+  // Recents 运行状态（§26.3：agent 运行中或后台 job 进行中的会话行显示状态点）
+  const runningIds = new Set<string>()
+  for (const sid of sessions.ids ?? []) {
+    const s = sessions.byId[sid]
+    if (s?.running === true) { runningIds.add(sid); continue }
+    const jobs = (sessions.jobsBySession ?? {})[sid] ?? []
+    if (jobs.some((j) => j.status === 'running' || j.status === 'stopping')) runningIds.add(sid)
+  }
 
   // ── 会话快照订阅：notifier → snapshotCache（chat legacy 节点 + promptError）──
   const sessionSnapshot = useSyncExternalStore(
@@ -692,6 +700,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   hideIds: sideChatIds,
                   deletedIds,
                   onDelete: deleteSession,
+                  runningIds,
                 }),
               }),
               jsx('div', {
