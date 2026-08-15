@@ -128,7 +128,7 @@ body { margin: 0; }
 .evo-tl-fork-error { font-size: 11px; color: var(--color-error); text-align: right; line-height: 1.4; max-width: 70%; }
 .evo-tl-row {
   display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; padding: 6px 10px; margin-bottom: 2px;
-  border: none; background: none; border-radius: 8px; cursor: default;
+  border: none; background: none; border-radius: 8px; cursor: default; position: relative;
 }
 .evo-tl-row:hover { background: var(--hover-bg); }
 .evo-tl-row[data-active] { background: var(--hover-bg); }
@@ -136,6 +136,11 @@ body { margin: 0; }
 .evo-tl-pin-badge { display: inline-flex; flex-shrink: 0; color: var(--brand); }
 .evo-tl-pin-badge svg { width: 11px; height: 11px; }
 .evo-tl-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.evo-tl-color-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.evo-tl-palette { position: absolute; right: 10px; z-index: 30; display: flex; gap: 5px; padding: 6px 8px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16); }
+.evo-tl-color-swatch { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--color-surface); cursor: pointer; flex-shrink: 0; transition: transform 0.12s; }
+.evo-tl-color-swatch:hover { transform: scale(1.2); }
+.evo-tl-color-swatch[data-active] { outline: 2px solid var(--color-text-secondary); outline-offset: 1px; }
 .evo-tl-row-sub { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 1px; }
 .evo-tl-empty { padding: 28px 16px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-tl-empty svg { width: 40px; height: 40px; color: var(--color-border); margin-bottom: 8px; }

@@ -254,6 +254,25 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     })
   }
 
+  // ── Recents 标签颜色（§26.3，client-side 持久化）──
+  const [tagColors, setTagColors] = useState<Record<string, string>>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('evoresearch-tagcolors') ?? '{}')
+      return typeof raw === 'object' && raw !== null ? raw : {}
+    } catch {
+      return {}
+    }
+  })
+  const setTagColor = (id: string, color: string | null) => {
+    setTagColors((prev) => {
+      const next = { ...prev }
+      if (color === null) delete next[id]
+      else next[id] = color
+      try { localStorage.setItem('evoresearch-tagcolors', JSON.stringify(next)) } catch { /* 忽略 */ }
+      return next
+    })
+  }
+
   // ── Side chats 列表（§22.3-22.4）：当前 workspace 的 fork 子会话 + 空白侧聊 ──
   const [, setSideTick] = useState(0)
   useEffect(() => {
@@ -447,6 +466,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   onExport: exportSession,
                   pinnedIds,
                   onTogglePin: togglePin,
+                  tagColors,
+                  onSetTagColor: setTagColor,
                   hideIds: sideChatIds,
                 }),
               }),
