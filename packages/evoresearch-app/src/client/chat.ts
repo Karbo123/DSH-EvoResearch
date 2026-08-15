@@ -1096,6 +1096,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('span', { className: 'evo-composer-dot', 'data-busy': running || undefined }),
                   jsx('span', { children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
                   jsx(SessionStatusLine, { session }),
+                  // 当前工作路径（§25.4）：与模型行同行右对齐、单行省略、tooltip 完整路径
+                  cwd !== null && jsx('span', { className: 'evo-cwd', title: cwd, children: cwd }),
                   jsx('span', { style: { flex: 1 } }),
                   // 停止本轮（官方 session.cancel；host 保留排队消息）
                   running && jsx('button', {
