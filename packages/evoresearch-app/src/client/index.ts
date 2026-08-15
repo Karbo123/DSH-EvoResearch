@@ -215,6 +215,26 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return null
   }
 
+  // ── 会话导出（§26.3 / §41.8）：JSON 诊断/迁移 + Markdown 人读 ──
+  const exportSession = (id: string, format: 'json' | 'markdown', title: string) => {
+    void fetch('/evoresearch/fs/session-export', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId: id, format, title }),
+    }).then((res) => res.json()).then((json) => {
+      if (!json.ok || json.value?.content === undefined) return
+      const blob = new Blob([json.value.content], { type: format === 'markdown' ? 'text/markdown' : 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = json.value.filename ?? `evoresearch-${id.slice(0, 8)}.${format === 'markdown' ? 'md' : 'json'}`
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    }).catch(() => {})
+  }
+
   // ── Side chats 列表（§22.3-22.4）：当前 workspace 的 fork 子会话 + 空白侧聊 ──
   const [, setSideTick] = useState(0)
   useEffect(() => {
@@ -405,6 +425,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   hasActive: (sessions.ids ?? []).some((id: string) => sessions.byId[id]?.blank !== true),
                   onRename: renameSession,
                   onForkSideChat: forkSideChat,
+                  onExport: exportSession,
                   hideIds: sideChatIds,
                 }),
               }),

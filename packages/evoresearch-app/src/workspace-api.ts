@@ -475,6 +475,63 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── 会话导出（§26.3 / §41.8）：JSON（诊断/迁移）与 Markdown（人读）──
+        if (method === 'session-export') {
+          const sessionId = requireString(payload, 'sessionId')
+          const format = payload.format === 'markdown' ? 'markdown' : 'json'
+          const sessions = ctx.get('sessions')
+          const live = sessions?.get?.(sessionId)
+          let events: Array<{ type?: string; data?: any; time?: number }> = []
+          if (live !== undefined && Array.isArray(live.log)) {
+            events = live.log as Array<{ type?: string; data?: any; time?: number }>
+          } else {
+            const persistence = ctx.get('sessionPersistence')
+            if (persistence?.load !== undefined) {
+              try {
+                const loaded = await persistence.load(sessionId)
+                events = loaded?.events ?? []
+              } catch { /* 持久化读失败 */ }
+            }
+          }
+          const textBlocks = (content: unknown): string => {
+            if (typeof content === 'string') return content
+            if (Array.isArray(content)) {
+              return content.map((b) => (b?.type === 'text' ? String(b.text ?? '') : '')).join('')
+            }
+            return ''
+          }
+          const messages: Array<{ role: string; text: string; time?: number }> = []
+          for (const event of events) {
+            if (event?.type === 'user/message') {
+              const text = textBlocks(event.data?.content)
+              if (text !== '') messages.push({ role: 'user', text, time: event.time })
+            } else if (event?.type === 'assistant/message') {
+              const text = textBlocks(event.data?.message?.content)
+              if (text !== '') messages.push({ role: 'assistant', text, time: event.time })
+            }
+          }
+          const title = typeof payload.title === 'string' && payload.title !== '' ? payload.title : sessionId.slice(0, 12)
+          const safeBase = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').replace(/\s+/g, '-').slice(0, 80)
+          if (format === 'markdown') {
+            const sections: string[] = [`# ${title}`, '', `> Thread: ${sessionId}`, '']
+            for (const m of messages) {
+              sections.push(`## ${m.role === 'user' ? 'User' : 'Assistant'}`, '', m.text, '')
+            }
+            writeOk(res, { filename: `${safeBase}.md`, content: sections.join('\n') })
+          } else {
+            const payloadJson = {
+              threadId: sessionId,
+              title,
+              workspace: live?.header?.cwd ?? null,
+              exportedAt: new Date().toISOString(),
+              messageCount: messages.length,
+              messages,
+            }
+            writeOk(res, { filename: `${safeBase}.json`, content: JSON.stringify(payloadJson, null, 2) })
+          }
+          return
+        }
+
         writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown method ${method ?? ''}` } })
       } catch (error) {
         writeError(res, error)

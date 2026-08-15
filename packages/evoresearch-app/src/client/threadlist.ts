@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
@@ -52,11 +52,13 @@ export interface ThreadListProps {
   onRename: (id: string, title: string) => Promise<boolean>
   /** 以某会话为起点创建继承型 Side Chat（官方 session.fork；返回结果）。 */
   onForkSideChat: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
+  /** 导出会话（json | markdown，§26.3/§41.8）。 */
+  onExport: (id: string, format: 'json' | 'markdown', title: string) => void
   /** 应从 Recents 隐藏的会话 id（侧聊/内部线程，§22.1）。 */
   hideIds: Set<string>
 }
 
-export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, hideIds }: ThreadListProps) {
+export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onExport, hideIds }: ThreadListProps) {
   const sessions = useSessions((s) => s)
   const currentId = sessions.current
   // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表）
@@ -215,6 +217,28 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                             forkRow(s.id)
                           },
                           children: jsx(MessagesSquare, {}),
+                        }),
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-tl-row-act',
+                          title: 'Export JSON',
+                          'aria-label': 'Export JSON',
+                          onClick: (e: { stopPropagation(): void }) => {
+                            e.stopPropagation()
+                            onExport(s.id, 'json', s.displayTitle ?? s.id.slice(0, 12))
+                          },
+                          children: jsx(FileJson, {}),
+                        }),
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-tl-row-act',
+                          title: 'Export Markdown',
+                          'aria-label': 'Export Markdown',
+                          onClick: (e: { stopPropagation(): void }) => {
+                            e.stopPropagation()
+                            onExport(s.id, 'markdown', s.displayTitle ?? s.id.slice(0, 12))
+                          },
+                          children: jsx(FileText, {}),
                         }),
                       ],
                     }),
