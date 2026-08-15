@@ -19,7 +19,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { evoresearchDb, type Migration, cleanForIndex } from '../core/db.js'
 import {
   type TurnRecord,
@@ -243,6 +243,17 @@ export const RESEARCH_MEMORY_MIGRATIONS: readonly Migration[] = [
       `)
     },
   },
+  {
+    // §36.2/§17.4：工具收据审计——补 tool_name 与参数/结果 digest。
+    version: 5,
+    up(db) {
+      db.exec(`
+        ALTER TABLE tool_execution_receipts ADD COLUMN tool_name TEXT;
+        ALTER TABLE tool_execution_receipts ADD COLUMN arguments_digest TEXT;
+        ALTER TABLE tool_execution_receipts ADD COLUMN result_digest TEXT;
+      `)
+    },
+  },
 ]
 
 /** 数据库行（宽松类型，读取后立即转换为领域对象）。 */
@@ -254,6 +265,17 @@ function asString(value: unknown, fallback = ''): string {
 
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' ? value : fallback
+}
+
+/** §36.2 审计摘要：稳定值 SHA-256 前 16 位。 */
+function digestOf(value: unknown): string {
+  let text: string
+  try {
+    text = typeof value === 'string' ? value : JSON.stringify(value)
+  } catch {
+    text = String(value)
+  }
+  return createHash('sha256').update(text).digest('hex').slice(0, 16)
 }
 
 function parseJsonArray<T>(value: unknown): T[] {
@@ -531,18 +553,21 @@ export class ResearchMemoryStore {
       .run(responseStarted ? 'completed-streamed' : 'completed', responseStarted ? 1 : 0, Date.now(), attemptId)
   }
 
-  /** 记录工具调用开始。 */
-  recordToolStarted(toolCallId: string, turnId: string | undefined): void {
+  /** 记录工具调用开始（§36.2：带工具名与参数 digest 审计）。 */
+  recordToolStarted(toolCallId: string, turnId: string | undefined, toolName?: string, argumentsValue?: unknown): void {
     this.db.db
-      .prepare('INSERT OR IGNORE INTO tool_execution_receipts (tool_call_id, turn_id, status, started_at) VALUES (?, ?, ?, ?)')
-      .run(toolCallId, turnId ?? null, 'started', Date.now())
+      .prepare(
+        `INSERT OR IGNORE INTO tool_execution_receipts (tool_call_id, turn_id, status, started_at, tool_name, arguments_digest)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(toolCallId, turnId ?? null, 'started', Date.now(), toolName ?? null, argumentsValue === undefined ? null : digestOf(argumentsValue))
   }
 
-  /** 记录工具调用完成（ToolMessage 已提交后补记）。 */
-  recordToolCompleted(toolCallId: string): void {
+  /** 记录工具调用完成（ToolMessage 已提交后补记；§36.2 写结果 digest）。 */
+  recordToolCompleted(toolCallId: string, resultValue?: unknown): void {
     this.db.db
-      .prepare("UPDATE tool_execution_receipts SET status = 'completed', completed_at = ? WHERE tool_call_id = ?")
-      .run(Date.now(), toolCallId)
+      .prepare("UPDATE tool_execution_receipts SET status = 'completed', completed_at = ?, result_digest = ? WHERE tool_call_id = ?")
+      .run(Date.now(), resultValue === undefined ? null : digestOf(resultValue), toolCallId)
   }
 
   /** 无法确认结果的工具收据（unknown）。 */

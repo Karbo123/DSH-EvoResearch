@@ -292,9 +292,9 @@ export class MemoryRuntime implements GoalRuntime {
     // v3 工具收据：模型请求的工具调用生命周期（started → completed）
     const workspaceDir = (session.header as { cwd?: string }).cwd ?? this.config.dataRoot
     if (event.type === 'tool/call') {
-      const data = event.data as SessionEvent<'tool/call'>['data']
+      const data = event.data as SessionEvent<'tool/call'>['data'] & { name?: unknown; arguments?: unknown }
       const active = this.activeTurns.get(session.id)
-      this.storeFor(workspaceDir).recordToolStarted(String(data.callId), active?.turnId)
+      this.storeFor(workspaceDir).recordToolStarted(String(data.callId), active?.turnId, typeof data.name === 'string' ? data.name : undefined, data.arguments)
       return
     }
     if (event.type === 'tool/result') {
@@ -302,7 +302,8 @@ export class MemoryRuntime implements GoalRuntime {
       const message = data.message as { source?: { callId?: unknown } }
       const callId = message?.source?.callId
       if (callId !== undefined) {
-        this.storeFor(workspaceDir).recordToolCompleted(String(callId))
+        const block = Array.isArray(data.message?.content) ? data.message.content.find((b: any) => b?.type === 'tool-result') : undefined
+        this.storeFor(workspaceDir).recordToolCompleted(String(callId), block?.content)
       }
     }
   }
