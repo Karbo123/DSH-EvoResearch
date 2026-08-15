@@ -129,11 +129,48 @@ export class MemoryRuntime implements GoalRuntime {
     return path.join(this.memoryDirFor(workspaceDir), 'observations')
   }
 
+  /** Profile 记忆目录（§12：memories/profile）。 */
+  profileDirFor(workspaceDir: string): string {
+    return path.join(this.memoryDirFor(workspaceDir), 'profile')
+  }
+
   /** 当前记忆包（供 systemPrompt.context 注入）。 */
   latestPacketText(): string {
     if (!this.lastActiveSessionId) return ''
     const packet = this.packets.get(this.lastActiveSessionId)
     return packet ? packet.text : ''
+  }
+
+  /** §12.3 Profile 注入：总量 ≤24000 字符时全文注入，超限只给文件清单 + 读取指令。 */
+  profileContextText(): string {
+    if (!this.lastActiveSessionId) return ''
+    const sessions = this.ctxRef?.get('sessions')
+    const getSession = sessions?.get as ((id: string) => unknown) | undefined
+    const session = getSession?.call(sessions, this.lastActiveSessionId) as { header?: { cwd?: string } } | undefined
+    const cwd = session?.header?.cwd
+    const base = cwd && cwd !== this.config.dataRoot ? cwd : this.config.dataRoot
+    const profileDir = path.join(base, '.evoresearch-data', 'memories', 'profile')
+    const files: Array<{ name: string; text: string }> = []
+    try {
+      for (const entry of fs.readdirSync(profileDir)) {
+        if (!entry.endsWith('.md')) continue
+        const full = path.join(profileDir, entry)
+        try {
+          const stat = fs.statSync(full)
+          if (!stat.isFile() || stat.size > 64 * 1024) continue
+          files.push({ name: entry, text: fs.readFileSync(full, 'utf8') })
+        } catch { /* 跳过不可读 */ }
+      }
+    } catch { /* 目录不存在 */ }
+    if (files.length === 0) return ''
+    files.sort((a, b) => a.name.localeCompare(b.name))
+    const BUDGET = 24000
+    const joined = files.map((f) => `## ${f.name}\n${f.text.trim()}`).join('\n\n')
+    if (joined.length <= BUDGET) {
+      return `<identity_profile>\n${joined}\n</identity_profile>`
+    }
+    const listing = files.map((f) => `- ${f.name}（${Math.max(1, Math.round(f.text.length / 1024))} KB）`).join('\n')
+    return `<identity_profile>\nProfile 总量超过 ${BUDGET} 字符，以下文件按需读取（read_memory 工具）：\n${listing}\n</identity_profile>`
   }
 
   /** 查询某会话最近记忆包（WebUI 展示用）。 */
@@ -183,6 +220,14 @@ export class MemoryRuntime implements GoalRuntime {
           name: 'evoresearch:research-memory',
           order: 60,
           text: () => this.latestPacketText(),
+        }),
+      )
+      // 2b) Identity Profile 注入（§12.3）
+      disposers.push(
+        systemPrompt.context({
+          name: 'evoresearch:identity-profile',
+          order: 61,
+          text: () => this.profileContextText(),
         }),
       )
     }

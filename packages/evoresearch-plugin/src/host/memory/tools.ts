@@ -21,6 +21,7 @@ import type { ResearchCategory, GoalProposal } from '../../shared/types.js'
 export interface MemoryToolHost {
   storeFor(workspaceDir: string): ResearchMemoryStore
   observationsDirFor(workspaceDir: string): string
+  profileDirFor(workspaceDir: string): string
 }
 
 /** 从工具执行上下文推断工作区。 */
@@ -323,6 +324,40 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       const store = host.storeFor(workspace)
       const result = store.linkObservations(host.observationsDirFor(workspace), input.observation_id, input.related_ids)
       return result
+    },
+  })
+
+  // ── update_profile（§12.2）：维护 Identity Profile 文件（只写稳定信息） ─────
+  register({
+    name: 'update_profile',
+    description:
+      '新建或整体更新 Identity Profile 记忆文件（memories/profile/，§12）。' +
+      '只写入稳定、未来仍有价值的信息（身份/偏好/习惯/项目约定），不要写入一次性日志、' +
+      '临时路径或未验证的猜测。可用文件名：SOUL.md、USER_PROFILE.md、RESEARCH_TASTE.md、' +
+      'PROJECT_PROFILE.md 或其他 <name>.md（≤64KB）。',
+    parameters: paramsSchema(
+      {
+        file: { type: 'string', description: '文件名（必须以 .md 结尾，如 SOUL.md）' },
+        content: { type: 'string', description: '完整文件内容（整体替换）' },
+      },
+      ['file', 'content'],
+    ),
+    output: { schema: { type: 'object', properties: { ok: { type: 'boolean' } } }, render: textRender },
+    execute: async (args, exec) => {
+      const input = args as { file: string; content: string }
+      const name = input.file.trim()
+      if (path.basename(name) !== name || !/^[A-Za-z0-9_.-]{1,80}\.md$/.test(name)) {
+        return { ok: false }
+      }
+      const workspace = workspaceOf(exec)
+      const dir = host.profileDirFor(workspace)
+      fs.mkdirSync(dir, { recursive: true })
+      const full = path.join(dir, name)
+      const content = String(input.content ?? '').slice(0, 64 * 1024)
+      const tmp = `${full}.tmp-${process.pid}`
+      fs.writeFileSync(tmp, content, 'utf8')
+      fs.renameSync(tmp, full)
+      return { ok: true }
     },
   })
 
