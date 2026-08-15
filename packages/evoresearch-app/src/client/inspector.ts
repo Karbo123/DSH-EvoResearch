@@ -118,6 +118,7 @@ function AgentsPanel({ sessionId }: { sessionId: string | null }) {
 export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNewSideChat, onOpenSideChat, onDeleteSideChat }: InspectorProps) {
   // 两段式删除确认：第一次点击进入确认态，5 秒无操作还原
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
   const armDelete = (id: string) => {
     setConfirmDelete(id)
     setTimeout(() => setConfirmDelete((v) => (v === id ? null : v)), 5000)
@@ -209,6 +210,27 @@ export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNe
                       }),
                       jsx('span', { style: { flex: 1 } }),
                       jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: () => { window.dispatchEvent(new CustomEvent('evo-sidechats-refresh')) }, children: jsx(RefreshCw, {}) }),
+                      // 删除当前 workspace 全部 Side Chat（§22.4，两段式确认）
+                      (sideChats ?? []).length > 0 && (confirmDeleteAll
+                        ? jsx('button', {
+                            type: 'button',
+                            className: 'evo-icon-btn evo-del-confirm',
+                            title: 'Confirm delete all side chats — cannot be undone',
+                            'aria-label': 'Confirm delete all side chats',
+                            onClick: () => {
+                              setConfirmDeleteAll(false)
+                              for (const sc of sideChats ?? []) void onDeleteSideChat(sc.id)
+                            },
+                            children: 'Delete all?',
+                          })
+                        : jsx('button', {
+                            type: 'button',
+                            className: 'evo-icon-btn evo-del',
+                            title: 'Delete all side chats',
+                            'aria-label': 'Delete all side chats',
+                            onClick: () => { setConfirmDeleteAll(true); setTimeout(() => setConfirmDeleteAll(false), 5000) },
+                            children: jsx(Trash2, {}),
+                          })),
                     ],
                   }),
                   (sideChats ?? []).length === 0

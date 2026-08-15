@@ -340,7 +340,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const sideChats: Array<{ id: string; title: string; kind: 'fork' | 'blank' }> = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
-    .filter((s) => s !== undefined && !deletedIds.has(s.id) && s.cwd === cwdNow)
+    // cwd 未设置时镜像字段为 undefined，统一 null 化后再与 cwdNow 比较（§22.4 只展示当前 workspace）
+    .filter((s) => s !== undefined && !deletedIds.has(s.id) && (s.cwd ?? null) === cwdNow)
     // fork 子会话（parentSessionId 或本地记录）或本地记录的空白侧聊（§22.4 只展示当前 workspace）
     .filter((s) => s.parentSessionId !== undefined || readSideChats(cwdNow).includes(s.id))
     .map((s) => ({

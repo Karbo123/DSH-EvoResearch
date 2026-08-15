@@ -1140,6 +1140,18 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   // 空输入上下键浏览输入历史（§23.5）
                   if (e.key === 'ArrowUp' && input === '') { e.preventDefault(); browseHistory(-1); return }
                   if (e.key === 'ArrowDown' && input === '' && historyIndex !== -1) { e.preventDefault(); browseHistory(1); return }
+                  // Ctrl/Cmd+Enter 也发送（§23.2）
+                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault()
+                    void submit()
+                    return
+                  }
+                  // Esc：运行中停止本轮（§23.2；候选框存在时上面已处理关闭）
+                  if (e.key === 'Escape' && running) {
+                    e.preventDefault()
+                    stopTurn()
+                    return
+                  }
                   if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault()
                     void submit()
