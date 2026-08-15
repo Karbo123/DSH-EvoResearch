@@ -11,7 +11,7 @@ import { t } from './i18n'
 import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
   Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
-  UserPlus, Power, PowerOff, Ban, ExternalLink, Send, Sparkles,
+  UserPlus, Power, PowerOff, Ban, ExternalLink, Send, Sparkles, PenLine, Pencil,
 } from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -65,6 +65,12 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const TURN_PAGE = 30
   // Identity（§26.5）
   const [profile, setProfile] = useState<Array<{ name: string; text: string; bytes: number }> | null>(null)
+  // §12.4 Profile 编辑：编辑态 / 重命名 / 新建 / 删除确认
+  const [editing, setEditing] = useState<{ name: string; draft: string } | null>(null)
+  const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
+  const [newFileName, setNewFileName] = useState('')
+  const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null)
+  const [profileBusy, setProfileBusy] = useState(false)
   // Knowledge（§26.5 轻量版）
   const [observations, setObservations] = useState<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; relatedObservationIds?: readonly string[]; updatedAt: number }> | null>(null)
   const [obsFilter, setObsFilter] = useState<'all' | 'active' | 'superseded'>('all')
@@ -82,6 +88,69 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
       .then(setProfile)
       .catch((e: any) => setError(String(e?.message ?? e)))
   }, [tab])
+
+  const reloadProfile = () => {
+    void api<Array<{ name: string; text: string; bytes: number }>>('memory-profile', {})
+      .then(setProfile)
+      .catch((e: any) => setError(String(e?.message ?? e)))
+  }
+
+  const saveProfile = () => {
+    if (editing === null || profileBusy) return
+    setProfileBusy(true)
+    setError(null)
+    void api<{ ok: boolean }>('memory-profile-write', { name: editing.name, content: editing.draft })
+      .then((r) => {
+        setProfileBusy(false)
+        if (r.ok) { setEditing(null); reloadProfile() }
+        else setError('保存失败')
+      })
+      .catch((e: any) => { setProfileBusy(false); setError(String(e?.message ?? e)) })
+  }
+
+  const createProfileFile = () => {
+    const name = newFileName.trim()
+    if (name === '' || profileBusy) return
+    const full = name.endsWith('.md') ? name : `${name}.md`
+    setProfileBusy(true)
+    setError(null)
+    void api<{ ok: boolean }>('memory-profile-write', { name: full, content: `# ${full.replace(/\.md$/, '')}\n` })
+      .then((r) => {
+        setProfileBusy(false)
+        if (r.ok) { setNewFileName(''); reloadProfile() }
+        else setError('创建失败')
+      })
+      .catch((e: any) => { setProfileBusy(false); setError(String(e?.message ?? e)) })
+  }
+
+  const deleteProfileFile = (name: string) => {
+    if (profileBusy) return
+    setProfileBusy(true)
+    setError(null)
+    void api<{ ok: boolean }>('memory-profile-delete', { name })
+      .then((r) => {
+        setProfileBusy(false)
+        setConfirmDeleteFile(null)
+        if (r.ok) reloadProfile()
+      })
+      .catch((e: any) => { setProfileBusy(false); setError(String(e?.message ?? e)) })
+  }
+
+  const submitRename = () => {
+    if (renaming === null || profileBusy) return
+    const to = renaming.value.trim()
+    if (to === '') return
+    const full = to.endsWith('.md') ? to : `${to}.md`
+    setProfileBusy(true)
+    setError(null)
+    void api<{ ok: boolean }>('memory-profile-rename', { from: renaming.from, to: full })
+      .then((r) => {
+        setProfileBusy(false)
+        setRenaming(null)
+        if (r.ok) reloadProfile()
+      })
+      .catch((e: any) => { setProfileBusy(false); setError(String(e?.message ?? e)) })
+  }
   useEffect(() => {
     if (tab !== 'knowledge') return
     setObservations(null)
@@ -348,26 +417,120 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
           ? jsxs(Fragment, {
               children: [
                 error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-                jsx('div', { className: 'evo-panel-hint', children: 'Identity 记忆文件（memories/profile/，可经 Inspector Workspace 编辑）' }),
+                jsx('div', { className: 'evo-panel-hint', children: t('identityHint') }),
+                // §12.4 新建记忆文件
+                jsxs('div', {
+                  className: 'evo-panel-form',
+                  children: [
+                    jsx('input', {
+                      type: 'text',
+                      className: 'evo-panel-input',
+                      placeholder: t('profileFileName'),
+                      value: newFileName,
+                      onInput: (e) => setNewFileName(e.currentTarget.value),
+                      onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') createProfileFile() },
+                    }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-panel-add',
+                      disabled: profileBusy || newFileName.trim() === '',
+                      onClick: createProfileFile,
+                      children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: t('newProfileFile') })] }),
+                    }),
+                  ],
+                }),
                 profile === null
                   ? jsx(LoadingRow, {})
                   : profile.length === 0
-                    ? jsx('span', { className: 'evo-panel-hint', children: '暂无 Identity 文件（SOUL.md / User.md / Taste.md 等）' })
+                    ? jsx('span', { className: 'evo-panel-hint', children: t('noIdentityFiles') })
                     : jsx('div', {
                         className: 'evo-panel-list',
-                        children: profile.map((f) => jsxs('div', {
-                          className: 'evo-skill-card',
-                          children: [
-                            jsxs('div', {
-                              className: 'evo-skill-head',
-                              children: [
-                                jsx('span', { className: 'evo-panel-item-main', children: f.name }),
-                                jsx('span', { className: 'evo-skill-source', children: `${Math.round(f.bytes / 1024)} KB` }),
-                              ],
-                            }),
-                            jsx('pre', { className: 'evo-identity-text', children: f.text }),
-                          ],
-                        }, f.name)),
+                        children: profile.map((f) => {
+                          const isEditing = editing?.name === f.name
+                          const isRenaming = renaming?.from === f.name
+                          return jsxs('div', {
+                            className: 'evo-skill-card',
+                            children: [
+                              jsxs('div', {
+                                className: 'evo-skill-head',
+                                children: [
+                                  jsx('span', { className: 'evo-panel-item-main', children: f.name }),
+                                  jsx('span', { className: 'evo-skill-source', children: `${Math.max(1, Math.round(f.bytes / 1024))} KB` }),
+                                  !isEditing && !isRenaming && jsxs(Fragment, { children: [
+                                    jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-panel-act',
+                                      title: t('edit'),
+                                      'aria-label': t('edit'),
+                                      onClick: () => setEditing({ name: f.name, draft: f.text }),
+                                      children: jsx(PenLine, {}),
+                                    }),
+                                    jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-panel-act',
+                                      title: t('rename'),
+                                      'aria-label': t('rename'),
+                                      onClick: () => setRenaming({ from: f.name, value: f.name.replace(/\.md$/, '') }),
+                                      children: jsx(Pencil, {}),
+                                    }),
+                                    confirmDeleteFile === f.name
+                                      ? jsx('button', {
+                                          type: 'button',
+                                          className: 'evo-panel-act evo-del-confirm',
+                                          title: t('confirmDeleteTitle'),
+                                          onClick: () => deleteProfileFile(f.name),
+                                          children: t('deleteQ'),
+                                        })
+                                      : jsx('button', {
+                                          type: 'button',
+                                          className: 'evo-panel-act evo-del',
+                                          title: t('remove'),
+                                          'aria-label': t('remove'),
+                                          onClick: () => { setConfirmDeleteFile(f.name); setTimeout(() => setConfirmDeleteFile((v) => (v === f.name ? null : v)), 5000) },
+                                          children: jsx(Trash2, {}),
+                                        }),
+                                  ] }),
+                                ],
+                              }),
+                              isRenaming
+                                ? jsxs('div', {
+                                    className: 'evo-panel-form evo-profile-rename',
+                                    children: [
+                                      jsx('input', {
+                                        type: 'text',
+                                        className: 'evo-panel-input',
+                                        value: renaming.value,
+                                        autoFocus: true,
+                                        onInput: (e) => setRenaming({ from: renaming.from, value: e.currentTarget.value }),
+                                        onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') setRenaming(null) },
+                                      }),
+                                      jsx('button', { type: 'button', className: 'evo-btn evo-btn-ok evo-btn-sm', disabled: profileBusy, onClick: submitRename, children: t('save') }),
+                                      jsx('button', { type: 'button', className: 'evo-btn evo-btn-sm', onClick: () => setRenaming(null), children: t('cancel') }),
+                                    ],
+                                  })
+                                  : isEditing
+                                    ? jsxs('div', {
+                                        className: 'evo-profile-edit',
+                                        children: [
+                                          jsx('textarea', {
+                                            className: 'evo-identity-edit',
+                                            value: editing.draft,
+                                            rows: 8,
+                                            onInput: (e) => setEditing({ name: editing.name, draft: e.currentTarget.value }),
+                                          }),
+                                          jsxs('div', {
+                                            className: 'evo-goal-proposal-acts',
+                                            children: [
+                                              jsx('button', { type: 'button', className: 'evo-btn evo-btn-ok evo-btn-sm', disabled: profileBusy, onClick: saveProfile, children: t('save') }),
+                                              jsx('button', { type: 'button', className: 'evo-btn evo-btn-sm', onClick: () => setEditing(null), children: t('cancel') }),
+                                            ],
+                                          }),
+                                        ],
+                                      })
+                                    : jsx('pre', { className: 'evo-identity-text', children: f.text }),
+                            ],
+                          }, f.name)
+                        }),
                       }),
               ],
             })

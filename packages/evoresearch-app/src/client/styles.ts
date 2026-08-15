@@ -414,6 +414,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-act:hover { color: var(--brand); background: var(--hover-bg); }
 .evo-panel-act:disabled { opacity: .45; cursor: default; }
 .evo-panel-act svg { width: 14px; height: 14px; }
+.evo-profile-edit { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 8px; }
+.evo-identity-edit { width: 100%; min-height: 140px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.6; resize: vertical; outline: none; }
+.evo-identity-edit:focus { border-color: var(--brand); }
+.evo-profile-rename { align-items: center; padding: 4px 2px 8px; }
 /* ── Schedule Builder（§42.2）── */
 .evo-sched-modes { display: flex; gap: 4px; }
 .evo-sched-fields { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

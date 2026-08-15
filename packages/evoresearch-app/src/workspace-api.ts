@@ -383,6 +383,24 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.memoryProfile as (a: typeof args) => Promise<unknown>)(args))
           return
         }
+        // §12.4 Profile 文件编辑：写（新建/保存）/ 删除 / 重命名（名字严格校验）
+        if (method === 'memory-profile-write' || method === 'memory-profile-delete' || method === 'memory-profile-rename') {
+          const serviceName = method === 'memory-profile-write' ? 'memoryProfileWrite' : method === 'memory-profile-delete' ? 'memoryProfileDelete' : 'memoryProfileRename'
+          const fn = evoresearch?.[serviceName] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = {}
+          if (typeof payload.workspaceDir === 'string') args.workspaceDir = payload.workspaceDir
+          if (typeof payload.name === 'string') args.name = payload.name
+          if (typeof payload.content === 'string') args.content = payload.content
+          if (typeof payload.from === 'string') args.from = payload.from
+          if (typeof payload.to === 'string') args.to = payload.to
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         // Knowledge（§26.5 轻量版）：Observation 列表
         if (method === 'memory-observations') {
           if (evoresearch?.memoryObservations === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')

@@ -7,7 +7,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import * as path from 'node:path'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, renameSync, existsSync, rmSync } from 'node:fs'
 import type { WorkspaceService } from './workspace.js'
 import type { MemoryRuntime } from './memory/index.js'
 import type { SchedulerService } from './scheduler.js'
@@ -141,6 +141,58 @@ export class EvoResearchApiService extends TypertRemoteService {
       }
     } catch { /* 目录不存在 */ }
     return out
+  }
+
+  /** §12.4 Profile 文件操作：写（新建/保存）、重命名、删除（名字严格限制在 profile 目录内）。 */
+  private profileDirOf(workspaceDir: string | undefined): string {
+    const base = workspaceDir && workspaceDir !== this.services.memory.config.dataRoot
+      ? workspaceDir
+      : this.services.memory.config.dataRoot
+    return path.join(base, '.evoresearch-data', 'memories', 'profile')
+  }
+
+  /** 校验 profile 文件名（仅允许 <name>.md，禁止路径穿越）。 */
+  private assertProfileName(name: string): string {
+    const base = path.basename(name)
+    if (base !== name || !/^[A-Za-z0-9_.-]{1,80}\.md$/.test(name)) {
+      throw new Error(`非法的记忆文件名: ${name}`)
+    }
+    return name
+  }
+
+  @Remote('memoryProfileWrite')
+  memoryProfileWrite(args: { workspaceDir?: string; name: string; content: string }): { ok: boolean; name: string } {
+    const name = this.assertProfileName(args.name)
+    const dir = this.profileDirOf(args.workspaceDir)
+    mkdirSync(dir, { recursive: true })
+    const content = String(args.content ?? '').slice(0, 64 * 1024)
+    const full = path.join(dir, name)
+    const tmp = `${full}.tmp-${process.pid}`
+    writeFileSync(tmp, content, 'utf8')
+    renameSync(tmp, full)
+    return { ok: true, name }
+  }
+
+  @Remote('memoryProfileDelete')
+  memoryProfileDelete(args: { workspaceDir?: string; name: string }): { ok: boolean } {
+    const name = this.assertProfileName(args.name)
+    const full = path.join(this.profileDirOf(args.workspaceDir), name)
+    if (existsSync(full)) rmSync(full, { force: true })
+    return { ok: true }
+  }
+
+  @Remote('memoryProfileRename')
+  memoryProfileRename(args: { workspaceDir?: string; from: string; to: string }): { ok: boolean; name: string } {
+    const from = this.assertProfileName(args.from)
+    const to = this.assertProfileName(args.to)
+    const dir = this.profileDirOf(args.workspaceDir)
+    const fromFull = path.join(dir, from)
+    if (!existsSync(fromFull)) throw new Error(`文件不存在: ${from}`)
+    const toFull = path.join(dir, to)
+    if (existsSync(toFull)) throw new Error(`目标已存在: ${to}`)
+    mkdirSync(dir, { recursive: true })
+    renameSync(fromFull, toFull)
+    return { ok: true, name: to }
   }
 
   /** Knowledge（§26.5 轻量版）：Observation 列表（active/superseded + 分类筛选）。 */
