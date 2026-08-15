@@ -335,6 +335,50 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: Chat
   })
 }
 
+/**
+ * 欢迎页 Research Dashboard（§31.7）：当前 workspace 的记忆/目标统计卡片。
+ * 无数据时渲染空（保持欢迎页简洁）。
+ */
+function ResearchDashboard({ cwd }: { cwd: string | null }) {
+  const [stats, setStats] = useState<{ turns: number; categories: number; goals: number } | null>(null)
+  useEffect(() => {
+    if (cwd === null) { setStats(null); return }
+    let cancelled = false
+    void Promise.all([
+      fetch('/evoresearch/fs/memory-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspaceDir: cwd }) })
+        .then((r) => r.json()).catch(() => null),
+      fetch('/evoresearch/fs/memory-goals', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspaceDir: cwd }) })
+        .then((r) => r.json()).catch(() => null),
+    ]).then(([catalog, goals]) => {
+      if (cancelled) return
+      const rows: Array<{ category?: string; count?: number }> = Array.isArray(catalog?.value) ? catalog.value : []
+      const turns = rows.reduce((a, c) => a + (typeof c.count === 'number' ? c.count : 0), 0)
+      const categories = rows.filter((c) => typeof c.count === 'number' && c.count > 0).length
+      const goalList = Array.isArray(goals?.value) ? goals.value : []
+      if (turns === 0 && goalList.length === 0) { setStats(null); return }
+      setStats({ turns, categories, goals: goalList.length })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [cwd])
+  if (stats === null) return null
+  const cards = [
+    { label: 'Memory turns', value: stats.turns },
+    { label: 'Categories', value: stats.categories },
+    { label: 'Active goals', value: stats.goals },
+  ]
+  return jsx('div', {
+    className: 'evo-dashboard',
+    'aria-label': 'Research dashboard',
+    children: cards.map((card) => jsxs('div', {
+      className: 'evo-dashboard-card',
+      children: [
+        jsx('div', { className: 'evo-dashboard-value', children: String(card.value) }),
+        jsx('div', { className: 'evo-dashboard-label', children: card.label }),
+      ],
+    }, card.label)),
+  })
+}
+
 export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [preview, setPreview] = useState(false)
@@ -861,6 +905,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       children: p,
                     }, p)),
                   }),
+                  jsx(ResearchDashboard, { cwd }),
                 ],
               }),
       }),

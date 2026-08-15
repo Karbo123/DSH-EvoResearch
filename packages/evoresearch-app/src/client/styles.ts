@@ -167,6 +167,11 @@ body { margin: 0; }
   cursor: pointer; transition: border-color .15s, box-shadow .15s; box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
 .evo-suggest-card:hover { border-color: var(--brand); color: var(--color-text-primary); box-shadow: 0 2px 6px rgb(0 0 0 / 10%); }
+/* ── 欢迎页 Research Dashboard（§31.7）── */
+.evo-dashboard { display: flex; gap: 10px; margin-top: 26px; }
+.evo-dashboard-card { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; padding: 12px 18px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
+.evo-dashboard-value { font-size: 22px; font-weight: 600; color: var(--brand); line-height: 1.1; }
+.evo-dashboard-label { font-size: 11.5px; color: var(--color-text-tertiary); }
 /* ── 输入面板 ── */
 .evo-composer-wrap { flex-shrink: 0; padding: 8px 24px 16px; display: flex; justify-content: center; position: relative; }
 /* ── 输入候选弹层（§23.2–23.5：斜杠命令 / @文件 / 输入历史）── */
