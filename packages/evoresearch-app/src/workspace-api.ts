@@ -6,7 +6,7 @@
  * 所有操作带信任栅栏（回环 + webRuntime.trustedHosts），写操作限制在
  * 请求声明的根目录内（isWithin 校验）。
  */
-import { opendir, readFile, stat, writeFile } from 'node:fs/promises'
+import { opendir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { zstdDecompressSync } from 'node:zlib'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
@@ -486,6 +486,38 @@ export function registerWorkspaceApi(ctx: any): void {
             } catch { /* 统计失败则跳过 */ }
           }
           writeOk(res, { file, bytes, events, sessionsRoot })
+          return
+        }
+
+        // ── 会话删除（附录 B-2/B-9）：移除持久化数据（jsonl/附件等）──
+        // 官方 dsh-session 无公开删除 API；live 会话无法从内存 store 摘除，
+        // 因此运行中的会话（agent.status === 'running'，官方同款判断）直接拒绝；
+        // 其余会话删除持久化目录，live 残留由客户端隐藏集合过滤，重启后彻底消失。
+        if (method === 'session-delete') {
+          const sessionId = requireString(payload, 'sessionId')
+          const agents = ctx.get('agents')
+          const status = (agents?.get?.(sessionId) as { status?: string } | undefined)?.status
+          if (status === 'running') throw httpError(409, 'session-busy', '会话正在进行中，请先停止后再删除')
+          const sessionsRoot = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'sessions')
+          let removed = 0
+          const walkSessions = async (dir: string, depth: number): Promise<void> => {
+            if (depth > 4) return
+            let level
+            try { level = await opendir(dir) } catch { return }
+            for await (const dirent of level) {
+              if (!dirent.isDirectory()) continue
+              if (dirent.name === sessionId) {
+                const target = join(dir, dirent.name)
+                if (!isWithin(target, sessionsRoot)) continue
+                try { await rm(target, { recursive: true, force: true }); removed += 1 } catch { /* 跳过失败目录 */ }
+              } else {
+                await walkSessions(join(dir, dirent.name), depth + 1)
+              }
+            }
+          }
+          await walkSessions(sessionsRoot, 0)
+          const live = ctx.get('sessions')?.get?.(sessionId) !== undefined
+          writeOk(res, { deleted: removed > 0, live })
           return
         }
 

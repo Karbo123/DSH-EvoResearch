@@ -532,6 +532,13 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tl-row-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; }
 .evo-tl-row-act:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-tl-row-act svg { width: 13px; height: 13px; }
+.evo-tl-del:hover, .evo-tl-del-confirm { color: var(--color-error); }
+.evo-tl-del-confirm { width: auto; padding: 0 6px; font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--color-error) 14%, transparent); }
+.evo-tl-del-confirm:hover { background: var(--color-error); color: var(--color-surface); }
+.evo-del { color: var(--color-text-tertiary); }
+.evo-del:hover { color: var(--color-error); }
+.evo-del-confirm { color: var(--color-error) !important; font-size: 11px; font-weight: 600; }
+.evo-del-confirm:hover { background: var(--color-error); color: var(--color-surface) !important; }
 .evo-tl-rename { display: flex; align-items: center; gap: 4px; padding: 4px 8px; }
 .evo-tl-rename-input { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--brand); border-radius: 6px; background: var(--color-surface); color: var(--color-text-primary); font-size: 12.5px; outline: none; }
 .evo-sidechat-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 6px 12px; }

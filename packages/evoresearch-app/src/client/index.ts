@@ -66,6 +66,12 @@ function recordSideChat(cwd: string | null, id: string): void {
     if (!list.includes(id)) localStorage.setItem(sideChatKey(cwd), JSON.stringify([...list, id]))
   } catch { /* 忽略 */ }
 }
+function forgetSideChat(cwd: string | null, id: string): void {
+  try {
+    const list = readSideChats(cwd)
+    if (list.includes(id)) localStorage.setItem(sideChatKey(cwd), JSON.stringify(list.filter((x) => x !== id)))
+  } catch { /* 忽略 */ }
+}
 
 /** 注入样式（data-plugin-css 模式，可被 HMR 清理）。 */
 function installCss() {
@@ -273,6 +279,51 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     })
   }
 
+  // ── 会话删除（附录 B-2/B-9）：host 删除持久化数据；live 残留由本集合过滤，重启后彻底消失 ──
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('evoresearch-deleted') ?? '[]')
+      return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
+    } catch {
+      return new Set()
+    }
+  })
+  const markDeleted = (id: string, cwd: string | null) => {
+    setDeletedIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      try { localStorage.setItem('evoresearch-deleted', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      return next
+    })
+    setPinnedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      try { localStorage.setItem('evoresearch-pinned', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      return next
+    })
+    setTagColors((prev) => { const next = { ...prev }; delete next[id]; return next })
+    forgetSideChat(cwd, id)
+  }
+  const deleteSession = async (id: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/evoresearch/fs/session-delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: id }),
+      })
+      const json = await res.json()
+      if (json.ok !== true) return { ok: false, error: (json.error as { message?: string } | undefined)?.message ?? '删除失败' }
+      const cwd = sessions.byId[id]?.cwd ?? null
+      markDeleted(id, cwd)
+      // 删除的是当前会话 → 跳到新会话
+      if (sessions.current === id) startNewChat()
+      window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
   // ── Side chats 列表（§22.3-22.4）：当前 workspace 的 fork 子会话 + 空白侧聊 ──
   const [, setSideTick] = useState(0)
   useEffect(() => {
@@ -285,11 +336,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const sideChatIds = new Set<string>()
   for (const sid of sessions.ids ?? []) {
     const s = sessions.byId[sid]
-    if (s !== undefined) for (const sc of readSideChats(s.cwd ?? null)) sideChatIds.add(sc)
+    if (s !== undefined && !deletedIds.has(sid)) for (const sc of readSideChats(s.cwd ?? null)) sideChatIds.add(sc)
   }
   const sideChats: Array<{ id: string; title: string; kind: 'fork' | 'blank' }> = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
-    .filter((s) => s !== undefined && s.cwd === cwdNow)
+    .filter((s) => s !== undefined && !deletedIds.has(s.id) && s.cwd === cwdNow)
     // fork 子会话（parentSessionId 或本地记录）或本地记录的空白侧聊（§22.4 只展示当前 workspace）
     .filter((s) => s.parentSessionId !== undefined || readSideChats(cwdNow).includes(s.id))
     .map((s) => ({
@@ -469,6 +520,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   tagColors,
                   onSetTagColor: setTagColor,
                   hideIds: sideChatIds,
+                  deletedIds,
+                  onDelete: deleteSession,
                 }),
               }),
               jsx('div', {
@@ -534,6 +587,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   sideChats,
                   onNewSideChat: newSideChat,
                   onOpenSideChat: openSession,
+                  onDeleteSideChat: deleteSession,
                 }),
               }),
             ],

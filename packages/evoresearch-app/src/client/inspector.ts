@@ -7,7 +7,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
-import { FolderOpen, Bot, MessagesSquare, X, Download, RefreshCw, ChevronRight, GitBranch, FilePlus2, MessageSquare } from 'lucide-react'
+import { FolderOpen, Bot, MessagesSquare, X, Download, RefreshCw, ChevronRight, GitBranch, FilePlus2, MessageSquare, Trash2 } from 'lucide-react'
 import { t } from './i18n'
 import { WorkspaceFiles } from './workspace-files'
 
@@ -31,6 +31,8 @@ export interface InspectorProps {
   sideChats: SideChatRow[]
   onNewSideChat: (kind: 'inherit' | 'blank') => void
   onOpenSideChat: (id: string) => void
+  /** 删除侧聊会话（host 删除持久化数据；返回是否成功）。 */
+  onDeleteSideChat: (id: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 const TABS = [
@@ -113,7 +115,17 @@ function AgentsPanel({ sessionId }: { sessionId: string | null }) {
   })
 }
 
-export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNewSideChat, onOpenSideChat }: InspectorProps) {
+export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNewSideChat, onOpenSideChat, onDeleteSideChat }: InspectorProps) {
+  // 两段式删除确认：第一次点击进入确认态，5 秒无操作还原
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const armDelete = (id: string) => {
+    setConfirmDelete(id)
+    setTimeout(() => setConfirmDelete((v) => (v === id ? null : v)), 5000)
+  }
+  const runDelete = (id: string) => {
+    void onDeleteSideChat(id)
+    setConfirmDelete(null)
+  }
   const [subTab, setSubTab] = useState<'tree' | 'bytype'>('tree')
 
   return jsxs('div', {
@@ -216,6 +228,23 @@ export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNe
                               onClick: () => onOpenSideChat(sc.id),
                               children: sc.title,
                             }),
+                            confirmDelete === sc.id
+                              ? jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-icon-btn evo-del-confirm',
+                                  title: 'Confirm delete — this cannot be undone',
+                                  'aria-label': 'Confirm delete side chat',
+                                  onClick: () => runDelete(sc.id),
+                                  children: 'Delete?',
+                                })
+                              : jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-icon-btn evo-del',
+                                  title: 'Delete side chat',
+                                  'aria-label': 'Delete side chat',
+                                  onClick: () => armDelete(sc.id),
+                                  children: jsx(Trash2, {}),
+                                }),
                           ],
                         }, sc.id)),
                       }),
