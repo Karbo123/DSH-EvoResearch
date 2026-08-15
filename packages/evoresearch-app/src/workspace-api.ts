@@ -413,6 +413,14 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, { text: result.text ?? '' })
           return
         }
+        // Run now（§42.3）：立即执行一次任务
+        if (method === 'scheduler-run') {
+          if (evoresearch?.schedulerRunNow === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = await (evoresearch.schedulerRunNow as (a: { taskId: string }) => Promise<{ ok: boolean; error?: string; threadId?: string }>)({ taskId: requireString(payload, 'taskId') })
+          if (result.ok !== true) throw httpError(400, 'method-error', result.error ?? '执行失败')
+          writeOk(res, { threadId: result.threadId ?? null })
+          return
+        }
 
         // ── Agents：当前会话的子代理树（ctx.subagents.listDescendants）──
         if (method === 'agents') {

@@ -299,7 +299,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   })
 }
 
-interface ScheduledTask { id?: string; taskId?: string; name?: string; cron?: string; enabled?: boolean; lastResultThreadId?: string }
+interface ScheduledTask { id?: string; taskId?: string; name?: string; cron?: string; enabled?: boolean; lastResultThreadId?: string; nextRunAt?: number | null }
 
 /** Scheduled 面板：任务列表 + Schedule Builder（§42.2 可视化 cron + 模板）+ 打开结果/回报主对话（§26.6）。 */
 export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => void }) {
@@ -364,6 +364,19 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
     void api<{ ok: boolean }>('scheduler-remove', { taskId: id }).then((result) => {
       if (result.ok) load()
     }).catch((e: any) => setError(String(e?.message ?? e)))
+  }
+
+  // §42.3 Run now：立即执行一次任务
+  const [runningNow, setRunningNow] = useState<string | null>(null)
+  const runNow = (taskId: string) => {
+    setRunningNow(taskId)
+    void api<{ threadId?: string | null }>('scheduler-run', { taskId })
+      .then((result) => {
+        setRunningNow(null)
+        load()
+        if (typeof result.threadId === 'string') onOpenThread(result.threadId)
+      })
+      .catch((e: any) => { setRunningNow(null); setError(String(e?.message ?? e)) })
   }
 
   // §26.6 Report to main chat：读取任务结果会话尾部回复 → 以普通用户消息回送当前主对话
@@ -457,6 +470,7 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
                 className: 'evo-panel-list',
                 children: (tasks ?? []).map((task) => {
                   const taskId = task.taskId ?? task.id
+                  const nextAt = typeof task.nextRunAt === 'number' ? new Date(task.nextRunAt).toLocaleString() : null
                   return jsx('div', {
                     className: 'evo-panel-item',
                     children: jsxs(Fragment, {
@@ -464,6 +478,7 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
                         jsx(ListChecks, {}),
                         jsx('span', { className: 'evo-panel-item-main', children: task.name ?? taskId }),
                         task.cron !== undefined && jsx('code', { className: 'evo-panel-item-code', children: task.cron }),
+                        nextAt !== null && jsx('span', { className: 'evo-panel-item-num', title: 'Next run', children: nextAt }),
                         task.lastResultThreadId !== undefined && jsx('button', {
                           type: 'button',
                           className: 'evo-panel-act',
@@ -471,6 +486,15 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
                           'aria-label': 'Open result thread',
                           onClick: () => onOpenThread(task.lastResultThreadId as string),
                           children: jsx(ExternalLink, {}),
+                        }),
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-panel-act',
+                          title: 'Run now',
+                          'aria-label': 'Run now',
+                          disabled: runningNow === taskId,
+                          onClick: () => runNow(taskId),
+                          children: jsx(Play, {}),
                         }),
                         jsx('button', {
                           type: 'button',

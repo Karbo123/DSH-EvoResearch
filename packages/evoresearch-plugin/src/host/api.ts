@@ -191,8 +191,11 @@ export class EvoResearchApiService extends TypertRemoteService {
   // ── 定时任务 ──────────────────────────────────────────────────────────────
 
   @Remote('schedulerList')
-  schedulerList(): ScheduledTask[] {
-    return this.services.scheduler.list()
+  schedulerList(): unknown[] {
+    return this.services.scheduler.list().map((task) => ({
+      ...task,
+      nextRunAt: this.services.scheduler.nextRunOf(task),
+    }))
   }
 
   @Remote('schedulerAdd')
@@ -212,6 +215,12 @@ export class EvoResearchApiService extends TypertRemoteService {
   @Remote('schedulerRemove')
   schedulerRemove(args: { taskId: string }): { ok: boolean } {
     return { ok: this.services.scheduler.remove(args.taskId) }
+  }
+
+  /** Run now（§42.3）：立即执行一次任务。 */
+  @Remote('schedulerRunNow')
+  async schedulerRunNow(args: { taskId: string }): Promise<{ ok: boolean; error?: string; threadId?: string }> {
+    return this.services.scheduler.runNow(this.hostCtx, args.taskId)
   }
 
   /** 读取任务最近一次运行的结果会话（lastResultThreadId）尾部回复文本（§26.6 Report to main chat）。 */

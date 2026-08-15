@@ -93,6 +93,33 @@ export class SchedulerService {
     return true
   }
 
+  /** Run now（§42.3）：立即执行一次任务，更新 lastRunAt 与结果线程。 */
+  async runNow(ctx: Context, taskId: string): Promise<{ ok: boolean; error?: string; threadId?: string }> {
+    const task = this.tasks.find((t) => t.taskId === taskId)
+    if (!task) return { ok: false, error: '任务不存在' }
+    try {
+      const threadId = await this.runTask(ctx, task)
+      task.lastRunAt = Date.now()
+      task.lastResultThreadId = threadId
+      this.save()
+      return { ok: true, threadId }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 计算某任务的下一次运行时间（毫秒时间戳；cron 非法或禁用返回 null）。 */
+  nextRunOf(task: ScheduledTask): number | null {
+    try {
+      if (!task.enabled) return null
+      // 从未运行过：从现在起算下一个 cron 点（不能从 epoch 起算）
+      const from = task.lastRunAt !== undefined ? new Date(task.lastRunAt) : new Date()
+      return nextRun(parseCron(task.cron), from)?.getTime() ?? null
+    } catch {
+      return null
+    }
+  }
+
   /** 启动每分钟一次的 tick。 */
   attach(ctx: Context): () => void {
     if (this.tickDisposer) return this.tickDisposer
