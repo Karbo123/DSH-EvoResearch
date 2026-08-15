@@ -156,16 +156,17 @@ body { margin: 0; }
 .evo-tl-empty svg { width: 40px; height: 40px; color: var(--color-border); margin-bottom: 8px; }
 /* ── 中间聊天区 ── */
 .evo-chat { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
-.evo-welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; }
-.evo-welcome h1 { font-size: 30px; font-weight: 700; margin: 0 0 10px; color: var(--color-text-primary); letter-spacing: -.01em; }
-.evo-welcome p { margin: 0 0 28px; color: var(--color-text-secondary); font-size: 14.5px; max-width: 520px; }
-.evo-suggest { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.evo-welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; min-height: 42vh; }
+.evo-welcome h1 { font-size: 22px; font-weight: 600; margin: 0 0 10px; color: var(--color-text-primary); letter-spacing: -.01em; }
+.evo-welcome p { margin: 0 0 28px; color: var(--color-text-secondary); font-size: 14px; max-width: 512px; line-height: 1.6; }
+.evo-suggest { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+/* §31.7：建议问题用圆形 pill 按钮（1px 边框、轻阴影、紧凑内边距） */
 .evo-suggest-card {
-  padding: 14px 18px; border: 1px solid var(--color-border); border-radius: var(--radius);
+  padding: 8px 18px; border: 1px solid var(--color-border); border-radius: 999px;
   background: var(--color-surface); color: var(--color-text-secondary); font-size: 13px;
-  cursor: pointer; transition: border-color .15s;
+  cursor: pointer; transition: border-color .15s, box-shadow .15s; box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
-.evo-suggest-card:hover { border-color: var(--brand); color: var(--color-text-primary); }
+.evo-suggest-card:hover { border-color: var(--brand); color: var(--color-text-primary); box-shadow: 0 2px 6px rgb(0 0 0 / 10%); }
 /* ── 输入面板 ── */
 .evo-composer-wrap { flex-shrink: 0; padding: 8px 24px 16px; display: flex; justify-content: center; position: relative; }
 /* ── 输入候选弹层（§23.2–23.5：斜杠命令 / @文件 / 输入历史）── */
@@ -369,6 +370,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-del { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
 .evo-panel-del:hover { color: var(--color-error); background: var(--hover-bg); }
 .evo-panel-del svg { width: 14px; height: 14px; }
+.evo-panel-act { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
+.evo-panel-act:hover { color: var(--brand); background: var(--hover-bg); }
+.evo-panel-act:disabled { opacity: .45; cursor: default; }
+.evo-panel-act svg { width: 14px; height: 14px; }
 /* ── 工作区文件浏览器（Inspector → Workspace）── */
 .evo-fs { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-fs-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px 4px; }

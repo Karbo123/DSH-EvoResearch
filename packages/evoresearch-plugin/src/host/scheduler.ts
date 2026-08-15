@@ -11,6 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { parseCron, nextRun } from './core/cron.js'
 import type { ScheduledTask } from '../shared/types.js'
 
@@ -134,22 +135,45 @@ export class SchedulerService {
   }
 
   /**
-   * 执行一次任务：创建/复用项目会话并发送 prompt。
+   * 执行一次任务：创建后台 agent 会话并发送 prompt（agent.followup）。
    * @returns 结果线程 id（供 WebUI 直达与回报主对话）。
    */
   private async runTask(ctx: Context, task: ScheduledTask): Promise<string> {
     const agents = ctx.get('agents')
-    if (!agents) throw new Error('agents 服务不可用')
-    // 创建后台 agent 会话（owner 为宿主进程，不走交互 UI）
-    const handle = await agents.create({
-      cwd: task.workspaceDir || this.config.dataRoot,
-      source: 'evoresearch:scheduler',
-      initialMessage: `【定时任务 ${task.name}】\n${task.prompt}\n\n完成后请汇报关键结果。`,
-    } as never)
-    const sessionId = (handle as unknown as { session?: { id?: string } }).session?.id
-      ?? (handle as unknown as { id?: string }).id
-      ?? randomUUID()
-    // 注：真实执行由 agent loop 异步完成；此处返回会话 id 供追踪。
+    if (!agents) return Promise.reject(new Error('agents 服务不可用'))
+    const sessionId = `session-${randomUUID()}`
+    // createAgent options 对齐官方（apiproxy ensureSession）：sessionId 必填；
+    // agentOptions 带默认模型选择（provider/model），否则 agent 无模型配置、turn 空转；
+    // setup 挂载 agent preset（系统提示/工具）。
+    const agentDefaultModel = ctx.get('agentDefaultModel') as { currentSelection?(): { provider: string; model: string } } | undefined
+    const selection = agentDefaultModel?.currentSelection?.()
+    const agentPresets = ctx.get('agentPresets') as { resolve?(id?: string): Promise<{ id: string }>; mount?(ctx: unknown, id: string): Promise<unknown> } | undefined
+    const setup = agentPresets?.resolve === undefined || agentPresets?.mount === undefined
+      ? undefined
+      : async (agentCtx: unknown) => {
+          const resolved = await (agentPresets as { resolve(id?: string): Promise<{ id: string }> }).resolve(undefined)
+          await (agentPresets as { mount(ctx: unknown, id: string): Promise<unknown> }).mount(agentCtx, resolved.id)
+        }
+    const handle = await (agents as {
+      create(options: {
+        sessionId: string
+        meta?: { cwd?: string }
+        agentOptions?: Record<string, unknown>
+        setup?: (agentCtx: unknown) => Promise<unknown>
+      }): Promise<unknown>
+    }).create({
+      sessionId,
+      meta: { cwd: task.workspaceDir || this.config.dataRoot },
+      agentOptions: selection !== undefined ? { provider: selection.provider, model: selection.model } : {},
+      ...(setup === undefined ? {} : { setup }),
+    })
+    const agent = (handle as { agent?: { followup(message: unknown): void } }).agent
+    if (!agent?.followup) return Promise.reject(new Error('创建 agent 失败'))
+    const message = createUserMessage({
+      content: [{ type: 'text', text: `【定时任务 ${task.name}】\n${task.prompt}\n\n完成后请汇报关键结果。` }],
+      source: { kind: 'user', rpcId: `rpc-${randomUUID()}` },
+    })
+    agent.followup(message)
     return sessionId
   }
 }

@@ -266,6 +266,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return () => { cancelled = true }
   }, [])
 
+  // §26.6：Scheduled 面板 "Report to main chat" —— 以普通用户消息回送当前主对话
+  useEffect(() => {
+    const onReport = (e: Event) => {
+      const text = (e as CustomEvent<{ text?: string }>).detail?.text
+      if (typeof text === 'string' && text !== '') sendMessage(text)
+    }
+    window.addEventListener('evo-report-to-chat', onReport)
+    return () => window.removeEventListener('evo-report-to-chat', onReport)
+  }, [current])
+
   // §43.5：view / inspector 状态写入 URL（可分享/可恢复）
   const setViewAndUrl = (v: SideView) => {
     setView(v)
@@ -644,7 +654,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   children: view === 'memory'
                     ? jsx(MemoryPanel, {})
                     : view === 'schedule'
-                      ? jsx(SchedulePanel, {})
+                      ? jsx(SchedulePanel, { onOpenThread: openSession })
                       : view === 'skills'
                         ? jsx(SkillsPanel, {})
                         : view === 'workspace'

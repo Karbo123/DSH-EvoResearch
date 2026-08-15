@@ -161,6 +161,42 @@ export class EvoResearchApiService extends TypertRemoteService {
     return { ok: this.services.scheduler.remove(args.taskId) }
   }
 
+  /** 读取任务最近一次运行的结果会话（lastResultThreadId）尾部回复文本（§26.6 Report to main chat）。 */
+  @Remote('schedulerReport')
+  async schedulerReport(args: { taskId: string }): Promise<{ text: string } | { error: string }> {
+    const task = this.services.scheduler.list().find((t) => t.taskId === args.taskId)
+    if (!task) return { error: '任务不存在' }
+    const threadId = task.lastResultThreadId
+    if (!threadId) return { error: '任务尚未运行' }
+    // 优先读 live 会话事件（本部署事件不落盘，persistence 只有 header）
+    const sessions = this.hostCtx.get('sessions') as { get?(id: string): { log?: Array<{ type?: string; data?: any }> } | undefined } | undefined
+    const live = sessions?.get?.(threadId)
+    let events: Array<{ type?: string; data?: any }> = []
+    if (live !== undefined && Array.isArray(live.log)) {
+      events = live.log
+    } else {
+      const persistence = this.hostCtx.get('sessionPersistence')
+      try {
+        const load = (persistence as { load(id: string): Promise<{ events?: Array<{ type?: string; data?: any }> } | undefined> } | undefined)?.load
+        const loaded = load !== undefined ? await load(threadId) : undefined
+        events = loaded?.events ?? []
+      } catch { /* 持久化读失败 */ }
+    }
+    const texts: string[] = []
+    for (const event of events) {
+      if (event?.type !== 'assistant/message') continue
+      const content = event.data?.message?.content
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block?.type === 'text' && typeof block.text === 'string') texts.push(block.text)
+        }
+      }
+    }
+    if (texts.length === 0) return { error: '结果会话暂无回复内容（任务可能仍在运行）' }
+    const text = texts[texts.length - 1]!.slice(0, 4000)
+    return { text: `【定时任务 ${task.name}】结果回报：\n${text}` }
+  }
+
   // ── 通道 ──────────────────────────────────────────────────────────────────
 
   @Remote('channelsStatus')

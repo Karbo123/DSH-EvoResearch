@@ -325,6 +325,13 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, { ok: result.ok === true })
           return
         }
+        if (method === 'scheduler-report') {
+          if (evoresearch?.schedulerReport === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const result = await (evoresearch.schedulerReport as (a: { taskId: string }) => Promise<{ text?: string; error?: string }>)({ taskId: requireString(payload, 'taskId') })
+          if (result.error !== undefined) throw httpError(400, 'method-error', result.error)
+          writeOk(res, { text: result.text ?? '' })
+          return
+        }
 
         // ── Agents：当前会话的子代理树（ctx.subagents.listDescendants）──
         if (method === 'agents') {

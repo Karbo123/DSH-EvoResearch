@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
   Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
-  UserPlus, Power, PowerOff, Ban,
+  UserPlus, Power, PowerOff, Ban, ExternalLink, Send,
 } from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -147,16 +147,17 @@ export function MemoryPanel() {
   })
 }
 
-interface ScheduledTask { id?: string; taskId?: string; name?: string; cron?: string; enabled?: boolean }
+interface ScheduledTask { id?: string; taskId?: string; name?: string; cron?: string; enabled?: boolean; lastResultThreadId?: string }
 
-/** Scheduled 面板：任务列表 + 添加/删除。 */
-export function SchedulePanel() {
+/** Scheduled 面板：任务列表 + 添加/删除 + 打开结果/回报主对话（§26.6）。 */
+export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => void }) {
   const [tasks, setTasks] = useState<ScheduledTask[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [cron, setCron] = useState('0 9 * * *')
   const [prompt, setPrompt] = useState('')
+  const [reporting, setReporting] = useState<string | null>(null)
 
   const load = () => {
     setTasks(null)
@@ -181,6 +182,21 @@ export function SchedulePanel() {
     }).catch((e: any) => setError(String(e?.message ?? e)))
   }
 
+  // §26.6 Report to main chat：读取任务结果会话尾部回复 → 以普通用户消息回送当前主对话
+  const reportToChat = (taskId: string) => {
+    setReporting(taskId)
+    void api<{ text?: string; error?: string }>('scheduler-report', { taskId })
+      .then((result) => {
+        setReporting(null)
+        if (typeof result.text === 'string' && result.text !== '') {
+          window.dispatchEvent(new CustomEvent('evo-report-to-chat', { detail: { text: result.text } }))
+        } else {
+          setError(result.error ?? '任务尚未运行')
+        }
+      })
+      .catch((e: any) => { setReporting(null); setError(String(e?.message ?? e)) })
+  }
+
   return jsx(PanelShell, {
     icon: Clock,
     title: 'Scheduled',
@@ -202,17 +218,37 @@ export function SchedulePanel() {
             ? jsx('span', { className: 'evo-panel-hint', children: 'No scheduled tasks' })
             : jsx('div', {
                 className: 'evo-panel-list',
-                children: (tasks ?? []).map((task) => jsx('div', {
-                  className: 'evo-panel-item',
-                  children: jsxs(Fragment, {
-                    children: [
-                      jsx(ListChecks, {}),
-                      jsx('span', { className: 'evo-panel-item-main', children: task.name ?? task.taskId ?? task.id }),
-                      task.cron !== undefined && jsx('code', { className: 'evo-panel-item-code', children: task.cron }),
-                      jsx('button', { type: 'button', className: 'evo-panel-del', title: 'Remove', onClick: () => removeTask(task.taskId ?? task.id), children: jsx(Trash2, {}) }),
-                    ],
-                  }),
-                }, task.taskId ?? task.id)),
+                children: (tasks ?? []).map((task) => {
+                  const taskId = task.taskId ?? task.id
+                  return jsx('div', {
+                    className: 'evo-panel-item',
+                    children: jsxs(Fragment, {
+                      children: [
+                        jsx(ListChecks, {}),
+                        jsx('span', { className: 'evo-panel-item-main', children: task.name ?? taskId }),
+                        task.cron !== undefined && jsx('code', { className: 'evo-panel-item-code', children: task.cron }),
+                        task.lastResultThreadId !== undefined && jsx('button', {
+                          type: 'button',
+                          className: 'evo-panel-act',
+                          title: 'Open result thread',
+                          'aria-label': 'Open result thread',
+                          onClick: () => onOpenThread(task.lastResultThreadId as string),
+                          children: jsx(ExternalLink, {}),
+                        }),
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-panel-act',
+                          title: 'Report to main chat',
+                          'aria-label': 'Report to main chat',
+                          disabled: reporting === taskId,
+                          onClick: () => reportToChat(taskId),
+                          children: jsx(Send, {}),
+                        }),
+                        jsx('button', { type: 'button', className: 'evo-panel-del', title: 'Remove', onClick: () => removeTask(taskId), children: jsx(Trash2, {}) }),
+                      ],
+                    }),
+                  }, taskId)
+                }),
               }),
       ],
     }),
