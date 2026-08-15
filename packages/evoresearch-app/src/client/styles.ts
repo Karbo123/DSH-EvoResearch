@@ -374,6 +374,14 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-act:hover { color: var(--brand); background: var(--hover-bg); }
 .evo-panel-act:disabled { opacity: .45; cursor: default; }
 .evo-panel-act svg { width: 14px; height: 14px; }
+/* ── Schedule Builder（§42.2）── */
+.evo-sched-modes { display: flex; gap: 4px; }
+.evo-sched-fields { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.evo-sched-select { width: auto; flex: 0 1 110px; }
+.evo-sched-preview { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--color-text-tertiary); background: var(--hover-bg); padding: 3px 8px; border-radius: 6px; }
+.evo-sched-templates { display: flex; flex-wrap: wrap; gap: 5px; }
+.evo-sched-template { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); font-size: 11.5px; border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+.evo-sched-template:hover { border-color: var(--brand); color: var(--brand); }
 /* ── 工作区文件浏览器（Inspector → Workspace）── */
 .evo-fs { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-fs-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px 4px; }

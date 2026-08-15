@@ -149,15 +149,42 @@ export function MemoryPanel() {
 
 interface ScheduledTask { id?: string; taskId?: string; name?: string; cron?: string; enabled?: boolean; lastResultThreadId?: string }
 
-/** Scheduled 面板：任务列表 + 添加/删除 + 打开结果/回报主对话（§26.6）。 */
+/** Scheduled 面板：任务列表 + Schedule Builder（§42.2 可视化 cron + 模板）+ 打开结果/回报主对话（§26.6）。 */
 export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => void }) {
   const [tasks, setTasks] = useState<ScheduledTask[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
-  const [cron, setCron] = useState('0 9 * * *')
   const [prompt, setPrompt] = useState('')
   const [reporting, setReporting] = useState<string | null>(null)
+  // §42.2 Schedule Builder：daily/weekly/monthly/custom + 模板
+  const [mode, setMode] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('daily')
+  const [hour, setHour] = useState(9)
+  const [minute, setMinute] = useState(0)
+  const [weekday, setWeekday] = useState(1)
+  const [dayOfMonth, setDayOfMonth] = useState(1)
+  const [cronInput, setCronInput] = useState('0 9 * * *')
+
+  const builtCron = (): string => {
+    if (mode === 'custom') return cronInput.trim()
+    if (mode === 'daily') return `${minute} ${hour} * * *`
+    if (mode === 'weekly') return `${minute} ${hour} * * ${weekday}`
+    return `${minute} ${hour} ${dayOfMonth} * *`
+  }
+  const cronPreview = builtCron()
+
+  const applyTemplate = (t: { name: string; cron: string; prompt: string }) => {
+    setName(t.name)
+    setPrompt(t.prompt)
+    setMode('custom')
+    setCronInput(t.cron)
+  }
+  const TEMPLATES = [
+    { name: 'Daily Papers', cron: '0 9 * * *', prompt: '按研究偏好追踪最新论文，并写入 daily-papers.md。' },
+    { name: 'Weekly Research Review', cron: '0 17 * * 5', prompt: '总结本周研究进展、决定、阻塞和下一步计划。' },
+    { name: 'Weekly Research Plan', cron: '0 8 * * 1', prompt: '生成本周科研计划。' },
+    { name: 'Experiment Backlog', cron: '0 10 * * 2', prompt: '把当前开放问题转成可检验的实验 backlog。' },
+  ]
 
   const load = () => {
     setTasks(null)
@@ -167,11 +194,16 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
   useEffect(() => { load() }, [])
 
   const addTask = () => {
-    if (!name.trim() || !cron.trim() || !prompt.trim()) return
+    if (!name.trim() || !prompt.trim()) return
+    const cronValue = cronPreview
+    if (!/^\d{1,2} \d{1,2} (\d{1,2}|\*) (\d{1,2}|\*) (\d{1,2}|\*)$/.test(cronValue)) {
+      setError('cron 表达式非法（5 段：分 时 日 月 周）')
+      return
+    }
     setAdding(true)
-    void api<{ ok: boolean }>('scheduler-add', { name: name.trim(), cron: cron.trim(), prompt: prompt.trim() }).then((result) => {
+    void api<{ ok: boolean }>('scheduler-add', { name: name.trim(), cron: cronValue, prompt: prompt.trim() }).then((result) => {
       setAdding(false)
-      if (result.ok) { setName(''); setCron('0 9 * * *'); setPrompt(''); load() }
+      if (result.ok) { setName(''); setPrompt(''); setMode('daily'); load() }
       else setError('添加失败')
     }).catch((e: any) => { setAdding(false); setError(String(e?.message ?? e)) })
   }
@@ -207,7 +239,60 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
           className: 'evo-panel-form',
           children: [
             jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: 'Task name', value: name, onInput: (e) => setName(e.currentTarget.value) }),
-            jsx('input', { type: 'text', className: 'evo-panel-input evo-panel-input-cron', placeholder: 'cron (5 fields)', value: cron, onInput: (e) => setCron(e.currentTarget.value) }),
+            // §42.2 Schedule Builder：daily/weekly/monthly/custom
+            jsx('div', { className: 'evo-sched-modes', role: 'group', 'aria-label': 'Schedule mode', children: (['daily', 'weekly', 'monthly', 'custom'] as const).map((m) => jsx('button', {
+              type: 'button',
+              className: 'evo-insp-subtab',
+              'data-active': mode === m || undefined,
+              onClick: () => setMode(m),
+              children: m === 'daily' ? 'Daily' : m === 'weekly' ? 'Weekly' : m === 'monthly' ? 'Monthly' : 'Custom',
+            }, m)) }),
+            jsx('div', { className: 'evo-sched-fields', children: [
+              mode !== 'custom' && jsx('select', {
+                className: 'evo-panel-input evo-sched-select',
+                value: String(hour),
+                onChange: (e) => setHour(Number(e.currentTarget.value)),
+                'aria-label': 'Hour',
+                children: Array.from({ length: 24 }, (_, i) => jsx('option', { value: String(i), children: `${String(i).padStart(2, '0')}:00` }, i)),
+              }),
+              mode !== 'custom' && jsx('select', {
+                className: 'evo-panel-input evo-sched-select',
+                value: String(minute),
+                onChange: (e) => setMinute(Number(e.currentTarget.value)),
+                'aria-label': 'Minute',
+                children: [0, 15, 30, 45].map((m) => jsx('option', { value: String(m), children: `${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')}` }, m)),
+              }),
+              mode === 'weekly' && jsx('select', {
+                className: 'evo-panel-input evo-sched-select',
+                value: String(weekday),
+                onChange: (e) => setWeekday(Number(e.currentTarget.value)),
+                'aria-label': 'Weekday',
+                children: [['Mon', 1], ['Tue', 2], ['Wed', 3], ['Thu', 4], ['Fri', 5], ['Sat', 6], ['Sun', 0]].map(([label, v]) => jsx('option', { value: String(v), children: label }, v)),
+              }),
+              mode === 'monthly' && jsx('select', {
+                className: 'evo-panel-input evo-sched-select',
+                value: String(dayOfMonth),
+                onChange: (e) => setDayOfMonth(Number(e.currentTarget.value)),
+                'aria-label': 'Day of month',
+                children: Array.from({ length: 28 }, (_, i) => jsx('option', { value: String(i + 1), children: `Day ${i + 1}` }, i + 1)),
+              }),
+              mode === 'custom' && jsx('input', {
+                type: 'text',
+                className: 'evo-panel-input evo-panel-input-cron',
+                placeholder: 'cron (5 fields)',
+                value: cronInput,
+                onInput: (e) => setCronInput(e.currentTarget.value),
+                'aria-label': 'Custom cron',
+              }),
+              jsx('code', { className: 'evo-sched-preview', children: cronPreview }),
+            ] }),
+            jsx('div', { className: 'evo-sched-templates', children: TEMPLATES.map((t) => jsx('button', {
+              type: 'button',
+              className: 'evo-sched-template',
+              title: t.prompt,
+              onClick: () => applyTemplate(t),
+              children: t.name,
+            }, t.name)) }),
             jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: 'Prompt (executed at cron time)', value: prompt, onInput: (e) => setPrompt(e.currentTarget.value) }),
             jsx('button', { type: 'button', className: 'evo-panel-add', disabled: adding || !name.trim() || !prompt.trim(), onClick: addTask, children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: 'Add' })] }) }),
           ],
