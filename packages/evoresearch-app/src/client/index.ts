@@ -159,6 +159,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const frameRef = useRef<HTMLDivElement | null>(null)
   const desktop = isDesktop()
 
+  // 响应式（§26.1）：<768px 左右栏改为抽屉 + 黑色 40% 遮罩
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   // 连接状态（Health 指示器）：hostDescription 快照存在 = 已握手；订阅断连/重连。
   const [connected, setConnected] = useState(() => connectionSource?.getSnapshot() !== undefined)
   useEffect(() => {
@@ -541,12 +549,15 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       // ── 三栏 ──
       jsxs('div', {
         className: 'evo-cols',
+        'data-narrow': narrow || undefined,
         children: [
+          // 响应式抽屉遮罩（§26.1：黑色 40%）
+          narrow && sidebar && jsx('div', { className: 'evo-drawer-mask', onClick: () => setSidebar(false) }),
           sidebar && jsxs(Fragment, {
             children: [
               jsx('aside', {
                 className: 'evo-left',
-                style: { width: panels.left },
+                style: narrow ? undefined : { width: panels.left },
                 children: jsx(ThreadList, {
                   useSessions,
                   view,
@@ -609,8 +620,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
           inspector && jsxs(Fragment, {
             children: [
+              narrow && jsx('div', { className: 'evo-drawer-mask', onClick: () => setInspector(false) }),
               jsx('div', {
-                className: 'evo-resize-handle',
+                className: 'evo-resize-handle evo-resize-right',
                 'data-dragging': dragging === 'right' || undefined,
                 onPointerDown: onDragStart('right'),
                 onPointerMove: onDragMove('right'),
@@ -618,7 +630,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               }),
               jsx('aside', {
                 className: 'evo-right',
-                style: { width: panels.right },
+                style: narrow ? undefined : { width: panels.right },
                 children: jsx(Inspector, {
                   tab: inspectorTab,
                   onTab: setInspectorTab,

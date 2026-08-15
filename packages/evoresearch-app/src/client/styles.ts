@@ -98,6 +98,16 @@ body { margin: 0; }
 }
 .evo-resize-handle { width: 4px; flex-shrink: 0; cursor: col-resize; background: transparent; position: relative; }
 .evo-resize-handle:hover, .evo-resize-handle[data-dragging] { background: var(--color-border); }
+/* ── 响应式抽屉（§26.1：<768px 左右栏变抽屉 + 黑色 40% 遮罩）── */
+.evo-drawer-mask { position: fixed; inset: 0; background: rgb(0 0 0 / 40%); z-index: 280; }
+@media (max-width: 767px) {
+  .evo-left, .evo-right { position: fixed; top: 0; bottom: 0; z-index: 300; width: min(320px, 84vw) !important; box-shadow: 0 0 40px rgb(0 0 0 / 35%); transition: transform 0.22s ease; }
+  .evo-left { left: 0; transform: translateX(-100%); }
+  .evo-right { right: 0; transform: translateX(100%); }
+  .evo-cols[data-narrow] .evo-left { transform: none; }
+  .evo-cols[data-narrow] .evo-right { transform: none; }
+  .evo-resize-handle { display: none; }
+}
 /* ── 左侧栏 ── */
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-tl-head { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 2px; }
