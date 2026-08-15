@@ -14,6 +14,7 @@
  */
 import { build } from 'esbuild'
 import { mkdirSync, readFileSync, writeFileSync, rmSync, copyFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -162,7 +163,15 @@ async function buildFrontend() {
   })
   copyFileSync(join(PKG, 'frontend', 'index.html'), join(dist, 'index.html'))
   copyFileSync(join(PKG, 'frontend', 'favicon.svg'), join(dist, 'favicon.svg'))
-  console.log('[build-app] frontend → dist/（index.html + assets/index.js + assets/mermaid.js + favicon.svg）')
+  // 构建指纹（§44.2 轻量版）：前端产物 hash + 构建时间，About 弹窗展示
+  const indexJs = readFileSync(join(assets, 'index.js'))
+  const revision = createHash('sha256').update(indexJs).digest('hex').slice(0, 12)
+  writeFileSync(
+    join(dist, 'build-stamp.json'),
+    JSON.stringify({ builtAt: new Date().toISOString(), revision, version: '0.1.0-rc.1' }, null, 2),
+    'utf8',
+  )
+  console.log(`[build-app] frontend → dist/（index.html + assets/index.js + assets/mermaid.js + favicon.svg + build-stamp.json rev=${revision}）`)
 }
 
 async function main() {

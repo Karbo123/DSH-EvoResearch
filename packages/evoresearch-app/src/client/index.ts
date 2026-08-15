@@ -93,6 +93,19 @@ function installCss() {
 
 const PANELS_KEY = 'evoresearch-panels'
 
+/** URL 查询状态（§43.5）：可分享/可恢复的导航状态（threadId/view/inspector…）。 */
+function patchUrl(patch: Record<string, string | null>): void {
+  try {
+    const params = new URLSearchParams(location.search)
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null) params.delete(key)
+      else params.set(key, value)
+    }
+    const qs = params.toString()
+    history.replaceState(null, '', qs === '' ? location.pathname : `${location.pathname}?${qs}`)
+  } catch { /* URL 更新失败不影响功能 */ }
+}
+
 function readPanels(): { left: number; right: number } {
   try {
     const v = JSON.parse(localStorage.getItem(PANELS_KEY) ?? '')
@@ -221,11 +234,48 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return s === undefined ? undefined : s.projections?.subscribeAny(() => setProjTick((v) => v + 1))
   }, [current])
 
-  const openSession = (id: string) => { sessionsService?.open(id) }
+  const openSession = (id: string) => {
+    sessionsService?.open(id)
+    patchUrl({ threadId: id, view: null })
+  }
   const startNewChat = () => {
     setView(null)
+    // Home 操作清除 thread/project/定位状态（§43.5），关闭不合适的面板
+    patchUrl({ threadId: null, view: null })
     // 创建空白会话并打开（host 侧默认工作目录；目录选择接入后经 pickDirectory）
     void sessionsService?.create({}).then((id) => sessionsService?.open(id))
+  }
+
+  // §43.5/§33.4：URL threadId 恢复（刷新或分享链接打开对应会话）
+  useEffect(() => {
+    const threadId = new URLSearchParams(location.search).get('threadId')
+    if (threadId === null || threadId === '') return
+    let cancelled = false
+    let attempts = 0
+    const tryOpen = () => {
+      if (cancelled) return
+      if (sessionsService === null || attempts > 30) return
+      attempts += 1
+      try {
+        sessionsService.open(threadId)
+      } catch {
+        setTimeout(tryOpen, 300)
+      }
+    }
+    tryOpen()
+    return () => { cancelled = true }
+  }, [])
+
+  // §43.5：view / inspector 状态写入 URL（可分享/可恢复）
+  const setViewAndUrl = (v: SideView) => {
+    setView(v)
+    patchUrl({ view: v })
+  }
+  const toggleInspector = () => {
+    setInspector((v) => {
+      patchUrl({ inspector: v ? null : '1' })
+      return !v
+    })
   }
 
   // ── Recents 操作（§26.3）与 Side Chat（§22.3）──
@@ -462,7 +512,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             onSideChats: () => { setInspector(true); setInspectorTab('chats') },
             onToggleTheme: () => { toggleTheme(); setThemeDark(resolvedTheme() === 'dark') },
             onToggleLanguage: toggleLanguage,
-            onToggleInspector: () => setInspector((v) => !v),
+            onToggleInspector: toggleInspector,
             onSettings: () => setSettingsOpen(true),
           })
         : jsxs('header', {
@@ -531,7 +581,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
-                onClick: () => setInspector((v) => !v),
+                onClick: toggleInspector,
                 title: inspector ? 'Hide inspector' : 'Show workspace',
                 children: inspector ? jsx(PanelRightClose, {}) : jsx(PanelRight, {}),
               }),
@@ -561,7 +611,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 children: jsx(ThreadList, {
                   useSessions,
                   view,
-                  onView: setView,
+                  onView: setViewAndUrl,
                   onOpen: openSession,
                   onNewChat: startNewChat,
                   hasActive: (sessions.ids ?? []).some((id: string) => sessions.byId[id]?.blank !== true),

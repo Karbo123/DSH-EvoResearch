@@ -15,6 +15,24 @@ export interface SettingsDialogProps {
 
 interface PluginRow { id: string; state: string }
 
+/** 构建指纹（§44.2）：读取 dist/build-stamp.json（前端 hash + 构建时间）。 */
+function BuildStamp() {
+  const [stamp, setStamp] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/build-stamp.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled || j === null || typeof j.revision !== 'string') return
+        const when = typeof j.builtAt === 'string' ? ` · ${j.builtAt.slice(0, 16).replace('T', ' ')}` : ''
+        setStamp(`build ${j.revision}${when}`)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  return stamp === null ? jsx('div', {}) : jsx('div', { style: { color: 'var(--color-text-tertiary)', fontSize: 11.5 }, children: stamp })
+}
+
 /** 权限模式选择（写 host permission 预设）。 */
 function PermissionSection({ sessionId }: { sessionId: string | null }) {
   const [current, setCurrent] = useState<string | null>(null)
@@ -172,6 +190,7 @@ export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
                       children: [
                         jsx('div', { children: `EvoResearch 0.1.0-rc.1` }),
                         jsx('div', { children: t('basedOn') }),
+                        jsx(BuildStamp, {}),
                       ],
                     }),
                   ],
