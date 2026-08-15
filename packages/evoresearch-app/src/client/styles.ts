@@ -299,6 +299,7 @@ html.evo-desktop body { margin: 0 !important; }
   -webkit-user-select: none; user-select: none;
 }
 html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; color: #52525b; }
+.evo-tb-spacer { flex: 1; min-width: 0; height: 100%; cursor: default; }
 .evo-tb-brand {
   display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 100%;
   border: 0; background: transparent; color: inherit; cursor: pointer; letter-spacing: 0.02em; white-space: nowrap;
@@ -323,7 +324,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tb-close:hover { background: #e81123; color: #ffffff; }
 /* ── 设置弹窗 ── */
 .evo-modal-mask { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
-.evo-modal { width: 560px; max-width: calc(100vw - 48px); max-height: calc(100vh - 96px); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
+.evo-modal { width: 75vw; height: 75vh; max-width: 75vw; max-height: 75vh; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
 .evo-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--color-border-light); }
 .evo-modal-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
 .evo-modal-body { padding: 14px 18px 18px; overflow-y: auto; }

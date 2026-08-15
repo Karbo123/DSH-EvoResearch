@@ -1,5 +1,5 @@
 /**
- * 工作台 i18n（中/英）。默认英文；语言偏好存 localStorage
+ * 工作台 i18n（中/英）。默认中文；语言偏好存 localStorage
  * （键 evoresearch-lang），切换后刷新页面生效（与主题切换同模式）。
  */
 
@@ -8,8 +8,8 @@ const KEY = 'evoresearch-lang'
 export type Lang = 'en' | 'zh'
 
 export function readLang(): Lang {
-  if (typeof localStorage === 'undefined') return 'en'
-  return localStorage.getItem(KEY) === 'zh' ? 'zh' : 'en'
+  if (typeof localStorage === 'undefined') return 'zh'
+  return localStorage.getItem(KEY) === 'en' ? 'en' : 'zh'
 }
 
 export function setLang(lang: Lang): void {

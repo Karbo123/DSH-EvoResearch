@@ -1,7 +1,7 @@
 /**
- * 主题管理（跟随系统 + 手动切换）：
- * 默认跟随系统，顶栏切换按钮在 light/dark 之间翻转，偏好存 localStorage
- * （键 evoresearch-theme），`html.dark` 类驱动 token 切换。
+ * 主题管理（默认深色 + 手动切换）：
+ * 无偏好时默认深色主题（dark），顶栏切换按钮在 light/dark 之间翻转，
+ * 偏好存 localStorage（键 evoresearch-theme），`html.dark` 类驱动 token 切换。
  */
 
 const KEY = 'evoresearch-theme'
@@ -9,9 +9,9 @@ const KEY = 'evoresearch-theme'
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export function readPreference(): ThemePreference {
-  if (typeof localStorage === 'undefined') return 'system'
+  if (typeof localStorage === 'undefined') return 'dark'
   const v = localStorage.getItem(KEY)
-  return v === 'light' || v === 'dark' ? v : 'system'
+  return v === 'light' || v === 'dark' ? v : 'dark'
 }
 
 export function systemDark(): boolean {

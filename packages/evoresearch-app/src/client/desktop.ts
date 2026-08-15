@@ -27,11 +27,16 @@ const MAX_ICON = `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="t
 const RESTORE_ICON = `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect x="2.5" y="3.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 3.5v-1.5h6v6h-1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`
 const CLOSE_ICON = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`
 
-/** 调用 Tauri 窗口命令（浏览器环境静默失败）。 */
+/** 调用 Tauri 窗口命令（浏览器环境静默失败）。
+ *  Tauri 2 双通道：withGlobalTauri 注入的 window.__TAURI__，或内核
+ *  window.__TAURI_INTERNALS__.invoke（始终存在）。 */
 function callWindow(method: string): void {
   try {
-    const tauri = (window as any).__TAURI__
-    if (tauri?.core?.invoke) void tauri.core.invoke(method)
+    const anyWindow = window as any
+    const tauri = anyWindow.__TAURI__
+    if (tauri?.core?.invoke) { void tauri.core.invoke(method); return }
+    const internals = anyWindow.__TAURI_INTERNALS__
+    if (internals?.invoke) { void internals.invoke(method); return }
   } catch { /* 浏览器环境 */ }
 }
 
@@ -99,11 +104,10 @@ export function DesktopTitlebar(props: DesktopTitlebarProps) {
 
   return jsxs('div', {
     className: 'evo-tb',
-    // Tauri 原生拖拽区：空白区 mousedown 即启动窗口拖动（同步可靠），
-    // 交互元素（按钮）不带该属性，点击正常；JS 拖拽作为备用路径。
-    'data-tauri-drag-region': true,
+    // 注意：容器不带 data-tauri-drag-region——该属性会拦截容器内所有按钮的
+    // mousedown（点击变拖动、click 不触发）。原生拖拽只标在空白 spacer 上；
+    // JS 拖拽（阈值后 start_drag）作为空白区备用路径。
     onPointerDown: onPointerDown as any,
-    onDoubleClick: () => callWindow('window_toggle_maximize'),
     children: [
       jsx('button', {
         type: 'button',
@@ -124,6 +128,12 @@ export function DesktopTitlebar(props: DesktopTitlebarProps) {
           icon('sidebar', 'Show navigation', onToggleSidebar),
           icon('new-chat', 'New chat', onNewChat),
         ],
+      }),
+      // 空白拖动区：原生 Tauri drag region + 双击最大化（仅此元素承载）
+      jsx('div', {
+        className: 'evo-tb-spacer',
+        'data-tauri-drag-region': true,
+        onDoubleClick: () => callWindow('window_toggle_maximize'),
       }),
       jsxs('div', {
         className: 'evo-tb-actions',
