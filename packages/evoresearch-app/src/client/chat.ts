@@ -10,7 +10,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
-  ChevronDown, ChevronUp, Shrink, Info, Search, Bell, BellOff, Keyboard, ListTodo, X as XIcon, Trash2,
+  ChevronDown, ChevronUp, Shrink, Info, Search, Bell, BellOff, Keyboard, ListTodo, X as XIcon, Trash2, Terminal,
 } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
@@ -73,6 +73,8 @@ export interface ChatAreaProps {
   session: any | null
   /** 当前 workspace（@文件 补全与输入历史的根目录；无会话时为 null）。 */
   cwd: string | null
+  /** 当前会话的后台任务（§21.6，jobsBySession 快照）。 */
+  jobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
   /** 打开另一个会话（Search 全历史结果跳转）。 */
   onOpenThread: (id: string) => void
   onSend: (text: string) => void
@@ -201,7 +203,7 @@ function AssistantBubble({ node, nodeKey, highlight }: { node: ChatNode; nodeKey
   })
 }
 
-export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, onOpenThread, onSend }: ChatAreaProps) {
+export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [preview, setPreview] = useState(false)
   const [autoApprove, setAutoApprove] = useState(false)
@@ -228,6 +230,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const [queueEditId, setQueueEditId] = useState<string | null>(null)
   const [queueEditText, setQueueEditText] = useState('')
   const queueItems = session?.snapshotCache?.queue ?? []
+
+  // ── 后台任务（§21.6）：会话 jobsBySession 快照 → 弹层 ──
+  const [jobsOpen, setJobsOpen] = useState(false)
+  const liveJobCount = jobs.filter((j) => j.status === 'running' || j.status === 'stopping').length
   const queueText = (item: any): string => {
     const c = item?.content
     if (typeof c === 'string') return c
@@ -717,6 +723,17 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       children: [jsx(ListTodo, {}), queueItems.length > 0 && jsx('span', { className: 'evo-queue-count', children: String(queueItems.length) })],
                     }),
                   }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-tool',
+                    'data-on': liveJobCount > 0 || undefined,
+                    title: jobs.length > 0 ? `Background jobs（${jobs.length}${liveJobCount > 0 ? `，${liveJobCount} running` : ''}）` : 'Background jobs',
+                    'aria-label': 'Background jobs',
+                    onClick: () => setJobsOpen((v) => !v),
+                    children: jsxs(Fragment, {
+                      children: [jsx(Terminal, {}), jobs.length > 0 && jsx('span', { className: 'evo-queue-count', children: String(jobs.length) })],
+                    }),
+                  }),
                   jsx('span', { className: 'evo-composer-divider' }),
                   jsx('button', {
                     type: 'button',
@@ -891,6 +908,36 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 ],
               }, id)
+            }),
+          }),
+        ],
+      }),
+      // ── 后台任务弹层（§21.6）──
+      jobsOpen && jobs.length > 0 && jsxs('div', {
+        className: 'evo-queue',
+        children: [
+          jsx('div', {
+            className: 'evo-queue-head',
+            children: jsx('span', { className: 'evo-insp-subtab-title', children: `Background jobs（${jobs.length}）` }),
+          }),
+          jsx('div', {
+            className: 'evo-queue-list',
+            children: jobs.map((job) => {
+              const live = job.status === 'running' || job.status === 'stopping'
+              const end = job.finishedAt ?? Date.now()
+              const dur = Math.max(0, Math.floor(((live ? end : (job.finishedAt ?? end)) - (job.startedAt ?? end)) / 1000))
+              const statusText = job.status === 'running' ? 'running' : job.status === 'stopping' ? 'stopping' : job.status === 'completed' ? 'completed' : job.status === 'killed' ? 'killed' : 'failed'
+              return jsxs('div', {
+                className: 'evo-job-row',
+                children: [
+                  jsx('span', { className: `evo-job-dot ${live ? 'running' : statusText === 'completed' ? 'done' : statusText === 'failed' ? 'failed' : 'killed'}` }),
+                  jsx('span', { className: 'evo-job-kind', children: job.kind }),
+                  jsx('span', { className: 'evo-job-label', title: job.label, children: job.label }),
+                  job.detail !== undefined && jsx('span', { className: 'evo-job-detail', children: job.detail }),
+                  jsx('span', { className: 'evo-job-status', children: statusText }),
+                  jsx('span', { className: 'evo-job-duration', children: dur < 60 ? `${dur}s` : `${Math.floor(dur / 60)}m ${dur % 60}s` }),
+                ],
+              }, job.id)
             }),
           }),
         ],

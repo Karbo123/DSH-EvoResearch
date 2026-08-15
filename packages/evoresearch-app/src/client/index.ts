@@ -142,6 +142,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const current = sessions.current
   const currentTitle = currentTitleOf(sessions)
   const running = current !== undefined && sessions.byId[current]?.running === true
+  // 当前会话的后台任务（§21.6：jobsBySession 快照）
+  const currentJobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
+    = current === undefined ? [] : ((sessions.jobsBySession ?? {})[current] ?? [])
 
   // ── 会话快照订阅：notifier → snapshotCache（chat legacy 节点 + promptError）──
   const sessionSnapshot = useSyncExternalStore(
@@ -442,6 +445,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   sessionId: current ?? null,
                   session: sessionObj,
                   cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
+                  jobs: currentJobs,
                   onOpenThread: openSession,
                   onSend: sendMessage,
                 }),

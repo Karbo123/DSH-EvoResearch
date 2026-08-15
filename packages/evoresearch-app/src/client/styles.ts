@@ -539,4 +539,16 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-wf-clear { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
 .evo-wf-clear:hover { color: var(--color-error); background: var(--hover-bg); }
 .evo-wf-clear svg { width: 13px; height: 13px; }
+/* ── 后台任务（§21.6）── */
+.evo-job-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-background); }
+.evo-job-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-border); flex-shrink: 0; }
+.evo-job-dot.running { background: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent); }
+.evo-job-dot.done { background: var(--color-success); }
+.evo-job-dot.failed { background: var(--color-error); }
+.evo-job-dot.killed { background: var(--color-text-tertiary); }
+.evo-job-kind { font-size: 11px; font-weight: 600; color: var(--brand); font-family: ui-monospace, Consolas, monospace; flex-shrink: 0; }
+.evo-job-label { flex: 1; min-width: 0; font-size: 12.5px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-job-detail { font-size: 11px; color: var(--color-text-tertiary); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.evo-job-status { font-size: 11px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-job-duration { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 `
