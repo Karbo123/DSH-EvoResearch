@@ -201,6 +201,7 @@ body { margin: 0; }
 .evo-composer-tool:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-composer-tool svg { width: 16px; height: 16px; }
 .evo-composer-tool[data-on] { color: var(--brand); }
+.evo-composer-tool.evo-aa-on { color: #e05d5d; }
 /* 动作项文字（§25.5）：窄容器只显示图标，hover 时该项文字平滑展开 */
 .evo-composer-tool span { max-width: 140px; opacity: 1; overflow: hidden; white-space: nowrap; transition: max-width 0.18s ease, opacity 0.18s ease, margin-left 0.18s ease; }
 @container (max-width: 640px) {

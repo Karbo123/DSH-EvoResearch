@@ -382,12 +382,27 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
 export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [preview, setPreview] = useState(false)
+    // §21.4 Auto-approve：按 Thread 持久化（localStorage evoresearch-auto-approve:<sessionId>）；
+  // 开启前先弹风险确认，关闭直接生效。
   const [autoApprove, setAutoApprove] = useState(false)
+  useEffect(() => {
+    if (sessionId === null) return
+    try { setAutoApprove(localStorage.getItem(`evoresearch-auto-approve:${sessionId}`) === '1') } catch { /* 忽略 */ }
+  }, [sessionId])
+  const persistAutoApprove = (value: boolean) => {
+    setAutoApprove(value)
+    if (sessionId !== null) {
+      try {
+        if (value) localStorage.setItem(`evoresearch-auto-approve:${sessionId}`, '1')
+        else localStorage.removeItem(`evoresearch-auto-approve:${sessionId}`)
+      } catch { /* 忽略 */ }
+    }
+  }
   const listRef = useRef<HTMLDivElement | null>(null)
   const taRef = useRef<HTMLTextAreaElement | null>(null)
 
   // ── 会话动作（§25.6）：Current / Search / Notify / Shortcuts / Compact / Clear view ──
-  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'model' | 'wf-clear'>(null)
+  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'model' | 'wf-clear' | 'auto-approve'>(null)
   const [clearView, setClearView] = useState(false)
   const [notifyOn, setNotifyOn] = useState(() => {
     try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
@@ -1277,9 +1292,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                   jsx('button', {
                     type: 'button',
-                    className: 'evo-composer-tool',
+                    className: `evo-composer-tool${autoApprove ? ' evo-aa-on' : ''}`,
                     'data-on': autoApprove || undefined,
-                    onClick: () => setAutoApprove((v) => !v),
+                    title: t('autoApprove'),
+                    'aria-label': t('autoApprove'),
+                    onClick: () => {
+                      // §21.4：开启先弹风险确认；关闭直接生效
+                      if (autoApprove) persistAutoApprove(false)
+                      else setActionDialog('auto-approve')
+                    },
                     children: jsxs(Fragment, {
                       children: [jsx(ShieldCheck, {}), jsx('span', { children: t('autoApprove') })],
                     }),
@@ -1382,6 +1403,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         onOpenThread,
       }),
       actionDialog === 'shortcuts' && jsx(ShortcutsDialog, { onClose: () => setActionDialog(null) }),
+      actionDialog === 'auto-approve' && jsx(ConfirmDialog, {
+        title: t('autoApproveConfirmTitle'),
+        message: t('autoApproveConfirmMsg'),
+        confirmLabel: t('confirmEnable'),
+        danger: true,
+        onConfirm: () => { persistAutoApprove(true); setActionDialog(null) },
+        onClose: () => setActionDialog(null),
+      }),
       actionDialog === 'model' && jsx(ModelSelectorDialog, { onClose: () => setActionDialog(null) }),
       actionDialog === 'compact' && jsx(ConfirmDialog, {
         title: t('compact'),
