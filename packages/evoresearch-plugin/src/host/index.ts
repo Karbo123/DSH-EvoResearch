@@ -133,6 +133,26 @@ function apply(ctx: Context): void {
   // 8) 视觉检查工具（vision_check，配置就绪时注册）
   const disposeVision = registerVisionTool(ctx, config.visionEnabled ?? true)
 
+  // 8.5) §10.6 科研代码生成模式规则注入：准备委派代码任务前必须询问用户选择
+  // Lite（一次性委派）/ More Effort（迭代式编码技能）；More Effort 技能未安装时
+  // 不得静默退回 Lite——停止委派并说明缺少能力。询问复用官方 ask_user 工具。
+  const systemPrompt = ctx.get('systemPrompt')
+  const disposeCodeMode = systemPrompt
+    ? systemPrompt.context({
+        name: 'evoresearch:code-mode-guidance',
+        order: 62,
+        text: () =>
+          '<code_mode>\n' +
+          '准备委派代码任务（进入实验实现阶段）前，必须先用 ask_user 工具询问用户选择代码模式：\n' +
+          '- Lite：普通代码 Agent，一次性完成当前委派；\n' +
+          '- More Effort：使用已安装的迭代式编码技能，多轮实现、验证和改进。\n' +
+          '若用户选择 More Effort：先用 skill 工具确认迭代式编码技能已安装；' +
+          '未安装时不得静默退回 Lite——应停止本次代码委派，明确告知用户缺少该能力，' +
+          '请其安装技能或重新选择 Lite。\n' +
+          '</code_mode>',
+      })
+    : undefined
+
   // 9) 挂载副作用（记忆事件订阅 + prompt 注入 + 工具；调度 tick；通道）
   const disposeMemory = memory.attach(ctx)
   const disposeScheduler = scheduler.attach(ctx)
@@ -151,6 +171,7 @@ function apply(ctx: Context): void {
       disposeChannels()
       disposeCommands()
       disposeVision?.()
+      disposeCodeMode?.()
     }
   })
 }

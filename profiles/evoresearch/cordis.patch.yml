@@ -5,4 +5,10 @@
 # - id: evoresearch-host
 #   config:
 #     dataRoot: D:\evoresearch
-[]
+
+# §21.3/§10.6：官方 dsh-base 默认不含 ask_user 工具行——补挂 tool-ask-user，
+# 使主 Agent 获得 ask_user_question 工具（模型主动提问 → 工作台问题卡片作答，
+# 科研代码模式 Lite/More Effort 选择依赖它）。
+- insert:
+    - id: tool-ask-user
+      name: '@deepseek-ai/dsh-tool-ask-user'
