@@ -162,6 +162,7 @@ const DICT: Record<string, [string, string]> = {
   identity: ['Identity', '身份'],
   knowledge: ['Knowledge', '知识'],
   noObservationsYet: ['No observations yet', '暂无观测记录'],
+  relatedTo: ['Related', '关联'],
   superseded: ['superseded', '已取代'],
   all: ['All', '全部'],
   active: ['Active', '活跃'],

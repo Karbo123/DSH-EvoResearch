@@ -89,6 +89,8 @@ export interface ObservationMeta {
   readonly topicKeys: readonly string[]
   readonly entities: readonly string[]
   readonly sourceTurnIds: readonly string[]
+  /** 关联的其他 Observation id（link_observations 双向维护）。 */
+  readonly relatedObservationIds: readonly string[]
   /** active | superseded（supersede 保留旧文件标记，检索默认只出 ACTIVE）。 */
   readonly status: 'active' | 'superseded'
   /** 被谁取代（observation id）。 */

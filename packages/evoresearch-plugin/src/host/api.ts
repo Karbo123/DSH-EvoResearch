@@ -152,6 +152,7 @@ export class EvoResearchApiService extends TypertRemoteService {
     categories: readonly string[]
     status: string
     supersededBy?: string
+    relatedObservationIds: readonly string[]
     updatedAt: number
   }> {
     return this.services.memory
@@ -168,6 +169,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         categories: o.categories,
         status: o.status,
         ...(o.supersededBy === undefined ? {} : { supersededBy: o.supersededBy }),
+        relatedObservationIds: o.relatedObservationIds ?? [],
         updatedAt: o.updatedAt,
       }))
   }

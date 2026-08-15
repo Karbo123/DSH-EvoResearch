@@ -66,7 +66,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   // Identity（§26.5）
   const [profile, setProfile] = useState<Array<{ name: string; text: string; bytes: number }> | null>(null)
   // Knowledge（§26.5 轻量版）
-  const [observations, setObservations] = useState<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; updatedAt: number }> | null>(null)
+  const [observations, setObservations] = useState<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; relatedObservationIds?: readonly string[]; updatedAt: number }> | null>(null)
   const [obsFilter, setObsFilter] = useState<'all' | 'active' | 'superseded'>('all')
 
   const loadTurns = (offset: number) => {
@@ -338,6 +338,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                             o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: `superseded by ${o.supersededBy.slice(0, 18)}` }),
                             o.content !== '' && jsx('div', { className: 'evo-skill-desc', children: o.content.slice(0, 220) }),
                             (o.categories ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: CATEGORY_LABELS[c] ?? c }, c)) }),
+                            (o.relatedObservationIds ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.relatedObservationIds ?? []).map((rid) => jsx('span', { className: 'evo-panel-tag evo-panel-tag-link', title: rid, children: `${t('relatedTo')} ${rid.slice(0, 10)}` }, rid)) }),
                           ],
                         }, o.observationId)),
                       }),

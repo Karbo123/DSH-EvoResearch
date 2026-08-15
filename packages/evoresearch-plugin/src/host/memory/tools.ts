@@ -303,6 +303,29 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
     },
   })
 
+  // ── link_observations（§21.5）：Observation 关联关系（双向） ──────────────
+  register({
+    name: 'link_observations',
+    description:
+      '建立/更新 Observation 之间的关联关系（双向）。适合表达"实验 X 相关于方法 Y"等' +
+      '结构化联系；重复调用会合并去重，不会覆盖已有关联。',
+    parameters: paramsSchema(
+      {
+        observation_id: { type: 'string', description: '主观测 id' },
+        related_ids: { type: 'array', items: { type: 'string' }, description: '要关联的观测 id 列表' },
+      },
+      ['observation_id', 'related_ids'],
+    ),
+    output: { schema: { type: 'object', properties: { ok: { type: 'boolean' }, related: { type: 'array', items: { type: 'string' } } } }, render: textRender },
+    execute: async (args, exec) => {
+      const input = args as { observation_id: string; related_ids: string[] }
+      const workspace = workspaceOf(exec)
+      const store = host.storeFor(workspace)
+      const result = store.linkObservations(host.observationsDirFor(workspace), input.observation_id, input.related_ids)
+      return result
+    },
+  })
+
   return () => {
     for (const dispose of disposers) dispose()
   }

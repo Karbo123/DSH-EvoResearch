@@ -234,6 +234,15 @@ export const RESEARCH_MEMORY_MIGRATIONS: readonly Migration[] = [
       `)
     },
   },
+  {
+    // §21.5：link_observations —— Observation 关联关系（双向）。
+    version: 4,
+    up(db) {
+      db.exec(`
+        ALTER TABLE observation_search_index ADD COLUMN related_observation_ids TEXT NOT NULL DEFAULT '[]';
+      `)
+    },
+  },
 ]
 
 /** 数据库行（宽松类型，读取后立即转换为领域对象）。 */
@@ -294,6 +303,7 @@ interface ObservationFrontmatter {
   topic_keys?: string[]
   entities?: string[]
   source_turn_ids?: string[]
+  related_observation_ids?: string[]
   status?: 'active' | 'superseded'
   superseded_by?: string
   project_id?: string
@@ -312,12 +322,13 @@ export function parseObservationFile(content: string): { frontmatter: Observatio
     const key = line.slice(0, colon).trim()
     const raw = line.slice(colon + 1).trim()
     const value: string | string[] = raw.startsWith('[') ? JSON.parse(raw) : raw.replace(/^["']|["']$/g, '')
-    if (key === 'categories' || key === 'topic_keys' || key === 'entities' || key === 'source_turn_ids') {
+    if (key === 'categories' || key === 'topic_keys' || key === 'entities' || key === 'source_turn_ids' || key === 'related_observation_ids') {
       const list = Array.isArray(value) ? value : [value]
       if (key === 'categories') frontmatter.categories = list
       else if (key === 'topic_keys') frontmatter.topic_keys = list
       else if (key === 'entities') frontmatter.entities = list
-      else frontmatter.source_turn_ids = list
+      else if (key === 'source_turn_ids') frontmatter.source_turn_ids = list
+      else frontmatter.related_observation_ids = list
     } else if (key === 'status') {
       frontmatter.status = value === 'superseded' ? 'superseded' : 'active'
     } else if (key === 'primary_category' || key === 'superseded_by' || key === 'project_id' || key === 'title') {
@@ -338,6 +349,7 @@ export function renderObservationFile(meta: {
   topicKeys: readonly string[]
   entities: readonly string[]
   sourceTurnIds: readonly string[]
+  relatedObservationIds?: readonly string[]
   status: 'active' | 'superseded'
   supersededBy?: string
   projectId?: string
@@ -352,6 +364,7 @@ export function renderObservationFile(meta: {
     `topic_keys: ${JSON.stringify(meta.topicKeys)}`,
     `entities: ${JSON.stringify(meta.entities)}`,
     `source_turn_ids: ${JSON.stringify(meta.sourceTurnIds)}`,
+    meta.relatedObservationIds && meta.relatedObservationIds.length > 0 ? `related_observation_ids: ${JSON.stringify(meta.relatedObservationIds)}` : null,
     `status: ${meta.status}`,
     meta.supersededBy ? `superseded_by: ${meta.supersededBy}` : null,
     meta.projectId ? `project_id: ${meta.projectId}` : null,
@@ -648,6 +661,7 @@ export class ResearchMemoryStore {
     topicKeys: readonly string[]
     entities: readonly string[]
     sourceTurnIds: readonly string[]
+    relatedObservationIds?: readonly string[]
     projectId?: string
   }): ObservationMeta {
     const fileName = `${input.observationId}.md`
@@ -664,6 +678,7 @@ export class ResearchMemoryStore {
       topicKeys: input.topicKeys,
       entities: input.entities,
       sourceTurnIds: input.sourceTurnIds,
+      relatedObservationIds: input.relatedObservationIds,
       status: 'active',
       projectId: input.projectId,
       createdAt: now,
@@ -684,6 +699,7 @@ export class ResearchMemoryStore {
       topicKeys: input.topicKeys,
       entities: input.entities,
       sourceTurnIds: input.sourceTurnIds,
+      relatedObservationIds: input.relatedObservationIds ?? [],
       status: 'active',
       projectId: input.projectId,
       createdAt: now,
@@ -707,6 +723,7 @@ export class ResearchMemoryStore {
         topicKeys: meta.topicKeys,
         entities: meta.entities,
         sourceTurnIds: meta.sourceTurnIds,
+        relatedObservationIds: meta.relatedObservationIds,
         status: 'superseded',
         supersededBy,
         projectId: meta.projectId,
@@ -720,19 +737,66 @@ export class ResearchMemoryStore {
       .run('superseded', supersededBy, Date.now(), observationId)
   }
 
+  /**
+   * link_observations（§21.5）：建立/更新 Observation 关联关系（双向）。
+   * 合并去重写入关联 id 列表，更新文件 frontmatter 与索引，updated_at 刷新。
+   */
+  linkObservations(observationsDir: string, observationId: string, relatedIds: readonly string[]): { ok: boolean; related: readonly string[] } {
+    const meta = this.getObservation(observationId)
+    if (!meta) return { ok: false, related: [] }
+    const merged = Array.from(new Set([...(meta.relatedObservationIds ?? []), ...relatedIds]))
+    const now = Date.now()
+    this.rewriteObservationFile(observationsDir, meta, { relatedObservationIds: merged, updatedAt: now })
+    // 反向：让每个 related 观测也包含本观测 id（双向链接）
+    for (const otherId of merged) {
+      const other = this.getObservation(otherId)
+      if (!other || other.observationId === observationId) continue
+      const otherMerged = Array.from(new Set([...(other.relatedObservationIds ?? []), observationId]))
+      this.rewriteObservationFile(observationsDir, other, { relatedObservationIds: otherMerged, updatedAt: now })
+    }
+    return { ok: true, related: merged }
+  }
+
+  /** 重写观测文件 + 索引（链接/更新共用）。 */
+  private rewriteObservationFile(observationsDir: string, meta: ObservationMeta, patch: Partial<ObservationMeta>): void {
+    const next: ObservationMeta = { ...meta, ...patch }
+    const dir = meta.projectId ? path.join(observationsDir, 'projects', meta.projectId) : path.join(observationsDir, 'global')
+    fs.writeFileSync(
+      path.join(dir, meta.fileName),
+      renderObservationFile({
+        title: next.title,
+        body: next.content.split('\n---\n')[1] ?? next.content,
+        categories: next.categories,
+        primaryCategory: next.primaryCategory,
+        topicKeys: next.topicKeys,
+        entities: next.entities,
+        sourceTurnIds: next.sourceTurnIds,
+        relatedObservationIds: next.relatedObservationIds,
+        status: next.status,
+        supersededBy: next.supersededBy,
+        projectId: next.projectId,
+        createdAt: next.createdAt,
+        updatedAt: next.updatedAt,
+      }),
+      'utf8',
+    )
+    this.upsertObservationIndex(next)
+  }
+
   /** 镜像索引写入（文件写入后同步）。 */
   private upsertObservationIndex(meta: ObservationMeta): void {
     this.db.db
       .prepare(
         `INSERT INTO observation_search_index
          (observation_id, file_name, title, content, categories, primary_category, topic_keys,
-          entities, source_turn_ids, status, superseded_by, project_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          entities, source_turn_ids, related_observation_ids, status, superseded_by, project_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(observation_id) DO UPDATE SET
            file_name = excluded.file_name, title = excluded.title, content = excluded.content,
            categories = excluded.categories, primary_category = excluded.primary_category,
            topic_keys = excluded.topic_keys, entities = excluded.entities,
-           source_turn_ids = excluded.source_turn_ids, status = excluded.status,
+           source_turn_ids = excluded.source_turn_ids, related_observation_ids = excluded.related_observation_ids,
+           status = excluded.status,
            superseded_by = excluded.superseded_by, project_id = excluded.project_id,
            updated_at = excluded.updated_at`,
       )
@@ -746,6 +810,7 @@ export class ResearchMemoryStore {
         JSON.stringify(meta.topicKeys),
         JSON.stringify(meta.entities),
         JSON.stringify(meta.sourceTurnIds),
+        JSON.stringify(meta.relatedObservationIds ?? []),
         meta.status,
         meta.supersededBy ?? null,
         meta.projectId ?? null,
@@ -770,6 +835,7 @@ export class ResearchMemoryStore {
       topicKeys: parseJsonArray<string>(row.topic_keys),
       entities: parseJsonArray<string>(row.entities),
       sourceTurnIds: parseJsonArray<string>(row.source_turn_ids),
+      relatedObservationIds: parseJsonArray<string>(row.related_observation_ids),
       status: asString(row.status, 'active') as 'active' | 'superseded',
       supersededBy: row.superseded_by === null || row.superseded_by === undefined ? undefined : asString(row.superseded_by),
       projectId: row.project_id === null || row.project_id === undefined ? undefined : asString(row.project_id),
