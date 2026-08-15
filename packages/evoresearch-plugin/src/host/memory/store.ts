@@ -827,14 +827,17 @@ export class ResearchMemoryStore {
 
   /**
    * 把用户查询转换为 FTS5 查询串（trigram tokenizer）：
-   * 按空白/标点分词后过滤 <3 字符的短 token（trigram 不支持），以 OR 连接。
+   * 按空白/标点分词 → 剥离 token 内全部非字母数字（FTS 运算符 `-` `*` `"` `(` 等
+   * 及 CJK 标点会破坏 MATCH 语法，如 "xxx】" 被解析为列名）→ 过滤 <3 字符
+   * （trigram 不支持）→ 双引号短语包裹 → OR 连接。上限 16 token 防超长查询。
    */
   static toFtsQuery(query: string): string {
     const tokens = query
-      .split(/[\s,，。；;:：'"“”‘’()（）]+/)
-      .map((t) => t.replace(/["']/g, ''))
+      .split(/[\s\p{P}\p{S}]+/u)
+      .map((t) => t.replace(/[^\p{L}\p{N}]+/gu, ''))
       .filter((t) => t.length >= 3)
-    return tokens.join(' OR ')
+      .slice(0, 16)
+    return tokens.map((t) => `"${t}"`).join(' OR ')
   }
 
   // ── Goals（v3 Goal Control） ──────────────────────────────────────────────
