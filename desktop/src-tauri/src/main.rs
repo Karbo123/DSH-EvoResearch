@@ -58,6 +58,19 @@ fn app_local_data_dir() -> PathBuf {
     dir
 }
 
+/// 启动自愈：若 profiles/node_modules 是真实目录（打包/复制残留），删除之。
+/// dsh 的 healProfilesModuleFallback 要求该路径不存在或为它管理的符号链接；
+/// 真实目录会导致 profile 启动直接报错（sidecar 起不来 → 无窗口）。
+fn heal_profiles_modules(workdir: &std::path::Path) {
+    let nested = workdir.join("profiles").join("node_modules");
+    if let Ok(meta) = std::fs::symlink_metadata(&nested) {
+        if !meta.file_type().is_symlink() {
+            let _ = std::fs::remove_dir_all(&nested);
+            eprintln!("[evoresearch] 已清理非符号链接的 profiles/node_modules（启动自愈）");
+        }
+    }
+}
+
 /// 启动 sidecar 进程。
 fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
     let node = locate_sidecar(resource_dir, "node.exe")
@@ -67,6 +80,7 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
     // sidecar 工作目录 = app 目录（DSH_HOME 根，含 profiles/ 与 node_modules/）
     let workdir = locate_sidecar(resource_dir, "app")
         .ok_or_else(|| std::io::Error::other("未找到 sidecar app 目录"))?;
+    heal_profiles_modules(&workdir);
     // 端口文件路径经环境变量传给 launch.js（避免两侧路径约定漂移）
     let port_file_env = app_local_data_dir().join("port.json");
     let stderr_log = std::env::temp_dir().join("evoresearch-sidecar.err.log");
