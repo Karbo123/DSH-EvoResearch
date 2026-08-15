@@ -237,6 +237,26 @@ export class EvoResearchApiService extends TypertRemoteService {
     return { hits: page as unknown }
   }
 
+  // ── 斜杠命令目录（动态读取 dsh-commands 全局注册表） ──────────────────────
+
+  @Remote('commandsList')
+  commandsList(): unknown {
+    const commands = this.hostCtx.get('commands') as { list(agent?: unknown): Array<{ name: string; description: string; input?: { hint?: string } }> } | undefined
+    if (!commands) return { commands: [], error: 'commands 服务不可用' }
+    try {
+      const descriptors = commands.list(undefined)
+      return {
+        commands: descriptors.map((d) => ({
+          name: d.name,
+          description: d.description,
+          hint: d.input?.hint ?? '',
+        })),
+      }
+    } catch (error) {
+      return { commands: [], error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
   @Remote('safety')
   safety(): { dangerousMode: boolean } {
     // 第一版：返回 false（危险模式由 DSH 权限预设管理，此处预留聚合）

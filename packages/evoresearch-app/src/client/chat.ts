@@ -12,6 +12,11 @@ import { Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Ey
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
 import { renderMarkdown } from './markdown'
+import {
+  CandidatePopup, buildCandidates, detectTrigger, pushHistory, readHistory,
+  resolveMentions, useCommandCatalog, useFileTree,
+  type Trigger, type Candidate,
+} from './composer-assist'
 
 const SUGGESTED_PROMPTS = [
   'Survey recent papers on a topic',
@@ -59,6 +64,8 @@ export interface ChatAreaProps {
   currentTitle: string | null
   /** 会话对象（投影/排队数据；无会话时为 null）。 */
   session: any | null
+  /** 当前 workspace（@文件 补全与输入历史的根目录；无会话时为 null）。 */
+  cwd: string | null
   onSend: (text: string) => void
 }
 
@@ -183,11 +190,68 @@ function AssistantBubble({ node }: { node: ChatNode }) {
   })
 }
 
-export function ChatArea({ nodes, partial, running, error, currentTitle, session, onSend }: ChatAreaProps) {
+export function ChatArea({ nodes, partial, running, error, currentTitle, session, cwd, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [preview, setPreview] = useState(false)
   const [autoApprove, setAutoApprove] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const taRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // ── 输入辅助（§23.2–23.5）：斜杠命令 / @文件 / 输入历史 ──
+  const commandCatalog = useCommandCatalog()
+  const fileTree = useFileTree(cwd)
+  const [history, setHistory] = useState<string[]>(() => readHistory(cwd))
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [trigger, setTrigger] = useState<Trigger | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  // workspace 切换时重载历史（§23.5：不读取/覆盖其他 workspace 的键）
+  useEffect(() => { setHistory(readHistory(cwd)); setHistoryIndex(-1) }, [cwd])
+
+  const candidates = trigger === null ? [] : buildCandidates(trigger, commandCatalog, fileTree, history)
+
+  const refreshTrigger = (value: string, pos: number) => {
+    const next = detectTrigger(value, pos)
+    setTrigger(next)
+    setActiveIndex(0)
+  }
+
+  const applyCandidate = (c: Candidate) => {
+    const el = taRef.current
+    const pos = el?.selectionStart ?? input.length
+    const t = detectTrigger(input, pos)
+    let next: string
+    let nextCursor: number
+    if (t !== null && (t.kind === 'mention' || t.kind === 'command')) {
+      next = input.slice(0, t.start) + c.insert + input.slice(pos)
+      nextCursor = t.start + c.insert.length
+    } else {
+      next = c.insert
+      nextCursor = next.length
+    }
+    setInput(next)
+    setTrigger(null)
+    setHistoryIndex(-1)
+    requestAnimationFrame(() => {
+      if (el === null) return
+      el.focus()
+      el.selectionStart = el.selectionEnd = nextCursor
+    })
+  }
+
+  const browseHistory = (delta: -1 | 1) => {
+    if (history.length === 0) return
+    const current = historyIndex
+    let next: number
+    if (current === -1) next = delta === -1 ? 0 : history.length - 1
+    else next = Math.min(Math.max(current + delta, 0), history.length - 1)
+    setHistoryIndex(next)
+    setInput(history[next])
+    requestAnimationFrame(() => {
+      const el = taRef.current
+      if (el !== null) el.selectionStart = el.selectionEnd = el.value.length
+    })
+  }
 
   // ── 历史分页与滚动行为（移植规范 §9）──
   // 默认只渲染最近 PAGE_SIZE 条；Load earlier 向前扩展并保持视觉位置；
@@ -236,12 +300,19 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (visibleCount > PAGE_SIZE) setVisibleCount(PAGE_SIZE)
   }
 
-  const submit = () => {
+  const submit = async () => {
     const text = input.trim()
     if (!text) return
+    // @引用解析（§23.4）：小型文本文件注入内容，其余保留路径
+    const resolved = await resolveMentions(text, cwd)
     // 忙时也允许发送：消息进入 append-only 队列（§23.6），由 host 顺序消费
-    onSend(text)
+    onSend(resolved)
+    pushHistory(cwd, text)
+    setHistory(readHistory(cwd))
     setInput('')
+    setTrigger(null)
+    setHistoryIndex(-1)
+    setPreview(false)
   }
 
   const hasMessages = nodes.length > 0 || partial !== null
@@ -350,6 +421,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       : jsx(Fragment, { children: [jsx('div', { dangerouslySetInnerHTML: { __html: renderMarkdown(input) } })] }),
                   })
                 : jsx('textarea', {
+                ref: taRef,
                 className: 'evo-composer-textarea',
                 placeholder: t('askAnything'),
                 rows: 1,
@@ -358,13 +430,38 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   setInput(e.currentTarget.value)
                   e.currentTarget.style.height = 'auto'
                   e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 220)}px`
+                  refreshTrigger(e.currentTarget.value, e.currentTarget.selectionStart)
                 },
-                onKeyDown: (e) => {
-                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    submit()
+                onKeyUp: (e) => {
+                  if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
+                    refreshTrigger(e.currentTarget.value, e.currentTarget.selectionStart)
                   }
                 },
+                onClick: (e) => refreshTrigger(e.currentTarget.value, e.currentTarget.selectionStart),
+                onKeyDown: (e) => {
+                  // 候选弹层键盘导航（§23.2：Tab 应用、上下移动、Esc 关闭）
+                  if (candidates.length > 0) {
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex((i) => (i + 1) % candidates.length); return }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex((i) => (i - 1 + candidates.length) % candidates.length); return }
+                    if (e.key === 'Tab') { e.preventDefault(); applyCandidate(candidates[activeIndex]); return }
+                    if (e.key === 'Escape') { e.preventDefault(); setTrigger(null); return }
+                  }
+                  // 空输入上下键浏览输入历史（§23.5）
+                  if (e.key === 'ArrowUp' && input === '') { e.preventDefault(); browseHistory(-1); return }
+                  if (e.key === 'ArrowDown' && input === '' && historyIndex !== -1) { e.preventDefault(); browseHistory(1); return }
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    void submit()
+                  }
+                },
+              }),
+              candidates.length > 0 && jsx(CandidatePopup, {
+                candidates,
+                active: activeIndex,
+                onActive: setActiveIndex,
+                onApply: applyCandidate,
+                onClose: () => setTrigger(null),
+                label: trigger?.kind === 'command' ? 'Commands' : trigger?.kind === 'mention' ? 'File mentions' : 'History',
               }),
               jsxs('div', {
                 className: 'evo-composer-tools',

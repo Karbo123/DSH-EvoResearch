@@ -346,6 +346,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   error: promptError,
                   currentTitle,
                   session: sessionObj,
+                  cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
                   onSend: sendMessage,
                 }),
           }),
