@@ -1,6 +1,6 @@
 // 真实 exe 窗口验证：启动 → 等待窗口/后端就绪 → 截图窗口 → 输出状态。
 // 用法：node scripts/verify-exe-window.mjs <exe路径> <输出png>
-import { spawn } from 'node:child_process'
+import { spawn, execSync } from 'node:child_process'
 import { writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -33,7 +33,7 @@ async function main() {
     // 窗口句柄（通过 powershell 查进程主窗口）
     if (handle === null) {
       try {
-        const out = require('node:child_process').execSync(
+        const out = execSync(
           `powershell -NoProfile -Command "$p = Get-Process evoresearch-desktop -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; if ($p) { Write-Output ($p.MainWindowHandle.ToString() + '|' + $p.MainWindowTitle) }"`,
           { encoding: 'utf8', timeout: 8000 },
         ).trim()
@@ -41,14 +41,19 @@ async function main() {
           const [h, t] = out.split('|')
           handle = h
           title = t
+        } else {
+          handle = 'EMPTY'
         }
-      } catch { /* 查询失败 */ }
+      } catch (error) {
+        handle = `QUERY-ERR:${String(error).slice(0, 80)}`
+        console.error('[exe-check] 窗口查询异常:', String(error).slice(0, 200))
+      }
     }
     if (port !== null && handle !== null) break
     await sleep(2000)
   }
   try {
-    logTail = require('node:child_process').execSync(
+    logTail = execSync(
       `powershell -NoProfile -Command "Get-Content $env:TEMP\\evoresearch-shell.log -Tail 8 -ErrorAction SilentlyContinue"`,
       { encoding: 'utf8', timeout: 8000 },
     ).trim()
@@ -80,10 +85,10 @@ $g = [System.Drawing.Graphics]::FromImage($bmp)
 $g.CopyFromScreen($rect.Left, $rect.Top, 0, 0, (New-Object System.Drawing.Size($w, $ht)))
 $bmp.Save("${outPng.replace(/\\/g, '/')}")
 $g.Dispose(); $bmp.Dispose()
-Write-Output "saved ${w}x${ht}"
+Write-Output "saved $w x $ht"
 `
     try {
-      const out = require('node:child_process').execSync(
+      const out = execSync(
         `powershell -NoProfile -Command "${script.replace(/"/g, '\\"')}"`,
         { encoding: 'utf8', timeout: 20000 },
       ).trim()
