@@ -276,6 +276,63 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return () => window.removeEventListener('evo-report-to-chat', onReport)
   }, [current])
 
+  // ── §42.4 浏览器通知事件 ──
+  const notifyEnabled = (): boolean =>
+    typeof Notification !== 'undefined' && Notification.permission === 'granted' && (() => {
+      try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
+    })()
+  // 1) Scheduled 任务完成：10s 轮询 + 首次 baseline（不补发）+ taskId:lastRunAt 去重（跨刷新持久化）
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return
+    const KEY = 'evoresearch-sched-notified'
+    let known = new Set<string>()
+    let baseline = true
+    try {
+      const raw = localStorage.getItem(KEY)
+      if (raw !== null) {
+        known = new Set(JSON.parse(raw))
+        baseline = false // 已有去重键：后续新完成事件立即通知
+      }
+    } catch { /* 损坏则视为首次运行 */ }
+    const timer = setInterval(() => {
+      if (!notifyEnabled()) return
+      void fetch('/evoresearch/fs/scheduler-list', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+        .then((r) => r.json())
+        .then((json) => {
+          const tasks: Array<{ taskId?: string; name?: string; lastRunAt?: number }> = json?.value ?? []
+          let changed = false
+          for (const t of tasks) {
+            if (t.taskId === undefined || t.lastRunAt === undefined) continue
+            const key = `${t.taskId}:${t.lastRunAt}`
+            if (known.has(key)) continue
+            known.add(key)
+            changed = true
+            if (!baseline) {
+              try { new Notification(`Scheduled 任务完成：${t.name ?? t.taskId}`) } catch { /* 静默退化 */ }
+            }
+          }
+          if (changed) {
+            try { localStorage.setItem(KEY, JSON.stringify([...known])) } catch { /* 忽略 */ }
+          }
+          baseline = false
+        })
+        .catch(() => { /* 网络失败静默 */ })
+    }, 10000)
+    return () => clearInterval(timer)
+  }, [])
+  // 2) Ask User / 工具审批出现时通知（仅新出现的 pending）
+  const prevPendingRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const pending: Array<{ kind?: string; key?: string }> = sessionSnapshot?.pending ?? []
+    const keys = new Set(pending.map((p) => `${p.kind ?? ''}:${p.key ?? ''}`))
+    const fresh = [...keys].filter((k) => !prevPendingRef.current.has(k))
+    prevPendingRef.current = keys
+    if (fresh.length > 0 && notifyEnabled() && current !== undefined) {
+      const labels = fresh.map((k) => (k.startsWith('question') ? 'Ask User 提问' : '工具审批'))
+      try { new Notification(`${labels.join('、')} 等待处理`) } catch { /* 静默退化 */ }
+    }
+  }, [sessionSnapshot])
+
   // §43.5：view / inspector 状态写入 URL（可分享/可恢复）
   const setViewAndUrl = (v: SideView) => {
     setView(v)
