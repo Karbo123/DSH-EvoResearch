@@ -11,6 +11,7 @@
  * 实现说明：标题栏与网页顶栏是同一 React 应用，直接调用同一批 handler。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
+import { t } from './i18n'
 
 const TB_ICONS = {
   sidebar: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 4v16" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`,
@@ -120,8 +121,8 @@ export function DesktopTitlebar(props: DesktopTitlebarProps) {
       jsx('button', {
         type: 'button',
         className: 'evo-tb-brand',
-        title: 'Home',
-        'aria-label': 'Home',
+        title: t('goHome'),
+        'aria-label': t('goHome'),
         onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onHome() },
         children: jsxs(Fragment, {
           children: [
@@ -133,8 +134,8 @@ export function DesktopTitlebar(props: DesktopTitlebarProps) {
       jsxs('div', {
         className: 'evo-tb-tools',
         children: [
-          icon('sidebar', 'Show navigation', onToggleSidebar),
-          icon('new-chat', 'New chat', onNewChat),
+          icon('sidebar', t('showNavigation'), onToggleSidebar),
+          icon('new-chat', t('newChat'), onNewChat),
         ],
       }),
       // 空白拖动区：原生 Tauri drag region + 双击最大化（仅此元素承载）
@@ -149,20 +150,20 @@ export function DesktopTitlebar(props: DesktopTitlebarProps) {
           jsx('button', {
             type: 'button',
             className: 'evo-tb-btn evo-tb-health',
-            title: connected ? 'Connected' : 'Offline',
+            title: connected ? t('connected') : t('offline'),
             onClick: (e: { preventDefault(): void; stopPropagation(): void }) => { e.preventDefault(); e.stopPropagation() },
             children: jsxs(Fragment, {
               children: [
                 jsx('span', { className: `evo-tb-dot${connected ? '' : ' disconnected'}` }),
-                jsx('span', { children: connected ? 'Connected' : 'Offline' }),
+                jsx('span', { children: connected ? t('connected') : t('offline') }),
               ],
             }),
           }),
-          icon('side-chats', 'Side chats', onSideChats),
-          icon('language', 'Language', onToggleLanguage),
-          icon('theme', themeDark ? 'Switch to light mode' : 'Switch to dark mode', onToggleTheme),
-          icon('inspector', 'Show workspace', onToggleInspector),
-          icon('settings', 'Settings', onSettings),
+          icon('side-chats', t('sideChats'), onSideChats),
+          icon('language', t('language'), onToggleLanguage),
+          icon('theme', themeDark ? t('switchToLight') : t('switchToDark'), onToggleTheme),
+          icon('inspector', t('showWorkspace'), onToggleInspector),
+          icon('settings', t('settings'), onSettings),
         ],
       }),
       jsxs('div', {
@@ -171,24 +172,24 @@ export function DesktopTitlebar(props: DesktopTitlebarProps) {
           jsx('button', {
             type: 'button',
             className: 'evo-tb-win evo-tb-min',
-            title: 'Minimize',
-            'aria-label': 'Minimize',
+            title: t('minimize'),
+            'aria-label': t('minimize'),
             dangerouslySetInnerHTML: { __html: MIN_ICON },
             onClick: () => callWindow('window_minimize'),
           }),
           jsx('button', {
             type: 'button',
             className: 'evo-tb-win evo-tb-max',
-            title: 'Maximize',
-            'aria-label': 'Maximize',
+            title: t('maximize'),
+            'aria-label': t('maximize'),
             dangerouslySetInnerHTML: { __html: MAX_ICON },
             onClick: () => callWindow('window_toggle_maximize'),
           }),
           jsx('button', {
             type: 'button',
             className: 'evo-tb-win evo-tb-close',
-            title: 'Close',
-            'aria-label': 'Close',
+            title: t('closeWindow'),
+            'aria-label': t('closeWindow'),
             dangerouslySetInnerHTML: { __html: CLOSE_ICON },
             onClick: () => callWindow('window_close'),
           }),

@@ -77,6 +77,20 @@ const DICT: Record<string, [string, string]> = {
   basedOn: ['Based on deepseek-harness 0.1.0-rc.6', '基于 deepseek-harness 0.1.0-rc.6'],
   noSession: ['Open a conversation to choose a model', '打开会话后可选择模型'],
   current: ['Current', '当前'],
+  // 顶栏 / 标题栏常用操作
+  goHome: ['Go to home', '返回首页'],
+  showNavigation: ['Show navigation', '显示导航'],
+  hideNavigation: ['Hide navigation', '隐藏导航'],
+  connected: ['Connected', '已连接'],
+  reconnecting: ['Reconnecting', '重连中'],
+  offline: ['Offline', '离线'],
+  showWorkspace: ['Show workspace', '显示工作区'],
+  hideInspector: ['Hide inspector', '隐藏检查器'],
+  switchToLight: ['Switch to light mode', '切换到浅色'],
+  switchToDark: ['Switch to dark mode', '切换到深色'],
+  minimize: ['Minimize', '最小化'],
+  maximize: ['Maximize', '最大化'],
+  closeWindow: ['Close', '关闭'],
 }
 
 export function t(key: string): string {

@@ -101,14 +101,14 @@ async function main() {
       spacer: spacer !== null,
       spacerDragRegion: spacer?.hasAttribute('data-tauri-drag-region') ?? false,
       containerDragRegion: document.querySelector('.evo-tb')?.hasAttribute('data-tauri-drag-region') ?? false,
-      minBtn: buttons.some(function(b){ return b.getAttribute('aria-label') === 'Minimize' }),
-      maxBtn: buttons.some(function(b){ return b.getAttribute('aria-label') === 'Maximize' }),
-      closeBtn: buttons.some(function(b){ return b.getAttribute('aria-label') === 'Close' }),
+      minBtn: document.querySelector('.evo-tb-min') !== null,
+      maxBtn: document.querySelector('.evo-tb-max') !== null,
+      closeBtn: document.querySelector('.evo-tb-close') !== null,
     }
   })()`)
 
   // 2) 关闭：点击标题栏关闭按钮 → 进程退出（ACL 链路完整验证）
-  report.closeClick = await cdp.eval(`(function(){ const b = Array.from(document.querySelectorAll('.evo-tb button')).find(function(x){ return x.getAttribute('aria-label') === 'Close' }); if (!b) return 'no-btn'; b.click(); return 'clicked' })()`)
+  report.closeClick = await cdp.eval(`(function(){ const b = document.querySelector('.evo-tb-close'); if (!b) return 'no-btn'; b.click(); return 'clicked' })()`)
   let exited = false
   for (let i = 0; i < 30; i += 1) {
     try { process.kill(child.pid, 0); await sleep(500) } catch { exited = true; break }

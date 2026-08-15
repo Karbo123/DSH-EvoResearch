@@ -600,7 +600,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 type: 'button',
                 className: 'evo-brand-btn',
                 onClick: startNewChat,
-                title: 'Go to home',
+                title: t('goHome'),
                 children: jsxs(Fragment, {
                   children: [
                     jsx('img', { className: 'evo-brand-logo', src: '/favicon.svg', alt: 'EvoResearch', width: 28, height: 28 }),
@@ -612,7 +612,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 type: 'button',
                 className: 'evo-icon-btn',
                 onClick: () => setSidebar((v) => !v),
-                title: sidebar ? 'Hide navigation' : 'Show navigation',
+                title: sidebar ? t('hideNavigation') : t('showNavigation'),
                 children: sidebar ? jsx(PanelLeftClose, {}) : jsx(PanelLeft, {}),
               }),
               !sidebar && jsx('button', {
@@ -629,14 +629,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             children: [
               jsxs('span', {
                 style: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--color-text-tertiary)', padding: '0 8px' },
-                title: connected ? 'Connected' : 'Reconnecting',
-                children: [jsx('span', { style: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block', background: connected ? 'var(--color-success)' : 'var(--color-warning)' } }), jsx('span', { children: connected ? 'Connected' : 'Reconnecting' })],
+                title: connected ? t('connected') : t('reconnecting'),
+                children: [jsx('span', { style: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block', background: connected ? 'var(--color-success)' : 'var(--color-warning)' } }), jsx('span', { children: connected ? t('connected') : t('reconnecting') })],
               }),
               jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
                 onClick: () => { setInspector(true); setInspectorTab('chats') },
-                title: 'Side chats',
+                title: t('sideChats'),
                 children: jsx(MessagesSquare, {}),
               }),
               jsx('button', {
@@ -650,14 +650,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 type: 'button',
                 className: 'evo-icon-btn',
                 onClick: () => { toggleTheme(); setThemeDark(resolvedTheme() === 'dark') },
-                title: themeDark ? 'Switch to light mode' : 'Switch to dark mode',
+                title: themeDark ? t('switchToLight') : t('switchToDark'),
                 children: themeDark ? jsx(Moon, {}) : jsx(Sun, {}),
               }),
               jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
                 onClick: toggleInspector,
-                title: inspector ? 'Hide inspector' : 'Show workspace',
+                title: inspector ? t('hideInspector') : t('showWorkspace'),
                 children: inspector ? jsx(PanelRightClose, {}) : jsx(PanelRight, {}),
               }),
               jsx('button', {
