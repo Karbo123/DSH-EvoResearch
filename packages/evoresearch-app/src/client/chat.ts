@@ -742,7 +742,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
             jsx(Command, {}),
             jsx('code', { className: 'evo-cmd-line', children: cmdResult?.line ?? '' }),
             cmdRunning && cmdResult === null && jsx('span', { className: 'evo-cmd-running', children: 'running…' }),
-            cmdResult !== null && jsx('pre', { className: 'evo-cmd-output', children: cmdResult.text }),
+            cmdResult !== null && (cmdResult.kind === 'success' && cmdResult.text !== ''
+              ? (() => {
+                  // 结果文本含 GFM 表格 → Markdown 渲染成真表格（§23.3"文本或表格"）；否则等宽文本
+                  const html = renderMarkdown(cmdResult.text)
+                  return html.includes('<table')
+                    ? jsx('div', { className: 'evo-cmd-output evo-cmd-output-md evo-md', dangerouslySetInnerHTML: { __html: html } })
+                    : jsx('pre', { className: 'evo-cmd-output', children: cmdResult.text })
+                })()
+              : jsx('pre', { className: 'evo-cmd-output', children: cmdResult.text })),
             cmdResult !== null && jsx('button', {
               type: 'button',
               className: 'evo-cmd-dismiss',

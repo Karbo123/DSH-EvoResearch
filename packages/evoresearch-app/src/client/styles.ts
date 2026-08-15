@@ -612,6 +612,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-cmd-line { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-primary); flex-shrink: 0; }
 .evo-cmd-running { font-size: 12px; color: var(--brand); }
 .evo-cmd-output { flex: 1; min-width: 0; margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.6; color: var(--color-text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow-y: auto; }
+.evo-cmd-output-md { font-family: inherit; font-size: 12.5px; line-height: 1.6; color: var(--color-text-primary); max-height: 220px; }
+.evo-cmd-output-md table { border-collapse: collapse; margin: 4px 0; }
+.evo-cmd-output-md th, .evo-cmd-output-md td { border: 1px solid var(--color-border); padding: 3px 10px; font-size: 12px; text-align: left; }
+.evo-cmd-output-md th { background: var(--hover-bg); font-weight: 600; }
 .evo-cmd-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
 .evo-cmd-dismiss:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-cmd-dismiss svg { width: 13px; height: 13px; }

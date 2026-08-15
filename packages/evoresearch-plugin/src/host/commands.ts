@@ -108,7 +108,8 @@ export function registerCommands(ctx: Context, host: CommandHost): () => void {
       if (!sub || sub === 'list') {
         const tasks = host.scheduler.list()
         if (tasks.length === 0) return ok('暂无定时任务。示例: /schedule add "0 9 * * 1-5" 每天上午做文献综述')
-        return ok(tasks.map((t) => `- ${t.taskId} [${t.enabled ? '开' : '关'}] ${t.cron} ${t.name}`).join('\n'))
+        const rows = tasks.map((t) => `| ${t.taskId} | ${t.enabled ? '开' : '关'} | ${t.cron} | ${t.name} |`)
+        return ok(`| ID | 状态 | Cron | 名称 |\n|---|---|---|---|\n${rows.join('\n')}`)
       }
       if (sub === 'add') {
         // 支持 "/schedule add "0 9 * * 1-5" 提示词" 的引号解析
@@ -143,7 +144,8 @@ export function registerCommands(ctx: Context, host: CommandHost): () => void {
       if (!sub || sub === 'list') {
         const statuses = host.channels.status()
         if (statuses.length === 0) return ok('暂无可用通道（内置适配器: telegram/slack/qq/wechat/feishu）')
-        return ok(statuses.map((s) => `- ${s.id} [${s.online ? '在线' : '离线'}] 收${s.received} 发${s.sent}${s.error ? ` ${s.error}` : ''}`).join('\n'))
+        const rows = statuses.map((s) => `| ${s.id} | ${s.online ? '在线' : '离线'} | ${s.received} | ${s.sent} | ${s.error ?? ''} |`)
+        return ok(`| 通道 | 状态 | 收 | 发 | 错误 |\n|---|---|---|---|---|\n${rows.join('\n')}`)
       }
       if (sub === 'start') {
         if (!id) return fail('用法: /channel start <id>')
@@ -169,7 +171,8 @@ export function registerCommands(ctx: Context, host: CommandHost): () => void {
       if (!sub || sub === 'list') {
         const teams = await host.experts.list()
         if (teams.length === 0) return ok('当前无受邀专家。可用: /expert invite <技能名>')
-        return ok(`活跃专家:\n${teams.map((t) => `- ${t.name}: ${t.description.slice(0, 60)}`).join('\n')}`)
+        const rows = teams.map((t) => `| ${t.name} | ${t.description.slice(0, 60)} |`)
+        return ok(`活跃专家:\n\n| 专家 | 说明 |\n|---|---|\n${rows.join('\n')}`)
       }
       if (sub === 'invite') {
         if (!name) return fail('用法: /expert invite <name>')
@@ -195,7 +198,8 @@ export function registerCommands(ctx: Context, host: CommandHost): () => void {
       if (!sub || sub === 'list') {
         const proposals = host.autoskills.listProposals()
         if (proposals.length === 0) return ok('暂无 AutoSkills 提案')
-        return ok(proposals.map((p) => `- ${p.proposalId} [${p.status}] ${p.name}（来源 ${p.sourceObservationIds.length} 条观测）`).join('\n'))
+        const rows = proposals.map((p) => `| ${p.proposalId} | ${p.status} | ${p.name} | ${p.sourceObservationIds.length} |`)
+        return ok(`| ID | 状态 | 名称 | 观测数 |\n|---|---|---|---|\n${rows.join('\n')}`)
       }
       if (sub === 'approve') {
         if (!id) return fail('用法: /autoskills approve <id>')
