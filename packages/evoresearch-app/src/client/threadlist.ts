@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2 } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
@@ -66,6 +66,10 @@ export interface ThreadListProps {
   deletedIds: Set<string>
   /** 删除会话（host 删除持久化数据；返回是否成功）。 */
   onDelete: (id: string) => Promise<{ ok: boolean; error?: string }>
+  /** 已归档会话 id（§26.3 Archive：从 Recents 隐藏但保留数据，可恢复）。 */
+  archivedIds: Set<string>
+  /** 归档/恢复会话（client-side 持久化）。 */
+  onToggleArchive: (id: string) => void
   /** 运行/停止中的会话 id（§26.3 行内运行状态点）。 */
   runningIds: Set<string>
 }
@@ -73,20 +77,26 @@ export interface ThreadListProps {
 /** 标签调色板（§26.3）。 */
 const TAG_PALETTE = ['#e05d5d', '#e08a3c', '#d9b13b', '#5dbe85', '#3b9cb0', '#7a6fe0', '#b05dc4', '#908d83']
 
-export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, runningIds }: ThreadListProps) {
+export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, archivedIds, onToggleArchive, runningIds }: ThreadListProps) {
   const sessions = useSessions((s) => s)
   const currentId = sessions.current
   const [colorFor, setColorFor] = useState<string | null>(null)
   // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表）
   const rows = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
-    .filter((s) => s !== undefined && s.blank !== true && s.parentSessionId === undefined && !hideIds.has(s.id) && !deletedIds.has(s.id))
+    .filter((s) => s !== undefined && s.blank !== true && s.parentSessionId === undefined && !hideIds.has(s.id) && !deletedIds.has(s.id) && !archivedIds.has(s.id))
     // 置顶会话排最前（§26.3 Pin）
     .sort((a, b) => (pinnedIds.has(b.id) ? 1 : 0) - (pinnedIds.has(a.id) ? 1 : 0))
+  // 已归档线程（§26.3 Archive：保留数据，可恢复）
+  const archivedRows = (sessions.ids ?? [])
+    .map((id) => sessions.byId[id])
+    .filter((s) => s !== undefined && s.blank !== true && s.parentSessionId === undefined && !hideIds.has(s.id) && !deletedIds.has(s.id) && archivedIds.has(s.id))
+    .sort((a, b) => (archivedIds.has(b.id) ? 1 : 0) - (archivedIds.has(a.id) ? 1 : 0))
   const [query, setQuery] = useState('')
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [forkError, setForkError] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
   // 两段式删除确认：第一次点击进入确认态，5 秒无操作还原
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -324,6 +334,17 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                           },
                           children: jsx(FileText, {}),
                         }),
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-tl-row-act',
+                          title: t('archive'),
+                          'aria-label': t('archive'),
+                          onClick: (e: { stopPropagation(): void }) => {
+                            e.stopPropagation()
+                            onToggleArchive(s.id)
+                          },
+                          children: jsx(Archive, {}),
+                        }),
                         confirmDelete === s.id
                           ? jsx('button', {
                               type: 'button',
@@ -352,8 +373,61 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                   ],
                 }, s.id)
               }),
-        ],
-      }),
+        // ── 已归档分区（§26.3 Archive：保留数据，可恢复）──
+        archivedRows.length > 0 && jsxs('div', {
+          className: 'evo-tl-section',
+          children: [
+            jsxs('button', {
+              type: 'button',
+              className: 'evo-tl-archived-toggle',
+              'aria-expanded': showArchived || undefined,
+              onClick: () => setShowArchived((v) => !v),
+              children: [
+                jsx(ChevronRight, { className: `evo-tool-chev${showArchived ? ' open' : ''}` }),
+                jsx(Archive, {}),
+                jsx('span', { children: `${t('archived')} (${archivedRows.length})` }),
+              ],
+            }),
+            showArchived && jsx('div', {
+              className: 'evo-tl-archived-list',
+              children: archivedRows.map((s) => jsxs('div', {
+                className: 'evo-tl-row evo-tl-archived-row',
+                'data-active': s.id === currentId || undefined,
+                children: [
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-tl-row-main',
+                    onClick: () => onOpen(s.id),
+                    children: jsxs(Fragment, {
+                      children: [
+                        jsx('span', { className: 'evo-tl-title-text', children: s.displayTitle ?? s.id.slice(0, 12) }),
+                        jsx('div', { className: 'evo-tl-row-sub', children: formatWhen(s.titleTime ?? s.updatedAt) }),
+                      ],
+                    }),
+                  }),
+                  jsx('div', {
+                    className: 'evo-tl-row-acts',
+                    children: [
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-tl-row-act',
+                        title: t('unarchive'),
+                        'aria-label': t('unarchive'),
+                        onClick: (e: { stopPropagation(): void }) => {
+                          e.stopPropagation()
+                          onToggleArchive(s.id)
+                        },
+                        children: jsx(ArchiveRestore, {}),
+                      }),
+                    ],
+                  }),
+                ],
+              }, s.id)),
+            }),
+          ],
+        }),
+      ],
+    }),
     ],
   })
 }

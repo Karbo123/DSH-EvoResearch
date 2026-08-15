@@ -135,6 +135,12 @@ body { margin: 0; }
 .evo-tl-body { flex: 1; overflow-y: auto; padding: 6px 8px 16px; min-height: 0; }
 .evo-tl-section { padding: 10px 10px 4px; display: flex; align-items: center; justify-content: space-between; }
 .evo-tl-section-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
+.evo-tl-archived-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); background: transparent; border: none; border-radius: 8px; cursor: pointer; font: inherit; }
+.evo-tl-archived-toggle:hover { background: var(--hover-bg); }
+.evo-tl-archived-toggle svg { width: 13px; height: 13px; }
+.evo-tl-archived-list { margin: 2px 0 6px; }
+.evo-tl-archived-row { opacity: 0.75; }
+.evo-tl-archived-row:hover { opacity: 1; }
 .evo-tl-fork-error { font-size: 11px; color: var(--color-error); text-align: right; line-height: 1.4; max-width: 70%; }
 .evo-tl-row {
   display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; padding: 6px 10px; margin-bottom: 2px;

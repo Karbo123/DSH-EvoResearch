@@ -103,6 +103,10 @@ const DICT: Record<string, [string, string]> = {
   confirmDeleteTitle: ['Confirm delete — this cannot be undone', '确认删除——此操作不可撤销'],
   deleteQ: ['Delete?', '删除？'],
   deleteSession: ['Delete session', '删除会话'],
+  archive: ['Archive', '归档'],
+  unarchive: ['Unarchive', '恢复'],
+  archived: ['Archived', '已归档'],
+  showArchived: ['Show archived', '显示已归档'],
   // 聊天区
   editMsg: ['Edit message', '编辑消息（回填输入框）'],
   thinking: ['Thinking', '思考中'],

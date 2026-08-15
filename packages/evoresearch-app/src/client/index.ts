@@ -449,6 +449,25 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     })
   }
 
+  // ── 会话归档（§26.3 Archive）：从 Recents 隐藏但保留数据，可恢复 ──
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('evoresearch-archived') ?? '[]')
+      return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
+    } catch {
+      return new Set()
+    }
+  })
+  const toggleArchive = (id: string) => {
+    setArchivedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      try { localStorage.setItem('evoresearch-archived', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      return next
+    })
+  }
+
   // ── 会话删除（附录 B-2/B-9）：host 删除持久化数据；live 残留由本集合过滤，重启后彻底消失 ──
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => {
     try {
@@ -700,6 +719,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   hideIds: sideChatIds,
                   deletedIds,
                   onDelete: deleteSession,
+                  archivedIds,
+                  onToggleArchive: toggleArchive,
                   runningIds,
                 }),
               }),
