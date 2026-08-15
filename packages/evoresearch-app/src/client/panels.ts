@@ -53,8 +53,9 @@ async function api<T>(method: string, body: Record<string, unknown> = {}): Promi
 export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => void }) {
   const [projects, setProjects] = useState<Array<{ name: string; path?: string }> | null>(null)
   const [catalog, setCatalog] = useState<Array<{ category: string; count: number }> | null>(null)
-  const [goals, setGoals] = useState<Array<{ id?: string; title?: string; status?: string; progress?: number }> | null>(null)
+  const [goals, setGoals] = useState<GoalRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [expandedGoal, setExpandedGoal] = useState<string | null>(null)
   const [tab, setTab] = useState<'overview' | 'history' | 'identity' | 'knowledge'>('overview')
   // History 时间线（§26.5）
   const [turns, setTurns] = useState<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }> | null>(null)
@@ -150,17 +151,71 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
           ? jsx('span', { className: 'evo-panel-hint', children: t('noActiveGoals') })
           : jsx('div', {
               className: 'evo-panel-list',
-              children: (goals ?? []).map((g) => jsx('div', {
-                className: 'evo-panel-item',
-                children: jsxs(Fragment, {
+              children: (goals ?? []).map((g) => {
+                const key = g.id ?? g.title ?? ''
+                const expanded = expandedGoal === key
+                const criteria = g.criteria ?? []
+                const satisfied = criteria.filter((c) => c.satisfied).length
+                return jsxs('div', {
+                  className: 'evo-panel-item evo-goal-item',
+                  'data-open': expanded || undefined,
                   children: [
-                    jsx(Target, {}),
-                    jsx('span', { className: 'evo-panel-item-main', children: g.title ?? g.id ?? t('goal') }),
-                    g.status !== undefined && jsx('span', { className: 'evo-panel-item-badge', children: g.status }),
-                    g.progress !== undefined && jsx('span', { className: 'evo-panel-item-num', children: `${Math.round(g.progress * 100)}%` }),
+                    jsxs('button', {
+                      type: 'button',
+                      className: 'evo-goal-head',
+                      'aria-expanded': expanded || undefined,
+                      onClick: () => setExpandedGoal((v) => (v === key ? null : key)),
+                      children: [
+                        jsx(Target, {}),
+                        jsx('span', { className: 'evo-panel-item-main', children: g.title ?? g.id ?? t('goal') }),
+                        g.status !== undefined && jsx('span', { className: 'evo-panel-item-badge', children: g.status }),
+                        g.progress !== undefined && jsx('span', { className: 'evo-panel-item-num', children: `${Math.round(g.progress * 100)}%` }),
+                        criteria.length > 0 && jsx('span', { className: 'evo-goal-criteria-count', children: `${satisfied}/${criteria.length}` }),
+                      ],
+                    }),
+                    expanded && jsx('div', {
+                      className: 'evo-goal-detail',
+                      children: [
+                        g.objective !== undefined && g.objective !== '' && jsxs('div', {
+                          className: 'evo-goal-detail-block',
+                          children: [
+                            jsx('span', { className: 'evo-goal-detail-label', children: t('goalObjective') }),
+                            jsx('span', { className: 'evo-goal-detail-text', children: g.objective }),
+                          ],
+                        }),
+                        criteria.length > 0 && jsxs('div', {
+                          className: 'evo-goal-detail-block',
+                          children: [
+                            jsx('span', { className: 'evo-goal-detail-label', children: `${t('successCriteria')}（${satisfied}/${criteria.length}）` }),
+                            jsx('div', { className: 'evo-goal-criteria', children: criteria.map((c) => jsxs('div', {
+                              className: `evo-goal-criterion${c.satisfied ? ' done' : ''}`,
+                              children: [
+                                jsx('span', { className: 'evo-goal-criterion-mark', children: c.satisfied ? '✓' : '○' }),
+                                jsx('span', { className: 'evo-goal-criterion-text', children: c.text }),
+                                c.evidence.length > 0 && jsx('span', { className: 'evo-goal-evidence', children: `${t('evidenceLabel')} ${c.evidence.length}` }),
+                              ],
+                            }, c.id)) }),
+                          ],
+                        }),
+                        (g.constraints ?? []).length > 0 && jsxs('div', {
+                          className: 'evo-goal-detail-block',
+                          children: [
+                            jsx('span', { className: 'evo-goal-detail-label', children: t('constraintsLabel') }),
+                            jsx('div', { className: 'evo-goal-tags', children: (g.constraints ?? []).map((c) => jsx('span', { className: 'evo-panel-tag', children: c }, c)) }),
+                          ],
+                        }),
+                        (g.version !== undefined || g.updatedAt !== undefined) && jsx('div', {
+                          className: 'evo-goal-detail-meta',
+                          children: [
+                            g.version !== undefined && jsx('span', { children: `${t('version')} ${g.version}` }),
+                            g.updatedAt !== undefined && jsx('span', { children: `${t('updatedAt')} ${new Date(g.updatedAt).toLocaleString()}` }),
+                          ],
+                        }),
+                      ],
+                    }),
                   ],
-                }),
-              }, g.id)),
+                }, key)
+              }),
             }),
     ],
   })
@@ -781,6 +836,18 @@ export function SkillsPanel() {
       ],
     }),
   })
+}
+
+interface GoalRow {
+  id?: string
+  title?: string
+  status?: string
+  progress?: number
+  objective?: string
+  criteria?: Array<{ id: string; text: string; satisfied: boolean; evidence: readonly string[] }>
+  constraints?: readonly string[]
+  version?: number
+  updatedAt?: number
 }
 
 interface ProjectRow { name: string; path?: string }

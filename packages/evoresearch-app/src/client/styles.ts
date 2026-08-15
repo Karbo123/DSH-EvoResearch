@@ -366,6 +366,25 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-item-code { font-size: 11.5px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
 .evo-panel-item-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--hover-bg); color: var(--color-text-secondary); }
 .evo-panel-item-num { font-size: 12px; font-weight: 600; color: var(--brand); }
+.evo-goal-item { flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+.evo-goal-item[data-open] { border-color: var(--brand); }
+.evo-goal-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: transparent; border: none; cursor: pointer; text-align: left; width: 100%; font: inherit; }
+.evo-goal-head:hover { background: var(--hover-bg); }
+.evo-goal-head svg { width: 15px; height: 15px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-goal-criteria-count { font-size: 11px; font-weight: 600; color: var(--color-text-tertiary); }
+.evo-goal-detail { padding: 4px 12px 12px; border-top: 1px dashed var(--color-border-light); display: flex; flex-direction: column; gap: 9px; }
+.evo-goal-detail-block { display: flex; flex-direction: column; gap: 4px; }
+.evo-goal-detail-label { font-size: 11px; font-weight: 600; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.4px; }
+.evo-goal-detail-text { font-size: 12.5px; color: var(--color-text-primary); line-height: 1.55; white-space: pre-wrap; }
+.evo-goal-criteria { display: flex; flex-direction: column; gap: 5px; }
+.evo-goal-criterion { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.5; }
+.evo-goal-criterion.done { color: var(--color-text-primary); }
+.evo-goal-criterion-mark { flex-shrink: 0; font-size: 12px; color: var(--color-text-tertiary); }
+.evo-goal-criterion.done .evo-goal-criterion-mark { color: #2ecc71; }
+.evo-goal-criterion-text { flex: 1; min-width: 0; }
+.evo-goal-evidence { flex-shrink: 0; font-size: 11px; color: var(--color-text-tertiary); padding: 1px 7px; border-radius: 999px; background: var(--hover-bg); }
+.evo-goal-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.evo-goal-detail-meta { display: flex; gap: 12px; font-size: 11px; color: var(--color-text-tertiary); }
 .evo-panel-form { display: flex; gap: 8px; flex-wrap: wrap; }
 .evo-panel-input { flex: 1; min-width: 140px; padding: 7px 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); color: var(--color-text-primary); font-size: 13px; outline: none; }
 .evo-panel-input:focus { border-color: var(--brand); }
