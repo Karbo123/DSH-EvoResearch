@@ -127,10 +127,18 @@ function CopyButton({ text }: { text: string }) {
   })
 }
 
-/** assistant 节点 → 可读文本（text + reasoning 块拼接）。 */
+/** assistant 节点 → 正文文本（仅 text 块；reasoning 单独折叠展示，§31.6）。 */
 function assistantText(node: ChatNode): string {
   return (node.data.blocks ?? [])
-    .filter((b) => (b.kind === 'text' || b.kind === 'reasoning') && b.text)
+    .filter((b) => b.kind === 'text' && b.text)
+    .map((b) => b.text)
+    .join('\n')
+}
+
+/** assistant 节点 → 推理文本（reasoning 块，§31.6 默认折叠为 Thinking 行）。 */
+function assistantReasoning(node: ChatNode): string {
+  return (node.data.blocks ?? [])
+    .filter((b) => b.kind === 'reasoning' && b.text)
     .map((b) => b.text)
     .join('\n')
 }
@@ -235,12 +243,15 @@ function UserBubble({ text, time, nodeKey, highlight }: { text: string; time?: n
   })
 }
 
-/** 助手消息（头像 + 内容 + 工具卡片分组）。 */
+/** 助手消息（头像 + 内容 + Thinking 折叠 + 工具卡片分组）。 */
 function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: ChatNode; nodeKey?: string; highlight?: boolean; toolResults: Record<string, { text: string; isError: boolean }> }) {
   const text = assistantText(node)
+  const reasoning = assistantReasoning(node)
   const tools = assistantTools(node, toolResults)
   const running = node.data.status === 'running'
   const settled = node.data.status === 'settled'
+  // 推理默认折叠（§31.6：小号 Thinking 行，展开后左侧 2px 边线 + 次级文字）
+  const [thinkingOpen, setThinkingOpen] = useState(false)
   // 工具组：默认折叠已完成的组（§21.1），运行中自动展开
   const [toolsOpen, setToolsOpen] = useState(!settled)
   const anyRunning = tools.some((t) => t.result === undefined)
@@ -252,6 +263,24 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: Chat
       jsxs('div', {
         className: 'evo-msg-body',
         children: [
+          reasoning !== '' && jsxs('div', {
+            className: 'evo-thinking',
+            children: [
+              jsx('button', {
+                type: 'button',
+                className: 'evo-thinking-toggle',
+                'aria-expanded': thinkingOpen || undefined,
+                onClick: () => setThinkingOpen((v) => !v),
+                children: jsxs(Fragment, {
+                  children: [
+                    jsx(ChevronRight, { className: `evo-tool-chev${thinkingOpen ? ' open' : ''}` }),
+                    jsx('span', { children: 'Thinking' }),
+                  ],
+                }),
+              }),
+              thinkingOpen && jsx('div', { className: 'evo-thinking-body', children: reasoning }),
+            ],
+          }),
           text !== '' && jsx('div', {
             className: 'evo-msg-bubble evo-msg-bubble-assistant',
             children: [

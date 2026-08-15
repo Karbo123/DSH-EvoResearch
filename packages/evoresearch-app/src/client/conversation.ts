@@ -118,8 +118,10 @@ const assistantDefinition = {
     if (match.event.type === 'assistant/chunk') return updateChunk(context.state, match)
     if (match.event.type === 'assistant/message') {
       const finalBlocks = toAssistantBlocks(match.event.data.message.content)
-      // 最终消息通常只含文本：保留流式期已出现的工具调用块（结果由渲染层关联），
-      // 与最终块按 callId 去重合并（§21.1 工具卡片在定稿后仍可见）
+      // 最终消息通常只含文本：保留流式期已出现的工具调用块与推理块
+      // （工具结果由渲染层关联；推理默认折叠为 Thinking 行，§31.6），
+      // 与最终块按 callId 去重合并
+      const keptReasoning = context.state.blocks.filter((b) => b.kind === 'reasoning')
       const byCallId = new Map(context.state.blocks.filter((b) => b.kind === 'tool-call').map((b) => [b.callId, b]))
       const merged = finalBlocks.map((b) => {
         if (b.kind === 'tool-call' && byCallId.has(b.callId)) {
@@ -130,9 +132,11 @@ const assistantDefinition = {
         return b
       })
       for (const leftover of byCallId.values()) merged.push(leftover)
+      // 推理块放最前（流式顺序：先思考后正文）
+      const blocks = finalBlocks.some((b) => b.kind === 'reasoning') ? merged : [...keptReasoning, ...merged]
       return {
         ...context.state,
-        blocks: merged,
+        blocks,
         hidden: false,
         final: match,
         usage: match.event.data.usage,

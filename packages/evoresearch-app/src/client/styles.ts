@@ -222,6 +222,12 @@ body { margin: 0; }
 .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 3px; text-align: right; }
 .evo-msg-cursor { display: inline-block; width: 7px; height: 15px; margin-left: 2px; background: var(--brand); vertical-align: -2px; animation: evo-blink 1s steps(2) infinite; }
 @keyframes evo-blink { 50% { opacity: 0; } }
+/* ── Thinking 折叠（§31.6：reasoning 默认折叠，左侧 2px 边线 + 次级文字）── */
+.evo-thinking { margin-top: 6px; }
+.evo-thinking-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; padding: 2px 6px 2px 0; font-size: 12px; color: var(--color-text-tertiary); cursor: pointer; }
+.evo-thinking-toggle:hover { color: var(--color-text-secondary); }
+.evo-thinking-toggle svg { width: 13px; height: 13px; }
+.evo-thinking-body { margin: 4px 0 10px; padding: 2px 0 2px 14px; border-left: 2px solid var(--color-border); color: var(--color-text-tertiary); font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 /* ── 工具卡片分组（§21.1：running/success/error 状态 + 折叠）── */
 .evo-tool-group { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .evo-tool-group-head { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; padding: 6px 10px; border: 1px solid var(--color-border-light); border-radius: 9px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
