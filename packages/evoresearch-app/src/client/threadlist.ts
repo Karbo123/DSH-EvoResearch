@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
@@ -48,13 +48,34 @@ export interface ThreadListProps {
   onNewChat: () => void
   /** 是否有活跃（非 blank）会话 */
   hasActive: boolean
+  /** 重命名会话（官方 session.rename；返回是否成功）。 */
+  onRename: (id: string, title: string) => Promise<boolean>
+  /** 以某会话为起点创建继承型 Side Chat（官方 session.fork；返回结果）。 */
+  onForkSideChat: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
+  /** 应从 Recents 隐藏的会话 id（侧聊/内部线程，§22.1）。 */
+  hideIds: Set<string>
 }
 
-export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive }: ThreadListProps) {
+export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, hideIds }: ThreadListProps) {
   const sessions = useSessions((s) => s)
   const currentId = sessions.current
-  const rows = (sessions.ids ?? []).map((id) => sessions.byId[id]).filter((s) => s !== undefined && s.blank !== true)
+  // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表）
+  const rows = (sessions.ids ?? [])
+    .map((id) => sessions.byId[id])
+    .filter((s) => s !== undefined && s.blank !== true && s.parentSessionId === undefined && !hideIds.has(s.id))
   const [query, setQuery] = useState('')
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [forkError, setForkError] = useState<string | null>(null)
+
+  const forkRow = (id: string) => {
+    setForkError(null)
+    void onForkSideChat(id).then((result) => {
+      if (result.ok && result.id !== undefined) { onOpen(result.id); return }
+      setForkError(result.error ?? 'Side chat 创建失败')
+      setTimeout(() => setForkError(null), 5000)
+    })
+  }
 
   // 搜索过滤（本地状态；组件内 useState）
   const results = query.trim()
@@ -117,6 +138,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
             className: 'evo-tl-section',
             children: [
               jsx('span', { className: 'evo-tl-section-title', children: t('recents') }),
+              forkError !== null && jsx('span', { className: 'evo-tl-fork-error', children: forkError }),
             ],
           }),
           results.length === 0
@@ -127,18 +149,78 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                   jsx('div', { children: hasActive ? t('noMatchingResearch') : t('noResearchYet') }),
                 ],
               })
-            : results.map((s) => jsx('button', {
-                type: 'button',
-                className: 'evo-tl-row',
-                'data-active': s.id === currentId || undefined,
-                onClick: () => onOpen(s.id),
-                children: jsxs(Fragment, {
+            : results.map((s) => {
+                if (renaming === s.id) {
+                  return jsxs('div', {
+                    className: 'evo-tl-row evo-tl-rename',
+                    children: [
+                      jsx('input', {
+                        type: 'text',
+                        className: 'evo-tl-rename-input',
+                        value: renameValue,
+                        autoFocus: true,
+                        placeholder: 'Rename session',
+                        onInput: (e) => setRenameValue(e.currentTarget.value),
+                        onKeyDown: (e) => {
+                          if (e.key === 'Enter') {
+                            void onRename(s.id, renameValue.trim()).then((ok) => { if (ok) setRenaming(null) })
+                          }
+                          if (e.key === 'Escape') setRenaming(null)
+                        },
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-tl-row-act',
+                        title: 'Save',
+                        'aria-label': 'Save',
+                        onClick: () => { void onRename(s.id, renameValue.trim()).then((ok) => { if (ok) setRenaming(null) }) },
+                        children: jsx(Check, {}),
+                      }),
+                    ],
+                  }, s.id)
+                }
+                return jsxs('div', {
+                  className: 'evo-tl-row',
+                  'data-active': s.id === currentId || undefined,
                   children: [
-                    jsx('div', { className: 'evo-tl-row-title', children: s.displayTitle ?? s.id.slice(0, 12) }),
-                    jsx('div', { className: 'evo-tl-row-sub', children: formatWhen(s.titleTime ?? s.updatedAt) }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-tl-row-main',
+                      onClick: () => onOpen(s.id),
+                      children: jsxs(Fragment, {
+                        children: [
+                          jsx('div', { className: 'evo-tl-row-title', children: s.displayTitle ?? s.id.slice(0, 12) }),
+                          jsx('div', { className: 'evo-tl-row-sub', children: formatWhen(s.titleTime ?? s.updatedAt) }),
+                        ],
+                      }),
+                    }),
+                    jsx('div', {
+                      className: 'evo-tl-row-acts',
+                      children: [
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-tl-row-act',
+                          title: 'Rename',
+                          'aria-label': 'Rename',
+                          onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); setRenameValue(s.displayTitle ?? ''); setRenaming(s.id) },
+                          children: jsx(Pencil, {}),
+                        }),
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-tl-row-act',
+                          title: 'Side chat from this session',
+                          'aria-label': 'Side chat',
+                          onClick: (e: { stopPropagation(): void }) => {
+                            e.stopPropagation()
+                            forkRow(s.id)
+                          },
+                          children: jsx(MessagesSquare, {}),
+                        }),
+                      ],
+                    }),
                   ],
-                }),
-              }, s.id)),
+                }, s.id)
+              }),
         ],
       }),
     ],

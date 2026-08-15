@@ -10,7 +10,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
-  ChevronDown, ChevronUp, Shrink, Info, Search, Bell, BellOff, Keyboard,
+  ChevronDown, ChevronUp, Shrink, Info, Search, Bell, BellOff, Keyboard, ListTodo, X as XIcon, Trash2,
 } from 'lucide-react'
 import { t } from './i18n'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
@@ -214,6 +214,31 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
   })
   const [jumpKey, setJumpKey] = useState<string | null>(null)
+
+  // ── 忙时消息队列 UI（§23.6）：编辑 / 删除 / 清空（官方 session.updateQueue）──
+  const [queueOpen, setQueueOpen] = useState(false)
+  const [queueEditId, setQueueEditId] = useState<string | null>(null)
+  const [queueEditText, setQueueEditText] = useState('')
+  const queueItems = session?.snapshotCache?.queue ?? []
+  const queueText = (item: any): string => {
+    const c = item?.content
+    if (typeof c === 'string') return c
+    if (Array.isArray(c)) return c.map((b: any) => (b?.type === 'text' ? b.text : '')).join('')
+    return String(item?.id ?? '')
+  }
+  const queueItemId = (item: any): string => item?.id ?? ''
+  const applyQueueAction = (itemId: string, action: { kind: 'edit'; content: Array<{ type: string; text: string }> } | { kind: 'remove' }) => {
+    const s = session
+    if (s?.updateQueue === undefined || itemId === '') return
+    void s.updateQueue(itemId, action)
+  }
+  const saveQueueEdit = (id: string) => {
+    const text = queueEditText.trim()
+    if (text === '') applyQueueAction(id, { kind: 'remove' })
+    else applyQueueAction(id, { kind: 'edit', content: [{ type: 'text', text }] })
+    setQueueEditId(null)
+  }
+  const clearQueue = () => { for (const item of queueItems) applyQueueAction(queueItemId(item), { kind: 'remove' }) }
 
   // 切换会话时重置 Clear view 与跳转高亮
   useEffect(() => { setClearView(false); setJumpKey(null) }, [sessionId])
@@ -555,6 +580,17 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     }),
                   }),
                   // ── 会话动作（§25.6）──
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-tool',
+                    'data-on': queueItems.length > 0 || undefined,
+                    title: queueItems.length > 0 ? `Queued messages（${queueItems.length}）` : 'Queued messages',
+                    'aria-label': 'Queued messages',
+                    onClick: () => setQueueOpen((v) => !v),
+                    children: jsxs(Fragment, {
+                      children: [jsx(ListTodo, {}), queueItems.length > 0 && jsx('span', { className: 'evo-queue-count', children: String(queueItems.length) })],
+                    }),
+                  }),
                   jsx('span', { className: 'evo-composer-divider' }),
                   jsx('button', {
                     type: 'button',
@@ -634,8 +670,95 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         title: 'Compact',
         message: 'Compact 会对较早的活跃上下文生成摘要投影（§10.3），完整聊天仍保存在数据库中。确认继续？',
         confirmLabel: 'Compact',
-        onConfirm: () => onSend('/compact'),
+        onConfirm: () => {
+          // 直接执行 /compact 命令（官方 session.command，不产生模型回复回显）
+          if (session?.command !== undefined) void session.command('/compact')
+          else onSend('/compact')
+        },
         onClose: () => setActionDialog(null),
+      }),
+      // ── 忙时消息队列弹层（§23.6）──
+      queueOpen && queueItems.length > 0 && jsxs('div', {
+        className: 'evo-queue',
+        children: [
+          jsxs('div', {
+            className: 'evo-queue-head',
+            children: [
+              jsx('span', { className: 'evo-insp-subtab-title', children: `Queued messages（${queueItems.length}）` }),
+              jsx('span', { style: { flex: 1 } }),
+              jsx('button', {
+                type: 'button',
+                className: 'evo-icon-btn',
+                title: 'Clear queue',
+                'aria-label': 'Clear queue',
+                onClick: clearQueue,
+                children: jsx(Trash2, {}),
+              }),
+            ],
+          }),
+          jsx('div', {
+            className: 'evo-queue-list',
+            children: queueItems.map((item: any) => {
+              const id = queueItemId(item)
+              if (queueEditId === id) {
+                return jsxs('div', {
+                  className: 'evo-queue-row',
+                  children: [
+                    jsx('input', {
+                      type: 'text',
+                      className: 'evo-queue-input',
+                      value: queueEditText,
+                      autoFocus: true,
+                      onInput: (e) => setQueueEditText(e.currentTarget.value),
+                      onKeyDown: (e) => {
+                        if (e.key === 'Enter') saveQueueEdit(id)
+                        if (e.key === 'Escape') setQueueEditId(null)
+                      },
+                    }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-queue-act',
+                      title: 'Save',
+                      'aria-label': 'Save',
+                      onClick: () => saveQueueEdit(id),
+                      children: jsx(Check, {}),
+                    }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-queue-act',
+                      title: 'Cancel',
+                      'aria-label': 'Cancel',
+                      onClick: () => setQueueEditId(null),
+                      children: jsx(XIcon, {}),
+                    }),
+                  ],
+                }, `edit-${id}`)
+              }
+              return jsxs('div', {
+                className: 'evo-queue-row',
+                children: [
+                  jsx('span', { className: 'evo-queue-text', children: queueText(item) }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-queue-act',
+                    title: 'Edit',
+                    'aria-label': 'Edit',
+                    onClick: () => { setQueueEditId(id); setQueueEditText(queueText(item)) },
+                    children: jsx(PenLine, {}),
+                  }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-queue-act',
+                    title: 'Remove',
+                    'aria-label': 'Remove',
+                    onClick: () => applyQueueAction(id, { kind: 'remove' }),
+                    children: jsx(XIcon, {}),
+                  }),
+                ],
+              }, id)
+            }),
+          }),
+        ],
       }),
     ],
   })

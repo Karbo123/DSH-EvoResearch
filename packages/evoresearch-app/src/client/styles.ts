@@ -125,9 +125,10 @@ body { margin: 0; }
 .evo-tl-body { flex: 1; overflow-y: auto; padding: 6px 8px 16px; min-height: 0; }
 .evo-tl-section { padding: 10px 10px 4px; display: flex; align-items: center; justify-content: space-between; }
 .evo-tl-section-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
+.evo-tl-fork-error { font-size: 11px; color: var(--color-error); text-align: right; line-height: 1.4; max-width: 70%; }
 .evo-tl-row {
-  display: block; width: 100%; text-align: left; padding: 8px 10px; margin-bottom: 2px;
-  border: none; background: none; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; padding: 6px 10px; margin-bottom: 2px;
+  border: none; background: none; border-radius: 8px; cursor: default;
 }
 .evo-tl-row:hover { background: var(--hover-bg); }
 .evo-tl-row[data-active] { background: var(--hover-bg); }
@@ -479,4 +480,32 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-clear-notice-sub { font-size: 12.5px; color: var(--color-text-tertiary); max-width: 420px; line-height: 1.6; }
 .evo-msg-jump { animation: evo-jump-flash 1.6s ease-out; border-radius: 10px; }
 @keyframes evo-jump-flash { 0% { background: color-mix(in srgb, var(--brand) 26%, transparent); } 100% { background: transparent; } }
+/* ── Recents 操作（§26.3）与 Side Chat（§22.3-22.4）── */
+.evo-tl-row { display: flex; align-items: center; gap: 4px; }
+.evo-tl-row-main { flex: 1; min-width: 0; text-align: left; border: none; background: none; padding: 0; cursor: pointer; }
+.evo-tl-row-acts { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; }
+.evo-tl-row:hover .evo-tl-row-acts, .evo-tl-row:focus-within .evo-tl-row-acts { opacity: 1; }
+.evo-tl-row-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; }
+.evo-tl-row-act:hover { color: var(--color-text-primary); background: var(--hover-bg); }
+.evo-tl-row-act svg { width: 13px; height: 13px; }
+.evo-tl-rename { display: flex; align-items: center; gap: 4px; padding: 4px 8px; }
+.evo-tl-rename-input { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--brand); border-radius: 6px; background: var(--color-surface); color: var(--color-text-primary); font-size: 12.5px; outline: none; }
+.evo-sidechat-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 6px 12px; }
+.evo-sidechat-tab { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); }
+.evo-sidechat-tab svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
+.evo-sidechat-tab-main { flex: 1; min-width: 0; text-align: left; border: none; background: none; padding: 0; font-size: 12.5px; color: var(--color-text-primary); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-sidechat-tab-main:hover { color: var(--brand); }
+.evo-sidechat-new { display: inline-flex; align-items: center; gap: 5px; }
+.evo-sidechat-new svg { width: 13px; height: 13px; }
+/* ── 忙时消息队列（§23.6）── */
+.evo-queue-count { font-size: 10.5px; font-weight: 700; min-width: 15px; height: 15px; line-height: 15px; text-align: center; border-radius: 999px; background: var(--brand-solid); color: var(--brand-foreground); padding: 0 4px; }
+.evo-queue { position: absolute; bottom: calc(100% - 8px); left: 50%; transform: translateX(-50%); width: min(520px, calc(100vw - 96px)); max-height: 300px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18); z-index: 40; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.evo-queue-head { display: flex; align-items: center; gap: 8px; }
+.evo-queue-list { display: flex; flex-direction: column; gap: 4px; }
+.evo-queue-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-background); }
+.evo-queue-text { flex: 1; min-width: 0; font-size: 12.5px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-queue-input { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--brand); border-radius: 6px; background: var(--color-surface); color: var(--color-text-primary); font-size: 12.5px; outline: none; }
+.evo-queue-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
+.evo-queue-act:hover { color: var(--color-text-primary); background: var(--hover-bg); }
+.evo-queue-act svg { width: 13px; height: 13px; }
 `

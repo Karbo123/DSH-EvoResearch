@@ -44,7 +44,28 @@ let sessionsService: {
   open(id: string): void
   binding(id: string): { session: any } | undefined
   create(opts?: { cwd?: string; workspaceId?: string }): Promise<string>
+  /** 官方 session.fork 在服务内部 manager 上（复制源会话历史创建子会话）。 */
+  manager?: { fork?(opts: { sessionId: string; atSeq?: number }): Promise<{ ok: boolean; value?: { sessionId: string } }> }
 } | null = null
+
+/** 空白 Side Chat 追踪键（每 workspace；fork 型由 parentSessionId 识别，无需记录）。 */
+function sideChatKey(cwd: string | null): string {
+  return `evoresearch-sidechats:${cwd ?? '__new__'}`
+}
+function readSideChats(cwd: string | null): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(sideChatKey(cwd)) ?? '[]')
+    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+function recordSideChat(cwd: string | null, id: string): void {
+  try {
+    const list = readSideChats(cwd)
+    if (!list.includes(id)) localStorage.setItem(sideChatKey(cwd), JSON.stringify([...list, id]))
+  } catch { /* 忽略 */ }
+}
 
 /** 注入样式（data-plugin-css 模式，可被 HMR 清理）。 */
 function installCss() {
@@ -152,6 +173,76 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setView(null)
     // 创建空白会话并打开（host 侧默认工作目录；目录选择接入后经 pickDirectory）
     void sessionsService?.create({}).then((id) => sessionsService?.open(id))
+  }
+
+  // ── Recents 操作（§26.3）与 Side Chat（§22.3）──
+  const renameSession = async (id: string, title: string): Promise<boolean> => {
+    if (title === '') return false
+    const session = sessionsService?.binding(id)?.session
+    if (session?.rename === undefined) return false
+    const result = await session.rename(title)
+    return result?.ok === true
+  }
+  const forkSideChat = async (id: string): Promise<{ ok: boolean; id?: string; error?: string }> => {
+    const manager = sessionsService?.manager
+    if (manager?.fork === undefined) return { ok: false, error: 'fork 服务不可用' }
+    let result
+    try {
+      // 保持 this 绑定（manager 方法依赖 this.summaries / this.api）
+      result = await manager.fork.call(manager, { sessionId: id })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    if (result?.ok === true && result.value?.sessionId !== undefined) {
+      // 摘要刷新可能丢失 parentSessionId，双写 localStorage 追踪（§22.3）
+      recordSideChat(sessions.byId[id]?.cwd ?? null, result.value.sessionId)
+      return { ok: true, id: result.value.sessionId }
+    }
+    // 官方 fork 要求源会话存在已完成轮次（host 错误原文透出）
+    const message = (result?.error as { message?: string } | undefined)?.message
+    return { ok: false, error: message ?? 'fork 失败' }
+  }
+  const createBlankSideChat = async (cwd: string | null): Promise<string | null> => {
+    const id = await sessionsService?.create(cwd === null ? {} : { cwd })
+    if (id !== undefined) {
+      recordSideChat(cwd, id)
+      sessionsService?.open(id)
+      return id
+    }
+    return null
+  }
+
+  // ── Side chats 列表（§22.3-22.4）：当前 workspace 的 fork 子会话 + 空白侧聊 ──
+  const [, setSideTick] = useState(0)
+  useEffect(() => {
+    const refresh = () => setSideTick((v) => v + 1)
+    window.addEventListener('evo-sidechats-refresh', refresh)
+    return () => window.removeEventListener('evo-sidechats-refresh', refresh)
+  }, [])
+  const cwdNow = current === undefined ? null : (sessions.byId[current]?.cwd ?? null)
+  // 全局侧聊 id 集合（供 Recents 隐藏；§22.1 内部/侧聊线程不混入普通列表）
+  const sideChatIds = new Set<string>()
+  for (const sid of sessions.ids ?? []) {
+    const s = sessions.byId[sid]
+    if (s !== undefined) for (const sc of readSideChats(s.cwd ?? null)) sideChatIds.add(sc)
+  }
+  const sideChats: Array<{ id: string; title: string; kind: 'fork' | 'blank' }> = (sessions.ids ?? [])
+    .map((id) => sessions.byId[id])
+    .filter((s) => s !== undefined && s.cwd === cwdNow)
+    // fork 子会话（parentSessionId 或本地记录）或本地记录的空白侧聊（§22.4 只展示当前 workspace）
+    .filter((s) => s.parentSessionId !== undefined || readSideChats(cwdNow).includes(s.id))
+    .map((s) => ({
+      id: s.id,
+      title: s.displayTitle ?? s.id.slice(0, 12),
+      kind: (s.parentSessionId !== undefined ? 'fork' : 'blank') as 'fork' | 'blank',
+    }))
+  const newSideChat = (kind: 'inherit' | 'blank') => {
+    if (current === undefined) return
+    if (kind === 'inherit') {
+      void forkSideChat(current).then((childId) => { if (childId !== null) { sessionsService?.open(childId); setSideTick((v) => v + 1) } })
+    } else {
+      void createBlankSideChat(cwdNow).then(() => setSideTick((v) => v + 1))
+    }
   }
   const toggleLanguage = () => {
     setLang(readLang() === 'zh' ? 'en' : 'zh')
@@ -309,6 +400,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   onOpen: openSession,
                   onNewChat: startNewChat,
                   hasActive: (sessions.ids ?? []).some((id: string) => sessions.byId[id]?.blank !== true),
+                  onRename: renameSession,
+                  onForkSideChat: forkSideChat,
+                  hideIds: sideChatIds,
                 }),
               }),
               jsx('div', {
@@ -370,6 +464,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   onClose: () => setInspector(false),
                   cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
                   sessionId: current ?? null,
+                  sideChats,
+                  onNewSideChat: newSideChat,
+                  onOpenSideChat: openSession,
                 }),
               }),
             ],
@@ -391,6 +488,8 @@ function apply(ctx: any) {
   registerConversation(ctx)
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
+    // 调试钩子：浏览器控制台可访问会话服务（开发诊断用）
+    ;(window as any).__evoresearch = { sessions: sessionsService }
     // 连接状态源：快照存在 = 已握手；断连/重连经 subscribe 通知 UI。
     connectionSource = ctx.get('connection')?.hostDescription ?? null
     const disposeService = ctx.reflect.provide('layout', {

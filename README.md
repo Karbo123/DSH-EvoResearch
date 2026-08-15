@@ -54,6 +54,7 @@ EvoResearch 自带**完全自有的工作台界面**（自建浏览器表面，�
 | 📜 | **历史分页与滚动** | 默认只渲染最近 100 条，Load earlier 向前翻页且滚动锚定不跳动；仅在位于底部时自动跟随新消息，上滚时右下角出现「回到最新」并释放旧页；忙时消息进入队列 |
 | ⌨️ | **输入辅助** | 斜杠命令候选框（目录动态读取 dsh-commands 注册表 + 平台命令镜像，Tab/方向键/Esc 导航）、`@文件` 补全（workspace 递归树、基名优先排序、发送时小型文本自动注入内容）、每 workspace 输入历史（最近 200 条，空输入上下键浏览、前缀建议） |
 | 🎛️ | **会话动作** | 输入面板动作条：Compact（二次确认 → `/compact` 摘要投影）、Current 弹窗（Thread/workspace/模型/权限/token·context/专家/事件数/会话文件路径与大小 + Clear view 仅清展示不删数据）、Search（先搜当前视图、Full history 走全历史搜索、点击跳转高亮）、Notify（浏览器通知开关）、Shortcuts（键盘规则表） |
+| 🧵 | **会话管理与 Side Chat** | Recents 行悬停操作：重命名（官方 session.rename）、从该会话派生 Side Chat（官方 session.fork，需已完成轮次，失败透出原因）；侧聊不混入普通 Recents；Inspector Side chats 页：Blank 空白侧聊（仅继承 workspace）/Inherit 继承侧聊 + tab 列表 + 打开；忙时队列弹层：编辑/删除/清空（官方 session.updateQueue） |
 | 📊 | **会话状态条与统计** | 输入面板实时徽章（排队消息 / 进行中目标 / 权限模式 Read-only·Write·Full effect / 当前模型 / 上下文用量%）+ 底部统计条（轮·步 \| LLM 耗时 · 工具耗时 \| 首 token 平均 · tok/s \| 缓存命中 \| 输入·输出 tokens） |
 | 🧩 | **业务面板** | EvoMemory（项目/七类统计/目标）、Scheduled（任务列表/添加/删除）、Research Skills（AutoSkills 提案审核：Approve/Reject/Run）、Channels（消息通道启停）与 Team（科研角色邀请/清空）、Workspace（项目导入）面板，经工作台侧栏菜单直达 |
 | 🗂️ | **工作区文件浏览器** | Inspector 内目录树（懒加载）+ 文本编辑（Ctrl+S 原子保存）+ 图片/PDF/HTML 内联预览 |

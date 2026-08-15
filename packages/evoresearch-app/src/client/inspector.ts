@@ -2,15 +2,22 @@
  * 右侧 inspector（会话/工作区检查）：
  * 顶部 Tabs（Workspace / Agents / Side chats）+ X 关闭；
  * Workspace 下有 Tree/By type 二级视图与文件树；
- * Agents 显示当前会话的子代理树（POST /evoresearch/fs/agents）。
+ * Agents 显示当前会话的子代理树（POST /evoresearch/fs/agents）；
+ * Side chats 显示当前 workspace 的侧边会话（fork 继承 + 空白，§22.3-22.4）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
-import { FolderOpen, Bot, MessagesSquare, X, Download, RefreshCw, ChevronRight } from 'lucide-react'
+import { FolderOpen, Bot, MessagesSquare, X, Download, RefreshCw, ChevronRight, GitBranch, FilePlus2, MessageSquare } from 'lucide-react'
 import { t } from './i18n'
 import { WorkspaceFiles } from './workspace-files'
 
 export type InspectorTab = 'workspace' | 'agents' | 'chats'
+
+export interface SideChatRow {
+  id: string
+  title: string
+  kind: 'fork' | 'blank'
+}
 
 export interface InspectorProps {
   tab: InspectorTab
@@ -20,6 +27,10 @@ export interface InspectorProps {
   cwd: string | null
   /** 当前会话 id（Agents 树根；无会话时为 null）。 */
   sessionId: string | null
+  /** 当前 workspace 的侧边会话列表。 */
+  sideChats: SideChatRow[]
+  onNewSideChat: (kind: 'inherit' | 'blank') => void
+  onOpenSideChat: (id: string) => void
 }
 
 const TABS = [
@@ -102,7 +113,7 @@ function AgentsPanel({ sessionId }: { sessionId: string | null }) {
   })
 }
 
-export function Inspector({ tab, onTab, onClose, cwd, sessionId }: InspectorProps) {
+export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNewSideChat, onOpenSideChat }: InspectorProps) {
   const [subTab, setSubTab] = useState<'tree' | 'bytype'>('tree')
 
   return jsxs('div', {
@@ -163,8 +174,52 @@ export function Inspector({ tab, onTab, onClose, cwd, sessionId }: InspectorProp
           : tab === 'agents'
             ? jsx(AgentsPanel, { sessionId })
             : jsxs('div', {
-                className: 'evo-insp-empty',
-                children: [jsx(MessagesSquare, {}), jsx('div', { children: t('noSideChats') })],
+                className: 'evo-sidechats',
+                children: [
+                  jsxs('div', {
+                    className: 'evo-insp-subtabs',
+                    children: [
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-insp-subtab evo-sidechat-new',
+                        disabled: sessionId === null,
+                        title: 'New side chat（继承当前会话历史）',
+                        onClick: () => onNewSideChat('inherit'),
+                        children: jsxs(Fragment, { children: [jsx(GitBranch, {}), jsx('span', { children: 'Inherit' })] }),
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-insp-subtab evo-sidechat-new',
+                        disabled: sessionId === null,
+                        title: 'New blank side chat（仅继承 workspace）',
+                        onClick: () => onNewSideChat('blank'),
+                        children: jsxs(Fragment, { children: [jsx(FilePlus2, {}), jsx('span', { children: 'Blank' })] }),
+                      }),
+                      jsx('span', { style: { flex: 1 } }),
+                      jsx('button', { type: 'button', className: 'evo-icon-btn', title: 'Refresh', onClick: () => { window.dispatchEvent(new CustomEvent('evo-sidechats-refresh')) }, children: jsx(RefreshCw, {}) }),
+                    ],
+                  }),
+                  (sideChats ?? []).length === 0
+                    ? jsxs('div', {
+                        className: 'evo-insp-empty',
+                        children: [jsx(MessagesSquare, {}), jsx('div', { children: t('noSideChats') })],
+                      })
+                    : jsx('div', {
+                        className: 'evo-sidechat-list',
+                        children: (sideChats ?? []).map((sc) => jsxs('div', {
+                          className: 'evo-sidechat-tab',
+                          children: [
+                            sc.kind === 'fork' ? jsx(GitBranch, {}) : jsx(FilePlus2, {}),
+                            jsx('button', {
+                              type: 'button',
+                              className: 'evo-sidechat-tab-main',
+                              onClick: () => onOpenSideChat(sc.id),
+                              children: sc.title,
+                            }),
+                          ],
+                        }, sc.id)),
+                      }),
+                ],
               }),
       }),
     ],
