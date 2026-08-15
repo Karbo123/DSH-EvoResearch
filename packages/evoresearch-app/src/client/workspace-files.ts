@@ -7,7 +7,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { ChevronRight, ChevronDown, Folder, FileText, FileCode2, Image as ImageIcon, File, RefreshCw, ArrowUp, Save } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FileText, FileCode2, Image as ImageIcon, File, RefreshCw, ArrowUp, Save, Upload, Archive } from 'lucide-react'
 
 interface FsEntry { name: string; path: string; isDir: boolean; hidden: boolean }
 
@@ -184,6 +184,68 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
 
   useEffect(() => { setBase(root); setOpenPath(null) }, [root])
 
+  // ── 上传（§27.2 多文件/相对目录）与 workspace ZIP 下载 ──
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const dirInputRef = useRef<HTMLInputElement | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [zipBusy, setZipBusy] = useState(false)
+  const uploadFiles = (files: Array<File & { webkitRelativePath?: string }>) => {
+    if (base === null || files.length === 0) return
+    setUploading(true)
+    setError(null)
+    let pending = files.length
+    let failed = false
+    for (const file of files) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = String(reader.result ?? '')
+        const data = dataUrl.slice(dataUrl.indexOf(',') + 1)
+        const rel = (file.webkitRelativePath ?? '').split('/').slice(1).join('/') || file.name
+        void fetch('/evoresearch/fs/upload', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ root: base, path: rel, data }),
+        }).then((r) => r.json()).then((json) => {
+          if (json.ok !== true) failed = true
+          pending -= 1
+          if (pending === 0) {
+            setUploading(false)
+            if (failed) setError('部分文件上传失败（可能超出 5MB 或路径非法）')
+            setRev((v) => v + 1)
+          }
+        }).catch(() => {
+          failed = true
+          pending -= 1
+          if (pending === 0) { setUploading(false); setError('上传失败'); setRev((v) => v + 1) }
+        })
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+  const downloadZip = () => {
+    if (base === null) return
+    setZipBusy(true)
+    setError(null)
+    void fetch('/evoresearch/fs/zip', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ root: base }),
+    }).then((r) => r.json()).then((json) => {
+      setZipBusy(false)
+      if (json.ok !== true) { setError(json.error?.message ?? '打包失败'); return }
+      const bytes = Uint8Array.from(atob(json.value.data as string), (c) => c.charCodeAt(0))
+      const blob = new Blob([bytes], { type: 'application/zip' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${base.split('\\').pop() ?? 'workspace'}.zip`
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    }).catch((e) => { setZipBusy(false); setError(String(e)) })
+  }
+
   useEffect(() => {
     if (base === null) { setEntries(null); return }
     let cancelled = false
@@ -217,6 +279,47 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
         className: 'evo-fs-toolbar',
         children: [
           jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: () => setRev((v) => v + 1), title: 'Refresh', children: jsx(RefreshCw, {}) }),
+          jsx('button', {
+            type: 'button',
+            className: 'evo-icon-btn',
+            onClick: () => fileInputRef.current?.click(),
+            disabled: uploading,
+            title: uploading ? 'Uploading…' : 'Upload files',
+            'aria-label': 'Upload files',
+            children: jsx(Upload, {}),
+          }),
+          jsx('button', {
+            type: 'button',
+            className: 'evo-icon-btn',
+            onClick: () => dirInputRef.current?.click(),
+            disabled: uploading,
+            title: 'Upload folder',
+            'aria-label': 'Upload folder',
+            children: jsx(Folder, {}),
+          }),
+          jsx('button', {
+            type: 'button',
+            className: 'evo-icon-btn',
+            onClick: () => void downloadZip(),
+            disabled: zipBusy,
+            title: zipBusy ? 'Zipping…' : 'Download workspace ZIP',
+            'aria-label': 'Download workspace ZIP',
+            children: jsx(Archive, {}),
+          }),
+          jsx('input', {
+            ref: fileInputRef,
+            type: 'file',
+            multiple: true,
+            hidden: true,
+            onChange: (e) => { uploadFiles(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = '' },
+          }),
+          jsx('input', {
+            ref: dirInputRef,
+            type: 'file',
+            webkitdirectory: '',
+            hidden: true,
+            onChange: (e) => { uploadFiles(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = '' },
+          }),
           jsx('span', { className: 'evo-fs-crumb', children: base }),
         ],
       }),

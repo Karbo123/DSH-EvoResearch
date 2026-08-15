@@ -6,7 +6,7 @@
  * 所有操作带信任栅栏（回环 + webRuntime.trustedHosts），写操作限制在
  * 请求声明的根目录内（isWithin 校验）。
  */
-import { opendir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { opendir, readFile, rm, stat, writeFile, mkdir } from 'node:fs/promises'
 import { zstdDecompressSync } from 'node:zlib'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
@@ -30,7 +30,7 @@ const MEDIA_TYPES: Record<string, string> = {
 }
 
 const MAX_READ_BYTES = 1 << 22 // 4 MiB 文本上限
-const MAX_BODY_BYTES = 1 << 21 // 2 MiB 写请求上限
+const MAX_BODY_BYTES = 1 << 23 // 8 MiB 写请求上限（含 5MiB 文件上传的 base64）
 
 interface FsEntry { name: string; path: string; isDir: boolean; hidden: boolean }
 
@@ -216,6 +216,58 @@ export function registerWorkspaceApi(ctx: any): void {
           const text = requireString(payload, 'text')
           await writeFile(target, text, 'utf8')
           writeOk(res, { path: target })
+          return
+        }
+
+        // POST /evoresearch/fs/upload {root, path(相对), data(base64)} → 上传单文件（§27.2：
+        // 相对路径可含子目录、单文件 ≤5MB、路径越界/穿越拒绝）
+        if (method === 'upload') {
+          const root = requireAbsolute(requireString(payload, 'root'))
+          const rel = requireString(payload, 'path')
+          if (rel.includes('..') || rel.startsWith('/') || /^[A-Za-z]:/.test(rel)) throw httpError(400, 'fs-error', '非法相对路径')
+          const target = resolve(root, rel)
+          if (!isWithin(target, root)) throw httpError(403, 'forbidden', '上传路径超出根目录')
+          const data = requireString(payload, 'data')
+          const bytes = Buffer.from(data, 'base64')
+          if (bytes.length > 5 * 1024 * 1024) throw httpError(400, 'fs-error', '单文件最大 5MB')
+          await mkdir(dirname(target), { recursive: true })
+          await writeFile(target, bytes)
+          writeOk(res, { path: target })
+          return
+        }
+
+        // POST /evoresearch/fs/zip {root} → workspace ZIP 下载（§27.2：隐藏 dotfile 与
+        // 常见构建产物不打包；总大小上限 50MB）
+        if (method === 'zip') {
+          const root = requireAbsolute(requireString(payload, 'root'))
+          const { zipSync } = await import('fflate')
+          const SKIP_DIRS = new Set(['.git', '.evosci-data', '.evoresearch-data', 'node_modules', '.venv', '__pycache__', '.next', 'dist', 'build', '.cache'])
+          const files: Record<string, Uint8Array> = {}
+          let total = 0
+          const walk = async (dir: string, prefix: string): Promise<void> => {
+            let level
+            try { level = await opendir(dir) } catch { return }
+            for await (const dirent of level) {
+              if (dirent.name.startsWith('.') || SKIP_DIRS.has(dirent.name)) continue
+              const full = join(dir, dirent.name)
+              const rel = prefix === '' ? dirent.name : `${prefix}/${dirent.name}`
+              if (dirent.isDirectory()) {
+                await walk(full, rel)
+              } else if (dirent.isFile()) {
+                try {
+                  const data = await readFile(full)
+                  total += data.length
+                  if (total > 50 * 1024 * 1024) throw httpError(400, 'fs-error', 'workspace 过大（>50MB），请缩小范围')
+                  files[rel] = data
+                } catch (error) {
+                  if ((error as Error & { status?: number }).status !== undefined) throw error
+                }
+              }
+            }
+          }
+          await walk(root, '')
+          const zipped = zipSync(files)
+          writeOk(res, { data: Buffer.from(zipped).toString('base64'), count: Object.keys(files).length })
           return
         }
 
