@@ -448,6 +448,15 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── 技能目录（§42.6 Marketplace 浏览：三层来源合并，官方 skills.list）──
+        if (method === 'skills-catalog') {
+          const skills = ctx.get('skills')
+          if (skills?.list === undefined) throw httpError(400, 'method-error', 'skills 服务不可用')
+          const list = await skills.list({})
+          writeOk(res, { skills: Array.isArray(list) ? list : [] })
+          return
+        }
+
         // ── 会话信息（§26.8 Current 弹窗）：持久化文件路径/大小/事件数 ──
         if (method === 'session-info') {
           const sessionId = requireString(payload, 'sessionId')

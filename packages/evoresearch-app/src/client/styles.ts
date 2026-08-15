@@ -382,6 +382,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-sched-templates { display: flex; flex-wrap: wrap; gap: 5px; }
 .evo-sched-template { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); font-size: 11.5px; border-radius: 999px; padding: 3px 11px; cursor: pointer; }
 .evo-sched-template:hover { border-color: var(--brand); color: var(--brand); }
+/* ── Skills Marketplace（§42.6）── */
+.evo-skill-name-btn { border: none; background: none; padding: 0; cursor: pointer; text-align: left; min-width: 0; }
+.evo-skill-name-btn:hover .evo-panel-item-main { color: var(--brand); }
+.evo-skill-source { font-size: 10.5px; color: var(--color-text-tertiary); background: var(--hover-bg); border-radius: 999px; padding: 2px 8px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-skill-detail { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--color-text-secondary); border-top: 1px dashed var(--color-border); padding-top: 7px; line-height: 1.55; }
 /* ── 工作区文件浏览器（Inspector → Workspace）── */
 .evo-fs { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-fs-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px 4px; }

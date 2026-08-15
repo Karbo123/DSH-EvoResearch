@@ -116,7 +116,9 @@ function apply(ctx: Context): void {
   })
 
   // 5) AutoSkills / 专家
-  const autoskillsConfig: AutoSkillsConfig = { dataRoot }
+  // skillsDir 对齐官方用户全局技能层 <DSH_HOME>/skills（dsh-skill-filesystem 默认根），
+  // approve 后的技能立即出现在 Skills Marketplace（§42.6）与官方技能目录。
+  const autoskillsConfig: AutoSkillsConfig = { dataRoot, skillsDir: path.join(dataRoot, 'skills') }
   const autoskills = new AutoSkillsService(autoskillsConfig)
   const expertConfig: ExpertConfig = { dataRoot }
   const experts = new ExpertService(expertConfig)

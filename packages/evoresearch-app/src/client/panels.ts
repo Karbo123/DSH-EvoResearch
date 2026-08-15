@@ -353,12 +353,89 @@ interface SkillProposal {
 
 type SkillFilter = 'all' | 'pending' | 'approved' | 'rejected'
 
+interface CatalogSkill {
+  name: string
+  description?: string
+  whenToUse?: string
+  invocation?: { modelInvocable?: boolean; userInvocable?: boolean }
+  source?: string
+}
+
+/** Marketplace（§42.6）：三层技能目录浏览 + 搜索 + 详情。 */
+function MarketplaceView() {
+  const [skills, setSkills] = useState<CatalogSkill[] | null>(null)
+  const [query, setQuery] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const load = () => {
+    setSkills(null)
+    void api<{ skills: CatalogSkill[] }>('skills-catalog')
+      .then((r) => setSkills(r.skills ?? []))
+      .catch((e: any) => setError(String(e?.message ?? e)))
+  }
+  useEffect(() => { load() }, [])
+  const q = query.trim().toLowerCase()
+  const rows = (skills ?? []).filter((s) => q === '' || (s.name ?? '').toLowerCase().includes(q) || (s.description ?? '').toLowerCase().includes(q))
+  return jsxs(Fragment, {
+    children: [
+      error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+      jsx('div', {
+        className: 'evo-panel-form',
+        children: [
+          jsx('input', {
+            type: 'text',
+            className: 'evo-panel-input',
+            placeholder: 'Search skills…',
+            value: query,
+            onInput: (e) => setQuery(e.currentTarget.value),
+            'aria-label': 'Search skills',
+          }),
+          jsx('span', { className: 'evo-panel-hint', children: `${rows.length} skills` }),
+        ],
+      }),
+      skills === null
+        ? jsx(LoadingRow, {})
+        : rows.length === 0
+          ? jsx('span', { className: 'evo-panel-hint', children: 'No skills found' })
+          : jsx('div', {
+              className: 'evo-panel-list',
+              children: rows.map((s) => jsxs('div', {
+                className: 'evo-skill-card',
+                children: [
+                  jsxs('div', {
+                    className: 'evo-skill-head',
+                    children: [
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-skill-name-btn',
+                        onClick: () => setExpanded((v) => (v === s.name ? null : s.name)),
+                        children: jsx('span', { className: 'evo-panel-item-main', children: s.name }),
+                      }),
+                      s.source !== undefined && jsx('span', { className: 'evo-skill-source', title: s.source, children: s.source.split('/').pop() }),
+                    ],
+                  }),
+                  s.description !== undefined && s.description !== '' && jsx('div', { className: 'evo-skill-desc', children: s.description }),
+                  expanded === s.name && jsxs('div', {
+                    className: 'evo-skill-detail',
+                    children: [
+                      s.whenToUse !== undefined && s.whenToUse !== '' && jsx('div', { children: jsxs(Fragment, { children: [jsx('b', { children: 'When to use: ' }), jsx('span', { children: s.whenToUse })] }) }),
+                      s.invocation !== undefined && jsx('div', { className: 'evo-skill-src', children: `model ${s.invocation.modelInvocable ? '✓' : '✗'} · user ${s.invocation.userInvocable ? '✓' : '✗'}` }),
+                    ],
+                  }),
+                ],
+              }, s.name)),
+            }),
+    ],
+  })
+}
+
 /** Research Skills 面板：AutoSkills 提案列表 + 审核/运行。 */
 export function SkillsPanel() {
   const [proposals, setProposals] = useState<SkillProposal[] | null>(null)
   const [filter, setFilter] = useState<SkillFilter>('all')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [view, setView] = useState<'proposals' | 'marketplace'>('proposals')
 
   const load = () => {
     setProposals(null)
@@ -388,6 +465,68 @@ export function SkillsPanel() {
     children: label,
   }, key)
 
+  const proposalsView = jsxs(Fragment, {
+    children: [
+      jsxs('div', {
+        className: 'evo-skill-tabs',
+        children: [tab('all', 'All'), tab('pending', 'Pending'), tab('approved', 'Approved'), tab('rejected', 'Rejected')],
+      }),
+      error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+      proposals === null
+        ? jsx(LoadingRow, {})
+        : proposals.length === 0
+          ? jsx('span', { className: 'evo-panel-hint', children: 'No skill proposals yet' })
+          : jsx('div', {
+              className: 'evo-panel-list',
+              children: proposals.map((p) => jsxs('div', {
+                className: 'evo-skill-card',
+                children: [
+                  jsxs('div', {
+                    className: 'evo-skill-head',
+                    children: [
+                      jsx('span', { className: 'evo-panel-item-main', children: p.name }),
+                      jsx('span', { className: `evo-skill-status ${p.status}`, children: p.status }),
+                      p.action !== undefined && jsx('span', { className: 'evo-skill-action', children: p.action }),
+                    ],
+                  }),
+                  p.description !== '' && p.description !== undefined && jsx('div', { className: 'evo-skill-desc', children: p.description }),
+                  p.sourceObservationIds !== undefined && p.sourceObservationIds.length > 0
+                    && jsx('div', { className: 'evo-skill-src', children: `${p.sourceObservationIds.length} observations` }),
+                  p.status === 'pending' && jsxs('div', {
+                    className: 'evo-skill-actions',
+                    children: [
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-btn evo-btn-ok',
+                        disabled: busy !== null,
+                        onClick: () => act(p.proposalId, 'approve'),
+                        children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: 'Approve' })] }),
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-btn evo-btn-danger',
+                        disabled: busy !== null,
+                        onClick: () => act(p.proposalId, 'reject'),
+                        children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: 'Reject' })] }),
+                      }),
+                    ],
+                  }),
+                  p.status === 'approved' && jsx('div', {
+                    className: 'evo-skill-actions',
+                    children: jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-run',
+                      disabled: busy !== null,
+                      onClick: () => act(p.proposalId, 'run'),
+                      children: jsxs(Fragment, { children: [jsx(Play, {}), jsx('span', { children: 'Run' })] }),
+                    }),
+                  }),
+                ],
+              }, p.proposalId)),
+            }),
+    ],
+  })
+
   return jsx(PanelShell, {
     icon: GraduationCap,
     title: 'Research Skills',
@@ -395,61 +534,12 @@ export function SkillsPanel() {
       children: [
         jsxs('div', {
           className: 'evo-skill-tabs',
-          children: [tab('all', 'All'), tab('pending', 'Pending'), tab('approved', 'Approved'), tab('rejected', 'Rejected')],
+          children: [
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': view === 'proposals' || undefined, onClick: () => setView('proposals'), children: 'Proposals' }),
+            jsx('button', { type: 'button', className: 'evo-insp-subtab', 'data-active': view === 'marketplace' || undefined, onClick: () => setView('marketplace'), children: 'Marketplace' }),
+          ],
         }),
-        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-        proposals === null
-          ? jsx(LoadingRow, {})
-          : proposals.length === 0
-            ? jsx('span', { className: 'evo-panel-hint', children: 'No skill proposals yet' })
-            : jsx('div', {
-                className: 'evo-panel-list',
-                children: proposals.map((p) => jsxs('div', {
-                  className: 'evo-skill-card',
-                  children: [
-                    jsxs('div', {
-                      className: 'evo-skill-head',
-                      children: [
-                        jsx('span', { className: 'evo-panel-item-main', children: p.name }),
-                        jsx('span', { className: `evo-skill-status ${p.status}`, children: p.status }),
-                        p.action !== undefined && jsx('span', { className: 'evo-skill-action', children: p.action }),
-                      ],
-                    }),
-                    p.description !== '' && p.description !== undefined && jsx('div', { className: 'evo-skill-desc', children: p.description }),
-                    p.sourceObservationIds !== undefined && p.sourceObservationIds.length > 0
-                      && jsx('div', { className: 'evo-skill-src', children: `${p.sourceObservationIds.length} observations` }),
-                    p.status === 'pending' && jsxs('div', {
-                      className: 'evo-skill-actions',
-                      children: [
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-btn evo-btn-ok',
-                          disabled: busy !== null,
-                          onClick: () => act(p.proposalId, 'approve'),
-                          children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: 'Approve' })] }),
-                        }),
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-btn evo-btn-danger',
-                          disabled: busy !== null,
-                          onClick: () => act(p.proposalId, 'reject'),
-                          children: jsxs(Fragment, { children: [jsx(XIcon, {}), jsx('span', { children: 'Reject' })] }),
-                        }),
-                      ],
-                    }),
-                    p.status === 'approved' && jsx('div', {
-                      className: 'evo-skill-actions',
-                      children: jsx('button', {
-                        type: 'button',
-                        className: 'evo-btn evo-btn-run',
-                        disabled: busy !== null,
-                        onClick: () => act(p.proposalId, 'run'),
-                        children: jsxs(Fragment, { children: [jsx(Play, {}), jsx('span', { children: 'Run' })] }),
-                      }),
-                    }),
-                  ],
-                }, p.proposalId)),
-              }),
+        view === 'marketplace' ? jsx(MarketplaceView, {}) : proposalsView,
       ],
     }),
   })
