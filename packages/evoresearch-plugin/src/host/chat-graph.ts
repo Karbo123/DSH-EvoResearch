@@ -152,13 +152,32 @@ export class ChatGraphService {
     return path.join(this.dataRoot, '.evoresearch-data', 'chat-graphs')
   }
 
+  /** 全局图文件（global scope 的记忆节点跨项目共享，如 SOUL.md/User.md/Taste.md 归类）。 */
+  private globalFile(): string {
+    return path.join(this.graphsDir(), '_global_.json')
+  }
+
   private fileOf(projectName: string): string {
     // 项目名是 workspace 校验过的安全 slug
     return path.join(this.graphsDir(), `${projectName}.json`)
   }
 
-  /** 读取项目图（不存在返回空图）。 */
-  get(projectName: string): ChatGraph {
+  /** 读取全局图（仅 global 节点；无则空）。 */
+  private readGlobal(): ChatGraph {
+    try {
+      const raw = fs.readFileSync(this.globalFile(), 'utf8')
+      const parsed = JSON.parse(raw) as Partial<ChatGraph>
+      return {
+        nodes: Array.isArray(parsed.nodes) ? parsed.nodes.filter((n) => n.scope === 'global') : [],
+        edges: [],
+      }
+    } catch {
+      return emptyGraph()
+    }
+  }
+
+  /** 读取项目图（不含 global 节点）。 */
+  private readProject(projectName: string): ChatGraph {
     try {
       const raw = fs.readFileSync(this.fileOf(projectName), 'utf8')
       const parsed = JSON.parse(raw) as Partial<ChatGraph>
@@ -171,10 +190,35 @@ export class ChatGraphService {
     }
   }
 
+  /** 读取项目图（global 节点合并可见：全局记忆跨项目共享；旧数据自动迁移到全局文件）。 */
+  get(projectName: string): ChatGraph {
+    const project = this.readProject(projectName)
+    const global = this.readGlobal()
+    const legacyGlobals = project.nodes.filter((n) => n.scope === 'global')
+    if (legacyGlobals.length > 0) {
+      // 迁移旧数据：项目文件里遗留的 global 节点 → 全局文件，并从项目文件剥离
+      const byId = new Map(global.nodes.map((n) => [n.id, n]))
+      for (const n of legacyGlobals) byId.set(n.id, n)
+      try {
+        const dir = this.graphsDir()
+        fs.mkdirSync(dir, { recursive: true })
+        const gfile = this.globalFile()
+        const gtmp = `${gfile}.tmp-${process.pid}`
+        fs.writeFileSync(gtmp, JSON.stringify({ nodes: [...byId.values()], edges: [] }, null, 2), 'utf8')
+        fs.renameSync(gtmp, gfile)
+      } catch { /* 迁移失败不影响读取 */ }
+      const projectOnly = { nodes: project.nodes.filter((n) => n.scope !== 'global'), edges: project.edges }
+      try { this.save(projectName, projectOnly) } catch { /* 剥离失败不影响读取 */ }
+      return { nodes: [...projectOnly.nodes, ...byId.values()], edges: projectOnly.edges }
+    }
+    return { nodes: [...project.nodes, ...global.nodes], edges: project.edges }
+  }
+
   /**
    * 保存项目图（整体覆盖）。校验：
-   * - 边引用的节点必须存在；
-   * - chat node 的 context 输入最多一条（后写覆盖先写，前端也做约束）。
+   * - 边引用的节点必须存在（含全局节点）；
+   * - chat node 的 context 输入最多一条（后写覆盖先写，前端也做约束）；
+   * - global scope 节点剥离到全局文件（跨项目共享），项目文件只存项目节点与边。
    */
   save(projectName: string, graph: ChatGraph): { ok: boolean; error?: string } {
     if (typeof projectName !== 'string' || projectName.trim() === '') return { ok: false, error: '项目名为空' }
@@ -194,12 +238,25 @@ export class ChatGraphService {
       seen.add(key)
       return true
     })
+    const globalNodes = nodes.filter((n) => n.scope === 'global')
+    const projectNodes = nodes.filter((n) => n.scope !== 'global')
     try {
       const dir = this.graphsDir()
       fs.mkdirSync(dir, { recursive: true })
+      // 全局节点合并写入全局文件（按 id 去重：保留最新位置/标题/内容）
+      if (globalNodes.length > 0) {
+        const current = this.readGlobal()
+        const byId = new Map(current.nodes.map((n) => [n.id, n]))
+        for (const n of globalNodes) byId.set(n.id, n)
+        const gfile = this.globalFile()
+        const gtmp = `${gfile}.tmp-${process.pid}`
+        fs.writeFileSync(gtmp, JSON.stringify({ nodes: [...byId.values()], edges: [] }, null, 2), 'utf8')
+        fs.renameSync(gtmp, gfile)
+      }
+      // 项目节点与边写入项目文件
       const file = this.fileOf(projectName)
       const tmp = `${file}.tmp-${process.pid}`
-      fs.writeFileSync(tmp, JSON.stringify({ nodes, edges: deduped }, null, 2), 'utf8')
+      fs.writeFileSync(tmp, JSON.stringify({ nodes: projectNodes, edges: deduped }, null, 2), 'utf8')
       fs.renameSync(tmp, file)
       return { ok: true }
     } catch (error) {
