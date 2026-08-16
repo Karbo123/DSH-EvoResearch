@@ -118,9 +118,9 @@ body { margin: 0; }
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-tl-head { padding: 10px 12px 4px; display: flex; align-items: center; gap: 6px; }
 .evo-tl-head-title { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.evo-tl-back { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: none; border-radius: 7px; color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; }
-.evo-tl-back:hover { background: var(--hover-bg); color: var(--color-text-primary); }
-.evo-tl-back svg { width: 15px; height: 15px; }
+.evo-tl-back { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; font-size: 12px; font: inherit; transition: border-color 0.15s, color 0.15s, background 0.15s; }
+.evo-tl-back:hover { border-color: var(--brand); color: var(--brand); background: var(--hover-bg); }
+.evo-tl-back svg { width: 14px; height: 14px; }
 .evo-tl-newchat {
   display: inline-flex; align-items: center; gap: 7px; width: auto; padding: 6px 10px; margin-left: auto;
   border: none; background: none; border-radius: 8px; color: var(--color-text-primary);

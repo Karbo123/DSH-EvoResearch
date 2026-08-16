@@ -429,6 +429,7 @@ const DICT: Record<string, [string, string]> = {
   graphClose: ['Close', '关闭'],
   projects: ['Projects', '项目'],
   projectBack: ['Back to projects', '返回项目列表'],
+  projectBackShort: ['Back', '返回'],
   noProjectsYet: ['No projects yet — start a conversation to create one.', '暂无项目——发起一段对话即可创建项目。'],
   subchatCount: ['{n} chats', '{n} 个子聊天'],
   subchats: ['Chats', '子聊天'],

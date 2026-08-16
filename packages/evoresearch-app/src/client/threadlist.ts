@@ -202,7 +202,9 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
             title: t('projectBack'),
             'aria-label': t('projectBack'),
             onClick: () => { setProjectMode(null); setMenuFor(null) },
-            children: jsx(ArrowLeft, {}),
+            children: jsxs(Fragment, {
+              children: [jsx(ArrowLeft, {}), jsx('span', { children: t('projectBackShort') })],
+            }),
           }),
           projectMode !== null
             ? jsx('span', { className: 'evo-tl-head-title', children: projectMode.name })
