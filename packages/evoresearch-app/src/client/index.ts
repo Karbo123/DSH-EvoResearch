@@ -15,7 +15,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef, useSyncExternalStore, Component } from 'react'
 import {
   PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, SquarePen,
-  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, Save,
+  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, Save, FolderOpen,
 } from 'lucide-react'
 import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
@@ -32,6 +32,7 @@ import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel,
 import { ExperimentsPanel } from './experiments'
 import { TrajectoryPanel } from './trajectory'
 import { StatusBar } from './statusbar'
+import { WorkspaceTabPicker } from './tab-files'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
 
@@ -668,9 +669,28 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   ])
   const [activeTabId, setActiveTabId] = useState<string>('chat')
   const [tabMenuOpen, setTabMenuOpen] = useState(false)
+  const [tabPickerOpen, setTabPickerOpen] = useState(false)
   const [newFileName, setNewFileName] = useState('')
   const [tabBusy, setTabBusy] = useState(false)
   const tabFileInputRef = useRef<HTMLInputElement | null>(null)
+  // 菜单外点击关闭（+ 菜单）
+  useEffect(() => {
+    if (!tabMenuOpen) return
+    const onDocClick = (e: MouseEvent) => {
+      const wrap = document.querySelector('.evo-tab-new-wrap')
+      if (wrap !== null && !wrap.contains(e.target as Node)) { setTabMenuOpen(false); setTabPickerOpen(false) }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [tabMenuOpen])
+  const closeTabMenu = () => { setTabMenuOpen(false); setTabPickerOpen(false) }
+  const pickWorkspaceFile = (path: string) => {
+    const ext = path.slice(path.lastIndexOf('.')).toLowerCase()
+    const root = cwdNow ?? ''
+    if (ext === '.pdf') openTabPdf(path, root)
+    else openTabEditor(path, root)
+    closeTabMenu()
+  }
   // 同步镜像（setState updater 在 React 18 是延迟执行的，不能在里面捕获 targetId）
   const tabsRef = useRef<WorkspaceTab[]>(tabs)
   tabsRef.current = tabs
@@ -1038,17 +1058,26 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                               className: 'evo-tab-new',
                               title: t('newTab'),
                               'aria-label': t('newTab'),
-                              disabled: cwdNow === null,
                               onClick: () => setTabMenuOpen((v) => !v),
                               children: jsx(Plus, {}),
                             }),
-                            tabMenuOpen && cwdNow !== null && jsxs('div', {
+                            tabMenuOpen && jsxs('div', {
                               className: 'evo-tab-menu',
                               children: [
+                                // 从工作区打开（懒加载目录树）
                                 jsx('button', {
                                   type: 'button',
                                   className: 'evo-tab-menu-item',
-                                  disabled: tabBusy,
+                                  disabled: cwdNow === null || tabBusy,
+                                  onClick: () => setTabPickerOpen((v) => !v),
+                                  children: jsxs(Fragment, { children: [jsx(FolderOpen, {}), jsx('span', { children: t('openFromWorkspace') })] }),
+                                }),
+                                tabPickerOpen && cwdNow !== null && jsx(WorkspaceTabPicker, { root: cwdNow, onPick: pickWorkspaceFile }),
+                                // 本地上传 PDF → 预览标签
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tab-menu-item',
+                                  disabled: cwdNow === null || tabBusy,
                                   onClick: () => tabFileInputRef.current?.click(),
                                   children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: t('openPdfTab') })] }),
                                 }),
@@ -1059,10 +1088,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                                   hidden: true,
                                   onChange: (e) => {
                                     const file = e.currentTarget.files?.[0]
-                                    if (file !== undefined) uploadPdfTab(cwdNow ?? '', file)
+                                    if (file !== undefined) { uploadPdfTab(cwdNow ?? '', file); closeTabMenu() }
                                     e.currentTarget.value = ''
                                   },
                                 }),
+                                // 新建文本文件
                                 jsxs('div', {
                                   className: 'evo-tab-menu-item evo-tab-menu-newfile',
                                   children: [
@@ -1072,21 +1102,22 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                                       className: 'evo-tab-newfile-input',
                                       placeholder: t('newFileName'),
                                       value: newFileName,
-                                      disabled: tabBusy,
+                                      disabled: tabBusy || cwdNow === null,
                                       onInput: (e) => setNewFileName(e.currentTarget.value),
                                       onKeyDown: (e) => {
-                                        if (e.key === 'Enter' && cwdNow !== null) createTabEditor(cwdNow)
+                                        if (e.key === 'Enter' && cwdNow !== null) { createTabEditor(cwdNow); closeTabMenu() }
                                       },
                                     }),
                                     jsx('button', {
                                       type: 'button',
                                       className: 'evo-tab-newfile-go',
-                                      disabled: tabBusy || newFileName.trim() === '',
-                                      onClick: () => { if (cwdNow !== null) createTabEditor(cwdNow) },
+                                      disabled: tabBusy || newFileName.trim() === '' || cwdNow === null,
+                                      onClick: () => { if (cwdNow !== null) { createTabEditor(cwdNow); closeTabMenu() } },
                                       children: t('create'),
                                     }),
                                   ],
                                 }),
+                                cwdNow === null && jsx('div', { className: 'evo-tab-menu-hint', children: t('openSessionHint') }),
                               ],
                             }),
                           ],

@@ -804,15 +804,33 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tab-new:hover:not(:disabled) { background: var(--hover-bg); color: var(--brand); }
 .evo-tab-new:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-tab-new svg { width: 14px; height: 14px; }
-.evo-tab-menu { position: absolute; top: 32px; left: 0; z-index: 60; min-width: 240px; padding: 6px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14); display: flex; flex-direction: column; gap: 4px; }
+.evo-tab-menu { position: absolute; top: 32px; left: 0; z-index: 60; min-width: 260px; max-width: 340px; padding: 6px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14); display: flex; flex-direction: column; gap: 4px; }
 .evo-tab-menu-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: none; background: none; border-radius: 7px; color: var(--color-text-primary); font-size: 12.5px; cursor: pointer; text-align: left; }
-.evo-tab-menu-item:hover { background: var(--hover-bg); }
+.evo-tab-menu-item:hover:not(:disabled) { background: var(--hover-bg); }
+.evo-tab-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-tab-menu-item svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
+.evo-tab-menu-hint { padding: 4px 10px 6px; font-size: 11.5px; color: var(--color-text-tertiary); line-height: 1.5; border-top: 1px solid var(--color-border-light); margin-top: 2px; }
 .evo-tab-menu-newfile { gap: 6px; }
 .evo-tab-newfile-input { flex: 1; min-width: 0; border: 1px solid var(--color-border); border-radius: 7px; background: var(--input-bg); color: var(--color-text-primary); font-size: 12.5px; padding: 5px 8px; outline: none; }
 .evo-tab-newfile-input:focus { border-color: var(--brand); }
 .evo-tab-newfile-go { display: inline-flex; align-items: center; border: 1px solid var(--brand); background: var(--brand-solid); color: var(--brand-foreground); border-radius: 7px; padding: 5px 10px; font-size: 12px; cursor: pointer; flex-shrink: 0; }
 .evo-tab-newfile-go:disabled { opacity: 0.5; cursor: not-allowed; }
+/* 「从工作区打开」目录树（内嵌 + 菜单） */
+.evo-tab-tree { border-top: 1px solid var(--color-border-light); padding: 6px 2px; display: flex; flex-direction: column; gap: 1px; max-height: 260px; overflow-y: auto; }
+.evo-tab-tree-head { display: flex; align-items: center; gap: 6px; padding: 3px 8px 5px; }
+.evo-tab-tree-head > svg { width: 13px; height: 13px; color: var(--brand); flex-shrink: 0; }
+.evo-tab-tree-root { font-size: 11px; color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-family: ui-monospace, Consolas, monospace; }
+.evo-tab-tree-refresh { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 5px; cursor: pointer; flex-shrink: 0; }
+.evo-tab-tree-refresh:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-tab-tree-refresh svg { width: 12px; height: 12px; }
+.evo-tab-tree-row { display: flex; align-items: center; gap: 6px; width: 100%; border: none; background: none; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; color: var(--color-text-primary); cursor: pointer; text-align: left; min-width: 0; }
+.evo-tab-tree-row:hover { background: var(--hover-bg); }
+.evo-tab-tree-row > svg { width: 13px; height: 13px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-tab-tree-row > svg:first-child { color: var(--color-text-tertiary); }
+.evo-tab-tree-arrow { width: 13px; flex-shrink: 0; }
+.evo-tab-tree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.evo-tab-tree-empty { font-size: 11.5px; color: var(--color-text-tertiary); padding: 4px 0; }
+.evo-tab-tree-error { font-size: 11.5px; color: var(--color-error); padding: 4px 8px; }
 .evo-tab-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .evo-tab-frame { flex: 1; width: 100%; border: none; background: #ffffff; }
 .evo-tab-editor-body { gap: 0; }

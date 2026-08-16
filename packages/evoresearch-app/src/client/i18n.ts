@@ -345,7 +345,9 @@ const DICT: Record<string, [string, string]> = {
   chatTab: ['Chat', '对话'],
   newTab: ['New tab', '新建标签'],
   closeTab: ['Close tab', '关闭标签'],
-  openPdfTab: ['Open PDF…', '打开 PDF…'],
+  openPdfTab: ['Open PDF from device…', '打开本地 PDF…'],
+  openFromWorkspace: ['Open from workspace…', '从工作区打开…'],
+  openSessionHint: ['Start a conversation to use tabs (the first message creates a project workspace).', '先开始一个会话再使用标签（首条消息会自动创建项目工作区）。'],
   newFileName: ['File name (saved to workspace)', '文件名（写入工作区）'],
   // 复制历史到新对话（§5.3）
   copyHistory: ['Copy history to new chat', '复制历史到新对话'],
