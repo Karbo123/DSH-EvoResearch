@@ -64,6 +64,16 @@ npx @deepseek-ai/dsh --profile profiles/evoresearch --port 3081
 在任意 deepseek-harness 部署中，将本仓库的 `@evoresearch/dsh-app` 与
 `@evoresearch/dsh-plugin` 加入 profile bundles 即可获得完整科研能力与工作台界面。
 
+## 💾 数据存储位置
+
+**Windows 桌面版**：所有数据集中在可执行文件同级目录下的 `evoresearch-data/`
+文件夹（会话记录、科研项目、记忆、实验快照、模型设置、凭据等），与程序文件分离、
+一目了然；换电脑时拷贝整个安装目录即完成迁移。
+
+**网页版 / DSH profile 挂载**：由 DSH 框架决定——默认在用户主目录 `~/.dsh/`
+（Windows 为 `C:\Users\<用户名>\.dsh\`），项目工作区在启动命令所在目录；
+可通过配置中的 `dataRoot` 指定部署根目录（见下节）。
+
 ## ⚙️ 配置
 
 在 DSH `settings.yaml` 中加入：
@@ -96,6 +106,7 @@ node desktop/scripts/build.mjs   # 桌面安装包
 ## ❓ FAQ
 
 **数据存在哪里？**
+见上文「数据存储位置」：桌面版在 exe 同级 `evoresearch-data/`，网页版在 `~/.dsh/`。
 每个项目独立目录 `projects/<name>/`，记忆库、观测文件与调度任务都在
 `.evoresearch-data/` 内，项目本身是 git 仓库，可整体迁移与备份。
 
