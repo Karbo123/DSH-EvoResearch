@@ -16,6 +16,7 @@ import type { AutoSkillsService } from './autoskills.js'
 import type { ExpertService } from './experts.js'
 import type { ExperimentService } from './experiments.js'
 import type { ProjectEnvService, ProjectEnvInfo } from './project-env.js'
+import type { RewindService } from './rewind.js'
 import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 
@@ -29,6 +30,7 @@ export interface HostServices {
   readonly experts: ExpertService
   readonly experiments: ExperimentService
   readonly projectEnv: ProjectEnvService
+  readonly rewind: RewindService
 }
 
 /** JSON 化的记忆包（不含内部引用）。 */
@@ -74,6 +76,8 @@ export class EvoResearchApiService extends TypertRemoteService {
       const project = this.services.workspace.createProject(args.name)
       // 后台异步创建项目专属 UV 环境（失败不阻塞项目创建）
       void this.services.projectEnv.create(project.path).catch(() => { /* 状态面板可重试 */ })
+      // 回溯基线提交（auto-turn 0 = 初始状态，编辑/回溯第 1 回合可恢复到此）
+      try { this.services.rewind.commitWorkspace(project.path, 'auto-turn 0') } catch { /* 非 git 项目忽略 */ }
       return project
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
@@ -113,7 +117,10 @@ export class EvoResearchApiService extends TypertRemoteService {
         : configured?.provider && configured?.model
           ? { provider: configured.provider, model: configured.model }
           : { provider: 'new-api', model: 'deepseek-v4-flash' }
-      return await this.services.workspace.autoCreateProject(this.hostCtx, model, String(args?.description ?? ''))
+      const project = await this.services.workspace.autoCreateProject(this.hostCtx, model, String(args?.description ?? ''))
+      // 欢迎页自动建项目路径同样打回溯基线（auto-turn 0 = 初始状态）
+      try { this.services.rewind.commitWorkspace(project.path, 'auto-turn 0') } catch { /* 非 git 项目忽略 */ }
+      return project
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -162,6 +169,62 @@ export class EvoResearchApiService extends TypertRemoteService {
   projectEnvRemove(args: { projectDir?: string }): { ok: boolean } | { error: string } {
     try {
       return this.services.projectEnv.remove(this.envArgs(args))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 回溯（§回溯：Git 工作区 + 会话截断 + 编辑重发）────────────────────────
+
+  /** 回溯信息：最近用户消息（编辑/回溯目标）+ 工作区 git 状态。 */
+  @Remote('rewindInfo')
+  rewindInfo(args: { sessionId?: string }): {
+    workspaceDir: string | null
+    lastUserMessage: { seq: number; text: string; turn: number } | null
+    gitLog: Array<{ sha: string; message: string; when: number }>
+  } | { error: string } {
+    try {
+      const sessionId = String(args?.sessionId ?? '')
+      const workspaceDir = this.services.rewind.workspaceOfSession(sessionId)
+      const gitLog = workspaceDir !== null ? this.services.rewind.workspaceLog(workspaceDir, 30) : []
+      return { workspaceDir, lastUserMessage: this.services.rewind.lastUserMessage(sessionId), gitLog }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 完全回溯：fork 截断子会话 + 工作区恢复到目标回合。 */
+  @Remote('rewindExecute')
+  rewindExecute(args: { sessionId?: string; beforeSeq?: number }): {
+    ok: boolean
+    childSessionId: string
+    workspaceDir: string | null
+    restoredCommit: string | null
+    safetyCommit: string | null
+    note?: string
+  } | { error: string } {
+    try {
+      return this.services.rewind.rewindFork(this.hostCtx, String(args?.sessionId ?? ''), Number(args?.beforeSeq ?? 0))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * 编辑重发：以被编辑消息为边界 fork 截断子会话（旧内容与后续回复不复存在），
+   * 并恢复工作区到该回合之前；前端打开子会话后以修正文本走官方 prompt 流程。
+   */
+  @Remote('usermsgEdit')
+  usermsgEdit(args: { sessionId?: string; seq?: number }): {
+    ok: boolean
+    childSessionId: string
+    workspaceDir: string | null
+    restoredCommit: string | null
+    safetyCommit: string | null
+    note?: string
+  } | { error: string } {
+    try {
+      return this.services.rewind.rewindFork(this.hostCtx, String(args?.sessionId ?? ''), Number(args?.seq ?? 0))
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

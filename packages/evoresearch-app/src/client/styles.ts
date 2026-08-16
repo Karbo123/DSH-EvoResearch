@@ -270,7 +270,7 @@ body { margin: 0; }
 .evo-tool-group-head { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; padding: 6px 10px; border: 1px solid var(--color-border-light); border-radius: 9px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
 .evo-tool-group-head:hover { border-color: var(--color-border); }
 .evo-tool-group-head svg { width: 14px; height: 14px; flex-shrink: 0; color: var(--color-text-tertiary); }
-.evo-tool-group-state { margin-left: auto; font-size: 11px; color: var(--color-text-tertiary); }
+.evo-tool-group-state { margin-left: auto; font-size: 11px; color: var(--color-text-tertiary); border: 1px solid var(--color-border-light); border-radius: 999px; padding: 0 7px; background: var(--color-background); }
 .evo-tool-group-body { display: flex; flex-direction: column; gap: 4px; padding-left: 8px; }
 .evo-tool-chev { transition: transform 0.15s; }
 .evo-tool-chev.open { transform: rotate(90deg); }
@@ -514,12 +514,21 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-plugin-id { font-size: 12px; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-plugin-state { font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
 .evo-plugin-ok { color: var(--color-success); }
-/* ── 消息复制 ── */
-.evo-msg-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-height: 22px; }
-.evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; }
-.evo-msg-bubble:hover .evo-msg-copy, .evo-msg-copy:focus-visible { opacity: 1; }
-.evo-msg-copy:hover { color: var(--color-text-primary); background: var(--hover-bg); }
+/* ── 消息复制 / 编辑 / 回溯（气泡外下方操作行）── */
+.evo-msg-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; }
+.evo-msg-user .evo-msg-stack { align-items: flex-end; }
+.evo-msg-meta { display: flex; align-items: center; gap: 7px; min-height: 18px; opacity: 0; transition: opacity 0.12s ease; padding: 0 2px; }
+.evo-msg-row:hover .evo-msg-meta { opacity: 1; }
+.evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); }
+.evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; padding: 0; }
+.evo-msg-copy:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-msg-copy.confirming { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
 .evo-msg-copy svg { width: 13px; height: 13px; }
+/* 用户消息内联编辑（§回溯：编辑并重发覆盖） */
+.evo-msg-edit { display: flex; flex-direction: column; gap: 7px; min-width: 320px; max-width: 620px; }
+.evo-msg-edit-textarea { width: 100%; min-height: 76px; max-height: 220px; padding: 10px 12px; border: 1px solid var(--brand); border-radius: 12px; background: var(--color-surface); color: var(--color-text-primary); font-size: 14px; font-family: inherit; line-height: 1.5; outline: none; resize: vertical; }
+.evo-msg-edit-acts { display: flex; align-items: center; gap: 8px; }
+.evo-msg-edit-hint { font-size: 11px; color: var(--color-text-tertiary); }
 /* ── Agents 树（Inspector）── */
 .evo-insp-subtab-title { font-size: 11.5px; font-weight: 600; color: var(--color-text-tertiary); letter-spacing: 0.3px; text-transform: uppercase; padding: 2px 4px; }
 .evo-agent-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 12px; }

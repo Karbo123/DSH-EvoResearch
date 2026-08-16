@@ -286,10 +286,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     void sessionsService?.create(cwd === undefined ? {} : { cwd }).then((id) => sessionsService?.open(id))
   }
 
-  // §43.5/§33.4：URL threadId 恢复（刷新或分享链接打开对应会话）
+  // §43.5/§33.4：URL threadId 恢复（刷新或分享链接打开对应会话）；?resend= 编辑重发
   useEffect(() => {
-    const threadId = new URLSearchParams(location.search).get('threadId')
+    const params = new URLSearchParams(location.search)
+    const threadId = params.get('threadId')
+    const resend = params.get('resend')
     if (threadId === null || threadId === '') return
+    if (resend !== null) {
+      // 编辑重发：清除参数，打开会话后自动发送修正文本（走官方 prompt 流程）
+      history.replaceState(null, '', `${location.pathname}${location.search.replace(/([?&])resend=[^&]*/, '$1').replace(/[?&]$/, '')}${location.hash}`)
+    }
     let cancelled = false
     let attempts = 0
     const tryOpen = () => {
@@ -303,6 +309,18 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       }
     }
     tryOpen()
+    if (resend !== null && resend !== '') {
+      // 等会话绑定就绪后自动重发
+      const timer = setInterval(() => {
+        if (cancelled) { clearInterval(timer); return }
+        const s = sessionsService?.binding(threadId)?.session
+        if (s !== undefined) {
+          clearInterval(timer)
+          void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+        }
+      }, 200)
+      setTimeout(() => clearInterval(timer), 20000)
+    }
     return () => { cancelled = true }
   }, [])
 
@@ -776,6 +794,42 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const onJumpChat = () => { setActiveTabId('chat'); setTabMenuOpen(false) }
     window.addEventListener('evo-traj-jump-chat', onJumpChat)
     return () => window.removeEventListener('evo-traj-jump-chat', onJumpChat)
+  }, [])
+  // §回溯/编辑重发：chat.ts 派发 evo-rewind → 提升子会话为主聊天 + 打开（编辑场景自动重发）
+  useEffect(() => {
+    const onRewind = (e: Event) => {
+      const detail = (e as CustomEvent<{ childId?: string; resend?: string }>).detail
+      if (typeof detail?.childId !== 'string' || detail.childId === '') return
+      void (async () => {
+        promoteSession(detail.childId)
+        const manager = sessionsService?.manager as { mergeSummary?(s: Record<string, unknown>): unknown; refreshList?(): Promise<unknown> } | undefined
+        const cwd = current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
+        // 本地合成摘要（对齐 manager.fork 的摘要形状）→ 可立即 select
+        try {
+          manager?.mergeSummary?.({ sessionId: detail.childId, updatedAt: Date.now(), running: false, blank: false, ...(cwd === undefined ? {} : { cwd }) })
+        } catch { /* 摘要合并失败则依赖 refreshList */ }
+        // select + 必要时的列表刷新重试（host 侧 fork 的子会话需进入目录）
+        for (let i = 0; i < 20; i++) {
+          try { sessionsService?.open(detail.childId); break } catch {
+            try { await manager?.refreshList?.() } catch { /* 忽略 */ }
+            await new Promise((r) => setTimeout(r, 250))
+          }
+        }
+        if (typeof detail.resend === 'string' && detail.resend !== '') {
+          // 编辑重发：绑定就绪后以修正文本走官方 prompt 流程
+          for (let i = 0; i < 60; i++) {
+            const s = sessionsService?.binding(detail.childId)?.session
+            if (s !== undefined) {
+              void s.prompt([{ type: 'text', text: detail.resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+              return
+            }
+            await new Promise((r) => setTimeout(r, 250))
+          }
+        }
+      })()
+    }
+    window.addEventListener('evo-rewind', onRewind)
+    return () => window.removeEventListener('evo-rewind', onRewind)
   }, [])
   // 编辑标签保存（写入工作区；root 为当前会话 cwd）
   const saveTabEditor = (tab: WorkspaceTab) => {

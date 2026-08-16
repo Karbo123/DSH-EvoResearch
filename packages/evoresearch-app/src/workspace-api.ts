@@ -922,6 +922,26 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── 回溯（rewind-info / rewind-execute / usermsg-edit）──
+        if (method === 'rewind-info' || method === 'rewind-execute' || method === 'usermsg-edit') {
+          const serviceMethod = method === 'rewind-info' ? 'rewindInfo'
+            : method === 'rewind-execute' ? 'rewindExecute'
+              : 'usermsgEdit'
+          const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = {}
+          if (typeof payload.sessionId === 'string') args.sessionId = payload.sessionId
+          if (typeof payload.beforeSeq === 'number') args.beforeSeq = payload.beforeSeq
+          if (typeof payload.seq === 'number') args.seq = payload.seq
+          if (typeof payload.text === 'string') args.text = payload.text
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
         writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown method ${method ?? ''}` } })
       } catch (error) {
         writeError(res, error)

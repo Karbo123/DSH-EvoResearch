@@ -11,7 +11,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
-  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle,
+  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History,
 } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
@@ -223,28 +223,96 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
   })
 }
 
-/** 用户消息气泡（hover 显示复制与编辑图标，§31.6；编辑 = 回填输入框）。 */
-function UserBubble({ text, time, nodeKey, highlight, onEdit }: { text: string; time?: number; nodeKey?: string; highlight?: boolean; onEdit?: (text: string) => void }) {
+/** 用户消息气泡：气泡内仅文本；下方（气泡外）小字操作行：时间 / 编辑 / 复制 / 回溯。 */
+function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, rewindConfirming }: {
+  text: string
+  time?: number
+  nodeKey?: string
+  highlight?: boolean
+  seq?: number
+  onEdit?: (seq: number, text: string) => void
+  onRewind?: (seq: number) => void
+  rewindConfirming?: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(text)
+  if (editing) {
+    return jsxs('div', {
+      className: `evo-msg-row evo-msg-user${highlight ? ' evo-msg-jump' : ''}`,
+      'data-node-key': nodeKey,
+      children: [
+        jsx('div', { className: 'evo-msg-user-body' }),
+        jsxs('div', {
+          className: 'evo-msg-edit',
+          children: [
+            jsx('textarea', {
+              className: 'evo-msg-edit-textarea',
+              value: draft,
+              spellCheck: false,
+              autoFocus: true,
+              onInput: (e) => setDraft(e.currentTarget.value),
+              onKeyDown: (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (seq !== undefined && draft.trim() !== '') onEdit?.(seq, draft) }
+                if (e.key === 'Escape') setEditing(false)
+              },
+            }),
+            jsxs('div', {
+              className: 'evo-msg-edit-acts',
+              children: [
+                jsx('span', { className: 'evo-msg-edit-hint', children: t('editHint') }),
+                jsx('span', { style: { flex: 1 } }),
+                jsx('button', {
+                  type: 'button',
+                  className: 'evo-btn evo-btn-danger',
+                  onClick: () => setEditing(false),
+                  children: t('cancel'),
+                }),
+                jsx('button', {
+                  type: 'button',
+                  className: 'evo-btn evo-btn-run',
+                  disabled: draft.trim() === '' || seq === undefined,
+                  onClick: () => { if (seq !== undefined && draft.trim() !== '') { setEditing(false); onEdit?.(seq, draft) } },
+                  children: t('editResend'),
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    })
+  }
   return jsxs('div', {
     className: `evo-msg-row evo-msg-user${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
     children: [
       jsx('div', { className: 'evo-msg-user-body' }),
       jsxs('div', {
-        className: 'evo-msg-bubble evo-msg-bubble-user',
+        className: 'evo-msg-stack',
         children: [
-          jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
           jsx('div', {
+            className: 'evo-msg-bubble evo-msg-bubble-user',
+            children: jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
+          }),
+          // 气泡外下方操作行（§用户反馈：复制/编辑/回溯 不进入气泡内部）
+          jsxs('div', {
             className: 'evo-msg-meta',
             children: [
               jsx('div', { className: 'evo-msg-time', children: fmtTime(time) }),
-              onEdit !== undefined && jsx('button', {
+              onEdit !== undefined && seq !== undefined && jsx('button', {
                 type: 'button',
                 className: 'evo-msg-copy',
                 title: t('editMsg'),
                 'aria-label': t('editMsg'),
-                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onEdit(text) },
+                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); setEditing(true) },
                 children: jsx(PenLine, {}),
+              }),
+              onRewind !== undefined && seq !== undefined && jsx('button', {
+                type: 'button',
+                className: `evo-msg-copy${rewindConfirming === true ? ' confirming' : ''}`,
+                title: rewindConfirming === true ? t('rewindConfirm') : t('rewindToHere'),
+                'aria-label': t('rewindToHere'),
+                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onRewind(seq) },
+                children: jsx(History, {}),
               }),
               jsx(CopyButton, { text }),
             ],
@@ -293,16 +361,20 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: Chat
               thinkingOpen && jsx('div', { className: 'evo-thinking-body', children: reasoning }),
             ],
           }),
-          text !== '' && jsx('div', {
-            className: 'evo-msg-bubble evo-msg-bubble-assistant',
+          text !== '' && jsxs('div', {
+            className: 'evo-msg-stack',
             children: [
-              jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
-              jsxs('div', {
-                className: 'evo-msg-meta',
+              jsx('div', {
+                className: 'evo-msg-bubble evo-msg-bubble-assistant',
                 children: [
+                  jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
                   running && jsx('span', { className: 'evo-msg-cursor' }),
-                  !running && jsx(CopyButton, { text }),
                 ],
+              }),
+              // 气泡外下方操作行：复制
+              !running && jsxs('div', {
+                className: 'evo-msg-meta',
+                children: [jsx(CopyButton, { text })],
               }),
             ],
           }),
@@ -565,6 +637,40 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       el.focus()
       el.selectionStart = el.selectionEnd = el.value.length
     })
+  }
+
+  // ── §回溯/编辑重发：fork 截断子会话 + git 工作区恢复（index.ts 处理 promote/open）──
+  const [opBusy, setOpBusy] = useState(false)
+  const [rewindConfirm, setRewindConfirm] = useState<number | null>(null)
+  const runRewindOp = (url: string, body: Record<string, unknown>, resend?: string) => {
+    if (sessionId === null || opBusy) return
+    setOpBusy(true)
+    void fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((res) => res.json()).then((json) => {
+      if (json.ok === true && typeof json.value?.childSessionId === 'string') {
+        if (json.value?.note !== undefined && json.value.note !== '') toast(json.value.note, 'info')
+        window.dispatchEvent(new CustomEvent('evo-rewind', { detail: { childId: json.value.childSessionId, ...(resend !== undefined ? { resend } : {}) } }))
+      } else {
+        setOpBusy(false)
+        toast(json.error?.message ?? '操作失败', 'error')
+      }
+    }).catch(() => { setOpBusy(false); toast('操作失败', 'error') })
+  }
+  const editAndResend = (seq: number, text: string) => {
+    runRewindOp('/evoresearch/fs/usermsg-edit', { sessionId, seq }, text)
+  }
+  const rewindAt = (seq: number) => {
+    if (opBusy) return
+    if (rewindConfirm !== seq) {
+      setRewindConfirm(seq)
+      setTimeout(() => setRewindConfirm((v) => (v === seq ? null : v)), 5000)
+      return
+    }
+    setRewindConfirm(null)
+    runRewindOp('/evoresearch/fs/rewind-execute', { sessionId, beforeSeq: seq })
   }
 
   // ── 输入辅助（§23.2–23.5）：斜杠命令 / @文件 / 输入历史 ──
@@ -874,7 +980,16 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 }),
                 ...shown.map((node) => node.kind === 'user'
-                  ? jsx(UserBubble, { text: node.data.text ?? '', time: node.data.time, nodeKey: node.key, highlight: node.key === jumpKey, onEdit: editUserMessage }, node.key)
+                  ? jsx(UserBubble, {
+                      text: node.data.text ?? '',
+                      time: node.data.time,
+                      nodeKey: node.key,
+                      highlight: node.key === jumpKey,
+                      seq: typeof node.data.seq === 'number' ? node.data.seq : undefined,
+                      onEdit: editAndResend,
+                      onRewind: rewindAt,
+                      rewindConfirming: rewindConfirm === node.data.seq,
+                    }, node.key)
                   : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults }, node.key)),
                 partial !== null && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults }, partial.key),
                 showJump && jsx('button', {

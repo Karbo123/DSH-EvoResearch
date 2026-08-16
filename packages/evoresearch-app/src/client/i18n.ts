@@ -111,7 +111,11 @@ const DICT: Record<string, [string, string]> = {
   archived: ['Archived', '已归档'],
   showArchived: ['Show archived', '显示已归档'],
   // 聊天区
-  editMsg: ['Edit message', '编辑消息（回填输入框）'],
+  editMsg: ['Edit message', '编辑消息'],
+  editResend: ['Save & resend', '保存并重发'],
+  editHint: ['Ctrl+Enter to send', 'Ctrl+Enter 发送'],
+  rewindToHere: ['Rewind to here (chat + workspace)', '回溯到此（对话+文件）'],
+  rewindConfirm: ['Click again to confirm rewind', '再次点击确认回溯'],
   thinking: ['Thinking', '思考中'],
   viewCleared: ['View cleared', '视图已清空'],
   restoreView: ['Restore view', '恢复视图'],

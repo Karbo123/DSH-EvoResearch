@@ -166,6 +166,27 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
   - 时间轴竖线串联 回合→步骤→调用；设置导航选中态改为左侧竖条指示器 + 微亮背景
 - 视觉验证固化：`scripts/visual-review.mjs`（截图 → mimo-v2.5 评审），最终评审「全部 OK」
 
+### 3.11 消息操作重构：复制按钮移到气泡外 + 编辑重发 + 完全回溯（Git 支撑）
+
+- **复制按钮**：从气泡内部移到**气泡外下方**小字操作行（hover 显现），用户/助手消息统一
+- **编辑并重发（覆盖）**：用户消息旁编辑按钮 → 内联编辑框（Ctrl+Enter 发送）→ 宿主以
+  `agents.create(seed)` 派生截断子会话（对齐官方 fork 语义，cut 在目标回合前一回合的
+  turn/end；编辑第 1 回合 → 空子会话）→ git 恢复工作区 → 前端打开子会话并以修正文本走
+  官方 prompt 流程 → 代理重答，旧内容与旧回复被完全覆盖（实测：文件按修正内容重写）
+- **完全回溯**：用户消息旁回溯按钮（两段确认）→ 同上派生子会话（历史 = 回溯点之前）+
+  工作区 git reset --hard 到目标回合完成时的 auto-turn 提交 → 打开子会话继续；
+  旧会话保留（git 式"分支"语义，reflog 可找回）
+- **自动提交**：每回合完成自动 `git commit "auto-turn N"`（debounce 2s）；项目创建即打
+  基线 `auto-turn 0`（初始状态可恢复）；`.gitignore` 自动补 `.venv/`
+- **关键技术点**：宿主侧必须用 `ctx.agents.create({sessionId, seed, meta})` 派生子会话
+  （可被 prompt 续跑）；`store.fork` 的 live 子会话无法被 prompt（"cannot prepare while
+  live"）；会话事件里的系统上下文注入是"伪用户消息"（lastUserMessage 需过滤）
+- 后端：`packages/evoresearch-plugin/src/host/rewind.ts`（git 工具 + rewindFork + 会话读取）
+  + Remote `rewindInfo/rewindExecute/usermsgEdit` + HTTP `rewind-info/rewind-execute/usermsg-edit`
+- 前端：chat.ts（气泡重构 + 内联编辑 + 两段确认回溯）+ index.ts（evo-rewind 事件：promote +
+  mergeSummary + open + resend prompt）
+- 视觉复核：visual-review.mjs 对聊天布局评审通过（无复制按钮相关问题）
+
 ### 3.9 轨迹面板（DSH Trajectory 复刻，EvoResearch 风格）
 
 - `packages/evoresearch-app/src/client/trajectory.ts`：数据源 = `session.events`
