@@ -26,8 +26,14 @@ export interface MemoryToolHost {
 
 /** 从工具执行上下文推断工作区。 */
 function workspaceOf(exec: ToolRunContext): string {
-  const agent = (exec as { agent?: { ctx?: { session?: { header?: { cwd?: string } } } } }).agent
-  return agent?.ctx?.session?.header?.cwd ?? ''
+  // Agent 直接持有 session（dsh-agent runtime-types）；经 agent.ctx.session 读取会因 cordis
+  // 未注入 'session' 抛 "cannot get property session without inject"。
+  const agent = (exec as { agent?: { session?: { header?: { cwd?: string } }; ctx?: { session?: { header?: { cwd?: string } } } } }).agent
+  try {
+    return agent?.session?.header?.cwd ?? ''
+  } catch {
+    return ''
+  }
 }
 
 /** 构造一个 JSON Schema 参数定义。 */
