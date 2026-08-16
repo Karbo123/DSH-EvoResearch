@@ -77,10 +77,15 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
         .ok_or_else(|| std::io::Error::other("未找到 sidecar node.exe（资源未嵌入？）"))?;
     let launch = locate_sidecar(resource_dir, "launch.js")
         .ok_or_else(|| std::io::Error::other("未找到 sidecar launch.js"))?;
-    // sidecar 工作目录 = app 目录（DSH_HOME 根，含 profiles/ 与 node_modules/）
+    // sidecar 工作目录 = app 目录（程序文件：profiles/ 与 node_modules/）
     let workdir = locate_sidecar(resource_dir, "app")
         .ok_or_else(|| std::io::Error::other("未找到 sidecar app 目录"))?;
     heal_profiles_modules(&workdir);
+    // 数据根：exe 同级目录下的 evoresearch-data（用户数据一目了然、随程序迁移；
+    // 与程序文件（sidecar/dist/app）分离，打包重建不会触碰）
+    let data_home = resource_dir.join("evoresearch-data");
+    fs::create_dir_all(&data_home).ok();
+    log(&format!("[shell] data_home={}", data_home.display()));
     // 端口文件路径经环境变量传给 launch.js（避免两侧路径约定漂移）
     let port_file_env = app_local_data_dir().join("port.json");
     let stderr_log = std::env::temp_dir().join("evoresearch-sidecar.err.log");
@@ -89,6 +94,7 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
         .arg(&launch)
         .current_dir(&workdir)
         .env("EVORESEARCH_PORT_FILE", &port_file_env)
+        .env("EVORESEARCH_DATA_HOME", &data_home)
         .stdin(Stdio::null())
         .stdout(Stdio::null()) // 端口经端口文件传递，避免管道阻塞
         .stderr(Stdio::from(stderr_file))

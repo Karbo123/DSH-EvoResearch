@@ -1,12 +1,14 @@
 /**
  * sidecar 启动脚本（由桌面壳 spawn；CommonJS，node.exe 直接运行）：
- * 1. 启动 DSH web profile（evoresearch），绑定 127.0.0.1 随机端口；
- * 2. 将端口写入 %LOCALAPPDATA%/EvoResearch/port.json（壳轮询读取）；
- * 3. 进程退出时清理端口文件；Windows 下父进程消失时自动退出（防孤儿）。
+ * 1. 数据根 = exe 同级 <程序目录>/evoresearch-data（壳经 EVORESEARCH_DATA_HOME 传入；
+ *    未传入时回退当前目录）——用户数据集中一处、一目了然、随程序目录迁移；
+ * 2. 启动 DSH web profile（evoresearch），绑定 127.0.0.1 随机端口；
+ * 3. 将端口写入 %LOCALAPPDATA%/EvoResearch/port.json（壳轮询读取）；
+ * 4. 进程退出时清理端口文件；Windows 下父进程消失时自动退出（防孤儿）。
  */
 'use strict'
 const { spawn, execSync } = require('node:child_process')
-const { writeFileSync, rmSync, mkdirSync } = require('node:fs')
+const { writeFileSync, rmSync, mkdirSync, copyFileSync, existsSync, readdirSync } = require('node:fs')
 const { join } = require('node:path')
 const { platform } = require('node:os')
 
@@ -19,7 +21,43 @@ const portFile = process.env.EVORESEARCH_PORT_FILE || join(dataDir, 'port.json')
 
 mkdirSync(dataDir, { recursive: true })
 
-/** 启动 DSH web 服务（当前目录即打包后的 DSH_HOME 根：profiles/ + node_modules/）。 */
+/** 数据根：壳传入的 exe 同级 evoresearch-data；未传入（直接运行本脚本）时用当前目录。 */
+const dataHome = process.env.EVORESEARCH_DATA_HOME || process.cwd()
+mkdirSync(dataHome, { recursive: true })
+
+/**
+ * 数据根下的 profiles 接入：DSH 从 $DSH_HOME/profiles 加载 profile，而 profiles/
+ * （含 node_modules 依赖）属于程序文件——在数据根创建指向程序目录 profiles 的
+ * junction（无需管理员），失败时退化为整体复制。
+ */
+function ensureProfilesLink() {
+  const target = join(dataHome, 'profiles')
+  if (existsSync(target)) return
+  const source = join(process.cwd(), 'profiles')
+  if (!existsSync(source)) return
+  try {
+    execSync(`cmd /c mklink /J "${target}" "${source}"`, { stdio: 'ignore' })
+    console.log(`EvoResearch data home: ${dataHome} (profiles junction → 程序目录)`)
+  } catch {
+    // junction 不可用（非 NTFS 等）：整体复制（profiles 含依赖，较慢但兜底）
+    const { cpSync } = require('node:fs')
+    cpSync(source, target, { recursive: true })
+    console.log(`EvoResearch data home: ${dataHome} (profiles 复制兜底)`)
+  }
+}
+ensureProfilesLink()
+
+/** 首次启动：把程序目录内置的 .credentials.yaml 复制进数据根（用户凭据只写数据根）。 */
+function ensureCredentials() {
+  const source = join(process.cwd(), '.credentials.yaml')
+  const target = join(dataHome, '.credentials.yaml')
+  if (existsSync(source) && !existsSync(target)) {
+    try { copyFileSync(source, target) } catch { /* 只读场景忽略 */ }
+  }
+}
+ensureCredentials()
+
+/** 启动 DSH web 服务（数据根 = DSH_HOME + EVORESEARCH_DATA_ROOT；程序文件在 cwd）。 */
 function startDsh() {
   const dshBin = join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
   const child = spawn(process.execPath, [dshBin, '--profile', 'evoresearch', '--port', '0'], {
@@ -28,7 +66,8 @@ function startDsh() {
     windowsHide: true,
     env: {
       ...process.env,
-      DSH_HOME: process.cwd(), // 独立数据根：profiles/ 与 node_modules 都在 sidecar 内
+      DSH_HOME: dataHome, // 会话/存储/凭据/profile 数据根
+      EVORESEARCH_DATA_ROOT: dataHome, // 插件数据根（projects/.evoresearch-data/.tools）
     },
   })
   child.stdout.on('data', (chunk) => parseOutput(String(chunk)))
