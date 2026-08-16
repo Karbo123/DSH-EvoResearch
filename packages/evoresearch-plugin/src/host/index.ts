@@ -28,6 +28,7 @@ import { builtinAdapters } from './channels/adapters.js'
 import type { ChannelMessage } from './channels/base.js'
 import { AutoSkillsService, type AutoSkillsConfig } from './autoskills.js'
 import { ExpertService, type ExpertConfig } from './experts.js'
+import { ExperimentService } from './experiments.js'
 import { EvoResearchApiService, type HostServices } from './api.js'
 import { registerCommands } from './commands.js'
 import { listProjects } from './core/paths.js'
@@ -123,8 +124,11 @@ function apply(ctx: Context): void {
   const expertConfig: ExpertConfig = { dataRoot }
   const experts = new ExpertService(expertConfig)
 
+  // 5.5) 实验管理（§5.1 Git 式分支/回退/checkpoint）
+  const experiments = new ExperimentService(dataRoot)
+
   // 6) Remote API（构造即注册 services.evoresearch）
-  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts }
+  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments }
   void new EvoResearchApiService(ctx, services)
 
   // 7) 斜杠命令

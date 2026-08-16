@@ -14,7 +14,8 @@ import type { SchedulerService } from './scheduler.js'
 import type { ChannelManager } from './channels/index.js'
 import type { AutoSkillsService } from './autoskills.js'
 import type { ExpertService } from './experts.js'
-import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings } from '../shared/types.js'
+import type { ExperimentService } from './experiments.js'
+import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 
 /** 各服务集合（host 入口注入）。 */
@@ -25,6 +26,7 @@ export interface HostServices {
   readonly channels: ChannelManager
   readonly autoskills: AutoSkillsService
   readonly experts: ExpertService
+  readonly experiments: ExperimentService
 }
 
 /** JSON 化的记忆包（不含内部引用）。 */
@@ -89,6 +91,26 @@ export class EvoResearchApiService extends TypertRemoteService {
       return { ok: true }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * 自动创建项目工作区（欢迎页首条消息触发）：AI 生成 slug，失败确定性回退。
+   * 模型取当前默认选择，其次配置的 auxiliaryModel，最后部署默认（new-api）。
+   */
+  @Remote('projectAutoCreate')
+  async projectAutoCreate(args: { description?: string }): Promise<ProjectInfo | { error: string }> {
+    try {
+      const selection = (this.hostCtx.get('agentDefaultModel') as { currentSelection?(): { provider?: string; model?: string } } | undefined)?.currentSelection?.()
+      const configured = this.services.memory.config.auxiliaryModel
+      const model = selection?.provider && selection?.model
+        ? { provider: selection.provider, model: selection.model }
+        : configured?.provider && configured?.model
+          ? { provider: configured.provider, model: configured.model }
+          : { provider: 'new-api', model: 'deepseek-v4-flash' }
+      return await this.services.workspace.autoCreateProject(this.hostCtx, model, String(args?.description ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -356,6 +378,104 @@ export class EvoResearchApiService extends TypertRemoteService {
   @Remote('goalProposalRespond')
   goalProposalRespond(args: { workspaceDir?: string; proposalId: string; decision: 'approve' | 'reject' }): { proposal: GoalProposal; goal?: GoalContract } {
     return this.services.memory.storeFor(args.workspaceDir ?? '').respondGoalProposal(args.proposalId, args.decision)
+  }
+
+  // ── 实验管理（§5.1 Git 式分支/回退/checkpoint）────────────────────────────
+
+  private experimentArgs(args: { workspaceDir?: string }): string {
+    return args?.workspaceDir ?? ''
+  }
+
+  @Remote('experimentsList')
+  experimentsList(args: { workspaceDir?: string }): ExperimentSummary[] {
+    return this.services.experiments.list(this.experimentArgs(args))
+  }
+
+  @Remote('experimentsGet')
+  experimentsGet(args: { workspaceDir?: string; id: string }): ExperimentManifest | { error: string } {
+    try {
+      return this.services.experiments.get(this.experimentArgs(args), String(args?.id ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentsCreate')
+  experimentsCreate(args: { workspaceDir?: string; name: string; description?: string }): ExperimentManifest | { error: string } {
+    try {
+      return this.services.experiments.create(this.experimentArgs(args), String(args?.name ?? ''), String(args?.description ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentsUpdate')
+  experimentsUpdate(args: { workspaceDir?: string; id: string; patch: { name?: string; description?: string } }): ExperimentManifest | { error: string } {
+    try {
+      return this.services.experiments.update(this.experimentArgs(args), String(args?.id ?? ''), args?.patch ?? {})
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentsAddPhase')
+  experimentsAddPhase(args: { workspaceDir?: string; id: string; name?: string; description?: string }): ExperimentManifest | { error: string } {
+    try {
+      return this.services.experiments.addPhase(this.experimentArgs(args), String(args?.id ?? ''), String(args?.name ?? ''), String(args?.description ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentsCheckpoint')
+  experimentsCheckpoint(args: { workspaceDir?: string; id: string; name?: string; note?: string; phaseId?: string; sessionId?: string }): ExperimentManifest | { error: string } {
+    try {
+      return this.services.experiments.checkpoint(this.experimentArgs(args), String(args?.id ?? ''), {
+        name: String(args?.name ?? ''),
+        note: String(args?.note ?? ''),
+        ...(typeof args?.phaseId === 'string' && args.phaseId !== '' ? { phaseId: args.phaseId } : {}),
+        ...(typeof args?.sessionId === 'string' && args.sessionId !== '' ? { sessionId: args.sessionId } : {}),
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentsRollback')
+  experimentsRollback(args: { workspaceDir?: string; id: string; checkpointId: string }): { ok: boolean; restored: number; checkpointId: string; name: string } | { error: string } {
+    try {
+      const result = this.services.experiments.rollback(this.experimentArgs(args), String(args?.id ?? ''), String(args?.checkpointId ?? ''))
+      return { ok: true, ...result }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentsBranch')
+  experimentsBranch(args: { workspaceDir?: string; id: string; fromCheckpointId: string; name?: string }): ExperimentManifest | { error: string } {
+    try {
+      return this.services.experiments.branch(this.experimentArgs(args), String(args?.id ?? ''), String(args?.fromCheckpointId ?? ''), String(args?.name ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentsSwitchBranch')
+  experimentsSwitchBranch(args: { workspaceDir?: string; id: string; branchId: string }): ExperimentManifest | { error: string } {
+    try {
+      return this.services.experiments.switchBranch(this.experimentArgs(args), String(args?.id ?? ''), String(args?.branchId ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentsDelete')
+  experimentsDelete(args: { workspaceDir?: string; id: string }): { ok: boolean } | { error: string } {
+    try {
+      return this.services.experiments.delete(this.experimentArgs(args), String(args?.id ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   // ── 定时任务 ──────────────────────────────────────────────────────────────

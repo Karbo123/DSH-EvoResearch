@@ -240,3 +240,71 @@ export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   image: { model: '', provider: '' },
   voice: { model: '', provider: 'api', url: '', keyEnv: 'VOICE_API_KEY' },
 }
+
+// ── 实验管理（§5.1 Git 式分支/回退/checkpoint）──────────────────────────────
+
+/** 实验检查点（工作区快照 + 元信息）。 */
+export interface ExperimentCheckpoint {
+  readonly id: string
+  readonly name: string
+  readonly note: string
+  readonly createdAt: number
+  /** 所属阶段 id（分支内）。 */
+  readonly phaseId: string
+  /** 快照目录（相对 <workspace>/.evoresearch-data/experiments/）。 */
+  readonly snapshotDir: string
+  /** 快照文件数与总字节。 */
+  readonly files: number
+  readonly bytes: number
+  /** 创建检查点时的会话 id（可一键跳回）。 */
+  readonly sessionId?: string
+  /** 是否被回退过（rollback 记录）。 */
+  readonly rolledBack?: boolean
+}
+
+/** 实验阶段（一个方向上的推进单元，按创建顺序排列）。 */
+export interface ExperimentPhase {
+  readonly id: string
+  readonly name: string
+  readonly description: string
+  readonly createdAt: number
+  readonly checkpoints: readonly ExperimentCheckpoint[]
+}
+
+/** 实验分支（从某 checkpoint 分出，携带截至该检查点的阶段/检查点副本）。 */
+export interface ExperimentBranch {
+  readonly id: string
+  readonly name: string
+  /** 分支来源检查点 id（首个分支可无）。 */
+  readonly fromCheckpointId?: string
+  readonly createdAt: number
+  readonly phases: readonly ExperimentPhase[]
+}
+
+/** 实验 manifest（<workspace>/.evoresearch-data/experiments/<id>.json）。 */
+export interface ExperimentManifest {
+  readonly id: string
+  readonly name: string
+  readonly description: string
+  /** 所属工作区绝对路径。 */
+  readonly workspaceDir: string
+  readonly createdAt: number
+  readonly updatedAt: number
+  readonly branches: readonly ExperimentBranch[]
+  readonly currentBranchId: string
+  /** 关联过的会话 id（跳回入口）。 */
+  readonly sessionIds: readonly string[]
+}
+
+/** 实验列表摘要。 */
+export interface ExperimentSummary {
+  readonly id: string
+  readonly name: string
+  readonly description: string
+  readonly createdAt: number
+  readonly updatedAt: number
+  readonly branchCount: number
+  readonly phaseCount: number
+  readonly checkpointCount: number
+  readonly currentBranchId: string
+}
