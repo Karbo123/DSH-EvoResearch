@@ -393,6 +393,20 @@ const DICT: Record<string, [string, string]> = {
   uvInstalling: ['Installing UV automatically…', '正在自动安装 UV…'],
   uvInstallFailed: ['UV auto-install failed', 'UV 自动安装失败'],
   retryUv: ['Retry UV install', '重试安装 UV'],
+  // 轨迹面板（§轨迹：DSH Trajectory 复刻）
+  trajectoryTab: ['Trajectory', '轨迹'],
+  trajActualTime: ['Actual time', '实际时间'],
+  trajEqualWidth: ['Equal width', '等宽'],
+  trajExpandTurns: ['Expand turns', '展开回合'],
+  trajCollapseTurns: ['Collapse turns', '收起回合'],
+  trajExpandCalls: ['Expand calls', '展开调用'],
+  trajCollapseCalls: ['Collapse calls', '收起调用'],
+  trajSearch: ['Search trajectory', '搜索轨迹'],
+  trajEmpty: ['No trajectory yet — send a message to get started.', '暂无轨迹——发送一条消息开始。'],
+  trajArgs: ['Arguments', '参数'],
+  trajResult: ['Result', '结果'],
+  turn: ['Turn', '回合'],
+  step: ['Step', '步骤'],
 }
 
 export function t(key: string): string {

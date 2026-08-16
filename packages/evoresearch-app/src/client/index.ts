@@ -30,6 +30,7 @@ import { t, readLang, setLang } from './i18n'
 import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
 import { ExperimentsPanel } from './experiments'
+import { TrajectoryPanel } from './trajectory'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
 
@@ -654,13 +655,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // ── 浏览器式标签栏（§5.2）：聊天（固定）/ PDF 预览 / 文本编辑器 ──
   interface WorkspaceTab {
     id: string
-    kind: 'chat' | 'pdf' | 'editor'
+    kind: 'chat' | 'pdf' | 'editor' | 'trajectory'
     title: string
     filePath?: string
     root?: string
     draft?: string
   }
-  const [tabs, setTabs] = useState<WorkspaceTab[]>([{ id: 'chat', kind: 'chat', title: t('chatTab') }])
+  const [tabs, setTabs] = useState<WorkspaceTab[]>([
+    { id: 'chat', kind: 'chat', title: t('chatTab') },
+    { id: 'trajectory', kind: 'trajectory', title: t('trajectoryTab') },
+  ])
   const [activeTabId, setActiveTabId] = useState<string>('chat')
   const [tabMenuOpen, setTabMenuOpen] = useState(false)
   const [newFileName, setNewFileName] = useState('')
@@ -1009,7 +1013,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           onClick: () => activateTab(tab.id),
                           children: [
                             jsx('span', { className: 'evo-tab-title', children: tab.title }),
-                            tab.kind !== 'chat' && jsx('button', {
+                            (tab.kind === 'pdf' || tab.kind === 'editor') && jsx('button', {
                               type: 'button',
                               className: 'evo-tab-close',
                               title: t('closeTab'),
@@ -1086,6 +1090,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                     (() => {
                       const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
                       if (activeTab === undefined) return null
+                      if (activeTab.kind === 'trajectory') {
+                        return jsx(TrajectoryPanel, { session: sessionObj })
+                      }
                       if (activeTab.kind === 'pdf' && activeTab.filePath !== undefined) {
                         return jsx('div', {
                           className: 'evo-tab-body',

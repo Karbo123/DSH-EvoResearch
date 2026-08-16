@@ -361,7 +361,7 @@ export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
     onPointerDown: (e: { target: HTMLElement; currentTarget: HTMLElement }) => { if (e.target === e.currentTarget) onClose() },
     children: [
       jsxs('div', {
-        className: 'evo-modal evo-settings-modal',
+        className: 'evo-modal evo-settings-modal evo-modal-full',
         role: 'dialog',
         'aria-modal': 'true',
         'aria-label': t('settings'),

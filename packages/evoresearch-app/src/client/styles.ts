@@ -332,6 +332,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── 设置弹窗 ── */
 .evo-modal-mask { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
 .evo-modal { width: 75vw; height: 75vh; max-width: 75vw; max-height: 75vh; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
+/* 设置面板占满整个窗口（用户要求）：fixed + inset 精确覆盖视口 */
+.evo-modal.evo-modal-full { position: fixed; inset: 0; width: auto; height: auto; max-width: none; max-height: none; border-radius: 0; border: none; }
 .evo-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--color-border-light); }
 .evo-modal-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
 .evo-modal-body { padding: 14px 18px 18px; overflow-y: auto; }
@@ -874,4 +876,41 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-env-pkgs { font-size: 11.5px; color: var(--color-text-secondary); line-height: 1.5; word-break: break-word; }
 .evo-env-uvrow { display: flex; align-items: center; gap: 8px; }
 .evo-env-uvhint { font-size: 11.5px; color: var(--color-warning); }
+/* ── 轨迹面板（§轨迹：DSH Trajectory 复刻，暖纸面风格）── */
+.evo-traj { display: flex; flex-direction: column; flex: 1; min-height: 0; background: var(--color-background); }
+.evo-traj-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--color-border); flex-shrink: 0; flex-wrap: wrap; }
+.evo-traj-toolbar > svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
+.evo-traj-chip { display: inline-flex; align-items: center; padding: 4px 11px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12px; cursor: pointer; }
+.evo-traj-chip[data-on] { background: color-mix(in srgb, var(--brand) 12%, var(--color-surface)); border-color: var(--brand); color: var(--brand); font-weight: 600; }
+.evo-traj-sep { width: 1px; height: 16px; background: var(--color-border); margin: 0 4px; flex-shrink: 0; }
+.evo-traj-totals { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.evo-traj-search { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); flex-shrink: 0; }
+.evo-traj-search svg { width: 13px; height: 13px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-traj-search-input { width: 140px; border: none; outline: none; background: none; color: var(--color-text-primary); font-size: 12px; }
+.evo-traj-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px 16px; }
+.evo-traj-empty { padding: 30px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
+.evo-traj-turn { border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 8px; background: var(--color-surface); overflow: hidden; }
+.evo-traj-step { border-top: 1px solid var(--color-border-light); }
+.evo-traj-call { border-top: 1px dashed var(--color-border-light); background: color-mix(in srgb, var(--color-background) 55%, transparent); }
+.evo-traj-row { display: flex; align-items: center; gap: 7px; padding: 6px 10px; font-size: 12.5px; color: var(--color-text-primary); cursor: pointer; min-width: 0; }
+.evo-traj-row:hover { background: var(--hover-bg); }
+.evo-traj-row > svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--color-text-tertiary); }
+.evo-traj-turn-row > svg:nth-child(2) { color: var(--brand); }
+.evo-traj-step-row > svg:nth-child(2) { color: var(--color-warning); }
+.evo-traj-call-row > svg:nth-child(2) { color: var(--color-text-secondary); }
+.evo-traj-label { font-weight: 600; flex-shrink: 0; }
+.evo-traj-usertext, .evo-traj-steptext { color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; max-width: 34%; }
+.evo-traj-args { color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30%; min-width: 0; }
+.evo-traj-tokens { flex-shrink: 0; font-size: 11px; color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+.evo-traj-bar { flex: 1; min-width: 30px; height: 5px; background: var(--hover-bg); border-radius: 999px; overflow: hidden; flex-shrink: 0; }
+.evo-traj-bar-fill { display: block; height: 100%; background: color-mix(in srgb, var(--brand) 55%, var(--color-border)); border-radius: 999px; }
+.evo-traj-dur { flex-shrink: 0; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+.evo-traj-status { flex-shrink: 0; display: inline-flex; }
+.evo-traj-status svg { width: 13px; height: 13px; color: var(--color-success); }
+.evo-traj-status svg:has(+ *) { color: inherit; }
+.evo-traj-call-row .evo-traj-status { color: var(--color-error); }
+.evo-traj-call-detail { padding: 2px 12px 10px 30px; display: flex; flex-direction: column; gap: 4px; }
+.evo-traj-detail-head { font-size: 11px; color: var(--color-text-tertiary); font-weight: 600; margin-top: 4px; }
+.evo-traj-detail-pre { margin: 0; padding: 8px 10px; background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); max-height: 240px; overflow-y: auto; }
+.evo-traj-detail-pre.error { color: var(--color-error); }
 `
