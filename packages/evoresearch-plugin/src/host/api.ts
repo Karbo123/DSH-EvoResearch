@@ -134,6 +134,12 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
   }
 
+  /** 确保 UV 已安装（缺失时用官方脚本自动安装；返回安装结果）。 */
+  @Remote('uvEnsure')
+  async uvEnsure(): Promise<{ ok: boolean; uv: string | null; installed: boolean; error?: string }> {
+    return this.services.projectEnv.uvEnsure()
+  }
+
   @Remote('projectEnvCreate')
   async projectEnvCreate(args: { projectDir?: string; pythonVersion?: string }): Promise<ProjectEnvInfo | { error: string }> {
     try {

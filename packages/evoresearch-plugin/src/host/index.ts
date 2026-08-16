@@ -132,6 +132,13 @@ function apply(ctx: Context): void {
   // 5.6) 项目环境（每项目独立 UV 虚拟环境）
   const projectEnv = new ProjectEnvService(dataRoot)
 
+  // 5.6.1) UV 自动安装（用户缺失时启动即静默安装，官方脚本，幂等快速）
+  void projectEnv.uvEnsure().then((result) => {
+    if (result.ok && result.installed) console.log(`[evoresearch] 已自动安装 UV → ${result.uv}`)
+    else if (result.ok) console.log(`[evoresearch] UV 已就绪: ${result.uv}`)
+    else console.warn(`[evoresearch] UV 自动安装失败（可稍后重试）: ${result.error}`)
+  })
+
   // 6) Remote API（构造即注册 services.evoresearch）
   const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, projectEnv }
   void new EvoResearchApiService(ctx, services)

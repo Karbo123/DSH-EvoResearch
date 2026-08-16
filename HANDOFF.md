@@ -129,7 +129,12 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 - **前端**：Workspace 面板每项目「项目环境」卡片——状态（Python 版本/包列表）、创建
   （可指定版本）、安装包、删除（两段确认）；新建项目/欢迎页自动建项目时后台自动创建环境
 - **泄漏防线**：`<project_env>` 加入 SYSTEM_LEAK_PREFIXES
-- **UV 安装**：`C:\Users\Karbo\.dsh\bin\uv.exe`（0.12.5，GitHub 官方独立版）
+- **UV 自动安装（客户开箱即用）**：host 启动时静默 `uvEnsure()`；缺失时按序尝试——
+  ① 官方 PowerShell 脚本（astral.sh/uv/install.ps1 → `~/.local/bin`）② 官方 zip +
+  Windows 自带 `tar.exe` 解压（无 PowerShell 依赖，沙箱环境可靠）→ `~/.local/bin/uv.exe`；
+  解析顺序 EVORESEARCH_UV → `~/.local/bin` → `%LOCALAPPDATA%\Programs\uv` → `~/.dsh/bin` → PATH。
+  已实测：隐藏全部 uv 后重启 → 自动安装成功 → 建项目环境自动创建（Python 3.12.13）。
+  环境卡片在 uv 缺失时显示「正在自动安装 UV…」+ 重试按钮
 
 ### 3.8 Markdown 行距收紧（用户反馈）
 

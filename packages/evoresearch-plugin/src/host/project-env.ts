@@ -15,6 +15,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as os from 'node:os'
 import { homedir } from 'node:os'
 import { spawn, spawnSync } from 'node:child_process'
 
@@ -70,18 +71,117 @@ function runAsync(exe: string, args: string[], timeoutMs: number): Promise<RunRe
   })
 }
 
+/** 下载文件（带超时与重定向跟随）。 */
+async function downloadFile(url: string, dest: string, timeoutMs = 5 * 60 * 1000): Promise<void> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal, redirect: 'follow' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const buffer = Buffer.from(await res.arrayBuffer())
+    fs.writeFileSync(dest, buffer)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** 递归查找指定文件名（返回首个匹配的绝对路径，未找到返回 null）。 */
+function findFile(dir: string, name: string): string | null {
+  let entries: fs.Dirent[] = []
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return null
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      const found = findFile(full, name)
+      if (found !== null) return found
+    } else if (entry.name === name) {
+      return full
+    }
+  }
+  return null
+}
+
+/**
+ * 解析 UV 可执行文件（null = 未安装）。
+ * 顺序：EVORESEARCH_UV → 官方脚本位置 ~/.local/bin → 静默安装器位置
+ * %LOCALAPPDATA%\Programs\uv → 旧版 ~/.dsh/bin → PATH。
+ */
+function uvPathOf(): string | null {
+  const fromEnv = process.env.EVORESEARCH_UV
+  if (fromEnv !== undefined && fromEnv !== '' && fs.existsSync(fromEnv)) return fromEnv
+  const candidates = [
+    path.join(homedir(), '.local', 'bin', 'uv.exe'),
+    path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'uv', 'uv.exe'),
+    path.join(homedir(), '.dsh', 'bin', 'uv.exe'),
+  ]
+  for (const candidate of candidates) if (fs.existsSync(candidate)) return candidate
+  const which = runCapture('where.exe', ['uv'])
+  return which !== '' ? which.split(/\r?\n/)[0]!.trim() : null
+}
+
 /** 项目环境服务。 */
 export class ProjectEnvService {
   constructor(readonly dataRoot: string) {}
 
   /** 解析 UV 可执行文件（null = 未安装）。 */
   uvPath(): string | null {
-    const fromEnv = process.env.EVORESEARCH_UV
-    if (fromEnv !== undefined && fromEnv !== '' && fs.existsSync(fromEnv)) return fromEnv
-    const local = path.join(homedir(), '.dsh', 'bin', 'uv.exe')
-    if (fs.existsSync(local)) return local
-    const which = runCapture('where.exe', ['uv'])
-    return which !== '' ? which.split(/\r?\n/)[0]!.trim() : null
+    return uvPathOf()
+  }
+
+  /**
+   * 确保 UV 可用：已安装直接返回；未安装则自动安装（客户开箱即用，无需手动操作）。
+   * 安装链路（按序尝试，成功即止）：
+   * 1. 官方 PowerShell 安装脚本（irm astral.sh/uv/install.ps1 | iex → ~/.local/bin）；
+   * 2. 官方 zip 下载 + Windows 自带 tar.exe 解压 → ~/.local/bin/uv.exe（无 PowerShell 依赖）。
+   * 幂等、可重入（并发调用只执行一次）。
+   */
+  private ensurePromise: Promise<{ ok: boolean; uv: string | null; installed: boolean; error?: string }> | null = null
+  uvEnsure(): Promise<{ ok: boolean; uv: string | null; installed: boolean; error?: string }> {
+    if (this.ensurePromise !== null) return this.ensurePromise
+    this.ensurePromise = (async () => {
+      const existing = uvPathOf()
+      if (existing !== null) return { ok: true, uv: existing, installed: false }
+      let lastError = ''
+      // 1) 官方脚本
+      try {
+        const script = 'irm https://astral.sh/uv/install.ps1 | iex'
+        const result = await runAsync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], 5 * 60 * 1000)
+        const found = uvPathOf()
+        if (result.status === 0 && found !== null) return { ok: true, uv: found, installed: true }
+        lastError = (result.stderr.trim() || result.stdout.trim() || `exit ${String(result.status)}`).slice(0, 300)
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error)
+      }
+      // 2) 官方 zip + tar.exe（Windows 10+ 自带 bsdtar，可解 zip；无 PowerShell 依赖）
+      try {
+        const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64'
+        const tmp = os.tmpdir()
+        const zip = path.join(tmp, `uv-${process.pid}-${Date.now()}.zip`)
+        const extractDir = path.join(tmp, `uv-extract-${process.pid}-${Date.now()}`)
+        await downloadFile(`https://github.com/astral-sh/uv/releases/latest/download/uv-${arch}-pc-windows-msvc.zip`, zip)
+        fs.mkdirSync(extractDir, { recursive: true })
+        const tarResult = await runAsync('tar.exe', ['-xf', zip, '-C', extractDir], 2 * 60 * 1000)
+        fs.rmSync(zip, { force: true })
+        if (tarResult.status !== 0) throw new Error(`tar 解压失败: ${(tarResult.stderr || tarResult.stdout).slice(0, 200)}`)
+        const uvExe = findFile(extractDir, 'uv.exe')
+        if (uvExe === null) throw new Error('zip 内未找到 uv.exe')
+        const binDir = path.join(homedir(), '.local', 'bin')
+        fs.mkdirSync(binDir, { recursive: true })
+        fs.copyFileSync(uvExe, path.join(binDir, 'uv.exe'))
+        fs.rmSync(extractDir, { recursive: true, force: true })
+        const found = uvPathOf()
+        if (found !== null) return { ok: true, uv: found, installed: true }
+        lastError = '解压安装完成但未找到 uv.exe'
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error)
+      }
+      return { ok: false, uv: null, installed: false, error: lastError || '所有安装方式均失败' }
+    })().finally(() => { this.ensurePromise = null })
+    return this.ensurePromise
   }
 
   envDirOf(projectDir: string): string {
@@ -144,11 +244,14 @@ export class ProjectEnvService {
 
   /**
    * 创建/重建项目环境：uv venv <project>/.venv --python <version> --python-preference managed。
-   * 异步（uv 下载 CPython 首次较慢，不阻塞事件循环）。
+   * 异步（uv 下载 CPython 首次较慢，不阻塞事件循环）。uv 缺失时自动安装。
    */
   async create(projectDir: string, pythonVersion?: string): Promise<ProjectEnvInfo> {
-    const uv = this.uvPath()
-    if (uv === null) throw new Error('uv 未安装（请安装 UV 或设置 EVORESEARCH_UV）')
+    const ensured = await this.uvEnsure()
+    if (!ensured.ok || ensured.uv === null) {
+      throw new Error(`UV 不可用且自动安装失败: ${ensured.error ?? '未安装'}`)
+    }
+    const uv = ensured.uv
     const envDir = this.envDirOf(projectDir)
     const version = (pythonVersion ?? '').trim() || this.envConfig(projectDir).pythonVersion || DEFAULT_PYTHON_VERSION
     const args = ['venv', envDir, '--python', version, '--python-preference', 'managed']
@@ -162,8 +265,11 @@ export class ProjectEnvService {
 
   /** 安装依赖：uv pip install --python <env> <packages...>（异步）。 */
   async install(projectDir: string, packages: string[]): Promise<{ ok: boolean; output: string }> {
-    const uv = this.uvPath()
-    if (uv === null) throw new Error('uv 未安装')
+    const ensured = await this.uvEnsure()
+    if (!ensured.ok || ensured.uv === null) {
+      throw new Error(`UV 不可用且自动安装失败: ${ensured.error ?? '未安装'}`)
+    }
+    const uv = ensured.uv
     const envDir = this.envDirOf(projectDir)
     if (!fs.existsSync(this.pythonOf(envDir))) throw new Error('项目环境尚未创建')
     const names = packages.map((p) => p.trim()).filter((p) => p !== '')

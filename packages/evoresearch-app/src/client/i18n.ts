@@ -389,6 +389,10 @@ const DICT: Record<string, [string, string]> = {
   installPkgsHint: ['Packages (e.g. numpy scikit-learn)', '包名（如 numpy scikit-learn）'],
   packages: ['packages', '个包'],
   noPackagesYet: ['No packages installed yet', '尚未安装任何包'],
+  uvMissing: ['UV not installed', 'UV 未安装'],
+  uvInstalling: ['Installing UV automatically…', '正在自动安装 UV…'],
+  uvInstallFailed: ['UV auto-install failed', 'UV 自动安装失败'],
+  retryUv: ['Retry UV install', '重试安装 UV'],
 }
 
 export function t(key: string): string {

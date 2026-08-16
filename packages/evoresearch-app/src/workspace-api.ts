@@ -891,7 +891,17 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
-        // ── 项目环境（§环境管理：env-status/env-create/env-install/env-remove）──
+        // ── 项目环境（§环境管理：env-status/env-create/env-install/env-remove/uv-ensure）──
+        if (method === 'uv-ensure') {
+          const fn = evoresearch?.uvEnsure as (() => Promise<{ ok: boolean; uv: string | null; installed: boolean; error?: string }>) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          try {
+            writeOk(res, await fn.call(evoresearch))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         if (method === 'env-status' || method === 'env-create' || method === 'env-install' || method === 'env-remove') {
           const serviceMethod = method === 'env-status' ? 'projectEnvStatus'
             : method === 'env-create' ? 'projectEnvCreate'

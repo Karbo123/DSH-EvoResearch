@@ -1135,11 +1135,12 @@ interface ProjectEnvRow {
   packages: string[]
 }
 
-/** 单个项目的环境卡片（状态 + 创建/装包/删除）。 */
+/** 单个项目的环境卡片（状态 + 创建/装包/删除；UV 缺失时自动安装）。 */
 function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: (m: string) => void }) {
   const [info, setInfo] = useState<ProjectEnvRow | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [uvBusy, setUvBusy] = useState(false)
   const [version, setVersion] = useState('3.12')
   const [pkgInput, setPkgInput] = useState('')
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -1149,6 +1150,19 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
     void api<ProjectEnvRow>('env-status', { projectDir }).then(setInfo).catch((e: any) => onError(String(e?.message ?? e)))
   }
   useEffect(() => { if (expanded) load() }, [expanded, projectDir])
+
+  // UV 缺失 → 自动安装（官方脚本；一次成功即刷新状态）
+  useEffect(() => {
+    if (!expanded || info === null || info.uv !== null || uvBusy) return
+    setUvBusy(true)
+    void api<{ ok: boolean; installed: boolean; error?: string }>('uv-ensure', {})
+      .then((result) => {
+        setUvBusy(false)
+        if (result.ok) load()
+        else onError(`${t('uvInstallFailed')}: ${result.error ?? ''}`)
+      })
+      .catch((e: any) => { setUvBusy(false); onError(String(e?.message ?? e)) })
+  }, [expanded, info, uvBusy])
 
   const doCreate = () => {
     setBusy(true)
@@ -1185,9 +1199,11 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
           jsx('span', { style: { flex: 1 } }),
           info === null
             ? jsx('span', { className: 'evo-env-state', children: t('loading') })
-            : info.exists
-              ? jsx('span', { className: 'evo-env-state evo-env-ok', children: info.pythonVersion.replace('Python ', '') })
-              : jsx('span', { className: 'evo-env-state evo-env-missing', children: t('envMissing') }),
+            : info.uv === null
+              ? jsx('span', { className: 'evo-env-state evo-env-missing', children: uvBusy ? t('uvInstalling') : t('uvMissing') })
+              : info.exists
+                ? jsx('span', { className: 'evo-env-state evo-env-ok', children: info.pythonVersion.replace('Python ', '') })
+                : jsx('span', { className: 'evo-env-state evo-env-missing', children: t('envMissing') }),
           expanded ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
         ],
       }),
@@ -1195,6 +1211,19 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
         className: 'evo-env-body',
         children: [
           info !== null && jsx('code', { className: 'evo-panel-item-code', children: info.envDir }),
+          info !== null && info.uv === null && jsxs('div', {
+            className: 'evo-env-uvrow',
+            children: [
+              jsx('span', { className: 'evo-env-uvhint', children: t('uvInstalling') }),
+              jsx('button', {
+                type: 'button',
+                className: 'evo-panel-add',
+                disabled: uvBusy,
+                onClick: () => { setUvBusy(false); load() },
+                children: jsx('span', { children: t('retryUv') }),
+              }),
+            ],
+          }),
           info !== null && info.exists && jsx('div', {
             className: 'evo-env-pkgs',
             children: info.packages.length > 0

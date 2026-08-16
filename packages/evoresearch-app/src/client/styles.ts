@@ -872,4 +872,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-env-state.evo-env-missing { color: var(--color-warning); }
 .evo-env-body { border-top: 1px solid var(--color-border-light); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .evo-env-pkgs { font-size: 11.5px; color: var(--color-text-secondary); line-height: 1.5; word-break: break-word; }
+.evo-env-uvrow { display: flex; align-items: center; gap: 8px; }
+.evo-env-uvhint { font-size: 11.5px; color: var(--color-warning); }
 `
