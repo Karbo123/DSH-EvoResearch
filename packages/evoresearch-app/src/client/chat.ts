@@ -968,14 +968,20 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (el === null) return
     composerResizeRef.current = { startY: e.clientY, startH: composerHeight ?? el.offsetHeight }
     e.currentTarget.setPointerCapture(e.pointerId)
+    e.currentTarget.dataset.dragging = '1'
   }
   const onComposerResizeMove = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number }) => {
     const ref = composerResizeRef.current
     if (ref === null || !e.currentTarget.hasPointerCapture(e.pointerId)) return
-    const next = ref.startH + (e.clientY - ref.startY)
+    // 上拖 = 增高（用户直觉：向上拖拽扩大输入区）
+    const next = ref.startH - (e.clientY - ref.startY)
     setComposerHeight(Math.min(composerMaxHeight(), Math.max(composerMinHeight(), next)))
   }
-  const onComposerResizeEnd = () => { composerResizeRef.current = null }
+  const onComposerResizeEnd = () => {
+    composerResizeRef.current = null
+    const el = document.querySelector<HTMLElement>('.evo-composer-resize')
+    if (el !== null) delete el.dataset.dragging
+  }
 
   const hasMessages = nodes.length > 0 || partial !== null
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)

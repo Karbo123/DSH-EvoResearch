@@ -268,6 +268,17 @@ gap=4、centerDelta=0、宽度差=0。
   （h/b/i/s/code/link/li/quote 全渲染）+ Ctrl+B 包裹/取消 + 无选区 Ctrl+I 光标置中。
   视觉模型 mimo-v2.5 评审通过（"逻辑清晰、视觉焦点明确"，建议的微距项已采纳）。
 
+### 3.15 输入框拖拽调整高度：方向反转 + 细线手柄（用户反馈）
+
+- **方向**：原实现"上拖 = 缩小"（`startH + (clientY - startY)`）→ 反转为
+  `startH - (clientY - startY)`：**鼠标上拖 = 输入框增高**（常见聊天工具直觉）。
+- **悬停样式**：原 8px 整条品牌色高亮色块 → 改为**居中 2px 细线手柄**
+  （`::before` 44px 圆角线，hover/拖动中变品牌色并加宽至 60px），热区保留 10px
+  点击区域（`cursor: ns-resize`），拖动中用 `data-dragging` 保持高亮。
+- E2E（scripts/verify-grip.mjs，headless Edge 真实鼠标事件）：上拖 60px → 高度
+  +60；下拖 30px → -30（精确增量）；hover 变品牌色 + 变宽。视觉模型 mimo-v2.5
+  评审 OK（"极简、符合专业工具审美、反馈明确"）。
+
 
 ## 四、E2E 验证结果（verify-newfeatures.mjs，真实模型对话）
 

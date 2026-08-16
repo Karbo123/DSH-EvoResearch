@@ -491,8 +491,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-fs-frame { flex: 1; min-height: 0; border: none; background: var(--color-surface); }
 /* ── 会话状态条 / 统计条 ── */
 .evo-composer { position: relative; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; container-type: inline-size; }
-.evo-composer-resize { height: 8px; cursor: ns-resize; border-radius: 12px 12px 0 0; flex-shrink: 0; touch-action: none; }
-.evo-composer-resize:hover { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+/* 输入区顶部拖拽热区：细线手柄（居中 2px 圆角线，hover/拖动变品牌色，不占突兀色块） */
+.evo-composer-resize { height: 10px; cursor: ns-resize; border-radius: 12px 12px 0 0; flex-shrink: 0; touch-action: none; display: flex; align-items: center; justify-content: center; position: relative; }
+.evo-composer-resize::before { content: ''; width: 44px; height: 2px; border-radius: 999px; background: var(--color-border); transition: background 0.15s ease, width 0.15s ease; }
+.evo-composer-resize:hover::before, .evo-composer-resize[data-dragging]::before { background: var(--brand); width: 60px; }
 .evo-composer-status { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); flex-wrap: wrap; }
 /* 当前工作路径（§25.4）：单行省略 + tooltip 完整路径 */
 .evo-cwd { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-tertiary); cursor: default; }
