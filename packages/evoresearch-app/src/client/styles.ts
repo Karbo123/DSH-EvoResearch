@@ -179,7 +179,7 @@ body { margin: 0; }
 .evo-dashboard-value { font-size: 22px; font-weight: 600; color: var(--brand); line-height: 1.1; }
 .evo-dashboard-label { font-size: 11.5px; color: var(--color-text-tertiary); }
 /* ── 输入面板 ── */
-.evo-composer-wrap { flex-shrink: 0; padding: 8px 24px 16px; display: flex; justify-content: center; position: relative; }
+.evo-composer-wrap { flex-shrink: 0; padding: 8px 24px 16px; display: flex; flex-wrap: wrap; justify-content: center; position: relative; }
 /* ── 输入候选弹层（§23.2–23.5：斜杠命令 / @文件 / 输入历史）── */
 .evo-cand { position: absolute; bottom: calc(100% - 8px); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 96px)); max-height: 280px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18); z-index: 40; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .evo-cand-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
@@ -191,8 +191,30 @@ body { margin: 0; }
 .evo-composer { width: 100%; max-width: var(--chat-max-width); border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 2px 12px rgba(0,0,0,.05); }
 .evo-composer-status { display: flex; align-items: center; gap: 7px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); }
 .evo-composer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
-.evo-composer-textarea { width: 100%; padding: 10px 14px 4px; border: none; outline: none; resize: none; background: none; color: var(--color-text-primary); font-size: 14.5px; font-family: inherit; line-height: 1.55; min-height: 44px; max-height: 220px; }
-.evo-composer-textarea::placeholder { color: var(--color-text-tertiary); }
+.evo-composer-textarea { width: 100%; padding: 10px 14px 4px; border: none; outline: none; resize: none; background: none; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--color-text-primary); font-size: 14.5px; font-family: inherit; line-height: 1.55; min-height: 44px; max-height: 220px; position: relative; }
+.evo-composer-textarea::placeholder { color: var(--color-text-tertiary); -webkit-text-fill-color: var(--color-text-tertiary); }
+.evo-composer-textarea::selection { background: color-mix(in srgb, var(--brand) 30%, transparent); }
+/* ── 双层 Markdown 实时编辑器（§composer）：装饰层渲染样式，textarea 透明编辑 ── */
+.evo-composer-input { position: relative; flex: 1; display: flex; min-height: 44px; }
+.evo-composer-deco { position: absolute; inset: 0; overflow: hidden; padding: 10px 14px 4px; font-size: 14.5px; font-family: inherit; line-height: 1.55; color: var(--color-text-primary); white-space: pre-wrap; word-break: break-word; pointer-events: none; }
+.evo-composer-deco[data-empty] { display: none; }
+.evod-m { visibility: hidden; }
+/* 聚焦输入时：隐藏的语法标记显示极浅背景，辅助定位（失焦自动隐藏，保持干净） */
+.evo-composer-input:focus-within .evod-m { visibility: visible; background: color-mix(in srgb, var(--color-text-tertiary) 13%, transparent); border-radius: 2px; }
+.evod-code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; background: var(--hover-bg); border-radius: 4px; padding: 1px 3px; }
+.evod-link { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+.evod-h { font-weight: 700; }
+.evod-h1 { font-size: 22px; } .evod-h2 { font-size: 19px; } .evod-h3 { font-size: 17px; } .evod-h4 { font-size: 15.5px; }
+.evod-h5 { font-size: 14.5px; } .evod-h6 { font-size: 14.5px; color: var(--color-text-secondary); }
+.evod-li { display: block; padding-left: 20px; position: relative; }
+.evod-ul::before, .evod-ol::before { content: '•'; position: absolute; left: 5px; color: var(--color-text-tertiary); }
+.evod-quote { border-left: 3px solid var(--color-border); padding-left: 9px; color: var(--color-text-secondary); }
+.evod-hr { border-bottom: 1px solid var(--color-border); margin: 5px 0; }
+.evod-fence-line, .evod-fence-body { background: var(--hover-bg); }
+.evod-fence-line { margin-top: 4px; border-radius: 6px 6px 0 0; }
+.evod-fence-body { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
+.evod-fence-body:last-child { border-radius: 0 0 6px 6px; margin-bottom: 4px; }
+.evo-composer-textarea::selection { background: color-mix(in srgb, var(--brand) 30%, transparent); }
 .evo-composer-tools { display: flex; align-items: center; gap: 4px; padding: 6px 8px 8px; }
 .evo-composer-tool {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: none; background: none;
@@ -483,6 +505,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-status-ro { color: var(--color-warning); }
 .evo-status-full { color: var(--color-error); }
 .evo-stats-line { display: flex; align-items: center; gap: 8px; padding: 6px 14px 9px; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 会话统计行（输入框圆角框下方外部、水平居中、紧贴）：flex-basis 100% 强制换行，
+   max-width 与输入框一致，justify-content 水平居中 */
+.evo-composer-stats { flex-basis: 100%; max-width: var(--chat-max-width); margin-top: 4px; }
+.evo-composer-stats .evo-stats-line { padding: 2px 4px 0; justify-content: center; }
 .evo-stats-sep { color: var(--color-border); margin-right: 8px; }
 /* ── 插件清单 ── */
 .evo-plugin-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
@@ -658,7 +684,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── 附件（§23.7）── */
 .evo-chat { position: relative; }
 .evo-chat-dragover::after { content: 'Drop image(s) to attach'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--brand) 12%, var(--color-background)); color: var(--brand); font-size: 15px; font-weight: 600; border: 2px dashed var(--brand); border-radius: 12px; pointer-events: none; z-index: 5; }
-.evo-attach-strip { flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 24px 0; }
+.evo-attach-strip { flex-basis: 100%; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 24px 0; }
 .evo-attach-error { font-size: 12px; color: var(--color-error); }
 .evo-attach-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .evo-attach-item { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); padding: 4px 8px; max-width: 260px; }

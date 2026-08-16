@@ -245,6 +245,29 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
   `%LOCALAPPDATA%\com.evoresearch.desktop\port.json`（1 行端口号）、
   诊断日志 `%TEMP%\evoresearch-*.log`；WebView2/Edge 浏览器缓存由浏览器托管。
 
+### 3.14 输入区改造：统计行移到输入框外 + Markdown 实时样式化编辑器
+
+**统计行位置（用户反馈）**：会话统计行（"N 轮 · N 步 | LLM … | 首 token …"）从输入框
+圆角框**内部**移到**下方外部**：`.evo-composer-wrap` 改 `flex-wrap: wrap`，
+统计行 `flex-basis: 100%` 换行到输入框下方、`justify-content: center` 水平居中、
+`margin-top: 4px` 紧贴、`max-width` 与输入框一致。E2E 断言：inComposer=false、
+gap=4、centerDelta=0、宽度差=0。
+
+**Markdown 实时样式化编辑器（Typora 式"输入即所见"）**：
+- 双层结构：底层 `.evo-composer-deco` 装饰层实时渲染 Markdown 样式，上层 textarea
+  透明文字（`-webkit-text-fill-color: transparent` + 可见 caret）继续负责编辑
+  （IME/光标/粘贴全部原生可靠）。
+- 核心约束：装饰层**可见字符数 = 源字符数**——语法标记（`**`、`#`、`- `、`>`、``` ```` 等）
+  用 `visibility: hidden` 隐藏但保留占位，textarea 光标/选区映射零偏移。
+- 覆盖语法：行内（加粗/斜体/删除线/行内代码/链接）+ 行级（标题 1-6/列表/引用/
+  代码围栏/分割线）；聚焦输入框时标记显示极浅背景辅助定位，失焦自动隐藏。
+- 快捷键（框选包裹、再按取消、无选区插入标记对并置中光标）：Ctrl/Cmd+B 加粗、
+  Ctrl/Cmd+I 斜体、Ctrl/Cmd+K 链接、Ctrl+Shift+` 行内代码、Ctrl+Shift+X 删除线；
+  状态行新增键盘提示按钮（hover 显示快捷键说明）。
+- E2E（scripts/verify-composer-markdown.mjs）：统计行位置断言 + 装饰层元素断言
+  （h/b/i/s/code/link/li/quote 全渲染）+ Ctrl+B 包裹/取消 + 无选区 Ctrl+I 光标置中。
+  视觉模型 mimo-v2.5 评审通过（"逻辑清晰、视觉焦点明确"，建议的微距项已采纳）。
+
 
 ## 四、E2E 验证结果（verify-newfeatures.mjs，真实模型对话）
 

@@ -217,3 +217,81 @@ export function renderMarkdown(text: string): string {
   const html = md.render(text)
   return DOMPurify.sanitize(html, SANITIZE_OPTS)
 }
+
+/**
+ * 输入框实时样式化装饰层（Typora 式"输入即所见"）：
+ * 渲染后可见字符数与源 Markdown 完全一致——语法标记（`**`、`#`、`- ` 等）
+ * 用 visibility:hidden 隐藏但保留占位，使下层 textarea 的光标/选区映射零偏移；
+ * 行内样式（加粗/斜体/删除线/行内代码/链接）与行级结构（标题/列表/引用/
+ * 代码围栏/分割线）即时呈现。仅作显示层，不参与提交（提交仍用 markdown 原文）。
+ */
+export function renderComposerDeco(text: string): string {
+  const esc = (s: string): string => s
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  // 隐藏但占位的语法标记（visibility:hidden 保留布局空间）
+  const M = (s: string): string => `<span class="evod-m">${esc(s)}</span>`
+  // 行内样式（逐行处理；所有替换保持可见字符数不变）
+  const inline = (line: string): string => {
+    let out = line
+    // 行内代码（最先处理，避免内部再被样式化）
+    out = out.replace(/(`+)([^`\n]*?)(\1)/g, (_m, ticks: string, inner: string) =>
+      `<code class="evod-code">${M(ticks)}${esc(inner)}${M(ticks)}</code>`)
+    // 链接 [text](url)
+    out = out.replace(/\[([^\[\]\n]*)\]\(([^()\n\s]+)\)/g, (_m, t: string, u: string) =>
+      `<a class="evod-link">${M('[')}${esc(t)}${M(`](${u})`)}</a>`)
+    // 加粗
+    out = out.replace(/\*\*([^*\n]+)\*\*/g, (_m, t: string) =>
+      `<b>${M('**')}${esc(t)}${M('**')}</b>`)
+    // 斜体（前置非 * 锚点，避免与加粗残留冲突）
+    out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, (_m, pre: string, t: string) =>
+      `${pre}<i>${M('*')}${esc(t)}${M('*')}</i>`)
+    // 删除线
+    out = out.replace(/~~([^~\n]+)~~/g, (_m, t: string) =>
+      `<s>${M('~~')}${esc(t)}${M('~~')}</s>`)
+    return out
+  }
+  const lines = text.split('\n')
+  let inFence = false
+  const out: string[] = []
+  for (const line of lines) {
+    // 代码围栏（``` / ~~~，允许语言后缀）
+    if (/^(`{3,}|~{3,})[^`~\n]*$/.test(line)) {
+      inFence = !inFence
+      out.push(`<div class="evod-fence-line">${M(line)}</div>`)
+      continue
+    }
+    if (inFence) {
+      out.push(`<div class="evod-fence-body">${esc(line)}</div>`)
+      continue
+    }
+    // 标题
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line)
+    if (heading !== null) {
+      const n = heading[1]!.length
+      out.push(`<div class="evod-h evod-h${n}">${M(`${heading[1]} `)}${inline(heading[2] ?? '')}</div>`)
+      continue
+    }
+    // 列表（- * + 或 1. 1)）
+    const listItem = /^([-*+]|\d+[.)])\s+(.*)$/.exec(line)
+    if (listItem !== null) {
+      const marker = listItem[1]!
+      out.push(`<div class="evod-li${/^\d/.test(marker) ? ' evod-ol' : ' evod-ul'}">${M(`${marker} `)}${inline(listItem[2] ?? '')}</div>`)
+      continue
+    }
+    // 引用
+    const quote = /^>\s?(.*)$/.exec(line)
+    if (quote !== null) {
+      const content = quote[1] ?? ''
+      const marker = line.slice(0, line.length - content.length)
+      out.push(`<div class="evod-quote">${M(marker)}${inline(content)}</div>`)
+      continue
+    }
+    // 分割线
+    if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      out.push(`<div class="evod-hr">${M(line)}</div>`)
+      continue
+    }
+    out.push(inline(line))
+  }
+  return out.join('\n')
+}

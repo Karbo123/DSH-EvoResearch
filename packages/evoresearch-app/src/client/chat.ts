@@ -16,7 +16,7 @@ import {
 import { t } from './i18n'
 import { toast } from './toast'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
-import { renderMarkdown, renderMermaidBlocks } from './markdown'
+import { renderMarkdown, renderComposerDeco, renderMermaidBlocks } from './markdown'
 import {
   CandidatePopup, buildCandidates, detectTrigger, pushHistory, readHistory,
   resolveMentions, useCommandCatalog, useFileTree,
@@ -472,6 +472,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   const listRef = useRef<HTMLDivElement | null>(null)
   const taRef = useRef<HTMLTextAreaElement | null>(null)
+  const decoRef = useRef<HTMLDivElement | null>(null)
 
   // ── 会话动作（§25.6）：Current / Search / Notify / Shortcuts / Compact / Clear view ──
   const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'model' | 'wf-clear' | 'auto-approve'>(null)
@@ -497,6 +498,38 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   useEffect(() => {
     if (userOnly && listRef.current !== null) listRef.current.scrollTop = 0
   }, [userOnly])
+
+  // ── Markdown 快捷键（§composer）：Ctrl/Cmd+B 加粗、I 斜体、K 链接、Shift+` 行内代码、Shift+X 删除线 ──
+  // 有选区 → 包裹；已包裹 → 取消包裹；无选区 → 插入标记对（光标置中）
+  const kbdWrap = (ta: HTMLTextAreaElement | null, before: string, after: string, mid?: string) => {
+    if (ta === null) return
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const value = ta.value
+    if (start >= before.length && value.slice(start - before.length, start) === before && value.slice(end, end + after.length) === after) {
+      const next = value.slice(0, start - before.length) + value.slice(start, end) + value.slice(end + after.length)
+      setInput(next)
+      refreshTrigger(next, Math.max(0, start - before.length))
+      requestAnimationFrame(() => { ta.selectionStart = Math.max(0, start - before.length); ta.selectionEnd = Math.max(0, end - after.length) })
+      return
+    }
+    const next = value.slice(0, start) + before + value.slice(start, end) + after + value.slice(end)
+    setInput(next)
+    let selStart: number
+    let selEnd: number
+    if (end > start) {
+      selStart = start + before.length
+      selEnd = end + before.length
+    } else if (mid !== undefined) {
+      selStart = start + before.length
+      selEnd = start + before.length + mid.length
+    } else {
+      selStart = start + before.length
+      selEnd = selStart
+    }
+    refreshTrigger(next, selStart)
+    requestAnimationFrame(() => { ta.selectionStart = selStart; ta.selectionEnd = selEnd })
+  }
   const [jumpKey, setJumpKey] = useState<string | null>(null)
 
   // 状态条模型 chip → 打开模型选择器（§25.2：模型名本身是按钮）
@@ -1336,6 +1369,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                         onClick: () => setPreview(true),
                         children: jsx(Eye, {}),
                       }, 'preview'),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-toggle-btn',
+                        title: t('markdownShortcuts'),
+                        'aria-label': t('markdownShortcuts'),
+                        children: jsx(Keyboard, {}),
+                      }, 'shortcuts-hint'),
                     ],
                   }),
                 ],
@@ -1347,7 +1387,18 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       ? jsx('span', { className: 'evo-composer-preview-empty', children: t('previewEmpty') })
                       : jsx(Fragment, { children: [jsx('div', { dangerouslySetInnerHTML: { __html: renderMarkdown(input) } })] }),
                   })
-                : jsx('textarea', {
+                : jsxs('div', {
+                    // 双层编辑器（§composer）：底层装饰层实时渲染 Markdown 样式
+                    // （标记字符隐藏但占位，光标映射零偏移），上层 textarea 透明文字编辑
+                    className: 'evo-composer-input',
+                    children: [
+                      jsx('div', {
+                        ref: decoRef,
+                        className: 'evo-composer-deco',
+                        'data-empty': input === '' || undefined,
+                        dangerouslySetInnerHTML: { __html: renderComposerDeco(input) },
+                      }),
+                      jsx('textarea', {
                 ref: taRef,
                 className: 'evo-composer-textarea',
                 placeholder: t('askAnything'),
@@ -1358,6 +1409,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 'aria-autocomplete': 'list',
                 'aria-activedescendant': candidates.length > 0 && activeIndex < candidates.length ? `evo-cand-${activeIndex}` : undefined,
                 style: composerHeight !== null ? { height: `${composerHeight}px`, maxHeight: 'none' } : undefined,
+                onScroll: (e) => {
+                  // 装饰层与 textarea 同步滚动（内容超高时）
+                  if (decoRef.current !== null) decoRef.current.scrollTop = e.currentTarget.scrollTop
+                },
                 onInput: (e) => {
                   setInput(e.currentTarget.value)
                   // 手动拖动设定高度后不再自动伸缩（§23.1）
@@ -1385,6 +1440,16 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   // 空输入上下键浏览输入历史（§23.5）
                   if (e.key === 'ArrowUp' && input === '') { e.preventDefault(); browseHistory(-1); return }
                   if (e.key === 'ArrowDown' && input === '' && historyIndex !== -1) { e.preventDefault(); browseHistory(1); return }
+                  // Markdown 快捷键（§composer）：Ctrl/Cmd+B 加粗、I 斜体、K 链接、
+                  // Shift+` 行内代码、Shift+X 删除线；框选文本时包裹，再按一次取消
+                  if (!e.nativeEvent.isComposing && (e.ctrlKey || e.metaKey) && !e.altKey) {
+                    const k = e.key.toLowerCase()
+                    if (k === 'b') { e.preventDefault(); kbdWrap(taRef.current, '**', '**'); return }
+                    if (k === 'i') { e.preventDefault(); kbdWrap(taRef.current, '*', '*'); return }
+                    if (k === 'k') { e.preventDefault(); kbdWrap(taRef.current, '[', '](url)', 'url'); return }
+                    if (e.shiftKey && k === '`') { e.preventDefault(); kbdWrap(taRef.current, '`', '`'); return }
+                    if (e.shiftKey && k === 'x') { e.preventDefault(); kbdWrap(taRef.current, '~~', '~~'); return }
+                  }
                   // Ctrl/Cmd+Enter 也发送（§23.2）
                   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                     e.preventDefault()
@@ -1403,6 +1468,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }
                 },
               }),
+                    ],
+                  }),
               candidates.length > 0 && jsx(CandidatePopup, {
                 candidates,
                 active: activeIndex,
@@ -1535,9 +1602,12 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 ],
               }),
-              // 过滤模式下隐藏统计行：界面完全服务于"聚焦用户指令"
-              !userOnly && jsx(SessionStatsLine, { session }),
             ],
+          }),
+          // 会话统计行：位于输入框圆角框下方外部、水平居中、紧贴（不在输入框内部）
+          !userOnly && jsx('div', {
+            className: 'evo-composer-stats',
+            children: jsx(SessionStatsLine, { session }),
           }),
         ],
       }),

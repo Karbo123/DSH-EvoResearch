@@ -135,6 +135,7 @@ const DICT: Record<string, [string, string]> = {
   removeAttachment: ['Remove attachment', '移除附件'],
   dragToResize: ['Drag to resize', '拖动调整高度'],
   markdownPreview: ['Markdown preview', 'Markdown 预览'],
+  markdownShortcuts: ['Markdown shortcuts: Ctrl+B bold · Ctrl+I italic · Ctrl+K link · Ctrl+Shift+` inline code · Ctrl+Shift+X strikethrough（selection to wrap, press again to undo）', 'Markdown 快捷键：Ctrl+B 加粗 · Ctrl+I 斜体 · Ctrl+K 链接 · Ctrl+Shift+` 行内代码 · Ctrl+Shift+X 删除线（框选文本后按，再按一次取消）'],
   compactTitle: ['Compact（摘要投影，不删历史）', '压缩（摘要投影，不删历史）'],
   currentSession: ['Current session', '当前会话'],
   search: ['Search', '搜索'],
