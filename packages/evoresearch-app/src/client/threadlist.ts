@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
@@ -46,7 +46,8 @@ export interface ThreadListProps {
   onView: (v: SideView) => void
   /** 打开（选中）一个会话 */
   onOpen: (id: string) => void
-  onNewChat: () => void
+  /** 新建聊天；传入项目工作区路径 = 在该项目下新建子聊天 */
+  onNewChat: (cwd?: string) => void
   /** 是否有活跃（非 blank）会话 */
   hasActive: boolean
   /** 重命名会话（官方 session.rename；返回是否成功）。 */
@@ -112,6 +113,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   const [renameValue, setRenameValue] = useState('')
   const [forkError, setForkError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  // §ChatGraph/§二级聊天：左侧按项目分类——null = 项目列表视图；非 null = 该项目子聊天列表
+  const [projectMode, setProjectMode] = useState<{ name: string; path: string } | null>(null)
   // 菜单内两段式删除确认：第一次点击进入确认态，5 秒无操作还原
   const [delArm, setDelArm] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -149,6 +152,35 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
     ? rows.filter((s) => (s.displayTitle ?? '').toLowerCase().includes(query.trim().toLowerCase()))
     : rows
 
+  // ── 项目分组（§二级聊天）：由会话 cwd 派生项目列表 ──
+  const cwdBase = (cwd: unknown): string | null =>
+    typeof cwd === 'string' && cwd !== '' ? cwd.replace(/[\\/]+$/, '') : null
+  const projectList = (() => {
+    const map = new Map<string, { path: string; count: number; updatedAt: number }>()
+    for (const s of rows) {
+      const base = cwdBase(s.cwd)
+      if (base === null) continue
+      const name = base.split(/[\\/]/).pop() ?? base
+      const cur = map.get(name)
+      if (cur !== undefined) {
+        cur.count += 1
+        if ((s.updatedAt ?? 0) > cur.updatedAt) cur.updatedAt = s.updatedAt ?? 0
+      } else {
+        map.set(name, { path: base, count: 1, updatedAt: s.updatedAt ?? 0 })
+      }
+    }
+    return [...map.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.updatedAt - a.updatedAt)
+  })()
+  // 当前项目视图下的会话（精确路径匹配）
+  const scopedRows = projectMode === null
+    ? []
+    : rows.filter((s) => cwdBase(s.cwd) === projectMode.path)
+  const currentProject = (() => {
+    const cur = currentId === undefined ? undefined : sessions.byId[currentId]
+    const base = cwdBase(cur?.cwd)
+    return base === null ? null : (base.split(/[\\/]/).pop() ?? base)
+  })()
+
   const isActive = (key: string) =>
     (key === 'skills' && view === 'skills') ||
     (key === 'memory' && view === 'memory') ||
@@ -164,10 +196,22 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
       jsxs('div', {
         className: 'evo-tl-head',
         children: [
+          projectMode !== null && jsx('button', {
+            type: 'button',
+            className: 'evo-tl-back',
+            title: t('projectBack'),
+            'aria-label': t('projectBack'),
+            onClick: () => { setProjectMode(null); setMenuFor(null) },
+            children: jsx(ArrowLeft, {}),
+          }),
+          projectMode !== null
+            ? jsx('span', { className: 'evo-tl-head-title', children: projectMode.name })
+            : jsx('span', { className: 'evo-tl-head-title', children: t('projects') }),
+          jsx('span', { style: { flex: 1 } }),
           jsx('button', {
             type: 'button',
             className: 'evo-tl-newchat',
-            onClick: onNewChat,
+            onClick: () => onNewChat(projectMode?.path),
             children: jsxs(Fragment, {
               children: [jsx(SquarePen, {}), jsx('span', { children: t('newChat') })],
             }),
@@ -187,30 +231,61 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
           }, item.key)
         }),
       }),
-      jsxs('div', {
-        className: 'evo-tl-search',
-        children: [
-          jsx(Search, {}),
-          jsx('input', {
-            type: 'text',
-            placeholder: t('searchResearch'),
-            value: query,
-            onInput: (e) => setQuery(e.currentTarget.value),
+      projectMode === null
+        ? null
+        : jsxs('div', {
+            className: 'evo-tl-search',
+            children: [
+              jsx(Search, {}),
+              jsx('input', {
+                type: 'text',
+                placeholder: t('searchResearch'),
+                value: query,
+                onInput: (e) => setQuery(e.currentTarget.value),
+              }),
+            ],
           }),
-        ],
-      }),
       jsxs('div', {
         className: 'evo-tl-body',
         children: [
-          jsxs('div', {
-            className: 'evo-tl-section',
-            children: [
-              jsx('span', { className: 'evo-tl-section-title', children: t('recents') }),
-              forkError !== null && jsx('span', { className: 'evo-tl-fork-error', children: forkError }),
-              deleteError !== null && jsx('span', { className: 'evo-tl-fork-error', children: deleteError }),
-            ],
-          }),
-          results.length === 0
+          projectMode === null
+            ? // ── 项目列表视图（§二级聊天）──
+              projectList.length === 0
+                ? jsxs('div', {
+                    className: 'evo-tl-empty',
+                    children: [
+                      jsx(FolderGit2, {}),
+                      jsx('div', { children: t('noProjectsYet') }),
+                    ],
+                  })
+                : projectList.map((p) => jsxs('div', {
+                    className: 'evo-tl-row evo-tl-project-row',
+                    'data-active': currentProject === p.name || undefined,
+                    onClick: () => { setProjectMode({ name: p.name, path: p.path }); setMenuFor(null) },
+                    children: [
+                      jsx(FolderGit2, {}),
+                      jsxs('div', {
+                        className: 'evo-tl-project-main',
+                        children: [
+                          jsx('span', { className: 'evo-tl-title-text', children: p.name }),
+                          jsx('span', { className: 'evo-tl-row-sub', children: t('subchatCount').replace('{n}', String(p.count)) }),
+                        ],
+                      }),
+                      jsx(ChevronRight, {}),
+                    ],
+                  }, p.path))
+            : // ── 项目内子聊天列表（对应图谱 Chat Node）──
+              jsxs(Fragment, {
+                children: [
+                  jsxs('div', {
+                    className: 'evo-tl-section',
+                    children: [
+                      jsx('span', { className: 'evo-tl-section-title', children: t('subchats') }),
+                      forkError !== null && jsx('span', { className: 'evo-tl-fork-error', children: forkError }),
+                      deleteError !== null && jsx('span', { className: 'evo-tl-fork-error', children: deleteError }),
+                    ],
+                  }),
+          results.length === 0 && scopedRows.length === 0
             ? jsxs('div', {
                 className: 'evo-tl-empty',
                 children: [
@@ -218,7 +293,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                   jsx('div', { children: hasActive ? t('noMatchingResearch') : t('noResearchYet') }),
                 ],
               })
-            : results.map((s) => {
+            : scopedRows.map((s) => {
                 if (renaming === s.id) {
                   return jsxs('div', {
                     className: 'evo-tl-row evo-tl-rename',
@@ -388,6 +463,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                     }),
                   ],
                 }, s.id)
+              }),
+                ],
               }),
         // ── 已归档分区（§26.3 Archive：保留数据，可恢复）──
         archivedRows.length > 0 && jsxs('div', {

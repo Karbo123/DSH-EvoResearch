@@ -280,13 +280,21 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setView(null)
     patchUrl({ threadId: id, view: null })
   }
-  const startNewChat = () => {
+  const startNewChat = (projectCwd?: string) => {
     setView(null)
     // Home 操作清除 thread/project/定位状态（§43.5），关闭不合适的面板
     patchUrl({ threadId: null, view: null })
-    // 新对话继承当前会话所在项目工作区（同一科研项目下开新聊天）；无则空白
-    const cwd = current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
-    void sessionsService?.create(cwd === undefined ? {} : { cwd }).then((id) => sessionsService?.open(id))
+    // 新对话：优先指定项目工作区（左侧项目内新建）；否则继承当前会话所在项目；无则空白
+    const cwd = projectCwd !== undefined && projectCwd !== ''
+      ? projectCwd
+      : current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
+    void sessionsService?.create(cwd === undefined ? {} : { cwd })
+      .then(async (id) => {
+        // 刷新会话目录快照（新建的会话需进入左侧列表）
+        const manager = sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined
+        try { await manager?.refreshList?.() } catch { /* 忽略 */ }
+        if (typeof id === 'string' && id !== '') sessionsService?.open(id)
+      })
   }
 
   // §43.5/§33.4：URL threadId 恢复（刷新或分享链接打开对应会话）；?resend= 编辑重发

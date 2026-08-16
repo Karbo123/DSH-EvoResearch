@@ -117,14 +117,23 @@ body { margin: 0; }
 }
 /* ── 左侧栏 ── */
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.evo-tl-head { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 2px; }
+.evo-tl-head { padding: 10px 12px 4px; display: flex; align-items: center; gap: 6px; }
+.evo-tl-head-title { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.evo-tl-back { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: none; border-radius: 7px; color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; }
+.evo-tl-back:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-tl-back svg { width: 15px; height: 15px; }
 .evo-tl-newchat {
-  display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px;
+  display: inline-flex; align-items: center; gap: 7px; width: auto; padding: 6px 10px; margin-left: auto;
   border: none; background: none; border-radius: 8px; color: var(--color-text-primary);
-  font-size: 14px; font-weight: 500; cursor: pointer;
+  font-size: 13px; font-weight: 500; cursor: pointer; flex-shrink: 0;
 }
 .evo-tl-newchat:hover { background: var(--hover-bg); }
-.evo-tl-newchat svg { width: 18px; height: 18px; color: var(--color-text-secondary); }
+.evo-tl-newchat svg { width: 16px; height: 16px; color: var(--color-text-secondary); }
+/* 项目行（§二级聊天） */
+.evo-tl-project-row { cursor: pointer; gap: 9px; padding: 8px 10px; }
+.evo-tl-project-row > svg { width: 16px; height: 16px; color: var(--brand); flex-shrink: 0; }
+.evo-tl-project-row > svg:last-child { width: 13px; height: 13px; color: var(--color-text-tertiary); }
+.evo-tl-project-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .evo-tl-menu { padding: 2px 8px; }
 .evo-tl-item {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px;
