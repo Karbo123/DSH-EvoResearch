@@ -28,7 +28,7 @@ import { ChannelManager } from './channels/index.js'
 import { builtinAdapters } from './channels/adapters.js'
 import type { ChannelMessage } from './channels/base.js'
 import { AutoSkillsService, type AutoSkillsConfig } from './autoskills.js'
-import { ChatGraphService } from './chat-graph.js'
+import { ChatGraphService, graphMemoryText, graphContextText } from './chat-graph.js'
 import { ExpertService, type ExpertConfig } from './experts.js'
 import { ExperimentService } from './experiments.js'
 import { ProjectEnvService } from './project-env.js'
@@ -229,43 +229,53 @@ function apply(ctx: Context): void {
       })
     : undefined
 
-  // 8.8) Chat Graph 记忆注入（§ChatGraph）：会话在图中若有 memory 边 →
-  // 把连接的记忆节点内容注入 systemPrompt（<graph_memory>），模型按需参考。
+  // 8.8) Chat Graph 记忆/上下文注入（§ChatGraph）：
+  // - <graph_memory>：会话的 memory 边 → 记忆节点内容；
+  // - <graph_context>：会话的 context 边 → 源 chat 会话的最近消息历史（上下文继承）。
+  const graphOf = (context: { agent?: { session?: { header?: { cwd?: string } } } }): { name: string; graph: import('./chat-graph.js').ChatGraph } | null => {
+    const cwd = context?.agent?.session?.header?.cwd ?? ''
+    if (cwd === '') return null
+    const v = workspace.validateWorkspace(cwd)
+    if (v.kind !== 'project') return null
+    return { name: v.name, graph: chatGraph.get(v.name) }
+  }
+  const sessionIdOf = (context: { agent?: { session?: { id?: string } } }): string =>
+    context?.agent?.session?.id ?? ''
   const disposeGraphMemory = systemPrompt
     ? systemPrompt.context({
         name: 'evoresearch:graph-memory',
         order: 62,
         text: (context: { agent?: { session?: { header?: { cwd?: string }; id?: string } } }) => {
-          const session = context?.agent?.session
-          const cwd = session?.header?.cwd ?? ''
-          const sessionId = session?.id ?? ''
-          if (cwd === '' || sessionId === '') return ''
-          const v = workspace.validateWorkspace(cwd)
-          if (v.kind !== 'project') return ''
-          const graph = chatGraph.get(v.name)
-          const node = graph.nodes.find((n) => n.type === 'chat' && n.sessionId === sessionId)
-          if (node === undefined) return ''
-          const memIds = graph.edges.filter((e) => e.to === node.id && e.toPort === 'memory').map((e) => e.from)
-          const contents = graph.nodes
-            .filter((n) => memIds.includes(n.id) && n.type === 'memory')
-            .map((n) => (n.content ?? '').trim())
-            .filter((c) => c !== '')
-          if (contents.length === 0) return ''
-          // 每节点截断 1500 字符，总长上限 6000，避免挤占上下文
-          const budget = 6000
-          let total = 0
-          const parts: string[] = []
-          for (const content of contents) {
-            const slice = content.slice(0, 1500)
-            total += slice.length + 2
-            if (total > budget) break
-            parts.push(slice)
-          }
-          if (parts.length === 0) return ''
+          const sessionId = sessionIdOf(context)
+          if (sessionId === '') return ''
+          const g = graphOf(context)
+          if (g === null) return ''
+          const content = graphMemoryText(g.graph, sessionId)
+          if (content === '') return ''
           return '<graph_memory>\n' +
             '本会话在聊天图谱中连接了以下记忆节点，回答时请按需参考：\n' +
-            parts.join('\n\n---\n\n') +
+            content +
             '\n</graph_memory>'
+        },
+      })
+    : undefined
+
+  // 8.8.1) <graph_context>：context 边 → 源 chat 会话历史注入（子聊天继承父上下文）
+  const disposeGraphContext = systemPrompt
+    ? systemPrompt.context({
+        name: 'evoresearch:graph-context',
+        order: 63,
+        text: (context: { agent?: { session?: { header?: { cwd?: string }; id?: string } } }) => {
+          const sessionId = sessionIdOf(context)
+          if (sessionId === '') return ''
+          const g = graphOf(context)
+          if (g === null) return ''
+          const inherited = graphContextText(g.graph, sessionId)
+          if (inherited === null) return ''
+          return '<graph_context>\n' +
+            `本会话在聊天图谱中继承自聊天节点「${inherited.fromTitle}」，以下是该会话的最近对话记录（作为本会话的上下文初始化）：\n` +
+            inherited.text +
+            '\n</graph_context>'
         },
       })
     : undefined

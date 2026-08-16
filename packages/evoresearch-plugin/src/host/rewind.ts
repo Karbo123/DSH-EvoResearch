@@ -62,7 +62,7 @@ function findSessionDir(sessionId: string): string | null {
 }
 
 /** 读取会话事件日志（支持多帧 zstd 与纯 jsonl）。 */
-function readSessionEvents(sessionId: string): SessionEvent[] {
+export function readSessionEvents(sessionId: string): SessionEvent[] {
   const dir = findSessionDir(sessionId)
   if (dir === null) throw new Error(`会话日志不存在: ${sessionId}`)
   const zstd = path.join(dir, 'session.jsonl.zstd')
@@ -97,7 +97,7 @@ function readSessionEvents(sessionId: string): SessionEvent[] {
 }
 
 /** 系统级注入内容前缀（user/message 事件中需跳过的"伪用户消息"——前端同源过滤）。 */
-const SYSTEM_LEAK_PREFIXES = [
+export const SYSTEM_LEAK_PREFIXES = [
   'Current runtime context',
   'Current DSH file policy',
   'Approval prompts are disabled',
@@ -108,7 +108,7 @@ const SYSTEM_LEAK_PREFIXES = [
   '<project_env>',
 ]
 
-function isSystemText(text: string): boolean {
+export function isSystemText(text: string): boolean {
   const trimmed = text.trimStart()
   return SYSTEM_LEAK_PREFIXES.some((p) => trimmed.startsWith(p))
 }

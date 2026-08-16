@@ -12,6 +12,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { readSessionEvents, isSystemText } from './rewind.js'
 
 export interface GraphNode {
   id: string
@@ -46,6 +47,94 @@ export interface ChatGraph {
 /** 空图。 */
 export function emptyGraph(): ChatGraph {
   return { nodes: [], edges: [] }
+}
+
+/**
+ * 提取会话历史文本（user/assistant 消息，跳过系统注入的"伪用户消息"），
+ * 最近消息优先，最多 maxChars 字符。
+ * 兼容多种事件形状：data.text / data.content[].text（结构化）/ assistant/chunk 的
+ * data.chunk.text / data.blocks[].text。
+ */
+export function sessionHistoryText(sessionId: string, maxChars = 8000): string {
+  let events: Array<{ type: string; data?: Record<string, unknown> }>
+  try {
+    events = readSessionEvents(sessionId)
+  } catch {
+    return ''
+  }
+  const textOf = (ev: { type: string; data?: Record<string, unknown> }): string => {
+    const d = ev.data ?? {}
+    if (typeof d.text === 'string' && d.text !== '') return d.text
+    if (Array.isArray(d.content)) {
+      const joined = d.content
+        .map((b) => (typeof (b as { text?: unknown })?.text === 'string' ? (b as { text: string }).text : ''))
+        .join('')
+        .trim()
+      if (joined !== '') return joined
+    }
+    if (ev.type === 'assistant/chunk') {
+      const chunk = d.chunk as { text?: unknown } | undefined
+      if (typeof chunk?.text === 'string' && chunk.text !== '') return chunk.text
+    }
+    if (Array.isArray(d.blocks)) {
+      const joined = d.blocks
+        .map((b) => (typeof (b as { text?: unknown })?.text === 'string' ? (b as { text: string }).text : ''))
+        .join('')
+        .trim()
+      if (joined !== '') return joined
+    }
+    return ''
+  }
+  const parts: string[] = []
+  for (const ev of events) {
+    if (ev.type !== 'user/message' && ev.type !== 'assistant/message' && ev.type !== 'assistant/chunk') continue
+    const text = textOf(ev)
+    if (text === '' || isSystemText(text)) continue
+    parts.push(text)
+  }
+  let total = 0
+  const recent: string[] = []
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]!
+    total += part.length + 1
+    if (total > maxChars) break
+    recent.unshift(part)
+  }
+  return recent.join('\n')
+}
+
+/** 提取 chat 节点经 memory 边连接的记忆节点内容（每节点 1500 字符、总 maxChars 上限）。 */
+export function graphMemoryText(graph: ChatGraph, sessionId: string, maxChars = 6000): string {
+  const node = graph.nodes.find((n) => n.type === 'chat' && n.sessionId === sessionId)
+  if (node === undefined) return ''
+  const memIds = graph.edges.filter((e) => e.to === node.id && e.toPort === 'memory').map((e) => e.from)
+  const contents = graph.nodes
+    .filter((n) => memIds.includes(n.id) && n.type === 'memory')
+    .map((n) => (n.content ?? '').trim())
+    .filter((c) => c !== '')
+  if (contents.length === 0) return ''
+  let total = 0
+  const parts: string[] = []
+  for (const content of contents) {
+    const slice = content.slice(0, 1500)
+    total += slice.length + 2
+    if (total > maxChars) break
+    parts.push(slice)
+  }
+  return parts.join('\n\n---\n\n')
+}
+
+/** 提取 chat 节点的上下文来源（context 边 → 源 chat 会话最近消息历史）。 */
+export function graphContextText(graph: ChatGraph, sessionId: string, maxChars = 8000): { fromTitle: string; text: string } | null {
+  const node = graph.nodes.find((n) => n.type === 'chat' && n.sessionId === sessionId)
+  if (node === undefined) return null
+  const ctxEdge = graph.edges.find((e) => e.to === node.id && e.toPort === 'context')
+  if (ctxEdge === undefined) return null
+  const src = graph.nodes.find((n) => n.id === ctxEdge.from && n.type === 'chat')
+  if (src === undefined || src.sessionId === undefined) return null
+  const text = sessionHistoryText(src.sessionId, maxChars)
+  if (text === '') return null
+  return { fromTitle: src.title, text }
 }
 
 /**
