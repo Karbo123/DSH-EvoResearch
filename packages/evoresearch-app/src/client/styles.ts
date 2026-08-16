@@ -98,7 +98,7 @@ body { margin: 0; }
   width: 264px; flex-shrink: 0; min-width: 0; display: flex; flex-direction: column;
   border-right: 1px solid var(--color-border); background: var(--color-background); overflow: hidden;
 }
-.evo-center { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+.evo-center { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
 .evo-right {
   width: 320px; flex-shrink: 0; min-width: 0; display: flex; flex-direction: column;
   border-left: 1px solid var(--color-border); background: var(--color-background); overflow: hidden;
@@ -168,7 +168,7 @@ body { margin: 0; }
 .evo-tl-empty { padding: 28px 16px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-tl-empty svg { width: 40px; height: 40px; color: var(--color-border); margin-bottom: 8px; }
 /* ── 中间聊天区 ── */
-.evo-chat { flex: 1; display: flex; flex-direction: column; min-height: 220px; overflow-y: auto; }
+.evo-chat { flex: none; height: auto; display: flex; flex-direction: column; min-height: 0; overflow: visible; }
 .evo-welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; min-height: 42vh; }
 .evo-welcome h1 { font-size: 22px; font-weight: 600; margin: 0 0 10px; color: var(--color-text-primary); letter-spacing: -.01em; }
 .evo-welcome p { margin: 0 0 28px; color: var(--color-text-secondary); font-size: 14px; max-width: 512px; line-height: 1.6; }
@@ -185,8 +185,8 @@ body { margin: 0; }
 .evo-dashboard-card { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; padding: 12px 18px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
 .evo-dashboard-value { font-size: 22px; font-weight: 600; color: var(--brand); line-height: 1.1; }
 .evo-dashboard-label { font-size: 11.5px; color: var(--color-text-tertiary); }
-/* ── 输入面板 ── */
-.evo-composer-wrap { flex-shrink: 0; padding: 8px 24px 16px; display: flex; flex-wrap: wrap; justify-content: center; position: relative; }
+/* ── 输入面板：sticky 常驻中间栏底部（消息区内容自适应、页面整体滚动）── */
+.evo-composer-wrap { flex-shrink: 0; padding: 8px 24px 16px; display: flex; flex-wrap: wrap; justify-content: center; position: sticky; bottom: 0; z-index: 30; background: var(--color-background); }
 /* ── 输入候选弹层（§23.2–23.5：斜杠命令 / @文件 / 输入历史）── */
 .evo-cand { position: absolute; bottom: calc(100% - 8px); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 96px)); max-height: 280px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18); z-index: 40; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .evo-cand-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
@@ -266,7 +266,7 @@ body { margin: 0; }
 .evo-insp-empty svg { width: 36px; height: 36px; color: var(--color-border); margin-bottom: 8px; }
 .evo-view { flex: 1; overflow-y: auto; }
 /* ── 消息列表 ── */
-.evo-msg-list { flex: 1; overflow-y: auto; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 13px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; position: relative; min-height: 160px; }
+.evo-msg-list { flex: none; height: auto; overflow: visible; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 13px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; position: relative; }
 .evo-msg-error { padding: 10px 14px; border: 1px solid var(--color-error); border-radius: 10px; color: var(--color-error); font-size: 13px; background: color-mix(in srgb, var(--color-error) 8%, transparent); }
 .evo-useronly-hint { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border: 1px dashed color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 999px; color: var(--color-text-secondary); font-size: 12px; background: color-mix(in srgb, var(--brand) 7%, var(--color-surface)); cursor: pointer; transition: border-color 0.15s, color 0.15s; }
 .evo-useronly-hint:hover { border-color: var(--brand); color: var(--brand); }
@@ -852,7 +852,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-cmd-dismiss svg { width: 13px; height: 13px; }
 /* ── 标签栏（§5.2 浏览器式标签；视觉评审后重设计：圆角胶囊 + 品牌选中态）── */
 .evo-tabwrap { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1; }
-.evo-tabbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--color-background); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; }
+.evo-tabbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--color-background); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
 .evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; transition: background 0.12s ease, color 0.12s ease; }
 .evo-tab:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-tab[data-active] { background: var(--brand-solid); border-color: var(--brand-solid); color: var(--brand-foreground); font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }

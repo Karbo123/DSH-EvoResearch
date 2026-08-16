@@ -473,6 +473,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const listRef = useRef<HTMLDivElement | null>(null)
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const decoRef = useRef<HTMLDivElement | null>(null)
+  // 滚动容器 = 中间栏（消息区内容自适应、页面整体滚动；输入框 sticky 常驻底部）
+  const scrollBox = () => document.querySelector<HTMLElement>('.evo-center')
 
   // ── 会话动作（§25.6）：Current / Search / Notify / Shortcuts / Compact / Clear view ──
   const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'model' | 'wf-clear' | 'auto-approve'>(null)
@@ -496,7 +498,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   // 切换过滤时滚动回顶（过滤后列表变短，避免停留位置越界）
   useEffect(() => {
-    if (userOnly && listRef.current !== null) listRef.current.scrollTop = 0
+    if (userOnly) {
+      const box = scrollBox()
+      if (box !== null) box.scrollTop = 0
+    }
   }, [userOnly])
 
   // ── Markdown 快捷键（§composer）：Ctrl/Cmd+B 加粗、I 斜体、K 链接、Shift+` 行内代码、Shift+X 删除线 ──
@@ -790,9 +795,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
 
   // 新消息/流式更新时：仅当位于底部才滚动到底部（§9.3）
   useEffect(() => {
-    const el = listRef.current
-    if (el === null || !nearBottomRef.current) return
-    el.scrollTop = el.scrollHeight
+    const box = scrollBox()
+    if (box === null || !nearBottomRef.current) return
+    box.scrollTop = box.scrollHeight
   }, [nodes.length, partial?.data.blocks])
 
   // Mermaid 惰性渲染（§31.5）：流式期间不绘制，回答结束后按需加载 /assets/mermaid.js
@@ -806,30 +811,37 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
 
   // 展开更早历史后恢复原视觉位置（§9.2 滚动锚定）
   useLayoutEffect(() => {
-    const el = listRef.current
-    if (el !== null && anchorRef.current !== null) {
-      el.scrollTop = anchorRef.current.scrollTop + (el.scrollHeight - anchorRef.current.scrollHeight)
+    const box = scrollBox()
+    if (box !== null && anchorRef.current !== null) {
+      box.scrollTop = anchorRef.current.scrollTop + (box.scrollHeight - anchorRef.current.scrollHeight)
       anchorRef.current = null
     }
   }, [visibleCount])
 
   const onListScroll = () => {
-    const el = listRef.current
-    if (el === null) return
-    const near = el.scrollHeight - el.scrollTop - el.clientHeight <= 1
+    const box = scrollBox()
+    if (box === null) return
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight <= 1
     nearBottomRef.current = near
     setShowJump(!near)
   }
+  // 滚动容器监听（中间栏滚动时判断是否在底部）
+  useEffect(() => {
+    const box = scrollBox()
+    if (box === null) return
+    box.addEventListener('scroll', onListScroll, { passive: true })
+    return () => box.removeEventListener('scroll', onListScroll)
+  }, [])
 
   const loadEarlier = () => {
-    const el = listRef.current
-    if (el !== null) anchorRef.current = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight }
+    const box = scrollBox()
+    if (box !== null) anchorRef.current = { scrollTop: box.scrollTop, scrollHeight: box.scrollHeight }
     setVisibleCount((v) => v + PAGE_SIZE)
   }
 
   const jumpToLatest = () => {
-    const el = listRef.current
-    if (el !== null) el.scrollTop = el.scrollHeight
+    const box = scrollBox()
+    if (box !== null) box.scrollTop = box.scrollHeight
     nearBottomRef.current = true
     setShowJump(false)
     // 回到最新后释放旧页（§9.3：位于底部时 DOM 只保留最近一页）
@@ -1036,7 +1048,6 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           ? jsxs('div', {
               ref: listRef,
               className: 'evo-msg-list',
-              onScroll: onListScroll,
               children: [
                 error !== null && jsx('div', { className: 'evo-msg-error', children: `发送失败：${error}` }),
                 userOnly && jsx('button', {
