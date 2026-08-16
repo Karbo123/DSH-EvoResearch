@@ -177,7 +177,7 @@ report.currentBranch = await ev(`document.querySelector('.evo-exp-branch-chip[da
 report.snapshotOnDisk = await ev(`(async function(){
   try {
     const ls = async (root) => { const res = await fetch('/evoresearch/fs/list', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ root }) }); const json = await res.json(); return json.ok ? json.value.entries : null }
-    const base = 'D:\\\\evoresearch-e2e-round1'
+    const base = 'D:\\\\DSH-Research\\\\.tmp-e2e\\\\dev'
     const entries = await ls(base)
     if (!entries) return { error: 'no dataRoot' }
     for (const e1 of entries) {

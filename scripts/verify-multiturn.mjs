@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs'
 
 const appPort = process.argv[2] || '2066'
 const debugPort = 47300
-const profile = `D:\\evoresearch-e2e-multiturn\\edge-${Date.now()}`
+const profile = `D:\\DSH-Research\\.tmp-e2e\\edge-${Date.now()}`
 mkdirSync(profile, { recursive: true })
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
