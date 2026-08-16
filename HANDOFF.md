@@ -125,6 +125,7 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 | 标签关闭/切换 | ✅ |
 | 实验：新建/阶段/检查点（快照落盘 3 文件）/回退（rolledBack）/分支/切分支/删除 | ✅ |
 | 项目自动创建（AI slug `rag-4090-*`） | ✅ |
+| 多轮续聊（同会话追问文献）→ 引用真实基准（HALLMARK/FaithfulRAG/ARES）并承接前文给出"修订后的推荐" | ✅ |
 
 ## 五、已知限制 / 后续建议
 
@@ -151,6 +152,8 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 | `packages/evoresearch-plugin/src/host/memory/tools.ts` | workspaceOf（Bug #2/#4 修复） |
 | `packages/evoresearch-plugin/src/shared/types.ts` | Experiment* 类型 |
 | `scripts/verify-newfeatures.mjs` | 本轮功能 E2E 验证脚本 |
+| `scripts/verify-mobile-dark.mjs` | 移动端（375px）与暗色模式探测 |
+| `scripts/verify-multiturn.mjs` | 多轮续聊 E2E（记忆一致性/web_search/Markdown 渲染/泄漏复检） |
 
 ## 七、重要 API 与模型配置
 
