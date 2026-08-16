@@ -180,14 +180,18 @@ li 间距 4→2px（实测计算样式 22.12px）。
 
 ## 五、已知限制 / 后续建议
 
-1. **exe 未重新构建**：本轮为功能级更新，按策略等下次大更新或用户指示再发布（流程：先 kill
-   sidecar → `build.mjs --skip-download` → 重拷 `~/.dsh/.credentials.yaml` → gh release upload）
-2. **图片生成/语音识别**仍为配置预留（无实际工具）；本地语音引擎未实现（ResearchOS 同为 API 模式）
-3. **实验快照**只复制文件，不含数据库类状态（记忆/会话在 `.evoresearch-data` 内，天然随项目迁移）
-4. **React dev 警告**：`Each child in a list should have a unique "key" prop` 为代码库既有的
+0. **发布记录（2026-08-16）**：v0.1.0-rc.1 release 已用新二进制 clobber 更新（轨迹面板/设置全屏/项目环境/实验管理/标签栏/复制历史等全部打进安装包）：
+   - `EvoResearch_0.1.0_x64-setup.exe`（49.4MB）SHA256 `4C571A36…4FA64A`、`evoresearch-desktop.exe`（4.2MB）SHA256 `F7037C40…0578B`（release notes 已同步）
+   - 新壳 exe 冒烟验证通过（窗口 + sidecar 启动）
+
+1. **图片生成/语音识别**仍为配置预留（无实际工具）；本地语音引擎未实现（ResearchOS 同为 API 模式）
+2. **实验快照**只复制文件，不含数据库类状态（记忆/会话在 `.evoresearch-data` 内，天然随项目迁移）
+3. **React dev 警告**：`Each child in a list should have a unique "key" prop` 为代码库既有的
    静态 children 数组模式（ThreadList/UserBubble 等），dev-only 噪音，构建无警告
-5. 会话默认 cwd 在未建项目时为进程目录（dist/app），实验面板会提示"未绑定项目工作区"；
+4. 会话默认 cwd 在未建项目时为进程目录（dist/app），实验面板会提示"未绑定项目工作区"；
    欢迎页发消息后自动创建项目即解决
+5. 发布流程备忘：先 kill sidecar → `node desktop/scripts/build.mjs --skip-download` →
+   重拷 `~/.dsh/.credentials.yaml` → `gh release upload --clobber` → notes SHA 替换
 
 ## 六、关键文件索引
 
