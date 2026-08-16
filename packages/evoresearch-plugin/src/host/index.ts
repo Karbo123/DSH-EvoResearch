@@ -229,6 +229,47 @@ function apply(ctx: Context): void {
       })
     : undefined
 
+  // 8.8) Chat Graph 记忆注入（§ChatGraph）：会话在图中若有 memory 边 →
+  // 把连接的记忆节点内容注入 systemPrompt（<graph_memory>），模型按需参考。
+  const disposeGraphMemory = systemPrompt
+    ? systemPrompt.context({
+        name: 'evoresearch:graph-memory',
+        order: 62,
+        text: (context: { agent?: { session?: { header?: { cwd?: string }; id?: string } } }) => {
+          const session = context?.agent?.session
+          const cwd = session?.header?.cwd ?? ''
+          const sessionId = session?.id ?? ''
+          if (cwd === '' || sessionId === '') return ''
+          const v = workspace.validateWorkspace(cwd)
+          if (v.kind !== 'project') return ''
+          const graph = chatGraph.get(v.name)
+          const node = graph.nodes.find((n) => n.type === 'chat' && n.sessionId === sessionId)
+          if (node === undefined) return ''
+          const memIds = graph.edges.filter((e) => e.to === node.id && e.toPort === 'memory').map((e) => e.from)
+          const contents = graph.nodes
+            .filter((n) => memIds.includes(n.id) && n.type === 'memory')
+            .map((n) => (n.content ?? '').trim())
+            .filter((c) => c !== '')
+          if (contents.length === 0) return ''
+          // 每节点截断 1500 字符，总长上限 6000，避免挤占上下文
+          const budget = 6000
+          let total = 0
+          const parts: string[] = []
+          for (const content of contents) {
+            const slice = content.slice(0, 1500)
+            total += slice.length + 2
+            if (total > budget) break
+            parts.push(slice)
+          }
+          if (parts.length === 0) return ''
+          return '<graph_memory>\n' +
+            '本会话在聊天图谱中连接了以下记忆节点，回答时请按需参考：\n' +
+            parts.join('\n\n---\n\n') +
+            '\n</graph_memory>'
+        },
+      })
+    : undefined
+
   // 8.7) 项目环境自动切换（shellEnv）：每次 bash/pwsh 执行注入当前项目环境的
   // 真实路径——按 execution.agent.session.header.cwd 解析，与所选项目一一对应。
   const shellEnv = ctx.get('shellEnv') as

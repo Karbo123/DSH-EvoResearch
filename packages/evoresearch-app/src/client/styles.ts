@@ -650,6 +650,15 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-menu-danger svg { color: var(--color-error); }
 .evo-graph-hint { padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--color-text-tertiary); font-size: 12.5px; text-align: center; line-height: 1.6; }
 .evo-graph-hint svg { width: 34px; height: 34px; color: var(--color-border); }
+/* 记忆节点内容编辑弹窗 */
+.evo-graph-editor-mask { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; }
+.evo-graph-editor { width: min(520px, calc(100vw - 48px)); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3); display: flex; flex-direction: column; padding: 12px; gap: 10px; }
+.evo-graph-editor-head { display: flex; align-items: center; gap: 8px; }
+.evo-graph-editor-title { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); }
+.evo-graph-editor-text { width: 100%; min-height: 140px; max-height: 50vh; resize: vertical; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); color: var(--color-text-primary); font-size: 13px; line-height: 1.5; font-family: inherit; outline: none; }
+.evo-graph-editor-text:focus { border-color: var(--brand); }
+.evo-graph-editor-foot { display: flex; align-items: center; gap: 8px; }
+.evo-graph-editor-hint { font-size: 11px; color: var(--color-text-tertiary); }
 /* ── Channels / Team ── */
 .evo-channel-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-tertiary); flex-shrink: 0; text-transform: capitalize; }
 .evo-channel-badge.online { background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }

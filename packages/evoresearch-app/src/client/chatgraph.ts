@@ -13,7 +13,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
-import { MessageSquare, Database, GitBranch, Plus, Trash2, Pencil, Globe, FolderGit2, X } from 'lucide-react'
+import { MessageSquare, Database, GitBranch, Plus, Trash2, Pencil, Globe, FolderGit2, X, FileText, Check } from 'lucide-react'
 
 /** 节点宽度/高度（画布内固定尺寸，端口偏移据此计算）。 */
 const NODE_W = 168
@@ -71,6 +71,9 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
   const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
   const [linking, setLinking] = useState<{ from: string; toX: number; toY: number } | null>(null)
   const [dragNode, setDragNode] = useState<{ id: string; dx: number; dy: number } | null>(null)
+  // 记忆节点内容编辑（双击或菜单打开）
+  const [editing, setEditing] = useState<GraphNode | null>(null)
+  const [editText, setEditText] = useState('')
   const hoverPortRef = useRef<{ nodeId: string; port: 'context' | 'memory' } | null>(null)
   const canvasRef = useRef<HTMLDivElement | null>(null)
 
@@ -213,6 +216,23 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
     if (node.type === 'chat' && node.sessionId !== undefined) onOpenSession(node.sessionId)
   }
 
+  const startEditMemory = (node: GraphNode) => {
+    setMenu(null)
+    setEditing(node)
+    setEditText(node.content ?? '')
+  }
+  const saveEditMemory = () => {
+    if (editing === null) return
+    const id = editing.id
+    const content = editText
+    setEditing(null)
+    setGraph((prev) => {
+      const next = { ...prev, nodes: prev.nodes.map((n) => (n.id === id ? { ...n, content } : n)) }
+      void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next }).catch(() => undefined)
+      return next
+    })
+  }
+
   const nodeById = (id: string): GraphNode | undefined => graph.nodes.find((n) => n.id === id)
 
   return jsxs('div', {
@@ -286,7 +306,11 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
                 if (rect === undefined) return
                 setDragNode({ id: node.id, dx: e.clientX - rect.left - node.x, dy: e.clientY - rect.top - node.y })
               },
-              onDoubleClick: () => openChatNode(node),
+              onDoubleClick: () => {
+                // chat → 打开会话；memory → 编辑内容
+                if (node.type === 'chat') openChatNode(node)
+                else startEditMemory(node)
+              },
               onContextMenu: (e) => {
                 e.preventDefault()
                 e.stopPropagation()
@@ -363,6 +387,11 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
                 onClick: () => renameNode(menu.nodeId as string),
                 children: jsxs(Fragment, { children: [jsx(Pencil, {}), jsx('span', { children: t('graphRename') })] }),
               }),
+              menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'memory' && jsx('button', {
+                type: 'button', className: 'evo-graph-menu-item',
+                onClick: () => { const n = nodeById(menu.nodeId as string); if (n !== undefined) startEditMemory(n) },
+                children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: t('graphEditContent') })] }),
+              }),
               menu.nodeId !== undefined && jsx('button', {
                 type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger',
                 onClick: () => deleteNode(menu.nodeId as string),
@@ -376,6 +405,45 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
         jsx(GitBranch, {}),
         jsx('span', { children: t('graphEmptyHint') }),
       ]})}),
+      // 记忆节点内容编辑弹窗
+      editing !== null && jsxs('div', {
+        className: 'evo-graph-editor-mask',
+        onClick: () => setEditing(null),
+        children: [
+          jsxs('div', {
+            className: 'evo-graph-editor',
+            onClick: (e) => e.stopPropagation(),
+            children: [
+              jsxs('div', { className: 'evo-graph-editor-head', children: [
+                jsx('span', { className: 'evo-graph-editor-title', children: editing.title }),
+                jsx('span', { style: { flex: 1 } }),
+                jsx('button', {
+                  type: 'button', className: 'evo-icon-btn', title: t('graphClose'),
+                  'aria-label': t('graphClose'),
+                  onClick: () => setEditing(null),
+                  children: jsx(X, {}),
+                }),
+              ]}),
+              jsx('textarea', {
+                className: 'evo-graph-editor-text',
+                value: editText,
+                placeholder: t('graphEditContentHint'),
+                autoFocus: true,
+                onInput: (e) => setEditText(e.currentTarget.value),
+              }),
+              jsxs('div', { className: 'evo-graph-editor-foot', children: [
+                jsx('span', { className: 'evo-graph-editor-hint', children: t('graphEditContentHint2') }),
+                jsx('span', { style: { flex: 1 } }),
+                jsx('button', {
+                  type: 'button', className: 'evo-btn evo-btn-run',
+                  onClick: saveEditMemory,
+                  children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: t('save') })] }),
+                }),
+              ]}),
+            ],
+          }),
+        ],
+      }),
     ],
   })
 }
