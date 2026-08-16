@@ -214,13 +214,15 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
-        // POST /evoresearch/fs/write {root, path, text} → 写文件（限制在 root 内）
+        // POST /evoresearch/fs/write {root, path, text} → 写文件（限制在 root 内；
+        // text 允许空串——新建空文件/清空内容均是合法操作；自动创建父目录）
         if (method === 'write') {
           const root = requireAbsolute(requireString(payload, 'root'))
           const target = requireAbsolute(requireString(payload, 'path'))
           if (!isWithin(target, root)) throw httpError(403, 'forbidden', `写入路径超出根目录: ${target}`)
-          const text = requireString(payload, 'text')
-          await writeFile(target, text, 'utf8')
+          if (typeof payload.text !== 'string') throw httpError(400, 'bad-request', '缺少或非法 "text"')
+          await mkdir(dirname(target), { recursive: true })
+          await writeFile(target, payload.text, 'utf8')
           writeOk(res, { path: target })
           return
         }
@@ -591,6 +593,21 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.projectValidate as (a: { path: string }) => Promise<{ ok: true } | { ok: false; error: string }>)({ path: requireString(payload, 'path') }))
           return
         }
+        // 自动创建项目（欢迎页首条消息触发）：AI slug + 确定性回退
+        if (method === 'projects-auto') {
+          if (evoresearch?.projectAutoCreate === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const description = typeof payload.description === 'string' ? payload.description : ''
+          try {
+            const project = await (evoresearch.projectAutoCreate as (a: { description: string }) => Promise<unknown>).call(evoresearch, { description })
+            if (project !== null && typeof project === 'object' && (project as { error?: string }).error !== undefined) {
+              throw httpError(400, 'project-error', (project as { error: string }).error)
+            }
+            writeOk(res, project)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         if (method === 'projects-import') {
           if (evoresearch?.projectImport === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const sourcePath = requireString(payload, 'sourcePath')
@@ -834,6 +851,42 @@ export function registerWorkspaceApi(ctx: any): void {
               messages,
             }
             writeOk(res, { filename: `${safeBase}.json`, content: JSON.stringify(payloadJson, null, 2) })
+          }
+          return
+        }
+
+        // ── 实验管理（§5.1 Git 式分支/回退/checkpoint）──
+        if (method === 'experiments-list' || method === 'experiments-get' || method === 'experiments-create' || method === 'experiments-update'
+          || method === 'experiments-phase' || method === 'experiments-checkpoint' || method === 'experiments-rollback'
+          || method === 'experiments-branch' || method === 'experiments-switch' || method === 'experiments-delete') {
+          const serviceMethod = method === 'experiments-list' ? 'experimentsList'
+            : method === 'experiments-get' ? 'experimentsGet'
+              : method === 'experiments-create' ? 'experimentsCreate'
+                : method === 'experiments-update' ? 'experimentsUpdate'
+                  : method === 'experiments-phase' ? 'experimentsAddPhase'
+                    : method === 'experiments-checkpoint' ? 'experimentsCheckpoint'
+                      : method === 'experiments-rollback' ? 'experimentsRollback'
+                        : method === 'experiments-branch' ? 'experimentsBranch'
+                          : method === 'experiments-switch' ? 'experimentsSwitchBranch'
+                            : 'experimentsDelete'
+          const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = {}
+          if (typeof payload.workspaceDir === 'string') args.workspaceDir = payload.workspaceDir
+          if (typeof payload.id === 'string') args.id = payload.id
+          if (typeof payload.name === 'string') args.name = payload.name
+          if (typeof payload.description === 'string') args.description = payload.description
+          if (typeof payload.note === 'string') args.note = payload.note
+          if (typeof payload.phaseId === 'string') args.phaseId = payload.phaseId
+          if (typeof payload.sessionId === 'string') args.sessionId = payload.sessionId
+          if (typeof payload.checkpointId === 'string') args.checkpointId = payload.checkpointId
+          if (typeof payload.fromCheckpointId === 'string') args.fromCheckpointId = payload.fromCheckpointId
+          if (typeof payload.branchId === 'string') args.branchId = payload.branchId
+          if (payload.patch !== null && typeof payload.patch === 'object') args.patch = payload.patch
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
           }
           return
         }

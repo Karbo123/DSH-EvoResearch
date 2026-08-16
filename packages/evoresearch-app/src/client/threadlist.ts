@@ -6,17 +6,18 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
-export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace' | 'channels' | 'team'
+export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace' | 'channels' | 'team' | 'experiments'
 
 const MENU = [
   { key: 'import', label: t('importProject'), icon: FolderGit2 },
   { key: 'skills', label: t('researchSkills'), icon: GraduationCap },
   { key: 'memory', label: t('evomemory'), icon: BrainCircuit },
   { key: 'schedule', label: t('scheduled'), icon: Clock },
+  { key: 'experiments', label: t('experiments'), icon: FlaskConical },
   { key: 'channels', label: t('channels'), icon: Cable },
   { key: 'team', label: t('team'), icon: Users },
 ] as const
@@ -52,6 +53,8 @@ export interface ThreadListProps {
   onRename: (id: string, title: string) => Promise<boolean>
   /** 以某会话为起点创建继承型 Side Chat（官方 session.fork；返回结果）。 */
   onForkSideChat: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
+  /** 复制历史到新对话（fork 后提升为主聊天；返回结果）。 */
+  onCopyHistory: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
   /** 导出会话（json | markdown，§26.3/§41.8）。 */
   onExport: (id: string, format: 'json' | 'markdown', title: string) => void
   /** 置顶会话 id 集合（client-side 持久化）。 */
@@ -72,25 +75,29 @@ export interface ThreadListProps {
   onToggleArchive: (id: string) => void
   /** 运行/停止中的会话 id（§26.3 行内运行状态点）。 */
   runningIds: Set<string>
+  /** 已提升为主聊天的复制会话 id（§5.3：有 parentSessionId 但不再按侧聊对待）。 */
+  promotedIds: Set<string>
 }
 
 /** 标签调色板（§26.3）。 */
 const TAG_PALETTE = ['#e05d5d', '#e08a3c', '#d9b13b', '#5dbe85', '#3b9cb0', '#7a6fe0', '#b05dc4', '#908d83']
 
-export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, archivedIds, onToggleArchive, runningIds }: ThreadListProps) {
+export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, archivedIds, onToggleArchive, runningIds, promotedIds }: ThreadListProps) {
   const sessions = useSessions((s) => s)
   const currentId = sessions.current
   const [colorFor, setColorFor] = useState<string | null>(null)
-  // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表）
+  const isPromoted = (id: string): boolean => promotedIds.has(id)
+  // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表；
+  // §5.3 提升后的复制会话除外——它已是独立主聊天）
   const rows = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
-    .filter((s) => s !== undefined && s.blank !== true && s.parentSessionId === undefined && !hideIds.has(s.id) && !deletedIds.has(s.id) && !archivedIds.has(s.id))
+    .filter((s) => s !== undefined && s.blank !== true && (s.parentSessionId === undefined || isPromoted(s.id)) && !hideIds.has(s.id) && !deletedIds.has(s.id) && !archivedIds.has(s.id))
     // 置顶会话排最前（§26.3 Pin）
     .sort((a, b) => (pinnedIds.has(b.id) ? 1 : 0) - (pinnedIds.has(a.id) ? 1 : 0))
   // 已归档线程（§26.3 Archive：保留数据，可恢复）
   const archivedRows = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
-    .filter((s) => s !== undefined && s.blank !== true && s.parentSessionId === undefined && !hideIds.has(s.id) && !deletedIds.has(s.id) && archivedIds.has(s.id))
+    .filter((s) => s !== undefined && s.blank !== true && (s.parentSessionId === undefined || isPromoted(s.id)) && !hideIds.has(s.id) && !deletedIds.has(s.id) && archivedIds.has(s.id))
     .sort((a, b) => (archivedIds.has(b.id) ? 1 : 0) - (archivedIds.has(a.id) ? 1 : 0))
   const [query, setQuery] = useState('')
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -124,6 +131,15 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
     })
   }
 
+  const copyRow = (id: string) => {
+    setForkError(null)
+    void onCopyHistory(id).then((result) => {
+      if (result.ok && result.id !== undefined) { onOpen(result.id); return }
+      setForkError(result.error ?? '复制历史失败')
+      setTimeout(() => setForkError(null), 5000)
+    })
+  }
+
   // 搜索过滤（本地状态；组件内 useState）
   const results = query.trim()
     ? rows.filter((s) => (s.displayTitle ?? '').toLowerCase().includes(query.trim().toLowerCase()))
@@ -135,6 +151,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
     (key === 'schedule' && view === 'schedule') ||
     (key === 'channels' && view === 'channels') ||
     (key === 'team' && view === 'team') ||
+    (key === 'experiments' && view === 'experiments') ||
     (key === 'import' && view === 'workspace')
 
   return jsxs('div', {
@@ -300,6 +317,17 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                           'aria-label': t('rename'),
                           onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); setRenameValue(s.displayTitle ?? ''); setRenaming(s.id) },
                           children: jsx(Pencil, {}),
+                        }),
+                        jsx('button', {
+                          type: 'button',
+                          className: 'evo-tl-row-act',
+                          title: t('copyHistory'),
+                          'aria-label': t('copyHistory'),
+                          onClick: (e: { stopPropagation(): void }) => {
+                            e.stopPropagation()
+                            copyRow(s.id)
+                          },
+                          children: jsx(Copy, {}),
                         }),
                         jsx('button', {
                           type: 'button',

@@ -8,7 +8,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
 import { t } from './i18n'
-import { ChevronRight, ChevronDown, Folder, FileText, FileCode2, Image as ImageIcon, File, RefreshCw, ArrowUp, Save, Upload, Archive } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FileText, FileCode2, Image as ImageIcon, File, RefreshCw, ArrowUp, Save, Upload, Archive, ExternalLink } from 'lucide-react'
 
 interface FsEntry { name: string; path: string; isDir: boolean; hidden: boolean }
 
@@ -145,6 +145,16 @@ function FileViewer({ path, root, onBack }: { path: string; root: string; onBack
         children: [
           jsx('button', { type: 'button', className: 'evo-icon-btn', onClick: onBack, title: t('back'), children: jsx(ArrowUp, {}) }),
           jsx('span', { className: 'evo-fs-viewer-name', children: name }),
+          (kind === 'pdf' || kind === 'text') && jsx('button', {
+            type: 'button',
+            className: 'evo-icon-btn',
+            title: t('openInTab'),
+            'aria-label': t('openInTab'),
+            onClick: () => {
+              window.dispatchEvent(new CustomEvent('evo-open-tab', { detail: { path, root, kind: kind === 'pdf' ? 'pdf' : 'editor' } }))
+            },
+            children: jsx(ExternalLink, {}),
+          }),
           kind === 'text' && jsx('button', {
             type: 'button',
             className: 'evo-fs-save',
