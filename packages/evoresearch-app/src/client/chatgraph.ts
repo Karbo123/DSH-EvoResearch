@@ -80,7 +80,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
   const load = () => {
     setError(null)
     void api<ChatGraph>('graph-get', { workspaceDir: cwd ?? undefined })
-      .then((g) => setGraph(g ?? { nodes: [], edges: [] }))
+      .then((g) => setGraph({ nodes: g?.nodes ?? [], edges: g?.edges ?? [] }))
       .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
   }
   useEffect(() => { load() }, [cwd])
@@ -269,10 +269,10 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
         },
         onClick: () => { setSelectedId(null); setMenu(null) },
         children: [
-          // 连线层
+          // 连线层（防御：graph 字段缺失时按空数组渲染）
           jsx('svg', {
             className: 'evo-graph-svg',
-            children: graph.edges.map((edge) => {
+            children: (graph?.edges ?? []).map((edge) => {
               const from = nodeById(edge.from)
               const to = nodeById(edge.to)
               if (from === undefined || to === undefined) return null
@@ -290,8 +290,8 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
               return [jsx('path', { d: edgePath(fp, { x: linking.toX, y: linking.toY }), className: 'evo-graph-edge evo-graph-edge-linking' }, 'link-tmp')]
             })() : []),
           }),
-          // 节点层
-          ...graph.nodes.map((node) => {
+          // 节点层（防御：graph 字段缺失时按空数组渲染）
+          ...(graph?.nodes ?? []).map((node) => {
             const selected = selectedId === node.id
             const isChat = node.type === 'chat'
             const h = isChat ? CHAT_H : MEMORY_H
