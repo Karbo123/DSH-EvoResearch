@@ -79,8 +79,11 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
 
   const load = () => {
     setError(null)
-    void api<ChatGraph>('graph-get', { workspaceDir: cwd ?? undefined })
-      .then((g) => setGraph({ nodes: g?.nodes ?? [], edges: g?.edges ?? [] }))
+    void api<ChatGraph & { error?: string }>('graph-get', { workspaceDir: cwd ?? undefined })
+      .then((g) => {
+        if (typeof g?.error === 'string' && g.error !== '') { setError(g.error); return }
+        setGraph({ nodes: g?.nodes ?? [], edges: g?.edges ?? [] })
+      })
       .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
   }
   useEffect(() => { load() }, [cwd])
@@ -101,12 +104,25 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
       setLinking((v) => (v === null ? null : { ...v, toX: e.clientX - rect.left, toY: e.clientY - rect.top }))
     }
     const onUp = (e: PointerEvent) => {
-      // 命中检测：优先用真实指针位置 elementFromPoint（比 pointerenter 更可靠）
-      const el = document.elementFromPoint(e.clientX, e.clientY)
-      const portEl = el?.closest?.('.evo-graph-port-in') as HTMLElement | null
-      const target = portEl !== null
-        ? { nodeId: portEl.closest('.evo-graph-node')?.getAttribute('data-node-id') ?? '', port: portEl.classList.contains('evo-graph-port-ctx') ? 'context' as const : 'memory' as const }
-        : hoverPortRef.current
+      // 命中检测：找鼠标附近（12px 内）最近的输入端口——不依赖精确像素命中，
+      // 节点重叠/遮挡时依然可连
+      let target: { nodeId: string; port: 'context' | 'memory' } | null = null
+      let bestDist = 12
+      const inPorts = document.querySelectorAll<HTMLElement>('.evo-graph-port-in')
+      for (const el of inPorts) {
+        const r = el.getBoundingClientRect()
+        const cx = r.left + r.width / 2
+        const cy = r.top + r.height / 2
+        const d = Math.hypot(e.clientX - cx, e.clientY - cy)
+        if (d < bestDist) {
+          bestDist = d
+          target = {
+            nodeId: el.closest('.evo-graph-node')?.getAttribute('data-node-id') ?? '',
+            port: el.classList.contains('evo-graph-port-ctx') ? 'context' as const : 'memory' as const,
+          }
+        }
+      }
+      if (target === null) target = hoverPortRef.current
       if (target !== null && target.nodeId !== '' && linking !== null && target.nodeId !== linking.from) {
         setGraph((prev) => {
           let edges = [...prev.edges]
@@ -149,6 +165,26 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
   }, [dragNode, cwd])
 
   // ── 操作 ──
+  /** 新节点坐标：优先菜单位置；否则找画布空白区域（避开已有节点矩形）。 */
+  const freeSpot = (fallbackX: number, fallbackY: number): { x: number; y: number } => {
+    const occupied = graph.nodes.map((n) => ({ x: n.x, y: n.y, w: NODE_W, h: n.type === 'chat' ? CHAT_H : MEMORY_H }))
+    const hit = (x: number, y: number) => occupied.some((o) => x < o.x + o.w + 16 && x + NODE_W + 16 > o.x && y < o.y + o.h + 16 && y + MEMORY_H + 16 > o.y)
+    if (!hit(fallbackX, fallbackY)) return { x: fallbackX, y: fallbackY }
+    // 螺旋搜索空白（步长 40，半径 4 圈）
+    for (let r = 1; r <= 6; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue
+          const x = fallbackX + dx * 48
+          const y = fallbackY + dy * 48
+          if (x < 0 || y < 0) continue
+          if (!hit(x, y)) return { x, y }
+        }
+      }
+    }
+    return { x: fallbackX + 40, y: fallbackY + 40 }
+  }
+
   const createChatNode = async () => {
     setMenu(null)
     if (cwd === null) { setError(t('graphNeedProject')); return }
@@ -156,11 +192,12 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
     try {
       const sessionId = await onCreateSession()
       if (sessionId === null) { setError(t('graphCreateSessionFailed')); return }
+      const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
       const node: Omit<GraphNode, 'id'> = {
         type: 'chat',
         title: t('graphNewChat'),
-        x: menu?.x ?? 40 + Math.floor(Math.random() * 120),
-        y: menu?.y ?? 40 + Math.floor(Math.random() * 120),
+        x: spot.x,
+        y: spot.y,
         sessionId,
         workspaceDir: cwd,
       }
@@ -176,11 +213,12 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
   const createMemoryNode = (scope: 'project' | 'global') => {
     setMenu(null)
     if (cwd === null) { setError(t('graphNeedProject')); return }
+    const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
     const node: Omit<GraphNode, 'id'> = {
       type: 'memory',
       title: scope === 'global' ? t('graphGlobalMemory') : t('graphProjectMemory'),
-      x: menu?.x ?? 40 + Math.floor(Math.random() * 120),
-      y: menu?.y ?? 40 + Math.floor(Math.random() * 120),
+      x: spot.x,
+      y: spot.y,
       scope,
       content: '',
     }

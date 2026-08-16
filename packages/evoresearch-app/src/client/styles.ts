@@ -638,17 +638,17 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-node-chat .evo-graph-node-head svg { color: var(--brand); }
 .evo-graph-node-memory .evo-graph-node-head svg { color: var(--color-success); }
 .evo-graph-node-title { font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.evo-graph-node-sub { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
-.evo-graph-node-tag { font-size: 10px; color: var(--color-text-tertiary); background: var(--hover-bg); border-radius: 4px; padding: 1px 5px; }
-.evo-graph-node-sid { font-size: 10px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
+.evo-graph-node-sub { display: flex; align-items: center; gap: 5px; margin-top: 4px; min-width: 0; }
+.evo-graph-node-tag { font-size: 10px; color: var(--color-text-tertiary); background: var(--hover-bg); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+.evo-graph-node-sid { font-size: 10px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-graph-node-memprev { gap: 4px; min-width: 0; }
 .evo-graph-node-preview { font-size: 10.5px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* 端口：统一 10px、hover 光圈 */
-.evo-graph-port { position: absolute; width: 10px; height: 10px; border-radius: 999px; border: 2px solid var(--color-surface); cursor: crosshair; transition: transform 0.12s, box-shadow 0.12s; }
-.evo-graph-port-in { left: -6px; }
+/* 端口：12px、hover 光圈 */
+.evo-graph-port { position: absolute; width: 12px; height: 12px; border-radius: 999px; border: 2px solid var(--color-surface); cursor: crosshair; transition: transform 0.12s, box-shadow 0.12s; }
+.evo-graph-port-in { left: -7px; }
 .evo-graph-port-ctx { top: 17px; background: var(--brand); }
 .evo-graph-port-mem { top: 39px; background: var(--color-success); }
-.evo-graph-port-out { right: -6px; top: 28px; background: var(--brand-hover); }
+.evo-graph-port-out { right: -7px; top: 28px; background: var(--brand-hover); }
 .evo-graph-node-memory .evo-graph-port-out { top: 18px; }
 .evo-graph-port:hover { transform: scale(1.4); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent); }
 /* 右键菜单：与面板同语言 */
@@ -668,7 +668,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-editor-head { display: flex; align-items: center; gap: 8px; }
 .evo-graph-editor-title { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); }
 .evo-graph-editor-text { width: 100%; min-height: 140px; max-height: 50vh; resize: vertical; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); color: var(--color-text-primary); font-size: 13px; line-height: 1.5; font-family: inherit; outline: none; }
-.evo-graph-editor-text:focus { border-color: var(--brand); }
+.evo-graph-editor-text:focus { border-color: color-mix(in srgb, var(--brand) 45%, var(--color-border)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 12%, transparent); }
 .evo-graph-editor-foot { display: flex; align-items: center; gap: 8px; }
 .evo-graph-editor-hint { font-size: 11px; color: var(--color-text-tertiary); }
 /* ── Channels / Team ── */
