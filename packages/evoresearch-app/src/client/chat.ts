@@ -479,6 +479,24 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const [notifyOn, setNotifyOn] = useState(() => {
     try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
   })
+  // 仅显示我的消息（用户消息过滤；localStorage 持久化，全局共享）
+  const [userOnly, setUserOnly] = useState(() => {
+    try { return localStorage.getItem('evoresearch-useronly') === '1' } catch { return false }
+  })
+  const toggleUserOnly = () => {
+    setUserOnly((v) => {
+      const next = !v
+      try {
+        if (next) localStorage.setItem('evoresearch-useronly', '1')
+        else localStorage.removeItem('evoresearch-useronly')
+      } catch { /* 忽略 */ }
+      return next
+    })
+  }
+  // 切换过滤时滚动回顶（过滤后列表变短，避免停留位置越界）
+  useEffect(() => {
+    if (userOnly && listRef.current !== null) listRef.current.scrollTop = 0
+  }, [userOnly])
   const [jumpKey, setJumpKey] = useState<string | null>(null)
 
   // 状态条模型 chip → 打开模型选择器（§25.2：模型名本身是按钮）
@@ -932,8 +950,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   // ── Dynamic Workflow（§24）：workflow-run 节点 → 输入区上方阶段条 ──
   const workflowNodes = (nodes as Array<ChatNode & { data?: any }>).filter((n) => n.kind === 'workflow-run')
   const messageNodes = ordered.filter((n) => n.kind !== 'workflow-run')
-  const shown = messageNodes.slice(-visibleCount)
-  const hasMore = messageNodes.length > visibleCount
+  // 仅显示我的消息：只保留 user 节点，隐藏 AI 回复（assistant-step / partial / 系统工具卡片）
+  const viewNodes = userOnly ? messageNodes.filter((n) => n.kind === 'user') : messageNodes
+  const shown = viewNodes.slice(-visibleCount)
+  const hasMore = viewNodes.length > visibleCount
   const showMessages = hasMessages && !clearView
   const toolResults = toolResultsOf(session)
   const [wfCleared, setWfCleared] = useState<string[]>(() => {
@@ -971,6 +991,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               onScroll: onListScroll,
               children: [
                 error !== null && jsx('div', { className: 'evo-msg-error', children: `发送失败：${error}` }),
+                userOnly && jsx('button', {
+                  type: 'button',
+                  className: 'evo-useronly-hint',
+                  title: t('userOnlyOff'),
+                  onClick: toggleUserOnly,
+                  children: jsxs(Fragment, {
+                    children: [jsx(User, {}), jsx('span', { children: t('userOnlyHint') })],
+                  }),
+                }),
                 hasMore && jsx('button', {
                   type: 'button',
                   className: 'evo-load-earlier',
@@ -991,7 +1020,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       rewindConfirming: rewindConfirm === node.data.seq,
                     }, node.key)
                   : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults }, node.key)),
-                partial !== null && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults }, partial.key),
+                partial !== null && !userOnly && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults }, partial.key),
                 showJump && jsx('button', {
                   type: 'button',
                   className: 'evo-jump-latest',
@@ -1447,6 +1476,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-tool',
+                    'data-on': userOnly || undefined,
+                    title: userOnly ? t('userOnlyOff') : t('userOnly'),
+                    'aria-label': t('userOnly'),
+                    onClick: toggleUserOnly,
+                    children: jsx(User, {}),
+                  }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-tool',
                     title: t('compactTitle'),
                     'aria-label': t('compact'),
                     onClick: () => setActionDialog('compact'),
@@ -1497,7 +1535,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   }),
                 ],
               }),
-              jsx(SessionStatsLine, { session }),
+              // 过滤模式下隐藏统计行：界面完全服务于"聚焦用户指令"
+              !userOnly && jsx(SessionStatsLine, { session }),
             ],
           }),
         ],

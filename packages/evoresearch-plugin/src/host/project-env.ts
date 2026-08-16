@@ -4,7 +4,8 @@
  * 约定：
  * - 环境目录：<projectDir>/.venv（uv 默认目标，随项目迁移，git 忽略）
  * - 配置记录：<projectDir>/.evoresearch-data/env.json（pythonVersion/createdAt）
- * - UV 解析：EVORESEARCH_UV 环境变量 → ~/.dsh/bin/uv.exe → PATH 上的 uv
+ * - UV 解析：EVORESEARCH_UV 环境变量 → <dataRoot>/.tools/bin/uv.exe（部署目录内安装，
+ *   随程序迁移，不写用户目录）→ ~/.local/bin 等既有安装 → PATH 上的 uv
  * - 版本指定：uv venv --python <version> --python-preference managed（uv 自动下载
  *   官方 CPython，默认 3.12）
  *
@@ -107,13 +108,15 @@ function findFile(dir: string, name: string): string | null {
 
 /**
  * 解析 UV 可执行文件（null = 未安装）。
- * 顺序：EVORESEARCH_UV → 官方脚本位置 ~/.local/bin → 静默安装器位置
- * %LOCALAPPDATA%\Programs\uv → 旧版 ~/.dsh/bin → PATH。
+ * 顺序：EVORESEARCH_UV → 部署目录 <dataRoot>/.tools/bin（本产品安装，随程序迁移）
+ * → 官方脚本位置 ~/.local/bin → 静默安装器位置 %LOCALAPPDATA%\Programs\uv
+ * → 旧版 ~/.dsh/bin → PATH。部署目录优先：不往用户目录写工具二进制。
  */
-function uvPathOf(): string | null {
+function uvPathOf(dataRoot: string): string | null {
   const fromEnv = process.env.EVORESEARCH_UV
   if (fromEnv !== undefined && fromEnv !== '' && fs.existsSync(fromEnv)) return fromEnv
   const candidates = [
+    path.join(dataRoot, '.tools', 'bin', 'uv.exe'),
     path.join(homedir(), '.local', 'bin', 'uv.exe'),
     path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'uv', 'uv.exe'),
     path.join(homedir(), '.dsh', 'bin', 'uv.exe'),
@@ -129,7 +132,18 @@ export class ProjectEnvService {
 
   /** 解析 UV 可执行文件（null = 未安装）。 */
   uvPath(): string | null {
-    return uvPathOf()
+    return uvPathOf(this.dataRoot)
+  }
+
+  /** 把给定 uv.exe 复制到部署目录 <dataRoot>/.tools/bin（幂等；失败静默）。 */
+  private copyUvIntoDeploy(uvExe: string): void {
+    try {
+      const binDir = path.join(this.dataRoot, '.tools', 'bin')
+      fs.mkdirSync(binDir, { recursive: true })
+      fs.copyFileSync(uvExe, path.join(binDir, 'uv.exe'))
+    } catch {
+      // 复制失败不影响：下次仍可从原位置解析
+    }
   }
 
   /**
@@ -143,20 +157,24 @@ export class ProjectEnvService {
   uvEnsure(): Promise<{ ok: boolean; uv: string | null; installed: boolean; error?: string }> {
     if (this.ensurePromise !== null) return this.ensurePromise
     this.ensurePromise = (async () => {
-      const existing = uvPathOf()
+      const existing = uvPathOf(this.dataRoot)
       if (existing !== null) return { ok: true, uv: existing, installed: false }
       let lastError = ''
-      // 1) 官方脚本
+      // 1) 官方脚本（固定装到 ~/.local/bin；成功后复制进部署目录，保证下次从部署目录解析）
       try {
         const script = 'irm https://astral.sh/uv/install.ps1 | iex'
         const result = await runAsync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], 5 * 60 * 1000)
-        const found = uvPathOf()
-        if (result.status === 0 && found !== null) return { ok: true, uv: found, installed: true }
+        const found = uvPathOf(this.dataRoot)
+        if (result.status === 0 && found !== null) {
+          this.copyUvIntoDeploy(found)
+          return { ok: true, uv: found, installed: true }
+        }
         lastError = (result.stderr.trim() || result.stdout.trim() || `exit ${String(result.status)}`).slice(0, 300)
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
       }
-      // 2) 官方 zip + tar.exe（Windows 10+ 自带 bsdtar，可解 zip；无 PowerShell 依赖）
+      // 2) 官方 zip + tar.exe（Windows 10+ 自带 bsdtar，可解 zip；无 PowerShell 依赖；
+      //    直接装进部署目录 <dataRoot>/.tools/bin——不写用户目录）
       try {
         const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64'
         const tmp = os.tmpdir()
@@ -169,11 +187,11 @@ export class ProjectEnvService {
         if (tarResult.status !== 0) throw new Error(`tar 解压失败: ${(tarResult.stderr || tarResult.stdout).slice(0, 200)}`)
         const uvExe = findFile(extractDir, 'uv.exe')
         if (uvExe === null) throw new Error('zip 内未找到 uv.exe')
-        const binDir = path.join(homedir(), '.local', 'bin')
+        const binDir = path.join(this.dataRoot, '.tools', 'bin')
         fs.mkdirSync(binDir, { recursive: true })
         fs.copyFileSync(uvExe, path.join(binDir, 'uv.exe'))
         fs.rmSync(extractDir, { recursive: true, force: true })
-        const found = uvPathOf()
+        const found = uvPathOf(this.dataRoot)
         if (found !== null) return { ok: true, uv: found, installed: true }
         lastError = '解压安装完成但未找到 uv.exe'
       } catch (error) {

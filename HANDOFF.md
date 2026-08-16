@@ -219,6 +219,32 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
   消息通道面板行标签「消息通道」→「适配器状态」，消除与面板标题重复
   （视觉模型 mimo-v2.5 复核通过）。
 
+### 3.13 新功能「仅我的消息」+ 数据目录集中化（提交见 git log）
+
+**新功能：仅显示我的消息（隐藏 AI 回复）**
+- 位置：聊天输入框工具栏（分隔线右侧第一枚人形图标按钮）；激活时品牌色高亮背景。
+- 行为：只渲染 `kind === 'user'` 节点（隐藏 assistant 气泡/工具卡片/流式 partial），
+  列表顶部出现可点击提示条「已隐藏 AI 回复，点击此处恢复」（点击即切回全量）；
+  过滤模式隐藏输入区统计行、切换时滚动回顶。
+- 持久化：localStorage `evoresearch-useronly`（刷新后保持，全局会话共享）。
+- E2E（scripts/verify-useronly.mjs）：2 用户/3 AI 基线 → 开启后 2/0 + hint + data-on →
+  刷新持久化 → 点击 hint 恢复 3 AI。视觉模型 mimo-v2.5 复评 OK。
+
+**数据目录集中化（回答"数据根/硬编码路径"）**
+- 数据根（dataRoot）= 部署根目录：`projects/`（项目工作区+实验/记忆/环境）、
+  `.evoresearch-data/`（模型设置/技能/定时任务/团队）、`sessions/`（DSH_HOME 下）、
+  `.credentials.yaml`（DSH_HOME 下）全部集中；桌面端 DSH_HOME/dataRoot =
+  `<安装目录>\sidecar\dist\app`（launch.js 强制 `DSH_HOME: process.cwd()`），
+  **与 EXE 同目录、非硬编码 C 盘路径**；换机拷贝整个安装目录即迁移。
+- 清理硬编码用户目录回退（原 `~/.dsh`，仅 DSH_HOME 未设时触发）：
+  rewind.ts `sessionsRoot()`、workspace-api.ts 两处 `sessionsRoot` → 回退 `process.cwd()`。
+- UV 工具安装：`~/.local/bin`（用户目录）→ `<dataRoot>/.tools/bin/`（部署目录内），
+  查找顺序 `.tools` 优先；官方脚本安装后也复制进 `.tools`。实测 `uv-ensure` 返回
+  `.tools\bin\uv.exe`。
+- 保留的用户目录写入（Windows 惯例，非用户数据）：端口文件
+  `%LOCALAPPDATA%\com.evoresearch.desktop\port.json`（1 行端口号）、
+  诊断日志 `%TEMP%\evoresearch-*.log`；WebView2/Edge 浏览器缓存由浏览器托管。
+
 
 ## 四、E2E 验证结果（verify-newfeatures.mjs，真实模型对话）
 

@@ -290,6 +290,9 @@ const DICT: Record<string, [string, string]> = {
   fileMentions: ['File mentions', '文件提及'],
   backgroundJobs: ['Background jobs', '后台任务'],
   notificationsOn: ['Notifications on', '通知已开启'],
+  userOnly: ['My messages only（hide AI replies）', '仅我的消息（隐藏 AI 回复）'],
+  userOnlyOff: ['Show all messages', '显示全部消息'],
+  userOnlyHint: ['AI replies are hidden — click here to show all', '已隐藏 AI 回复，点击此处恢复'],
   notificationsOff: ['Notifications off', '通知已关闭'],
   notifications: ['Notifications', '通知'],
   // 面板 / 工作区文件

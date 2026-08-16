@@ -9,7 +9,6 @@
 import { opendir, readFile, rm, stat, writeFile, mkdir } from 'node:fs/promises'
 import { zstdDecompressSync } from 'node:zlib'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
-import { homedir } from 'node:os'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /** 统计字节流中的行数（事件数近似；超长文件在调用侧已设上限）。 */
@@ -692,7 +691,7 @@ export function registerWorkspaceApi(ctx: any): void {
         // ── 会话信息（§26.8 Current 弹窗）：持久化文件路径/大小/事件数 ──
         if (method === 'session-info') {
           const sessionId = requireString(payload, 'sessionId')
-          const sessionsRoot = join(process.env.DSH_HOME ?? join(os.homedir(), '.dsh'), 'sessions')
+          const sessionsRoot = join(process.env.DSH_HOME ?? process.cwd(), 'sessions')
           let file: string | null = null
           let bytes = 0
           let events: number | null = null
@@ -746,7 +745,7 @@ export function registerWorkspaceApi(ctx: any): void {
           const agents = ctx.get('agents')
           const status = (agents?.get?.(sessionId) as { status?: string } | undefined)?.status
           if (status === 'running') throw httpError(409, 'session-busy', '会话正在进行中，请先停止后再删除')
-          const sessionsRoot = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'sessions')
+          const sessionsRoot = join(process.env.DSH_HOME ?? process.cwd(), 'sessions')
           let removed = 0
           const walkSessions = async (dir: string, depth: number): Promise<void> => {
             if (depth > 4) return

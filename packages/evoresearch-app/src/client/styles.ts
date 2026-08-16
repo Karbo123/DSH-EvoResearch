@@ -200,7 +200,7 @@ body { margin: 0; }
 }
 .evo-composer-tool:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-composer-tool svg { width: 16px; height: 16px; }
-.evo-composer-tool[data-on] { color: var(--brand); }
+.evo-composer-tool[data-on] { color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, var(--color-surface)); }
 .evo-composer-tool.evo-aa-on { color: #e05d5d; }
 /* 动作项文字（§25.5）：窄容器只显示图标，hover 时该项文字平滑展开 */
 .evo-composer-tool span { max-width: 140px; opacity: 1; overflow: hidden; white-space: nowrap; transition: max-width 0.18s ease, opacity 0.18s ease, margin-left 0.18s ease; }
@@ -239,6 +239,8 @@ body { margin: 0; }
 /* ── 消息列表 ── */
 .evo-msg-list { flex: 1; overflow-y: auto; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 13px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; position: relative; }
 .evo-msg-error { padding: 10px 14px; border: 1px solid var(--color-error); border-radius: 10px; color: var(--color-error); font-size: 13px; background: color-mix(in srgb, var(--color-error) 8%, transparent); }
+.evo-useronly-hint { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border: 1px dashed color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 999px; color: var(--color-text-secondary); font-size: 12px; background: color-mix(in srgb, var(--brand) 7%, var(--color-surface)); cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+.evo-useronly-hint:hover { border-color: var(--brand); color: var(--brand); }
 /* 历史分页（移植规范 §9）：Load earlier / 回到最新 */
 .evo-load-earlier { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
 .evo-load-earlier:hover { border-color: var(--brand); color: var(--color-text-primary); }

@@ -11,7 +11,6 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { homedir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { zstdDecompressSync } from 'node:zlib'
 import { randomUUID } from 'node:crypto'
@@ -34,9 +33,13 @@ function git(dir: string, args: string[], timeoutMs = 120000): string {
   return (result.stdout ?? '').trim()
 }
 
-/** 会话持久化根（<DSH_HOME>/sessions/；子目录按会话 cwd 编码组织）。 */
+/**
+ * 会话持久化根（<DSH_HOME>/sessions/；子目录按会话 cwd 编码组织）。
+ * 回退到进程 cwd（= 部署根）：绝不默认写入用户目录（~/.dsh），
+ * 保证数据集中在程序/部署目录内、换机拷贝即迁移。
+ */
 function sessionsRoot(): string {
-  const home = process.env.DSH_HOME ?? path.join(homedir(), '.dsh')
+  const home = process.env.DSH_HOME ?? process.cwd()
   return path.join(home, 'sessions')
 }
 
