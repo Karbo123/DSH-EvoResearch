@@ -113,6 +113,29 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 - 实验面板：刷新保留旧列表（避免详情/提示随加载态卸载）；回退成功提示常驻 5s
 - i18n：删除重复 `back` 键（消除 esbuild duplicate-key 警告）
 
+### 3.7 项目环境管理（每项目独立 UV 虚拟环境）
+
+- **后端** `packages/evoresearch-plugin/src/host/project-env.ts`（ProjectEnvService）：环境目录
+  `<project>/.venv`（随项目迁移）；UV 解析 EVORESEARCH_UV → `~/.dsh/bin/uv.exe` → PATH；
+  创建 `uv venv --python <version> --python-preference managed`（默认 3.12，uv 自动下载
+  CPython）；配置记录 `.evoresearch-data/env.json`；安装 `uv pip install --python <env>`；
+  全部异步 spawn（不阻塞事件循环）
+- **自动切换（双通道，均按每次执行的 agent 会话 cwd 解析）**：
+  1. `shellEnv`（官方 dsh-shell-env）注册 `DSH_VENV` / `DSH_VENV_PYTHON` / `DSH_VENV_SCRIPTS` /
+     `DSH_UV`——每次 bash/pwsh 执行注入当前项目环境真实路径（已实测：模型 pwsh 里
+     `$env:DSH_VENV_PYTHON` = 当前项目 `.venv\Scripts\python.exe`）
+  2. `systemPrompt.context`（order 61，动态）按会话注入 `<project_env>` 指引：环境存在时
+     告诉模型用哪个解释器/怎么装包；不存在时给出 uv venv 创建命令
+- **前端**：Workspace 面板每项目「项目环境」卡片——状态（Python 版本/包列表）、创建
+  （可指定版本）、安装包、删除（两段确认）；新建项目/欢迎页自动建项目时后台自动创建环境
+- **泄漏防线**：`<project_env>` 加入 SYSTEM_LEAK_PREFIXES
+- **UV 安装**：`C:\Users\Karbo\.dsh\bin\uv.exe`（0.12.5，GitHub 官方独立版）
+
+### 3.8 Markdown 行距收紧（用户反馈）
+
+`styles.ts` `.evo-md`：line-height 1.75→1.58、段距 16→10px、标题上距 24→18px、
+li 间距 4→2px（实测计算样式 22.12px）。
+
 ## 四、E2E 验证结果（verify-newfeatures.mjs，真实模型对话）
 
 | 项目 | 结果 |
@@ -132,6 +155,12 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 | 第 5 步 优化迭代：按要求精简 + 补 Self-RAG（reflection tokens）/CRAG（corrective actions）对比，紧扣前文 | ✅ |
 | Ask User 提问卡片：模型实验前问方向/数据 → 界面作答 → 立即继续（完整闭环） | ✅ |
 | 重型自主流程（诊断真实环境：torch DLL 失败修复、QASPER 下载、pip 竞态排查，24+ 工具步） | ✅（因装 torch 数 GB 耗时，用户要求改轻量后主动停止） |
+| **项目环境 + ML 示例（verify-ml.mjs，可见窗口）**： | |
+| ML 例 1：纯标准库迷你神经网络训 XOR → 100% 准确率（模型主动用项目 .venv） | ✅ |
+| 环境自动创建：新建项目后台秒建 Python 3.12.13 虚拟环境（uv 托管下载） | ✅ |
+| UI 安装 scikit-learn → uv 解析完整依赖链（6 包：numpy/scipy/joblib…） | ✅ |
+| ML 例 2：项目 venv 跑 sklearn 随机森林（digits 80/20 分层）→ 96.11% 准确率 | ✅ |
+| 自动切换铁证：模型 pwsh 输出 `$env:DSH_VENV_PYTHON` = 当前项目 `.venv\Scripts\python.exe` | ✅ |
 
 ## 五、已知限制 / 后续建议
 
