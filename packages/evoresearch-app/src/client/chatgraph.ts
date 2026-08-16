@@ -124,15 +124,28 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
       }
       if (target === null) target = hoverPortRef.current
       if (target !== null && target.nodeId !== '' && linking !== null && target.nodeId !== linking.from) {
-        setGraph((prev) => {
-          let edges = [...prev.edges]
-          if (target.port === 'context') edges = edges.filter((e) => !(e.to === target.nodeId && e.toPort === 'context'))
-          const id = `e${Date.now().toString(36)}`
-          edges = [...edges, { id, from: linking.from, to: target.nodeId, toPort: target.port }]
-          void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: { ...prev, edges } })
-            .catch(() => undefined)
-          return { ...prev, edges }
-        })
+        if (target.port === 'context') {
+          // §上下文初始化继承：context 连线由 graph-inherit 原子完成
+          // （fork 源会话历史 → 目标节点重新绑定 → context 边唯一替换 → 落盘），
+          // 避免与前端 graph-save 竞争覆盖；只有一层、非递归、非运行时注入
+          void api<{ ok: boolean; sessionId?: string; replaced?: boolean; error?: string }>(
+            'graph-inherit',
+            { workspaceDir: cwd ?? undefined, fromNodeId: linking.from, toNodeId: target.nodeId },
+          )
+            .then((r) => {
+              if (!r?.ok) setError(r?.error ?? t('graphInheritFailed'))
+              else load()
+            })
+            .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
+        } else {
+          setGraph((prev) => {
+            const id = `e${Date.now().toString(36)}`
+            const next = { ...prev, edges: [...prev.edges, { id, from: linking.from, to: target.nodeId, toPort: 'memory' as const }] }
+            void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next })
+              .catch(() => undefined)
+            return next
+          })
+        }
       }
       setLinking(null)
       hoverPortRef.current = null

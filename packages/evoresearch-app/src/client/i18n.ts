@@ -421,6 +421,7 @@ const DICT: Record<string, [string, string]> = {
   graphEmptyHint: ['右键画布新建聊天/记忆节点，拖动端点连线：chat→chat 继承上下文，memory→chat 注入记忆。', '右键画布新建聊天/记忆节点，拖动端点连线：chat→chat 继承上下文，memory→chat 注入记忆。'],
   graphNeedProject: ['Open a project chat first to bind the workspace.', '请先打开一个项目会话以绑定工作区。'],
   graphCreateSessionFailed: ['Failed to create session.', '创建会话失败。'],
+  graphInheritFailed: ['Failed to inherit context.', '上下文继承失败。'],
   graphGlobal: ['Global', '全局'],
   graphProject: ['Project', '项目'],
   graphEditContent: ['Edit content', '编辑内容'],

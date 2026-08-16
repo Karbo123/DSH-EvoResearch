@@ -942,11 +942,12 @@ export function registerWorkspaceApi(ctx: any): void {
         }
 
         // ── Chat Graph（节点/连线图，按项目存储）──
-        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge') {
+        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-inherit') {
           const serviceMethod = method === 'graph-get' ? 'graphGet'
             : method === 'graph-save' ? 'graphSave'
               : method === 'graph-add-node' ? 'graphAddNode'
-                : 'graphAddEdge'
+                : method === 'graph-add-edge' ? 'graphAddEdge'
+                  : 'graphInherit'
           const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
           if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const args: Record<string, unknown> = {}
@@ -954,6 +955,8 @@ export function registerWorkspaceApi(ctx: any): void {
           if (payload.graph !== undefined) args.graph = payload.graph
           if (payload.node !== undefined) args.node = payload.node
           if (payload.edge !== undefined) args.edge = payload.edge
+          if (typeof payload.fromNodeId === 'string') args.fromNodeId = payload.fromNodeId
+          if (typeof payload.toNodeId === 'string') args.toNodeId = payload.toNodeId
           try {
             writeOk(res, await fn.call(evoresearch, args))
           } catch (error) {

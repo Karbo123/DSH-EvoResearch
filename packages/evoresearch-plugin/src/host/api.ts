@@ -8,6 +8,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import * as path from 'node:path'
 import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, renameSync, existsSync, rmSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import type { WorkspaceService } from './workspace.js'
 import type { MemoryRuntime } from './memory/index.js'
 import type { SchedulerService } from './scheduler.js'
@@ -18,6 +19,7 @@ import type { ExperimentService } from './experiments.js'
 import type { ChatGraphService } from './chat-graph.js'
 import type { ProjectEnvService, ProjectEnvInfo } from './project-env.js'
 import type { RewindService } from './rewind.js'
+import { readSessionEvents } from './rewind.js'
 import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 
@@ -646,6 +648,81 @@ export class EvoResearchApiService extends TypertRemoteService {
       return this.services.chatGraph.addEdge(this.graphProjectOf(args), args?.edge as never)
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * 上下文初始化继承（§ChatGraph）：context 连线时一次性执行——
+   * 把源 chat 会话的完整历史 fork 为新的独立会话（一层继承，非递归、非运行时注入），
+   * 并将目标节点重新绑定到该会话。
+   */
+  @Remote('graphInherit')
+  graphInherit(args: { workspaceDir?: string; fromNodeId: string; toNodeId: string }): { ok: boolean; sessionId?: string; replaced?: boolean; error?: string } {
+    try {
+      const name = this.graphProjectOf(args)
+      const graph = this.services.chatGraph.get(name)
+      const from = graph.nodes.find((n) => n.id === String(args?.fromNodeId ?? '') && n.type === 'chat')
+      const to = graph.nodes.find((n) => n.id === String(args?.toNodeId ?? '') && n.type === 'chat')
+      if (from === undefined || from.sessionId === undefined) return { ok: false, error: '源聊天节点未绑定会话' }
+      if (to === undefined) return { ok: false, error: '目标聊天节点不存在' }
+      const agents = this.hostCtx.get('agents') as { create?(opts: Record<string, unknown>): Promise<unknown> } | undefined
+      if (agents?.create === undefined) return { ok: false, error: 'agents 服务不可用' }
+      // 源会话历史从持久化文件读取（源会话可能不是 live 会话）；
+      // 过滤不符合官方 seed envelope 的事件（如会话头事件 session{type,id,cwd}）
+      let seedEvents: unknown[]
+      let cwd: string | undefined
+      try {
+        const raw = readSessionEvents(from.sessionId) as Array<Record<string, unknown>>
+        const allowed = new Set(['type', 'seq', 'time', 'data', 'surfaceOp', 'sourceEventSeqs', 'ignorable'])
+        // 过滤非法 envelope 事件，重排 seq 并丢弃 sourceEventSeqs（其引用旧 seq，
+        // seed 回放不需要；官方要求 seed 从 0 连续且引用必须更早）
+        seedEvents = raw
+          .filter((ev) => {
+            if (typeof ev.type !== 'string') return false
+            if (typeof ev.seq !== 'number' || typeof ev.time !== 'number' || ev.data === undefined) return false
+            return Object.keys(ev).every((k) => allowed.has(k))
+          })
+          .map((ev, i) => {
+            const clean: Record<string, unknown> = { type: ev.type, seq: i, time: ev.time, data: ev.data }
+            if (ev.surfaceOp !== undefined) clean.surfaceOp = ev.surfaceOp
+            if (ev.ignorable === true) clean.ignorable = true
+            return clean
+          })
+        // cwd：live 会话头优先，否则取会话头事件（type==='session' 的 cwd 字段）
+        const store = this.hostCtx.get('sessions') as { get?(id: string): { header?: { cwd?: string } } } | undefined
+        const live = store?.get?.(from.sessionId)
+        cwd = live?.header?.cwd
+        if (cwd === undefined || cwd === '') {
+          const head = raw.find((ev) => ev.type === 'session')
+          cwd = typeof head?.cwd === 'string' && head.cwd !== '' ? head.cwd : undefined
+        }
+      } catch (error) {
+        return { ok: false, error: `源会话历史读取失败: ${error instanceof Error ? error.message : String(error)}` }
+      }
+      const childId = `session-${randomUUID()}`
+      const seed = Array.isArray(seedEvents) ? seedEvents : []
+      void agents.create({
+        sessionId: childId,
+        seed,
+        meta: {
+          ...(typeof cwd === 'string' && cwd !== '' ? { cwd } : {}),
+          parentSession: from.sessionId,
+          seedLength: seed.length,
+          inherited: true,
+        },
+        agentOptions: {},
+      })
+      const replaced = to.sessionId !== childId
+      // 原子保存：context 边（唯一替换）+ 目标节点重新绑定 + 全图落盘
+      // （与前端拖线共用一个写入口，避免 graph-save 与 graph-inherit 竞争覆盖）
+      const edges = graph.edges
+        .filter((e) => !(e.to === to.id && e.toPort === 'context'))
+        .concat([{ id: `e${Date.now().toString(36)}`, from: from.id, to: to.id, toPort: 'context' }])
+      const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: childId } : n)), edges }
+      this.services.chatGraph.save(name, next)
+      return { ok: true, sessionId: childId, replaced }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 

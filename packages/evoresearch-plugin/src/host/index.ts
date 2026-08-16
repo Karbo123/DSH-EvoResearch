@@ -28,7 +28,7 @@ import { ChannelManager } from './channels/index.js'
 import { builtinAdapters } from './channels/adapters.js'
 import type { ChannelMessage } from './channels/base.js'
 import { AutoSkillsService, type AutoSkillsConfig } from './autoskills.js'
-import { ChatGraphService, graphMemoryText, graphContextText } from './chat-graph.js'
+import { ChatGraphService, graphMemoryText } from './chat-graph.js'
 import { ExpertService, type ExpertConfig } from './experts.js'
 import { ExperimentService } from './experiments.js'
 import { ProjectEnvService } from './project-env.js'
@@ -260,25 +260,8 @@ function apply(ctx: Context): void {
       })
     : undefined
 
-  // 8.8.1) <graph_context>：context 边 → 源 chat 会话历史注入（子聊天继承父上下文，支持链式）
-  const disposeGraphContext = systemPrompt
-    ? systemPrompt.context({
-        name: 'evoresearch:graph-context',
-        order: 63,
-        text: (context: { agent?: { session?: { header?: { cwd?: string }; id?: string } } }) => {
-          const sessionId = sessionIdOf(context)
-          if (sessionId === '') return ''
-          const g = graphOf(context)
-          if (g === null) return ''
-          const inherited = graphContextText(g.graph, sessionId)
-          if (inherited === null) return ''
-          return '<graph_context>\n' +
-            '本会话在聊天图谱中继承了上游聊天节点的上下文（含其自身的上下文链），以下是继承的对话记录，作为本会话的上下文初始化：\n' +
-            inherited.text +
-            '\n</graph_context>'
-        },
-      })
-    : undefined
+  // 8.8.1) 上下文继承不再运行时注入（§ChatGraph 语义调整：context 连线时由
+  // graphInherit 一次性 fork 源会话历史作为初始化，只有一层；此后会话独立演进）
 
   // 8.7) 项目环境自动切换（shellEnv）：每次 bash/pwsh 执行注入当前项目环境的
   // 真实路径——按 execution.agent.session.header.cwd 解析，与所选项目一一对应。
