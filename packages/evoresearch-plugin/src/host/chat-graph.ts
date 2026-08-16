@@ -56,6 +56,8 @@ export function emptyGraph(): ChatGraph {
  * （按 turn+step 合并为完整回复）/ data.blocks[].text。
  */
 const historyCache = new Map<string, { mtimeMs: number; size: number; text: string }>()
+/** 缓存上限（会话多时防止无限增长；超出清空重建，简单近似）。 */
+const HISTORY_CACHE_MAX = 100
 export function sessionHistoryText(sessionId: string, maxChars = 8000): string {
   let events: Array<{ type: string; data?: Record<string, unknown> }>
   try {
@@ -70,6 +72,7 @@ export function sessionHistoryText(sessionId: string, maxChars = 8000): string {
         return t.length > maxChars ? t.slice(-maxChars) : t
       }
       const text = extractHistory(sessionId, maxChars)
+      if (historyCache.size >= HISTORY_CACHE_MAX) historyCache.clear()
       historyCache.set(sessionId, { mtimeMs: stat.mtimeMs, size: stat.size, text })
       return text.length > maxChars ? text.slice(-maxChars) : text
     }
@@ -163,7 +166,8 @@ function extractHistory(sessionId: string, maxChars = 8000): string {
 export function graphMemoryText(graph: ChatGraph, sessionId: string, maxChars = 6000): string {
   const node = graph.nodes.find((n) => n.type === 'chat' && n.sessionId === sessionId)
   if (node === undefined) return ''
-  const memIds = graph.edges.filter((e) => e.to === node.id && e.toPort === 'memory').map((e) => e.from)
+  // 去重：同一记忆节点被多条边连接时不重复注入
+  const memIds = [...new Set(graph.edges.filter((e) => e.to === node.id && e.toPort === 'memory').map((e) => e.from))]
   const contents = graph.nodes
     .filter((n) => memIds.includes(n.id) && n.type === 'memory')
     .map((n) => (n.content ?? '').trim())
@@ -172,7 +176,11 @@ export function graphMemoryText(graph: ChatGraph, sessionId: string, maxChars = 
   let total = 0
   const parts: string[] = []
   for (const content of contents) {
-    const slice = content.slice(0, 1500)
+    // 防止用户内容里的闭合标签提前终止注入块（XML/提示注入混淆防护）
+    const cleaned = content
+      .replace(/<\/graph_memory>/gi, '＜/graph_memory＞')
+      .replace(/<graph_memory>/gi, '＜graph_memory＞')
+    const slice = cleaned.slice(0, 1500)
     total += slice.length + 2
     if (total > maxChars) break
     parts.push(slice)
@@ -316,16 +324,12 @@ export class ChatGraphService {
     try {
       const dir = this.graphsDir()
       fs.mkdirSync(dir, { recursive: true })
-      // 全局节点合并写入全局文件（按 id 去重：保留最新位置/标题/内容）
-      if (globalNodes.length > 0) {
-        const current = this.readGlobal()
-        const byId = new Map(current.nodes.map((n) => [n.id, n]))
-        for (const n of globalNodes) byId.set(n.id, n)
-        const gfile = this.globalFile()
-        const gtmp = `${gfile}.tmp-${process.pid}`
-        fs.writeFileSync(gtmp, JSON.stringify({ nodes: [...byId.values()], edges: [] }, null, 2), 'utf8')
-        fs.renameSync(gtmp, gfile)
-      }
+      // 全局节点全量回写（跨项目共享：get 合并保证每次保存都携带全部 global 节点；
+      // 无条件写——删除的 global 节点随即从全局文件移除，不会"复活"）
+      const gfile = this.globalFile()
+      const gtmp = `${gfile}.tmp-${process.pid}`
+      fs.writeFileSync(gtmp, JSON.stringify({ nodes: globalNodes, edges: [] }, null, 2), 'utf8')
+      fs.renameSync(gtmp, gfile)
       // 项目节点与边写入项目文件
       const file = this.fileOf(projectName)
       const tmp = `${file}.tmp-${process.pid}`

@@ -13,7 +13,8 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
-import { MessageSquare, Database, GitBranch, Plus, Trash2, Pencil, Globe, FolderGit2, X, FileText, Check } from 'lucide-react'
+import { toast } from './toast'
+import { MessageSquare, Database, GitBranch, Plus, Trash2, Pencil, Globe, FolderGit2, X, FileText, Check, Unlink } from 'lucide-react'
 
 /** 节点宽度/高度（画布内固定尺寸，端口偏移据此计算）。 */
 const NODE_W = 168
@@ -128,13 +129,16 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
           // §上下文初始化继承：context 连线由 graph-inherit 原子完成
           // （fork 源会话历史 → 目标节点重新绑定 → context 边唯一替换 → 落盘），
           // 避免与前端 graph-save 竞争覆盖；只有一层、非递归、非运行时注入
-          void api<{ ok: boolean; sessionId?: string; replaced?: boolean; error?: string }>(
+          void api<{ ok: boolean; sessionId?: string; replaced?: boolean; notice?: string; error?: string }>(
             'graph-inherit',
             { workspaceDir: cwd ?? undefined, fromNodeId: linking.from, toNodeId: target.nodeId },
           )
             .then((r) => {
               if (!r?.ok) setError(r?.error ?? t('graphInheritFailed'))
-              else load()
+              else {
+                if (typeof r.notice === 'string' && r.notice !== '') toast(r.notice)
+                load()
+              }
             })
             .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
         } else {
@@ -245,6 +249,16 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
     setSelectedId(null)
     setGraph((prev) => {
       const next = { nodes: prev.nodes.filter((n) => n.id !== id), edges: prev.edges.filter((e) => e.from !== id && e.to !== id) }
+      void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next }).catch(() => undefined)
+      return next
+    })
+  }
+
+  /** 断开某节点的上下文继承（移除其 context 边；已 fork 的会话保留、独立演进）。 */
+  const disconnectContext = (id: string) => {
+    setMenu(null)
+    setGraph((prev) => {
+      const next = { ...prev, edges: prev.edges.filter((e) => !(e.to === id && e.toPort === 'context')) }
       void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next }).catch(() => undefined)
       return next
     })
@@ -459,6 +473,13 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
                 onClick: () => { const n = nodeById(menu.nodeId as string); if (n !== undefined) startEditMemory(n) },
                 children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: t('graphEditContent') })] }),
               }),
+              // 断开上下文继承（仅对有 context 边的 chat 节点显示）
+              menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat'
+                && graph.edges.some((e) => e.to === menu.nodeId && e.toPort === 'context') && jsx('button', {
+                  type: 'button', className: 'evo-graph-menu-item',
+                  onClick: () => disconnectContext(menu.nodeId as string),
+                  children: jsxs(Fragment, { children: [jsx(Unlink, {}), jsx('span', { children: t('graphDisconnectContext') })] }),
+                }),
               menu.nodeId !== undefined && jsx('button', {
                 type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger',
                 onClick: () => deleteNode(menu.nodeId as string),

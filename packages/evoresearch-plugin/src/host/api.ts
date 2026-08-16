@@ -657,7 +657,7 @@ export class EvoResearchApiService extends TypertRemoteService {
    * 并将目标节点重新绑定到该会话。
    */
   @Remote('graphInherit')
-  graphInherit(args: { workspaceDir?: string; fromNodeId: string; toNodeId: string }): { ok: boolean; sessionId?: string; replaced?: boolean; error?: string } {
+  graphInherit(args: { workspaceDir?: string; fromNodeId: string; toNodeId: string }): { ok: boolean; sessionId?: string; replaced?: boolean; notice?: string; error?: string } {
     try {
       const name = this.graphProjectOf(args)
       const graph = this.services.chatGraph.get(name)
@@ -665,6 +665,7 @@ export class EvoResearchApiService extends TypertRemoteService {
       const to = graph.nodes.find((n) => n.id === String(args?.toNodeId ?? '') && n.type === 'chat')
       if (from === undefined || from.sessionId === undefined) return { ok: false, error: '源聊天节点未绑定会话' }
       if (to === undefined) return { ok: false, error: '目标聊天节点不存在' }
+      if (from.id === to.id) return { ok: false, error: '不能继承自己的上下文' }
       const agents = this.hostCtx.get('agents') as { create?(opts: Record<string, unknown>): Promise<unknown> } | undefined
       if (agents?.create === undefined) return { ok: false, error: 'agents 服务不可用' }
       // 源会话历史从持久化文件读取（源会话可能不是 live 会话）；
@@ -713,6 +714,13 @@ export class EvoResearchApiService extends TypertRemoteService {
         agentOptions: {},
       })
       const replaced = to.sessionId !== childId
+      // 目标旧会话已有内容时提示（重新继承会换绑新会话，原会话保留但不再显示）
+      let notice: string | undefined
+      if (replaced && to.sessionId !== undefined) {
+        try {
+          if (readSessionEvents(to.sessionId).length > 0) notice = '该聊天已有内容，已重新绑定继承会话（原内容保留在旧会话中）'
+        } catch { /* 旧会话不存在则无需提示 */ }
+      }
       // 原子保存：context 边（唯一替换）+ 目标节点重新绑定 + 全图落盘
       // （与前端拖线共用一个写入口，避免 graph-save 与 graph-inherit 竞争覆盖）
       const edges = graph.edges
@@ -720,7 +728,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         .concat([{ id: `e${Date.now().toString(36)}`, from: from.id, to: to.id, toPort: 'context' }])
       const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: childId } : n)), edges }
       this.services.chatGraph.save(name, next)
-      return { ok: true, sessionId: childId, replaced }
+      return { ok: true, sessionId: childId, replaced, notice }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
