@@ -297,8 +297,14 @@ gap=4、centerDelta=0、宽度差=0。
 
 ## 五、已知限制 / 后续建议
 
-0. **发布记录（2026-08-16）**：v0.1.0-rc.1 release 已用新二进制 clobber 更新（轨迹面板/设置全屏/项目环境/实验管理/标签栏/复制历史等全部打进安装包）：
-   - `EvoResearch_0.1.0_x64-setup.exe`（49.4MB）SHA256 `4C571A36…4FA64A`、`evoresearch-desktop.exe`（4.2MB）SHA256 `F7037C40…0578B`（release notes 已同步）
+0. **发布记录（2026-08-16 晚，第二次 clobber）**：v0.1.0-rc.1 release 已用新二进制更新
+   （新增：消息编辑重发/完全回溯、复制按钮移出气泡、侧栏"置顶+⋯"重构、+ 菜单补全、
+   仅我的消息过滤、Markdown 实时样式化编辑器 + 快捷键、统计行移出输入框、数据目录
+   集中化、消息通道/实验面板复核修复；release notes 已同步）：
+   - `EvoResearch_0.1.0_x64-setup.exe`（47.2MB）SHA256 `069EEAC0…62B10`、
+     `evoresearch-desktop.exe`（4.0MB）SHA256 `C8946D7F…9D7CD`；
+   - 打包产物冒烟通过（verify-exe-window.mjs：窗口 + sidecar 启动正常，已终止实例）；
+   - 旧版 SHA：setup `4C571A36…4FA64A`、exe `F7037C40…0578B`（已失效）。
    - 新壳 exe 冒烟验证通过（窗口 + sidecar 启动）
 
 1. **图片生成/语音识别**仍为配置预留（无实际工具）；本地语音引擎未实现（ResearchOS 同为 API 模式）
