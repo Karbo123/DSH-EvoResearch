@@ -12,6 +12,7 @@ import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
   Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
   UserPlus, Power, PowerOff, Ban, ExternalLink, Send, Sparkles, PenLine, Pencil,
+  Boxes, Download, ChevronDown, ChevronRight,
 } from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -1124,7 +1125,145 @@ interface GoalProposalRow {
 
 interface ProjectRow { name: string; path?: string }
 
-/** Workspace 面板：项目列表 + 新建项目 + Import Project。 */
+/** 项目环境信息（§环境管理）。 */
+interface ProjectEnvRow {
+  uv: string | null
+  envDir: string
+  pythonPath: string
+  exists: boolean
+  pythonVersion: string
+  packages: string[]
+}
+
+/** 单个项目的环境卡片（状态 + 创建/装包/删除）。 */
+function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: (m: string) => void }) {
+  const [info, setInfo] = useState<ProjectEnvRow | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [version, setVersion] = useState('3.12')
+  const [pkgInput, setPkgInput] = useState('')
+  const [confirmRemove, setConfirmRemove] = useState(false)
+
+  const load = () => {
+    setInfo(null)
+    void api<ProjectEnvRow>('env-status', { projectDir }).then(setInfo).catch((e: any) => onError(String(e?.message ?? e)))
+  }
+  useEffect(() => { if (expanded) load() }, [expanded, projectDir])
+
+  const doCreate = () => {
+    setBusy(true)
+    void api<ProjectEnvRow>('env-create', { projectDir, pythonVersion: version.trim() || '3.12' })
+      .then((row) => { setBusy(false); setInfo(row) })
+      .catch((e: any) => { setBusy(false); onError(String(e?.message ?? e)) })
+  }
+  const doInstall = () => {
+    const pkgs = pkgInput.trim()
+    if (pkgs === '') return
+    setBusy(true)
+    void api<{ ok: boolean }>('env-install', { projectDir, packages: pkgs.split(/\s+/) })
+      .then(() => { setBusy(false); setPkgInput(''); load() })
+      .catch((e: any) => { setBusy(false); onError(String(e?.message ?? e)) })
+  }
+  const doRemove = () => {
+    setConfirmRemove(false)
+    setBusy(true)
+    void api<{ ok: boolean }>('env-remove', { projectDir })
+      .then(() => { setBusy(false); load() })
+      .catch((e: any) => { setBusy(false); onError(String(e?.message ?? e)) })
+  }
+
+  return jsxs('div', {
+    className: 'evo-env-card',
+    children: [
+      jsxs('button', {
+        type: 'button',
+        className: 'evo-env-head',
+        onClick: () => setExpanded((v) => !v),
+        children: [
+          jsx(Boxes, {}),
+          jsx('span', { children: t('projectEnv') }),
+          jsx('span', { style: { flex: 1 } }),
+          info === null
+            ? jsx('span', { className: 'evo-env-state', children: t('loading') })
+            : info.exists
+              ? jsx('span', { className: 'evo-env-state evo-env-ok', children: info.pythonVersion.replace('Python ', '') })
+              : jsx('span', { className: 'evo-env-state evo-env-missing', children: t('envMissing') }),
+          expanded ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
+        ],
+      }),
+      expanded && jsxs('div', {
+        className: 'evo-env-body',
+        children: [
+          info !== null && jsx('code', { className: 'evo-panel-item-code', children: info.envDir }),
+          info !== null && info.exists && jsx('div', {
+            className: 'evo-env-pkgs',
+            children: info.packages.length > 0
+              ? `${info.packages.length} ${t('packages')}: ${info.packages.slice(0, 12).join(', ')}${info.packages.length > 12 ? '…' : ''}`
+              : t('noPackagesYet'),
+          }),
+          // 创建（未存在时）
+          !info?.exists && jsxs('div', {
+            className: 'evo-panel-form',
+            children: [
+              jsx('input', {
+                type: 'text',
+                className: 'evo-panel-input',
+                placeholder: t('pythonVersionHint'),
+                value: version,
+                disabled: busy,
+                onInput: (e) => setVersion(e.currentTarget.value),
+              }),
+              jsx('button', {
+                type: 'button',
+                className: 'evo-panel-add',
+                disabled: busy,
+                onClick: doCreate,
+                children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: busy ? t('creating') : t('createEnv') })] }),
+              }),
+            ],
+          }),
+          // 安装包 + 删除（已存在时）
+          info?.exists && jsxs(Fragment, {
+            children: [
+              jsxs('div', {
+                className: 'evo-panel-form',
+                children: [
+                  jsx('input', {
+                    type: 'text',
+                    className: 'evo-panel-input',
+                    placeholder: t('installPkgsHint'),
+                    value: pkgInput,
+                    disabled: busy,
+                    onInput: (e) => setPkgInput(e.currentTarget.value),
+                    onKeyDown: (e) => { if (e.key === 'Enter') doInstall() },
+                  }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-panel-add',
+                    disabled: busy || pkgInput.trim() === '',
+                    onClick: doInstall,
+                    children: jsxs(Fragment, { children: [jsx(Download, {}), jsx('span', { children: busy ? t('installing') : t('installPkgs') })] }),
+                  }),
+                ],
+              }),
+              confirmRemove
+                ? jsx('button', { type: 'button', className: 'evo-tl-del-confirm', disabled: busy, onClick: doRemove, children: t('deleteQ') })
+                : jsx('button', {
+                    type: 'button',
+                    className: 'evo-tl-del',
+                    disabled: busy,
+                    onClick: () => { setConfirmRemove(true); setTimeout(() => setConfirmRemove(false), 5000) },
+                    children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('removeEnv') })] }),
+                  }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  })
+}
+
+/** Workspace 面板：项目列表 + 新建项目 + Import Project + 每项目环境。 */
 export function WorkspacePanel() {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null)
   const [sourcePath, setSourcePath] = useState('')
@@ -1232,15 +1371,19 @@ export function WorkspacePanel() {
             ? jsx('span', { className: 'evo-panel-hint', children: t('noProjectsYet') })
             : jsx('div', {
                 className: 'evo-panel-list',
-                children: (projects ?? []).map((p) => jsx('div', {
-                  className: 'evo-panel-item',
-                  children: jsxs(Fragment, {
-                    children: [
-                      jsx(FolderGit2, {}),
-                      jsx('span', { className: 'evo-panel-item-main', children: p.name }),
-                      p.path !== undefined && jsx('code', { className: 'evo-panel-item-code', children: p.path }),
-                    ],
-                  }),
+                children: (projects ?? []).map((p) => jsxs('div', {
+                  className: 'evo-panel-item evo-panel-item-wrap',
+                  children: [
+                    jsxs('div', {
+                      className: 'evo-panel-item-row',
+                      children: [
+                        jsx(FolderGit2, {}),
+                        jsx('span', { className: 'evo-panel-item-main', children: p.name }),
+                        p.path !== undefined && jsx('code', { className: 'evo-panel-item-code', children: p.path }),
+                      ],
+                    }),
+                    p.path !== undefined && jsx(ProjectEnvCard, { projectDir: p.path, onError: (m) => setError(m) }),
+                  ],
                 }, p.name)),
               }),
       ],

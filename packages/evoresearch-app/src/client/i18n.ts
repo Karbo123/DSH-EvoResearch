@@ -378,6 +378,17 @@ const DICT: Record<string, [string, string]> = {
   files: ['files', '个文件'],
   confirmQ: ['Confirm?', '确认？'],
   experimentNoWorkspace: ['Current session is not bound to a project workspace — sending your first message from the home page auto-creates one.', '当前会话未绑定项目工作区——在欢迎页发送首条消息会自动创建科研项目。'],
+  // 项目环境（§环境管理）
+  projectEnv: ['Project environment', '项目环境'],
+  envMissing: ['Not created', '未创建'],
+  createEnv: ['Create env', '创建环境'],
+  removeEnv: ['Remove env', '删除环境'],
+  pythonVersionHint: ['Python version (e.g. 3.12)', 'Python 版本（如 3.12）'],
+  installPkgs: ['Install', '安装'],
+  installing: ['Installing…', '安装中…'],
+  installPkgsHint: ['Packages (e.g. numpy scikit-learn)', '包名（如 numpy scikit-learn）'],
+  packages: ['packages', '个包'],
+  noPackagesYet: ['No packages installed yet', '尚未安装任何包'],
 }
 
 export function t(key: string): string {

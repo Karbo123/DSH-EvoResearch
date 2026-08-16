@@ -244,6 +244,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     '<code_mode>',
     '<research_memory_packet>',
     '<identity_profile>',
+    '<project_env>',
   ]
   const isSystemLeak = (n: any): boolean => {
     if (n === null || n.data === undefined) return false

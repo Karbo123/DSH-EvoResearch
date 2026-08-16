@@ -15,6 +15,7 @@ import type { ChannelManager } from './channels/index.js'
 import type { AutoSkillsService } from './autoskills.js'
 import type { ExpertService } from './experts.js'
 import type { ExperimentService } from './experiments.js'
+import type { ProjectEnvService, ProjectEnvInfo } from './project-env.js'
 import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 
@@ -27,6 +28,7 @@ export interface HostServices {
   readonly autoskills: AutoSkillsService
   readonly experts: ExpertService
   readonly experiments: ExperimentService
+  readonly projectEnv: ProjectEnvService
 }
 
 /** JSON 化的记忆包（不含内部引用）。 */
@@ -69,7 +71,10 @@ export class EvoResearchApiService extends TypertRemoteService {
   @Remote('projectCreate')
   projectCreate(args: { name: string }): ProjectInfo | { error: string } {
     try {
-      return this.services.workspace.createProject(args.name)
+      const project = this.services.workspace.createProject(args.name)
+      // 后台异步创建项目专属 UV 环境（失败不阻塞项目创建）
+      void this.services.projectEnv.create(project.path).catch(() => { /* 状态面板可重试 */ })
+      return project
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -109,6 +114,48 @@ export class EvoResearchApiService extends TypertRemoteService {
           ? { provider: configured.provider, model: configured.model }
           : { provider: 'new-api', model: 'deepseek-v4-flash' }
       return await this.services.workspace.autoCreateProject(this.hostCtx, model, String(args?.description ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 项目环境（§环境管理：每项目独立 UV 虚拟环境）─────────────────────────
+
+  private envArgs(args: { projectDir?: string }): string {
+    return String(args?.projectDir ?? '')
+  }
+
+  @Remote('projectEnvStatus')
+  projectEnvStatus(args: { projectDir?: string }): ProjectEnvInfo | { error: string } {
+    try {
+      return this.services.projectEnv.status(this.envArgs(args))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('projectEnvCreate')
+  async projectEnvCreate(args: { projectDir?: string; pythonVersion?: string }): Promise<ProjectEnvInfo | { error: string }> {
+    try {
+      return await this.services.projectEnv.create(this.envArgs(args), typeof args?.pythonVersion === 'string' ? args.pythonVersion : undefined)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('projectEnvInstall')
+  async projectEnvInstall(args: { projectDir?: string; packages?: string[] }): Promise<{ ok: boolean; output: string } | { error: string }> {
+    try {
+      return await this.services.projectEnv.install(this.envArgs(args), Array.isArray(args?.packages) ? args.packages.map(String) : [])
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('projectEnvRemove')
+  projectEnvRemove(args: { projectDir?: string }): { ok: boolean } | { error: string } {
+    try {
+      return this.services.projectEnv.remove(this.envArgs(args))
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

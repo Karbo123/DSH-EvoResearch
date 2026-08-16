@@ -891,6 +891,27 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── 项目环境（§环境管理：env-status/env-create/env-install/env-remove）──
+        if (method === 'env-status' || method === 'env-create' || method === 'env-install' || method === 'env-remove') {
+          const serviceMethod = method === 'env-status' ? 'projectEnvStatus'
+            : method === 'env-create' ? 'projectEnvCreate'
+              : method === 'env-install' ? 'projectEnvInstall'
+                : 'projectEnvRemove'
+          const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = {}
+          if (typeof payload.projectDir === 'string') args.projectDir = payload.projectDir
+          if (typeof payload.pythonVersion === 'string') args.pythonVersion = payload.pythonVersion
+          if (Array.isArray(payload.packages)) args.packages = payload.packages
+          try {
+            // 创建/安装耗时较长（uv 下载），await 完整结果
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
         writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown method ${method ?? ''}` } })
       } catch (error) {
         writeError(res, error)

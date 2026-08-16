@@ -20,6 +20,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import * as path from 'node:path'
+import * as fs from 'node:fs'
 import { WorkspaceService, type WorkspaceConfig } from './workspace.js'
 import { MemoryRuntime, type MemoryConfig } from './memory/index.js'
 import { SchedulerService, type SchedulerConfig } from './scheduler.js'
@@ -29,6 +30,7 @@ import type { ChannelMessage } from './channels/base.js'
 import { AutoSkillsService, type AutoSkillsConfig } from './autoskills.js'
 import { ExpertService, type ExpertConfig } from './experts.js'
 import { ExperimentService } from './experiments.js'
+import { ProjectEnvService } from './project-env.js'
 import { EvoResearchApiService, type HostServices } from './api.js'
 import { registerCommands } from './commands.js'
 import { listProjects } from './core/paths.js'
@@ -127,8 +129,11 @@ function apply(ctx: Context): void {
   // 5.5) 实验管理（§5.1 Git 式分支/回退/checkpoint）
   const experiments = new ExperimentService(dataRoot)
 
+  // 5.6) 项目环境（每项目独立 UV 虚拟环境）
+  const projectEnv = new ProjectEnvService(dataRoot)
+
   // 6) Remote API（构造即注册 services.evoresearch）
-  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments }
+  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, projectEnv }
   void new EvoResearchApiService(ctx, services)
 
   // 7) 斜杠命令
@@ -157,6 +162,74 @@ function apply(ctx: Context): void {
       })
     : undefined
 
+  // 8.6) 项目环境（§环境管理）：按会话动态注入 <project_env> 指引——
+  // assemble context 携带 agent.session.header.cwd，据此解析当前项目的 .venv。
+  const disposeEnvHint = systemPrompt
+    ? systemPrompt.context({
+        name: 'evoresearch:project-env',
+        order: 61,
+        text: (context: { agent?: { session?: { header?: { cwd?: string } } } }) => {
+          const cwd = context?.agent?.session?.header?.cwd ?? ''
+          if (cwd === '') return ''
+          const envDir = projectEnv.envDirOf(cwd)
+          const python = projectEnv.pythonOf(envDir)
+          if (fs.existsSync(python)) {
+            return '<project_env>\n' +
+              '本项目拥有独立的 Python 虚拟环境（UV 管理，与其它项目隔离）：\n' +
+              `- 环境目录: ${envDir}\n` +
+              `- 解释器: ${python}\n` +
+              `- 环境变量: $env:DSH_VENV_PYTHON（pwsh）/ $DSH_VENV_PYTHON（bash）即该解释器路径\n` +
+              '运行本项目 Python 代码请使用该解释器（pwsh: & $env:DSH_VENV_PYTHON script.py；bash: "$DSH_VENV_PYTHON" script.py）；\n' +
+              `安装依赖请使用: uv pip install --python "${envDir}" <package>（uv 路径在 $env:DSH_UV）\n` +
+              '禁止使用全局 python/pip（会污染其它项目）。\n' +
+              '</project_env>'
+          }
+          const uv = projectEnv.uvPath()
+          return '<project_env>\n' +
+            '本项目尚未创建专属虚拟环境（.venv 不存在）。如需 Python 依赖，请先创建环境：\n' +
+            `- uv venv "${envDir}" --python 3.12 --python-preference managed` +
+            (uv === null ? '' : `（uv 位于 ${uv}）`) + '\n' +
+            '创建后再安装依赖并运行代码；不要使用全局 python/pip。\n' +
+            '</project_env>'
+        },
+      })
+    : undefined
+
+  // 8.7) 项目环境自动切换（shellEnv）：每次 bash/pwsh 执行注入当前项目环境的
+  // 真实路径——按 execution.agent.session.header.cwd 解析，与所选项目一一对应。
+  const shellEnv = ctx.get('shellEnv') as
+    | { register(contributor: {
+        name: string
+        variables: Record<string, { description: string }>
+        resolve(execution: { agent?: { session?: { header?: { cwd?: string } } } }): Record<string, string>
+      }): () => void }
+    | undefined
+  const disposeShellEnv = shellEnv
+    ? shellEnv.register({
+        name: 'evoresearch-project-env',
+        variables: {
+          DSH_VENV: { description: '当前会话所属科研项目的虚拟环境目录（.venv 不存在时也为目录路径）' },
+          DSH_VENV_PYTHON: { description: '项目虚拟环境的 python.exe 绝对路径（环境不存在时为空字符串）' },
+          DSH_VENV_SCRIPTS: { description: '项目虚拟环境的 Scripts 目录（环境不存在时为空字符串）' },
+          DSH_UV: { description: 'UV 可执行文件绝对路径（未安装时为空字符串）' },
+        },
+        resolve(execution) {
+          const cwd = execution?.agent?.session?.header?.cwd ?? ''
+          const uv = projectEnv.uvPath()
+          if (cwd === '') return { DSH_VENV: '', DSH_VENV_PYTHON: '', DSH_VENV_SCRIPTS: '', DSH_UV: uv ?? '' }
+          const envDir = projectEnv.envDirOf(cwd)
+          const python = projectEnv.pythonOf(envDir)
+          const exists = fs.existsSync(python)
+          return {
+            DSH_VENV: envDir,
+            DSH_VENV_PYTHON: exists ? python : '',
+            DSH_VENV_SCRIPTS: exists ? path.join(envDir, 'Scripts') : '',
+            DSH_UV: uv ?? '',
+          }
+        },
+      })
+    : undefined
+
   // 9) 挂载副作用（记忆事件订阅 + prompt 注入 + 工具；调度 tick；通道）
   const disposeMemory = memory.attach(ctx)
   const disposeScheduler = scheduler.attach(ctx)
@@ -176,6 +249,8 @@ function apply(ctx: Context): void {
       disposeCommands()
       disposeVision?.()
       disposeCodeMode?.()
+      disposeEnvHint?.()
+      disposeShellEnv?.()
     }
   })
 }
