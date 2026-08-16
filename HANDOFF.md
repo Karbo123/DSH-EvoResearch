@@ -141,6 +141,17 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 `styles.ts` `.evo-md`：line-height 1.75→1.58、段距 16→10px、标题上距 24→18px、
 li 间距 4→2px（实测计算样式 22.12px）。
 
+### 3.9 轨迹面板（DSH Trajectory 复刻，EvoResearch 风格）
+
+- `packages/evoresearch-app/src/client/trajectory.ts`：数据源 = `session.events`
+  原始事件日志（客户端镜像实时追加），解析 turn/start→end、step/start→end、
+  assistant/chunk(usage)、assistant/message、tool/call→tool/result 三级结构
+- 功能对齐官方：实际时间/等宽两种时长模式（条形图宽度 ∝ 时长/等宽）、展开收起
+  回合、展开收起调用、轨迹搜索（回合/步骤/调用三级过滤）、每步 token 用量
+  （工具栏 Σ 汇总）、调用参数与结果折叠查看、实时流式更新
+- 入口：顶部标签栏「轨迹」tab（与「对话」并列，常驻不可关）
+- 设置面板全屏化：`.evo-modal-full`（fixed + inset:0，精确覆盖视口）
+
 ## 四、E2E 验证结果（verify-newfeatures.mjs，真实模型对话）
 
 | 项目 | 结果 |
