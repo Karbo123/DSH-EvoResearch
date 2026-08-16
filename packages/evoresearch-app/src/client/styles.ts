@@ -690,11 +690,26 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── Recents 操作（§26.3）与 Side Chat（§22.3-22.4）── */
 .evo-tl-row { display: flex; align-items: center; gap: 4px; }
 .evo-tl-row-main { flex: 1; min-width: 0; text-align: left; border: none; background: none; padding: 0; cursor: pointer; }
-.evo-tl-row-acts { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; }
+.evo-tl-row-acts { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; align-items: center; }
 .evo-tl-row:hover .evo-tl-row-acts, .evo-tl-row:focus-within .evo-tl-row-acts { opacity: 1; }
 .evo-tl-row-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; }
 .evo-tl-row-act:hover { color: var(--color-text-primary); background: var(--hover-bg); }
+.evo-tl-row-act[data-on] { color: var(--brand); }
 .evo-tl-row-act svg { width: 13px; height: 13px; }
+.evo-tl-row-act-del { margin-left: 3px; }
+.evo-tl-row-act-del:hover { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 10%, transparent); }
+.evo-tl-row-act.evo-tl-del-confirm { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 12%, transparent); font-size: 11px; width: auto; padding: 0 7px; font-weight: 600; }
+/* 「⋯」更多操作菜单（§侧栏重构：低频操作收纳） */
+.evo-tl-row-more { position: relative; display: inline-flex; align-items: center; }
+.evo-tl-row-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 80; min-width: 172px; padding: 5px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16); display: flex; flex-direction: column; gap: 1px; }
+.evo-tl-menu-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: none; background: none; border-radius: 7px; color: var(--color-text-primary); font-size: 12.5px; cursor: pointer; text-align: left; white-space: nowrap; }
+.evo-tl-menu-item:hover { background: var(--hover-bg); }
+.evo-tl-menu-item svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
+.evo-tl-menu-sep { height: 1px; background: var(--color-border-light); margin: 3px 6px; }
+.evo-tl-menu-danger { color: var(--color-error); }
+.evo-tl-menu-danger svg { color: var(--color-error); }
+.evo-tl-menu-danger:hover { background: color-mix(in srgb, var(--color-error) 10%, transparent); }
+.evo-tl-row-acts[data-menu-open] .evo-tl-row-act[data-on] { color: var(--brand); }
 .evo-tl-del:hover, .evo-tl-del-confirm { color: var(--color-error); }
 .evo-tl-del-confirm { width: auto; padding: 0 6px; font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--color-error) 14%, transparent); }
 .evo-tl-del-confirm:hover { background: var(--color-error); color: var(--color-surface); }

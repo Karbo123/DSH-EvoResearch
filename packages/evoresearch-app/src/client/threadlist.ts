@@ -5,8 +5,8 @@
  * 数据来自 framework kit 的 useSessions（DSH client-runtime 镜像）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
@@ -86,6 +86,14 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   const sessions = useSessions((s) => s)
   const currentId = sessions.current
   const [colorFor, setColorFor] = useState<string | null>(null)
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  // 「⋯」更多菜单外点击关闭
+  useEffect(() => {
+    if (menuFor === null) return
+    const onDoc = () => setMenuFor(null)
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [menuFor])
   const isPromoted = (id: string): boolean => promotedIds.has(id)
   // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表；
   // §5.3 提升后的复制会话除外——它已是独立主聊天）
@@ -104,13 +112,9 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   const [renameValue, setRenameValue] = useState('')
   const [forkError, setForkError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
-  // 两段式删除确认：第一次点击进入确认态，5 秒无操作还原
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  // 菜单内两段式删除确认：第一次点击进入确认态，5 秒无操作还原
+  const [delArm, setDelArm] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const armDelete = (id: string) => {
-    setConfirmDelete(id)
-    setTimeout(() => setConfirmDelete((v) => (v === id ? null : v)), 5000)
-  }
   const runDelete = (id: string) => {
     setDeleteError(null)
     void onDelete(id).then((result) => {
@@ -118,7 +122,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
         setDeleteError(result.error ?? '删除失败')
         setTimeout(() => setDeleteError(null), 5000)
       }
-      setConfirmDelete(null)
+      setDelArm(null)
     })
   }
 
@@ -285,19 +289,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                     }),
                     jsx('div', {
                       className: 'evo-tl-row-acts',
+                      'data-menu-open': menuFor === s.id || undefined,
                       children: [
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-tl-row-act',
-                          title: t('tagColor'),
-                          'aria-label': t('tagColor'),
-                          'data-on': colorFor === s.id || undefined,
-                          onClick: (e: { stopPropagation(): void }) => {
-                            e.stopPropagation()
-                            setColorFor((v) => (v === s.id ? null : s.id))
-                          },
-                          children: jsx(Palette, {}),
-                        }),
                         jsx('button', {
                           type: 'button',
                           className: 'evo-tl-row-act',
@@ -310,92 +303,91 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                           },
                           children: jsx(Pin, {}),
                         }),
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-tl-row-act',
-                          title: t('rename'),
-                          'aria-label': t('rename'),
-                          onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); setRenameValue(s.displayTitle ?? ''); setRenaming(s.id) },
-                          children: jsx(Pencil, {}),
-                        }),
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-tl-row-act',
-                          title: t('copyHistory'),
-                          'aria-label': t('copyHistory'),
-                          onClick: (e: { stopPropagation(): void }) => {
-                            e.stopPropagation()
-                            copyRow(s.id)
-                          },
-                          children: jsx(Copy, {}),
-                        }),
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-tl-row-act',
-                          title: t('sideChatFromThis'),
-                          'aria-label': t('sideChatFromThis'),
-                          onClick: (e: { stopPropagation(): void }) => {
-                            e.stopPropagation()
-                            forkRow(s.id)
-                          },
-                          children: jsx(MessagesSquare, {}),
-                        }),
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-tl-row-act',
-                          title: t('exportJson'),
-                          'aria-label': t('exportJson'),
-                          onClick: (e: { stopPropagation(): void }) => {
-                            e.stopPropagation()
-                            onExport(s.id, 'json', s.displayTitle ?? s.id.slice(0, 12))
-                          },
-                          children: jsx(FileJson, {}),
-                        }),
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-tl-row-act',
-                          title: t('exportMarkdown'),
-                          'aria-label': t('exportMarkdown'),
-                          onClick: (e: { stopPropagation(): void }) => {
-                            e.stopPropagation()
-                            onExport(s.id, 'markdown', s.displayTitle ?? s.id.slice(0, 12))
-                          },
-                          children: jsx(FileText, {}),
-                        }),
-                        jsx('button', {
-                          type: 'button',
-                          className: 'evo-tl-row-act',
-                          title: t('archive'),
-                          'aria-label': t('archive'),
-                          onClick: (e: { stopPropagation(): void }) => {
-                            e.stopPropagation()
-                            onToggleArchive(s.id)
-                          },
-                          children: jsx(Archive, {}),
-                        }),
-                        confirmDelete === s.id
-                          ? jsx('button', {
+                        // 「⋯」更多菜单（§侧栏重构：低频/高风险操作收纳，避免横排占满）
+                        jsxs('div', {
+                          className: 'evo-tl-row-more',
+                          children: [
+                            jsx('button', {
                               type: 'button',
-                              className: 'evo-tl-row-act evo-tl-del-confirm',
-                              title: t('confirmDeleteTitle'),
-                              'aria-label': t('confirmDeleteTitle'),
+                              className: 'evo-tl-row-act',
+                              title: t('moreActions'),
+                              'aria-label': t('moreActions'),
+                              'data-on': menuFor === s.id || undefined,
                               onClick: (e: { stopPropagation(): void }) => {
                                 e.stopPropagation()
-                                runDelete(s.id)
+                                setMenuFor((v) => (v === s.id ? null : s.id))
                               },
-                              children: t('deleteQ'),
-                            })
-                          : jsx('button', {
-                              type: 'button',
-                              className: 'evo-tl-row-act evo-tl-del',
-                              title: t('deleteSession'),
-                              'aria-label': t('deleteSession'),
-                              onClick: (e: { stopPropagation(): void }) => {
-                                e.stopPropagation()
-                                armDelete(s.id)
-                              },
-                              children: jsx(Trash2, {}),
+                              children: jsx(MoreHorizontal, {}),
                             }),
+                            menuFor === s.id && jsx('div', {
+                              className: 'evo-tl-row-menu',
+                              onClick: (e: { stopPropagation(): void }) => e.stopPropagation(),
+                              children: [
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-menu-item',
+                                  onClick: () => { setMenuFor(null); setRenameValue(s.displayTitle ?? ''); setRenaming(s.id) },
+                                  children: jsxs(Fragment, { children: [jsx(Pencil, {}), jsx('span', { children: t('rename') })] }),
+                                }),
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-menu-item',
+                                  onClick: () => { setMenuFor(null); setColorFor((v) => (v === s.id ? null : s.id)) },
+                                  children: jsxs(Fragment, { children: [jsx(Palette, {}), jsx('span', { children: t('tagColor') })] }),
+                                }),
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-menu-item',
+                                  onClick: () => { setMenuFor(null); onToggleArchive(s.id) },
+                                  children: jsxs(Fragment, { children: [jsx(Archive, {}), jsx('span', { children: t('archive') })] }),
+                                }),
+                                jsx('div', { className: 'evo-tl-menu-sep' }),
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-menu-item',
+                                  onClick: () => { setMenuFor(null); forkRow(s.id) },
+                                  children: jsxs(Fragment, { children: [jsx(MessagesSquare, {}), jsx('span', { children: t('menuSideChat') })] }),
+                                }),
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-menu-item',
+                                  onClick: () => { setMenuFor(null); copyRow(s.id) },
+                                  children: jsxs(Fragment, { children: [jsx(Copy, {}), jsx('span', { children: t('menuCopyHistory') })] }),
+                                }),
+                                jsx('div', { className: 'evo-tl-menu-sep' }),
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-menu-item',
+                                  onClick: () => { setMenuFor(null); onExport(s.id, 'json', s.displayTitle ?? s.id.slice(0, 12)) },
+                                  children: jsxs(Fragment, { children: [jsx(FileJson, {}), jsx('span', { children: t('exportJson') })] }),
+                                }),
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-menu-item',
+                                  onClick: () => { setMenuFor(null); onExport(s.id, 'markdown', s.displayTitle ?? s.id.slice(0, 12)) },
+                                  children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: t('exportMarkdown') })] }),
+                                }),
+                                jsx('div', { className: 'evo-tl-menu-sep' }),
+                                delArm === s.id
+                                  ? jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-tl-menu-item evo-tl-menu-danger',
+                                      onClick: () => { setMenuFor(null); setDelArm(null); runDelete(s.id) },
+                                      children: jsx('span', { children: t('deleteQ') }),
+                                    })
+                                  : jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-tl-menu-item evo-tl-menu-danger',
+                                      onClick: () => {
+                                        setDelArm(s.id)
+                                        setTimeout(() => setDelArm((v) => (v === s.id ? null : v)), 5000)
+                                      },
+                                      children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('deleteSession') })] }),
+                                    }),
+                              ],
+                            }),
+                          ],
+                        }),
                       ],
                     }),
                   ],
