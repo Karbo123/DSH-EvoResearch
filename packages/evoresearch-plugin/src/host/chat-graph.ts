@@ -52,10 +52,50 @@ export function emptyGraph(): ChatGraph {
 /**
  * 提取会话历史文本（user/assistant 消息，跳过系统注入的"伪用户消息"），
  * 最近消息优先，最多 maxChars 字符。
- * 兼容多种事件形状：data.text / data.content[].text（结构化）/ assistant/chunk 的
- * data.chunk.text / data.blocks[].text。
+ * 兼容多种事件形状：data.text / data.content[].text（结构化）/ assistant/chunk
+ * （按 turn+step 合并为完整回复）/ data.blocks[].text。
  */
+const historyCache = new Map<string, { mtimeMs: number; size: number; text: string }>()
 export function sessionHistoryText(sessionId: string, maxChars = 8000): string {
+  let events: Array<{ type: string; data?: Record<string, unknown> }>
+  try {
+    // 按文件 mtime+size 缓存提取结果（会话大时避免每次 prompt 全量解压）
+    const dir = findSessionDirCached(sessionId)
+    const file = dir === null ? null : fs.existsSync(path.join(dir, 'session.jsonl.zstd')) ? path.join(dir, 'session.jsonl.zstd') : fs.existsSync(path.join(dir, 'session.jsonl')) ? path.join(dir, 'session.jsonl') : null
+    if (file !== null) {
+      const stat = fs.statSync(file)
+      const cached = historyCache.get(sessionId)
+      if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+        const t = cached.text
+        return t.length > maxChars ? t.slice(-maxChars) : t
+      }
+      const text = extractHistory(sessionId, maxChars)
+      historyCache.set(sessionId, { mtimeMs: stat.mtimeMs, size: stat.size, text })
+      return text.length > maxChars ? text.slice(-maxChars) : text
+    }
+    return extractHistory(sessionId, maxChars)
+  } catch {
+    return ''
+  }
+}
+
+/** 会话目录查找（复用 rewind 的扫描；不做缓存）。 */
+function findSessionDirCached(sessionId: string): string | null {
+  try {
+    // 轻量扫描（会话目录按 cwd 编码组织，数量有限）
+    const root = path.join(process.env.DSH_HOME ?? process.cwd(), 'sessions')
+    let entries: string[] = []
+    try { entries = fs.readdirSync(root) } catch { return null }
+    for (const name of entries) {
+      const candidate = path.join(root, name, sessionId)
+      if (fs.statSync(candidate, { throwIfNoEntry: false })?.isDirectory()) return candidate
+    }
+  } catch { /* 忽略 */ }
+  return null
+}
+
+/** 从事件流提取消息文本（chunk 按 turn+step 合并）。 */
+function extractHistory(sessionId: string, maxChars = 8000): string {
   let events: Array<{ type: string; data?: Record<string, unknown> }>
   try {
     events = readSessionEvents(sessionId)
@@ -73,8 +113,10 @@ export function sessionHistoryText(sessionId: string, maxChars = 8000): string {
       if (joined !== '') return joined
     }
     if (ev.type === 'assistant/chunk') {
-      const chunk = d.chunk as { text?: unknown } | undefined
-      if (typeof chunk?.text === 'string' && chunk.text !== '') return chunk.text
+      // 只提取正文增量（text-delta）；reasoning-delta（思考过程）不进入上下文
+      const chunk = d.chunk as { type?: unknown; text?: unknown } | undefined
+      if (chunk?.type === 'text-delta' && typeof chunk.text === 'string' && chunk.text !== '') return chunk.text
+      return ''
     }
     if (Array.isArray(d.blocks)) {
       const joined = d.blocks
@@ -85,17 +127,31 @@ export function sessionHistoryText(sessionId: string, maxChars = 8000): string {
     }
     return ''
   }
-  const parts: string[] = []
+  // 按消息分组：user/message、assistant/message 各成一条；assistant/chunk 按 turn+step 合并
+  const messages: string[] = []
+  let pending: { turn: number; step: number; text: string } | null = null
+  const flush = () => { if (pending !== null) { messages.push(pending.text); pending = null } }
   for (const ev of events) {
-    if (ev.type !== 'user/message' && ev.type !== 'assistant/message' && ev.type !== 'assistant/chunk') continue
-    const text = textOf(ev)
-    if (text === '' || isSystemText(text)) continue
-    parts.push(text)
+    const turn = typeof ev.data?.turn === 'number' ? ev.data.turn : -1
+    const step = typeof ev.data?.step === 'number' ? ev.data.step : -1
+    if (ev.type === 'user/message' || ev.type === 'assistant/message') {
+      flush()
+      const text = textOf(ev)
+      if (text !== '' && !isSystemText(text)) messages.push(text)
+    } else if (ev.type === 'assistant/chunk') {
+      const text = textOf(ev)
+      if (text === '') continue
+      if (pending !== null && pending.turn === turn && pending.step === step) pending.text += text
+      else { flush(); pending = { turn, step, text } }
+    } else {
+      flush()
+    }
   }
+  flush()
   let total = 0
   const recent: string[] = []
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const part = parts[i]!
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const part = messages[i]!
     total += part.length + 1
     if (total > maxChars) break
     recent.unshift(part)
@@ -124,17 +180,34 @@ export function graphMemoryText(graph: ChatGraph, sessionId: string, maxChars = 
   return parts.join('\n\n---\n\n')
 }
 
-/** 提取 chat 节点的上下文来源（context 边 → 源 chat 会话最近消息历史）。 */
+/**
+ * 提取 chat 节点的上下文来源（context 边 → 源 chat 会话最近消息历史）。
+ * 支持递归继承链（A→B→C：C 聚合 B 与 A 的历史，标注来源；深度 ≤3、防循环）。
+ */
 export function graphContextText(graph: ChatGraph, sessionId: string, maxChars = 8000): { fromTitle: string; text: string } | null {
   const node = graph.nodes.find((n) => n.type === 'chat' && n.sessionId === sessionId)
   if (node === undefined) return null
-  const ctxEdge = graph.edges.find((e) => e.to === node.id && e.toPort === 'context')
-  if (ctxEdge === undefined) return null
-  const src = graph.nodes.find((n) => n.id === ctxEdge.from && n.type === 'chat')
-  if (src === undefined || src.sessionId === undefined) return null
-  const text = sessionHistoryText(src.sessionId, maxChars)
-  if (text === '') return null
-  return { fromTitle: src.title, text }
+  const parts: string[] = []
+  let total = 0
+  const visited = new Set<string>([node.id])
+  const walk = (chatNodeId: string, depth: number): void => {
+    if (depth > 3 || total >= maxChars) return
+    const ctxEdge = graph.edges.find((e) => e.to === chatNodeId && e.toPort === 'context')
+    if (ctxEdge === undefined) return
+    const src = graph.nodes.find((n) => n.id === ctxEdge.from && n.type === 'chat')
+    if (src === undefined || src.sessionId === undefined || visited.has(src.id)) return
+    visited.add(src.id)
+    const text = sessionHistoryText(src.sessionId, Math.max(200, maxChars - total))
+    if (text !== '') {
+      const block = `【${src.title}】\n${text}`
+      total += block.length + 1
+      parts.push(block)
+    }
+    walk(src.id, depth + 1)
+  }
+  walk(node.id, 0)
+  if (parts.length === 0) return null
+  return { fromTitle: node.title, text: parts.join('\n\n') }
 }
 
 /**

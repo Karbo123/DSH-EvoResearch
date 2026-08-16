@@ -260,7 +260,7 @@ function apply(ctx: Context): void {
       })
     : undefined
 
-  // 8.8.1) <graph_context>：context 边 → 源 chat 会话历史注入（子聊天继承父上下文）
+  // 8.8.1) <graph_context>：context 边 → 源 chat 会话历史注入（子聊天继承父上下文，支持链式）
   const disposeGraphContext = systemPrompt
     ? systemPrompt.context({
         name: 'evoresearch:graph-context',
@@ -273,7 +273,7 @@ function apply(ctx: Context): void {
           const inherited = graphContextText(g.graph, sessionId)
           if (inherited === null) return ''
           return '<graph_context>\n' +
-            `本会话在聊天图谱中继承自聊天节点「${inherited.fromTitle}」，以下是该会话的最近对话记录（作为本会话的上下文初始化）：\n` +
+            '本会话在聊天图谱中继承了上游聊天节点的上下文（含其自身的上下文链），以下是继承的对话记录，作为本会话的上下文初始化：\n' +
             inherited.text +
             '\n</graph_context>'
         },
