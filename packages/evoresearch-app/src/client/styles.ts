@@ -60,6 +60,13 @@ html.dark {
   --hover-bg: #332f2a;
 }
 * { box-sizing: border-box; }
+/* 全局细滚动条（消息列表/侧栏/面板一致）：细、圆角、半透明，hover 加深——避免默认粗条视觉噪音 */
+* { scrollbar-width: thin; scrollbar-color: rgba(128, 128, 128, 0.38) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.38); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background-color: rgba(128, 128, 128, 0.62); }
+::-webkit-scrollbar-corner { background: transparent; }
 body { margin: 0; }
 .evo-app {
   display: flex; flex-direction: column; height: 100vh;
@@ -161,7 +168,7 @@ body { margin: 0; }
 .evo-tl-empty { padding: 28px 16px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-tl-empty svg { width: 40px; height: 40px; color: var(--color-border); margin-bottom: 8px; }
 /* ── 中间聊天区 ── */
-.evo-chat { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+.evo-chat { flex: 1; display: flex; flex-direction: column; min-height: 220px; overflow-y: auto; }
 .evo-welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; min-height: 42vh; }
 .evo-welcome h1 { font-size: 22px; font-weight: 600; margin: 0 0 10px; color: var(--color-text-primary); letter-spacing: -.01em; }
 .evo-welcome p { margin: 0 0 28px; color: var(--color-text-secondary); font-size: 14px; max-width: 512px; line-height: 1.6; }
@@ -259,7 +266,7 @@ body { margin: 0; }
 .evo-insp-empty svg { width: 36px; height: 36px; color: var(--color-border); margin-bottom: 8px; }
 .evo-view { flex: 1; overflow-y: auto; }
 /* ── 消息列表 ── */
-.evo-msg-list { flex: 1; overflow-y: auto; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 13px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; position: relative; }
+.evo-msg-list { flex: 1; overflow-y: auto; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 13px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; position: relative; min-height: 160px; }
 .evo-msg-error { padding: 10px 14px; border: 1px solid var(--color-error); border-radius: 10px; color: var(--color-error); font-size: 13px; background: color-mix(in srgb, var(--color-error) 8%, transparent); }
 .evo-useronly-hint { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border: 1px dashed color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 999px; color: var(--color-text-secondary); font-size: 12px; background: color-mix(in srgb, var(--brand) 7%, var(--color-surface)); cursor: pointer; transition: border-color 0.15s, color 0.15s; }
 .evo-useronly-hint:hover { border-color: var(--brand); color: var(--brand); }
