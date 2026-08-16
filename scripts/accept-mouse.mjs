@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import WebSocket from 'ws'
-const PORT = '11279'
+const PORT = '12789'
 const debugPort = 47433
 const profile = `D:\\DSH-Research\\.tmp-e2e\\edge-accept-${Date.now()}`
 mkdirSync(profile, { recursive: true })
@@ -57,7 +57,7 @@ const shot = async (name) => {
 await send('Network.enable')
 await send('Network.setCacheDisabled', { cacheDisabled: true })
 await send('Page.enable')
-await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/?sidebar=1&threadId=session-384c58e2-b601-4cc2-b745-ca94bfa89b2d` })
+await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/?sidebar=1&threadId=session-c9fed8a5-0b73-440d-b6a1-9c2300e7f106` })
 await sleep(9000)
 for (let i = 0; i < 20; i++) {
   const n = await evalJs(`document.querySelectorAll('.evo-tl-item').length`).catch(() => 0)
@@ -85,38 +85,38 @@ const canvas = await evalJs(`(() => { const c = document.querySelector('.evo-gra
 await rmouse('mousePressed', canvas.x, canvas.y)
 await rmouse('mouseReleased', canvas.x, canvas.y)
 await sleep(700)
-const menuInfo = await evalJs(`(() => { const m = document.querySelector('.evo-graph-menu'); if (!m) return null; const r = m.getBoundingClientRect(); return { x: Math.round(r.left + 40), y: Math.round(r.top + 40), items: [...m.querySelectorAll('.evo-graph-menu-item')].map(i => i.textContent.trim()) } })()`)
+const menuInfo = await evalJs(`(() => { const m = document.querySelector('.evo-graph-menu'); if (!m) return null; const items = [...m.querySelectorAll('.evo-graph-menu-item')]; const target = items[1]; if (!target) return null; const r = target.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), items: items.map(i => i.textContent.trim()) } })()`)
 console.log('STEP2 context menu:', JSON.stringify(menuInfo))
 await shot('graph-menu')
 if (menuInfo) {
-  // 点"新建记忆节点"（菜单第一项之下：菜单项顺序 = 聊天节点/记忆节点/全局记忆）
-  await mouse('mousePressed', menuInfo.x, menuInfo.y + 28, { buttons: 1, clickCount: 1 })
-  await mouse('mouseReleased', menuInfo.x, menuInfo.y + 28, { buttons: 0, clickCount: 1 })
+  // 点第二个菜单项（新建记忆节点）——按 DOM 实测圆心点击
+  await mouse('mousePressed', menuInfo.x, menuInfo.y, { buttons: 1, clickCount: 1 })
+  await mouse('mouseReleased', menuInfo.x, menuInfo.y, { buttons: 0, clickCount: 1 })
 }
 await sleep(1200)
 console.log('STEP3 new memory node:', JSON.stringify(await evalJs(`(() => ({
   nodes: document.querySelectorAll('.evo-graph-node').length,
   mems: document.querySelectorAll('.evo-graph-node-memory').length,
+  edges: document.querySelectorAll('.evo-graph-edge').length,
 }))()`)))
 
-// 3) 拖线：新记忆节点 output → chat 节点 memory input
+// 3) 拖线：新记忆节点 output → chat 节点 memory input（按真实 socket 圆心）
 const ports = await evalJs(`(() => {
-  const canvasR = document.querySelector('.evo-graph-canvas').getBoundingClientRect()
   const mems = [...document.querySelectorAll('.evo-graph-node-memory')]
   const chat = document.querySelector('.evo-graph-node-chat')
   if (mems.length === 0 || !chat) return null
-  const m = mems[mems.length - 1].getBoundingClientRect()
-  const c = chat.getBoundingClientRect()
+  const out = mems[mems.length - 1].querySelector('.evo-graph-socket-out').getBoundingClientRect()
+  const inn = chat.querySelector('.evo-graph-socket-in.evo-graph-socket-mem').getBoundingClientRect()
   return {
-    out: { x: Math.round(m.right + 1), y: Math.round(m.top + 23) },
-    in: { x: Math.round(c.left - 1), y: Math.round(c.top + 44) },
+    out: { x: Math.round(out.left + out.width / 2), y: Math.round(out.top + out.height / 2) },
+    in: { x: Math.round(inn.left + inn.width / 2), y: Math.round(inn.top + inn.height / 2) },
   }
 })()`)
 if (ports) {
   await mouse('mousePressed', ports.out.x, ports.out.y, { buttons: 1, clickCount: 1 })
   await sleep(250)
-  for (let s = 1; s <= 10; s++) {
-    const t = s / 10
+  for (let s = 1; s <= 12; s++) {
+    const t = s / 12
     await mouse('mouseMoved', Math.round(ports.out.x + (ports.in.x - ports.out.x) * t), Math.round(ports.out.y + (ports.in.y - ports.out.y) * t), { buttons: 1 })
     await sleep(50)
   }
@@ -158,3 +158,4 @@ await shot('chat-opened')
 ws.close()
 edge.kill()
 process.exit(0)
+

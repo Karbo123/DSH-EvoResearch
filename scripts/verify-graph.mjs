@@ -141,7 +141,7 @@ console.log('STEP6 edges:', JSON.stringify(await evalJs(`(() => ({
 }))()`)))
 
 // 落盘检查
-const persisted = await evalJs(`fetch('/evoresearch/fs/graph-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspaceDir: 'D:\\DSH-Research\\.tmp-e2e\\dev\\projects\\project' }) }).then(r => r.json()).then(j => ({ ok: j.ok, nodes: j.value?.nodes?.length ?? -1, edges: j.value?.edges?.length ?? -1 }))`)
+const persisted = await evalJs(`fetch('/evoresearch/fs/graph-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspaceDir: 'D:\\\\DSH-Research\\\\.tmp-e2e\\\\dev\\\\projects\\\\project' }) }).then(r => r.json()).then(j => ({ ok: j.ok, rev: typeof j.value?.rev, nodes: j.value?.graph?.nodes?.length ?? -1, edges: j.value?.graph?.edges?.length ?? -1 }))`)
 console.log('STEP7 persisted:', JSON.stringify(persisted))
 
 // 双击 chat 节点 → 打开会话

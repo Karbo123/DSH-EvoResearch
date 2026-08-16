@@ -243,6 +243,18 @@ export class ChatGraphService {
     return path.join(this.graphsDir(), `${projectName}.json`)
   }
 
+  /**
+   * 当前修订号：项目文件与全局文件的 mtimeMs 之和（任一文件变动即视为新修订）。
+   * 前端每次整图保存携带该值，服务端比对不一致则拒绝（乐观并发，防陈旧窗口覆盖）。
+   */
+  rev(projectName: string): number {
+    let v = 0
+    for (const file of [this.fileOf(projectName), this.globalFile()]) {
+      try { v += fs.statSync(file).mtimeMs } catch { /* 尚未落盘 = 0 */ }
+    }
+    return v
+  }
+
   /** 读取全局图（仅 global 节点；无则空）。 */
   private readGlobal(): ChatGraph {
     try {

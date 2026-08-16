@@ -11,15 +11,22 @@
  * - 数据：后端 graph-get/graph-save（按项目存储）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { t } from './i18n'
 import { toast } from './toast'
 import { MessageSquare, Database, GitBranch, Plus, Trash2, Pencil, Globe, FolderGit2, X, FileText, Check, Unlink } from 'lucide-react'
 
-/** 节点宽度/高度（画布内固定尺寸，端口偏移据此计算）。 */
-const NODE_W = 168
-const CHAT_H = 64
-const MEMORY_H = 46
+/**
+ * 节点几何（Blender 节点编辑器风格）：
+ * - 标题栏 24px（类型色渐变）+ 主体（socket 行 18px）；
+ * - chat：标题 24 + padding 4 + ctx 行 + mem 行 + padding 6 → 总高 76；
+ * - memory：标题 24 + 主体（标签/预览 两行）→ 总高 58。
+ * socket 圆心坐标（画布坐标）与 CSS 内边距对齐。
+ */
+const NODE_W = 176
+const CHAT_H = 76
+const MEMORY_H = 58
+const TITLE_H = 24
 
 interface GraphNode {
   id: string
@@ -40,14 +47,16 @@ interface GraphEdge {
 }
 interface ChatGraph { nodes: GraphNode[]; edges: GraphEdge[] }
 
-/** 端口位置（画布坐标，固定尺寸推导）。 */
+/** 端口位置（画布坐标；与 CSS socket 布局对齐：标题栏 24px + 行高 18px）。 */
 function portPos(node: GraphNode, port: 'context' | 'memory' | 'output'): { x: number; y: number } {
   if (node.type === 'chat') {
-    if (port === 'context') return { x: node.x, y: node.y + 22 }
-    if (port === 'memory') return { x: node.x, y: node.y + 44 }
-    return { x: node.x + NODE_W, y: node.y + 33 }
+    // ctx 行圆心 y = 24 + 4(padding) + 9(socket 半高) = 37；mem 行 +18 = 55；output 与输入对齐 46
+    if (port === 'context') return { x: node.x, y: node.y + 37 }
+    if (port === 'memory') return { x: node.x, y: node.y + 55 }
+    return { x: node.x + NODE_W, y: node.y + 46 }
   }
-  return { x: node.x + NODE_W, y: node.y + 23 }
+  // memory：标题 24 + 主体（标签行）→ output 圆心 y = 24 + 8 = 32
+  return { x: node.x + NODE_W, y: node.y + 32 }
 }
 
 /** 水平贝塞尔连线路径。 */
@@ -75,26 +84,65 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
   // 记忆节点内容编辑（双击或菜单打开）
   const [editing, setEditing] = useState<GraphNode | null>(null)
   const [editText, setEditText] = useState('')
+  // 端口实测坐标（画布坐标）：以 DOM socket 圆心为锚点，保证连线与圆点像素级对齐
+  const [portMap, setPortMap] = useState<Record<string, { x: number; y: number }>>({})
   const hoverPortRef = useRef<{ nodeId: string; port: 'context' | 'memory' } | null>(null)
   const canvasRef = useRef<HTMLDivElement | null>(null)
+  // 图修订号（乐观并发：整图保存携带，服务端比对不一致则拒绝）
+  const revRef = useRef<number | null>(null)
+  // 整图保存串行化：同窗口连续操作按序提交，避免互相冲突
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve())
 
   const load = () => {
     setError(null)
-    void api<ChatGraph & { error?: string }>('graph-get', { workspaceDir: cwd ?? undefined })
-      .then((g) => {
-        if (typeof g?.error === 'string' && g.error !== '') { setError(g.error); return }
-        setGraph({ nodes: g?.nodes ?? [], edges: g?.edges ?? [] })
+    void api<{ graph?: ChatGraph; rev?: number; error?: string }>('graph-get', { workspaceDir: cwd ?? undefined })
+      .then((r) => {
+        if (typeof r?.error === 'string' && r.error !== '') { setError(r.error); return }
+        setGraph({ nodes: r?.graph?.nodes ?? [], edges: r?.graph?.edges ?? [] })
+        revRef.current = typeof r?.rev === 'number' ? r.rev : null
       })
       .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
   }
   useEffect(() => { load() }, [cwd])
 
-  const persist = (next: ChatGraph) => {
-    setGraph(next)
+  /** 整图保存（乐观并发 + FIFO 串行）。冲突 → 提示并重新加载最新状态。 */
+  const saveGraph = (next: ChatGraph) => {
     setError(null)
-    void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next }).catch((e: unknown) =>
-      setError(String((e as Error)?.message ?? e)))
+    saveChainRef.current = saveChainRef.current.then(async () => {
+      try {
+        const r = await api<{ ok: boolean; conflict?: boolean; rev?: number; error?: string }>('graph-save', {
+          workspaceDir: cwd ?? undefined, graph: next, rev: revRef.current ?? undefined,
+        })
+        if (r?.ok === true && typeof r.rev === 'number') revRef.current = r.rev
+        else if (r?.conflict === true) { toast(t('graphConflict')); load() }
+        else if (typeof r?.error === 'string' && r.error !== '') setError(r.error)
+      } catch (e: unknown) {
+        setError(String((e as Error)?.message ?? e))
+      }
+    }).catch(() => undefined)
   }
+
+  // 节点/socket 渲染后（含拖拽过程中每帧移动后）重新测量端口圆心；
+  // 连线据此绘制，避免手算几何与真实 CSS 布局的偏差。
+  useLayoutEffect(() => {
+    const cr = canvasRef.current?.getBoundingClientRect()
+    if (cr === undefined) return
+    const map: Record<string, { x: number; y: number }> = {}
+    document.querySelectorAll('.evo-graph-socket').forEach((el) => {
+      const nodeEl = (el as HTMLElement).closest('.evo-graph-node')
+      const nid = nodeEl?.getAttribute('data-node-id')
+      if (nid === null || nid === undefined || nid === '') return
+      const cls = (el as HTMLElement).classList
+      const port = cls.contains('evo-graph-socket-out') ? 'output' : cls.contains('evo-graph-socket-ctx') ? 'context' : 'memory'
+      const r = (el as HTMLElement).getBoundingClientRect()
+      map[`${nid}:${port}`] = { x: r.left - cr.left + r.width / 2, y: r.top - cr.top + r.height / 2 }
+    })
+    setPortMap(map)
+  }, [graph])
+
+  /** 端口画布坐标：优先实测值（与 socket 圆心像素对齐），首帧回退几何估算。 */
+  const portOf = (node: GraphNode, port: 'context' | 'memory' | 'output') =>
+    portMap[`${node.id}:${port}`] ?? portPos(node, port)
 
   // ── 连线拖拽：window 级 move/up ──
   useEffect(() => {
@@ -109,7 +157,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
       // 节点重叠/遮挡时依然可连
       let target: { nodeId: string; port: 'context' | 'memory' } | null = null
       let bestDist = 12
-      const inPorts = document.querySelectorAll<HTMLElement>('.evo-graph-port-in')
+      const inPorts = document.querySelectorAll<HTMLElement>('.evo-graph-socket-in')
       for (const el of inPorts) {
         const r = el.getBoundingClientRect()
         const cx = r.left + r.width / 2
@@ -119,7 +167,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
           bestDist = d
           target = {
             nodeId: el.closest('.evo-graph-node')?.getAttribute('data-node-id') ?? '',
-            port: el.classList.contains('evo-graph-port-ctx') ? 'context' as const : 'memory' as const,
+            port: el.classList.contains('evo-graph-socket-ctx') ? 'context' as const : 'memory' as const,
           }
         }
       }
@@ -145,8 +193,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
           setGraph((prev) => {
             const id = `e${Date.now().toString(36)}`
             const next = { ...prev, edges: [...prev.edges, { id, from: linking.from, to: target.nodeId, toPort: 'memory' as const }] }
-            void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next })
-              .catch(() => undefined)
+            saveGraph(next)
             return next
           })
         }
@@ -172,7 +219,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
     const onUp = () => {
       setDragNode(null)
       setGraph((prev) => {
-        void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: prev }).catch(() => undefined)
+        saveGraph(prev)
         return prev
       })
     }
@@ -218,8 +265,9 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
         sessionId,
         workspaceDir: cwd,
       }
-      const created = await api<GraphNode>('graph-add-node', { workspaceDir: cwd, node })
-      setGraph((prev) => ({ ...prev, nodes: [...prev.nodes, created] }))
+      const created = await api<{ node: GraphNode; rev?: number }>('graph-add-node', { workspaceDir: cwd, node })
+      setGraph((prev) => ({ ...prev, nodes: [...prev.nodes, created.node] }))
+      if (typeof created.rev === 'number') revRef.current = created.rev
     } catch (e: unknown) {
       setError(String((e as Error)?.message ?? e))
     } finally {
@@ -239,8 +287,11 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
       scope,
       content: '',
     }
-    void api<GraphNode>('graph-add-node', { workspaceDir: cwd, node })
-      .then((created) => setGraph((prev) => ({ ...prev, nodes: [...prev.nodes, created] })))
+    void api<{ node: GraphNode; rev?: number }>('graph-add-node', { workspaceDir: cwd, node })
+      .then((created) => {
+        setGraph((prev) => ({ ...prev, nodes: [...prev.nodes, created.node] }))
+        if (typeof created.rev === 'number') revRef.current = created.rev
+      })
       .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
   }
 
@@ -249,7 +300,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
     setSelectedId(null)
     setGraph((prev) => {
       const next = { nodes: prev.nodes.filter((n) => n.id !== id), edges: prev.edges.filter((e) => e.from !== id && e.to !== id) }
-      void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next }).catch(() => undefined)
+      saveGraph(next)
       return next
     })
   }
@@ -259,7 +310,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
     setMenu(null)
     setGraph((prev) => {
       const next = { ...prev, edges: prev.edges.filter((e) => !(e.to === id && e.toPort === 'context')) }
-      void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next }).catch(() => undefined)
+      saveGraph(next)
       return next
     })
   }
@@ -272,7 +323,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
     if (title === null || title.trim() === '') return
     setGraph((prev) => {
       const next = { ...prev, nodes: prev.nodes.map((n) => (n.id === id ? { ...n, title: title.trim() } : n)) }
-      void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next }).catch(() => undefined)
+      saveGraph(next)
       return next
     })
   }
@@ -293,7 +344,7 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
     setEditing(null)
     setGraph((prev) => {
       const next = { ...prev, nodes: prev.nodes.map((n) => (n.id === id ? { ...n, content } : n)) }
-      void api<{ ok: boolean }>('graph-save', { workspaceDir: cwd ?? undefined, graph: next }).catch(() => undefined)
+      saveGraph(next)
       return next
     })
   }
@@ -334,45 +385,16 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
         },
         onClick: () => { setSelectedId(null); setMenu(null) },
         children: [
-          // 连线层（防御：graph 字段缺失时按空数组渲染）
-          jsx('svg', {
-            className: 'evo-graph-svg',
-            children: [
-              // 箭头定义（context/memory 各自颜色）
-              jsx('defs', { children: [
-                jsx('marker', { id: 'evo-arrow-ctx', markerWidth: 7, markerHeight: 7, refX: 6, refY: 3.5, orient: 'auto', children: jsx('path', { d: 'M0,0 L7,3.5 L0,7 Z', fill: 'var(--brand)' }) }),
-                jsx('marker', { id: 'evo-arrow-mem', markerWidth: 7, markerHeight: 7, refX: 6, refY: 3.5, orient: 'auto', children: jsx('path', { d: 'M0,0 L7,3.5 L0,7 Z', fill: 'var(--color-success)' }) }),
-              ]}),
-              ...(graph?.edges ?? []).map((edge) => {
-              const from = nodeById(edge.from)
-              const to = nodeById(edge.to)
-              if (from === undefined || to === undefined) return null
-              const fp = portPos(from, 'output')
-              const tp = portPos(to, edge.toPort)
-              const isCtx = edge.toPort === 'context'
-              return jsx('path', {
-                d: edgePath(fp, tp),
-                className: `evo-graph-edge${isCtx ? ' evo-graph-edge-ctx' : ' evo-graph-edge-mem'}`,
-                markerEnd: `url(#${isCtx ? 'evo-arrow-ctx' : 'evo-arrow-mem'})`,
-              }, edge.id)
-            }),
-              ...(linking !== null ? (() => {
-                const from = nodeById(linking.from)
-                if (from === undefined) return []
-                const fp = portPos(from, 'output')
-                return [jsx('path', { d: edgePath(fp, { x: linking.toX, y: linking.toY }), className: 'evo-graph-edge evo-graph-edge-linking' }, 'link-tmp')]
-              })() : []),
-              ],
-            }),
           // 节点层（防御：graph 字段缺失时按空数组渲染）
           ...(graph?.nodes ?? []).map((node) => {
             const selected = selectedId === node.id
             const isChat = node.type === 'chat'
             const h = isChat ? CHAT_H : MEMORY_H
             return jsxs('div', {
-              className: `evo-graph-node evo-graph-node-${node.type}${selected ? ' evo-graph-node-sel' : ''}`,
+              className: `evo-graph-node evo-graph-node-${node.type}${selected ? ' evo-graph-node-sel' : ''}${dragNode !== null && dragNode.id === node.id ? ' evo-graph-node-dragging' : ''}`,
               style: { left: node.x, top: node.y, width: NODE_W, height: h },
               'data-node-id': node.id,
+              'data-global': node.scope === 'global' || undefined,
               onPointerDown: (e) => {
                 e.stopPropagation()
                 setSelectedId(node.id)
@@ -394,54 +416,107 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
                 setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, nodeId: node.id })
               },
               children: [
-                // 输入端口（chat：context + memory；memory 无输入）
-                isChat && jsx('span', {
-                  className: 'evo-graph-port evo-graph-port-in evo-graph-port-ctx',
-                  title: t('graphContextPort'),
-                  onPointerDown: (e) => e.stopPropagation(),
-                  onPointerEnter: () => { hoverPortRef.current = { nodeId: node.id, port: 'context' } },
-                  onPointerLeave: () => { if (hoverPortRef.current?.nodeId === node.id) hoverPortRef.current = null },
-                }),
-                isChat && jsx('span', {
-                  className: 'evo-graph-port evo-graph-port-in evo-graph-port-mem',
-                  title: t('graphMemoryPort'),
-                  onPointerDown: (e) => e.stopPropagation(),
-                  onPointerEnter: () => { hoverPortRef.current = { nodeId: node.id, port: 'memory' } },
-                  onPointerLeave: () => { if (hoverPortRef.current?.nodeId === node.id) hoverPortRef.current = null },
-                }),
-                jsx('span', {
-                  className: 'evo-graph-port evo-graph-port-out',
-                  title: t('graphOutputPort'),
-                  onPointerDown: (e) => {
-                    e.stopPropagation()
-                    const rect = canvasRef.current?.getBoundingClientRect()
-                    if (rect === undefined) return
-                    const fp = portPos(node, 'output')
-                    setLinking({ from: node.id, toX: fp.x + 8, toY: fp.y })
-                  },
-                  onPointerEnter: () => { hoverPortRef.current = { nodeId: node.id, port: 'memory' } },
-                  onPointerLeave: () => { if (hoverPortRef.current?.nodeId === node.id) hoverPortRef.current = null },
-                }),
-                jsxs('div', { className: 'evo-graph-node-head', children: [
-                  isChat ? jsx(MessageSquare, {}) : (node.scope === 'global' ? jsx(Globe, {}) : jsx(Database, {})),
-                  jsx('span', { className: 'evo-graph-node-title', children: node.title }),
+                // Blender 风格：顶部类型色标题栏 + 主体 socket 行（左输入/右输出带标签）
+                jsxs('div', { className: 'evo-graph-node-titlebar', children: [
+                  jsx('span', { className: 'evo-graph-node-dot' }),
+                  jsx('span', { className: 'evo-graph-node-title', title: node.title, children: node.title }),
                 ]}),
-                isChat
-                  ? jsxs('div', { className: 'evo-graph-node-sub', children: [
-                      jsx('span', { className: 'evo-graph-node-tag', children: 'chat' }),
-                      jsx('span', { className: 'evo-graph-node-sid', title: node.sessionId, children: (node.sessionId ?? '').slice(0, 8) }),
-                    ]})
-                  : jsxs('div', { className: 'evo-graph-node-sub evo-graph-node-memprev', children: [
-                      jsx('span', { className: 'evo-graph-node-tag', children: node.scope === 'global' ? t('graphGlobal') : t('graphProject') }),
-                      (node.content ?? '').trim() !== '' && jsx('span', {
-                        className: 'evo-graph-node-preview',
-                        title: node.content,
-                        children: (node.content ?? '').replace(/\s+/g, ' ').slice(0, 18) + ((node.content ?? '').length > 18 ? '…' : ''),
-                      }),
-                    ]}),
+                jsxs('div', { className: 'evo-graph-node-body', children: [
+                  isChat
+                    ? jsxs(Fragment, { children: [
+                        jsxs('div', { className: 'evo-graph-socket-row', children: [
+                          jsx('span', {
+                            className: 'evo-graph-socket evo-graph-socket-in evo-graph-socket-ctx',
+                            title: t('graphContextPort'),
+                            onPointerDown: (e) => e.stopPropagation(),
+                            onPointerEnter: () => { hoverPortRef.current = { nodeId: node.id, port: 'context' } },
+                            onPointerLeave: () => { if (hoverPortRef.current?.nodeId === node.id) hoverPortRef.current = null },
+                          }),
+                          jsx('span', { className: 'evo-graph-socket-label', children: 'Context' }),
+                        ]}),
+                        jsxs('div', { className: 'evo-graph-socket-row', children: [
+                          jsx('span', {
+                            className: 'evo-graph-socket evo-graph-socket-in evo-graph-socket-mem',
+                            title: t('graphMemoryPort'),
+                            onPointerDown: (e) => e.stopPropagation(),
+                            onPointerEnter: () => { hoverPortRef.current = { nodeId: node.id, port: 'memory' } },
+                            onPointerLeave: () => { if (hoverPortRef.current?.nodeId === node.id) hoverPortRef.current = null },
+                          }),
+                          jsx('span', { className: 'evo-graph-socket-label', children: 'Memory' }),
+                          jsx('span', { style: { flex: 1 } }),
+                          jsx('span', { className: 'evo-graph-node-sid', title: node.sessionId, children: (node.sessionId ?? '').slice(0, 8) }),
+                        ]}),
+                        jsxs('div', { className: 'evo-graph-socket-row evo-graph-socket-row-out', children: [
+                          jsx('span', { style: { flex: 1 } }),
+                          jsx('span', { className: 'evo-graph-socket-label', children: 'Output' }),
+                          jsx('span', {
+                            className: 'evo-graph-socket evo-graph-socket-out',
+                            title: t('graphOutputPort'),
+                            onPointerDown: (e) => {
+                              e.stopPropagation()
+                              const rect = canvasRef.current?.getBoundingClientRect()
+                              if (rect === undefined) return
+                              const fp = portPos(node, 'output')
+                              setLinking({ from: node.id, toX: fp.x + 8, toY: fp.y })
+                            },
+                            onPointerEnter: () => { hoverPortRef.current = { nodeId: node.id, port: 'memory' } },
+                            onPointerLeave: () => { if (hoverPortRef.current?.nodeId === node.id) hoverPortRef.current = null },
+                          }),
+                        ]}),
+                      ]})
+                    : jsxs(Fragment, { children: [
+                        jsxs('div', { className: 'evo-graph-socket-row', children: [
+                          jsx('span', { className: 'evo-graph-node-tag', children: node.scope === 'global' ? t('graphGlobal') : t('graphProject') }),
+                          (node.content ?? '').trim() !== '' && jsx('span', {
+                            className: 'evo-graph-node-preview',
+                            title: node.content,
+                            children: (node.content ?? '').replace(/\s+/g, ' ').slice(0, 16) + ((node.content ?? '').length > 16 ? '…' : ''),
+                          }),
+                          jsx('span', { style: { flex: 1 } }),
+                          jsx('span', { className: 'evo-graph-socket-label', children: 'Output' }),
+                          jsx('span', {
+                            className: 'evo-graph-socket evo-graph-socket-out',
+                            title: t('graphOutputPort'),
+                            onPointerDown: (e) => {
+                              e.stopPropagation()
+                              const rect = canvasRef.current?.getBoundingClientRect()
+                              if (rect === undefined) return
+                              const fp = portPos(node, 'output')
+                              setLinking({ from: node.id, toX: fp.x + 8, toY: fp.y })
+                            },
+                            onPointerEnter: () => { hoverPortRef.current = { nodeId: node.id, port: 'memory' } },
+                            onPointerLeave: () => { if (hoverPortRef.current?.nodeId === node.id) hoverPortRef.current = null },
+                          }),
+                        ]}),
+                      ]}),
+                ]}),
               ],
             }, node.id)
           }),
+          // 连线层（绘制于节点之上，Blender noodle 风格；pointer-events: none 不挡交互）
+          jsx('svg', {
+            className: 'evo-graph-svg',
+            children: [
+              ...(graph?.edges ?? []).map((edge) => {
+              const from = nodeById(edge.from)
+              const to = nodeById(edge.to)
+              if (from === undefined || to === undefined) return null
+              const fp = portOf(from, 'output')
+              const tp = portOf(to, edge.toPort)
+              const isCtx = edge.toPort === 'context'
+              return jsx('path', {
+                d: edgePath(fp, tp),
+                className: `evo-graph-edge${isCtx ? ' evo-graph-edge-ctx' : ' evo-graph-edge-mem'}`,
+              }, edge.id)
+            }),
+              ...(linking !== null ? (() => {
+                const from = nodeById(linking.from)
+                if (from === undefined) return []
+                const fp = portOf(from, 'output')
+                return [jsx('path', { d: edgePath(fp, { x: linking.toX, y: linking.toY }), className: 'evo-graph-edge evo-graph-edge-linking' }, 'link-tmp')]
+              })() : []),
+              ],
+            }),
           // 右键菜单
           menu !== null && jsxs('div', {
             className: 'evo-graph-menu',

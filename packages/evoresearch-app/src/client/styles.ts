@@ -617,46 +617,50 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-btn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
 .evo-graph-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-graph-btn svg { width: 13px; height: 13px; }
-/* 画布：略浅背景 + 清晰点阵网格（16px） */
+/* 画布：Blender 节点编辑器风格深色底 + 点阵网格 */
 .evo-graph-canvas { position: relative; flex: 1; min-height: 300px; overflow: auto; background:
-  radial-gradient(circle, color-mix(in srgb, var(--color-text-tertiary) 26%, transparent) 1.1px, transparent 1.1px) 0 0 / 16px 16px,
-  var(--color-background); }
-.evo-graph-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-/* 连线：柔细 + 类型语义色 + 箭头（marker 由组件注入） */
-.evo-graph-edge { fill: none; stroke: color-mix(in srgb, var(--color-text-tertiary) 45%, transparent); stroke-width: 1.4px; }
-.evo-graph-edge-ctx { stroke: color-mix(in srgb, var(--brand) 80%, transparent); stroke-width: 1.8px; }
-.evo-graph-edge-mem { stroke: color-mix(in srgb, var(--color-success) 70%, transparent); stroke-width: 1.6px; }
-.evo-graph-edge-linking { stroke: var(--brand); stroke-dasharray: 6 4; stroke-width: 1.8px; }
-/* 节点卡片：统一圆角/渐变/阴影 */
-.evo-graph-node { position: absolute; background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 100%, white 3%), var(--color-surface)); border: 1px solid var(--color-border); border-radius: 11px; padding: 8px 10px; cursor: grab; user-select: none; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.24); transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
-.evo-graph-node:hover { border-color: color-mix(in srgb, var(--brand) 55%, var(--color-border)); box-shadow: 0 5px 16px rgba(0, 0, 0, 0.3); }
-.evo-graph-node-sel { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 22%, transparent), 0 5px 16px rgba(0, 0, 0, 0.3); }
-.evo-graph-node-chat { border-left: 3px solid var(--brand); }
-.evo-graph-node-memory { border-left: 3px solid var(--color-success); }
-.evo-graph-node-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.evo-graph-node-head svg { width: 13px; height: 13px; color: var(--color-text-tertiary); flex-shrink: 0; }
-.evo-graph-node-chat .evo-graph-node-head svg { color: var(--brand); }
-.evo-graph-node-memory .evo-graph-node-head svg { color: var(--color-success); }
-.evo-graph-node-title { font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.evo-graph-node-sub { display: flex; align-items: center; gap: 5px; margin-top: 4px; min-width: 0; }
-.evo-graph-node-tag { font-size: 10px; color: var(--color-text-tertiary); background: var(--hover-bg); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
-.evo-graph-node-sid { font-size: 10px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.evo-graph-node-memprev { gap: 4px; min-width: 0; }
-.evo-graph-node-preview { font-size: 10.5px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* 端口：12px、hover 光圈 */
-.evo-graph-port { position: absolute; width: 12px; height: 12px; border-radius: 999px; border: 2px solid var(--color-surface); cursor: crosshair; transition: transform 0.12s, box-shadow 0.12s; }
-.evo-graph-port-in { left: -7px; }
-.evo-graph-port-ctx { top: 17px; background: var(--brand); }
-.evo-graph-port-mem { top: 39px; background: var(--color-success); }
-.evo-graph-port-out { right: -7px; top: 28px; background: var(--brand-hover); }
-.evo-graph-node-memory .evo-graph-port-out { top: 18px; }
-.evo-graph-port:hover { transform: scale(1.4); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent); }
+  radial-gradient(circle, #3a3a42 1.2px, transparent 1.2px) 0 0 / 20px 20px,
+  #1b1b1e; }
+.evo-graph-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+/* 节点卡片：Blender 节点编辑器风格——类型色标题栏 + 深灰主体 + socket 行（顶部内高光增强浮起感） */
+.evo-graph-node { position: absolute; background: linear-gradient(180deg, #2e2e33, #29292d); border: 1px solid #19191d; border-radius: 5px; padding: 0; cursor: grab; user-select: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 3px 12px rgba(0, 0, 0, 0.4); transition: border-color 0.15s, box-shadow 0.15s; display: flex; flex-direction: column; }
+.evo-graph-node:hover { border-color: #4a4a52; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 5px 18px rgba(0, 0, 0, 0.45); }
+.evo-graph-node-sel { border-color: #e8a33d; box-shadow: 0 0 0 1.5px rgba(232, 163, 61, 0.55), 0 5px 18px rgba(0, 0, 0, 0.42); }
+.evo-graph-node-dragging { z-index: 30; cursor: grabbing; box-shadow: 0 0 0 1.5px rgba(232, 163, 61, 0.4), 0 10px 28px rgba(0, 0, 0, 0.5); }
+/* 标题栏：类型色渐变（Blender 节点 header 风格） */
+.evo-graph-node-titlebar { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 4px 4px 0 0; flex-shrink: 0; }
+.evo-graph-node-chat .evo-graph-node-titlebar { background: linear-gradient(180deg, #2d4a68, #243a52); }
+.evo-graph-node-memory .evo-graph-node-titlebar { background: linear-gradient(180deg, #2d5440, #23422f); }
+.evo-graph-node-memory[data-global] .evo-graph-node-titlebar { background: linear-gradient(180deg, #4a3d63, #382e4d); }
+.evo-graph-node-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--color-text-secondary); flex-shrink: 0; }
+.evo-graph-node-chat .evo-graph-node-dot { background: #7fb3e8; }
+.evo-graph-node-memory .evo-graph-node-dot { background: #7fd8a0; }
+.evo-graph-node-memory[data-global] .evo-graph-node-dot { background: #c39bf0; }
+.evo-graph-node-title { font-size: 12px; font-weight: 600; color: #f2f2f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+/* 主体：socket 行 */
+.evo-graph-node-body { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 5px 7px 6px; min-width: 0; }
+.evo-graph-socket-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.evo-graph-socket-row-out { margin-top: 1px; }
+/* Blender socket：8px 实心圆 + 亮描边 */
+.evo-graph-socket { width: 9px; height: 9px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, 0.75); cursor: crosshair; flex-shrink: 0; transition: transform 0.12s, box-shadow 0.12s; box-shadow: 0 0 3px rgba(0, 0, 0, 0.5); }
+.evo-graph-socket-ctx { background: #4a90d9; }
+.evo-graph-socket-mem { background: #5dbe85; }
+.evo-graph-socket-out { background: #c98b3d; }
+.evo-graph-socket:hover { transform: scale(1.45); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18); }
+.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: #9d9da3; white-space: nowrap; }
+.evo-graph-node-tag { font-size: 9.5px; color: #a8a8ad; background: rgba(255, 255, 255, 0.07); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; }
+.evo-graph-node-sid { font-size: 9.5px; color: #7a7a80; font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-graph-node-preview { font-size: 10px; color: #b8b8bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* 连线：粗贝塞尔 + 类型色（Blender 风格：线在 socket 处衔接） */
+.evo-graph-edge { fill: none; stroke: #6a6a72; stroke-width: 2px; }
+.evo-graph-edge-ctx { stroke: #4a90d9; stroke-width: 2.2px; }
+.evo-graph-edge-mem { stroke: #5dbe85; stroke-width: 2px; }
+.evo-graph-edge-linking { stroke: #e8a33d; stroke-dasharray: 6 4; stroke-width: 2.2px; }
 /* 右键菜单：与面板同语言 */
 .evo-graph-menu { position: absolute; z-index: 50; min-width: 176px; padding: 5px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); display: flex; flex-direction: column; gap: 2px; }
 .evo-graph-menu-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border: none; background: none; border-radius: 7px; color: var(--color-text-primary); font-size: 12.5px; cursor: pointer; text-align: left; font: inherit; transition: background 0.12s; }
 .evo-graph-menu-item:hover:not(:disabled) { background: var(--hover-bg); }
 .evo-graph-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
-.evo-graph-menu-item svg { width: 13px; height: 13px; color: var(--brand); }
 .evo-graph-menu-item svg { width: 13px; height: 13px; color: var(--color-text-tertiary); }
 .evo-graph-menu-danger { color: var(--color-error); }
 .evo-graph-menu-danger svg { color: var(--color-error); }

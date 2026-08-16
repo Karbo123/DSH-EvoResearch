@@ -957,6 +957,8 @@ export function registerWorkspaceApi(ctx: any): void {
           if (payload.edge !== undefined) args.edge = payload.edge
           if (typeof payload.fromNodeId === 'string') args.fromNodeId = payload.fromNodeId
           if (typeof payload.toNodeId === 'string') args.toNodeId = payload.toNodeId
+          // 乐观并发修订号（graph-save 携带，服务端比对防陈旧窗口覆盖）
+          if (typeof payload.rev === 'number') args.rev = payload.rev
           try {
             writeOk(res, await fn.call(evoresearch, args))
           } catch (error) {

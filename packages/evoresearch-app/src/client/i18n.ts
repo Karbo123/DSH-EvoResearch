@@ -422,6 +422,7 @@ const DICT: Record<string, [string, string]> = {
   graphNeedProject: ['Open a project chat first to bind the workspace.', '请先打开一个项目会话以绑定工作区。'],
   graphCreateSessionFailed: ['Failed to create session.', '创建会话失败。'],
   graphInheritFailed: ['Failed to inherit context.', '上下文继承失败。'],
+  graphConflict: ['The graph was modified in another window. Reloaded the latest state.', '图谱已在其他窗口修改，已重新加载最新状态。'],
   graphDisconnectContext: ['Disconnect context inheritance', '断开上下文继承'],
   graphGlobal: ['Global', '全局'],
   graphProject: ['Project', '项目'],

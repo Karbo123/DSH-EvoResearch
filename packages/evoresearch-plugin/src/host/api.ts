@@ -618,16 +618,24 @@ export class EvoResearchApiService extends TypertRemoteService {
   @Remote('graphGet')
   graphGet(args: { workspaceDir?: string }): unknown {
     try {
-      return this.services.chatGraph.get(this.graphProjectOf(args))
+      const name = this.graphProjectOf(args)
+      return { graph: this.services.chatGraph.get(name), rev: this.services.chatGraph.rev(name) }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
   }
 
   @Remote('graphSave')
-  graphSave(args: { workspaceDir?: string; graph: unknown }): { ok: boolean; error?: string } {
+  graphSave(args: { workspaceDir?: string; graph: unknown; rev?: number }): { ok: boolean; error?: string; conflict?: boolean; rev?: number } {
     try {
-      return this.services.chatGraph.save(this.graphProjectOf(args), (args?.graph ?? { nodes: [], edges: [] }) as never)
+      const name = this.graphProjectOf(args)
+      // 乐观并发：前端携带的修订号与当前不一致 → 拒绝并提示刷新（防陈旧窗口整图覆盖）
+      if (typeof args?.rev === 'number' && this.services.chatGraph.rev(name) !== args.rev) {
+        return { ok: false, conflict: true, error: '图谱已在其他窗口修改，请刷新后重试' }
+      }
+      const result = this.services.chatGraph.save(name, (args?.graph ?? { nodes: [], edges: [] }) as never)
+      if (!result.ok) return result
+      return { ok: true, rev: this.services.chatGraph.rev(name) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -636,7 +644,8 @@ export class EvoResearchApiService extends TypertRemoteService {
   @Remote('graphAddNode')
   graphAddNode(args: { workspaceDir?: string; node: unknown }): unknown {
     try {
-      return this.services.chatGraph.addNode(this.graphProjectOf(args), args?.node as never)
+      const name = this.graphProjectOf(args)
+      return { node: this.services.chatGraph.addNode(name, args?.node as never), rev: this.services.chatGraph.rev(name) }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -645,7 +654,8 @@ export class EvoResearchApiService extends TypertRemoteService {
   @Remote('graphAddEdge')
   graphAddEdge(args: { workspaceDir?: string; edge: unknown }): unknown {
     try {
-      return this.services.chatGraph.addEdge(this.graphProjectOf(args), args?.edge as never)
+      const name = this.graphProjectOf(args)
+      return { edge: this.services.chatGraph.addEdge(name, args?.edge as never), rev: this.services.chatGraph.rev(name) }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -657,7 +667,7 @@ export class EvoResearchApiService extends TypertRemoteService {
    * 并将目标节点重新绑定到该会话。
    */
   @Remote('graphInherit')
-  graphInherit(args: { workspaceDir?: string; fromNodeId: string; toNodeId: string }): { ok: boolean; sessionId?: string; replaced?: boolean; notice?: string; error?: string } {
+  graphInherit(args: { workspaceDir?: string; fromNodeId: string; toNodeId: string }): { ok: boolean; sessionId?: string; replaced?: boolean; notice?: string; error?: string; rev?: number } {
     try {
       const name = this.graphProjectOf(args)
       const graph = this.services.chatGraph.get(name)
@@ -728,7 +738,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         .concat([{ id: `e${Date.now().toString(36)}`, from: from.id, to: to.id, toPort: 'context' }])
       const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: childId } : n)), edges }
       this.services.chatGraph.save(name, next)
-      return { ok: true, sessionId: childId, replaced, notice }
+      return { ok: true, sessionId: childId, replaced, notice, rev: this.services.chatGraph.rev(name) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
