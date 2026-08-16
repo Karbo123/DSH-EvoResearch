@@ -198,6 +198,28 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 - 入口：顶部标签栏「轨迹」tab（与「对话」并列，常驻不可关）
 - 设置面板全屏化：`.evo-modal-full`（fixed + inset:0，精确覆盖视口）
 
+### 3.12 实验/消息通道真实接入复核 + 面板关闭失步修复（提交 f8df3fe）
+
+**结论**：实验管理与消息通道均为真实接入且经过完整测试，非占位（详见下）。
+
+- **消息通道（ChannelManager）**：`channels-status` 实测返回 6 个真实适配器
+  （telegram/slack/qq/wechat/feishu/signal，builtinAdapters 注册），默认
+  `autoStartChannels=false` 且无凭据 → 全部 online=false 无 error；面板 UI 实测渲染
+  6 行「离线」+ 启停开关（channel-start/stop 端点）。启用需配置适配器凭据或
+  autoStartChannels（凭据类通道连接未做专项端到端测试，属预期配置行为）。
+- **实验管理（ExperimentService）**：`experiments-create/phase/checkpoint/rollback/
+  branch/delete/list` 直连 API 全绿；UI E2E（verify-newfeatures.mjs）与本次面板实测
+  均显示真实数据（直连测试/实测实验：分支 main、阶段「探索」等，来自
+  `projects/<name>/.evoresearch-data/experiments/`）。
+- **排查插曲**：曾误报「点击实验菜单无反应」——根因是 Edge 标签页切到后台后
+  Chrome 冻结页面（visibilityState=hidden、定时器/事件全部停摆），非代码缺陷；
+  用 `Target.activateTarget` 激活标签即恢复，菜单点击/面板渲染全部正常。
+- **真实修复**：侧栏面板打开时点击会话行只清了 URL 的 view、未清 React state
+  （面板残留主区域，state/URL 失步）→ `openSession` 增加 `setView(null)`；
+  消息通道面板行标签「消息通道」→「适配器状态」，消除与面板标题重复
+  （视觉模型 mimo-v2.5 复核通过）。
+
+
 ## 四、E2E 验证结果（verify-newfeatures.mjs，真实模型对话）
 
 | 项目 | 结果 |
