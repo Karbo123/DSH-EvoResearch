@@ -1,8 +1,8 @@
 /**
  * 设置面板：左侧 tab 导航 + 右侧配置 + 左上角「返回」（图标 + 文字）。
  * - 通用：权限模式 / 默认模型 / 插件清单 / 关于（主题与语言在顶栏，不重复）；
- * - 写代码模型：三档（轻量/均衡/深度），可设为默认模型；
- * - 图片识别 / 图片生成 / 语音识别：模型与端点配置（参照 ResearchOS 设置面板）。
+ * - 代码文本模型：三档（轻量/均衡/深度），可设为默认模型；
+ * - 图片识别 / 图片生成 / 语音识别模型：模型与端点配置（参照 ResearchOS 设置面板）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'

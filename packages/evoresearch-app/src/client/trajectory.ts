@@ -2,20 +2,18 @@
  * 轨迹面板（§轨迹：复刻 DSH 官方 Trajectory 视图，EvoResearch 设计风格）。
  *
  * 数据源：session.events 原始事件日志（客户端镜像，随流式实时追加）：
- *   turn/start → turn/end（回合边界）
- *   step/start → step/end（模型步骤边界）
- *   assistant/chunk(usage)（token 用量累计）
- *   assistant/message（步骤最终文本）
- *   tool/call → tool/result（工具调用与结果）
+ *   turn/start → turn/end、step/start → step/end、assistant/chunk(usage)、
+ *   assistant/message、tool/call → tool/result。
  *
- * 功能（与 DSH 轨迹一致）：实际时间/等宽两种时长模式、展开/收起回合、
- * 展开/收起调用、轨迹搜索、每步 token 用量、调用参数与结果折叠查看、
- * 实时流式更新。
+ * 交互（用户反馈后重构）：点击行本身即展开/收起，无全局展开按钮；
+ * 工具栏仅保留时长模式（按耗时 / 等宽排列）与搜索；展开的详情用 Markdown
+ * 渲染完整对话文本与工具参数/结果。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { t } from './i18n'
-import { ChevronDown, ChevronRight, Search, Timer, Zap, MessageSquareText, Wrench, CheckCircle2, XCircle, CircleDashed } from 'lucide-react'
+import { renderMarkdown } from './markdown'
+import { ChevronDown, ChevronRight, Search, Timer, Zap, MessageSquareText, Wrench, CheckCircle2, XCircle, CircleDashed, CornerDownRight, User } from 'lucide-react'
 
 interface TrajCall {
   callId: string
@@ -171,13 +169,12 @@ function fmtTokens(usage: { input: number; output: number } | null): string {
   return `${usage.input}→${usage.output}`
 }
 
-/** 截断长 JSON（参数/结果预览）。 */
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text
   return `${text.slice(0, max)}…`
 }
 
-/** 轨迹面板（toolbar + 回合/步骤/调用时间线）。 */
+/** 轨迹面板：点击行展开/收起，详情 Markdown 渲染。 */
 export function TrajectoryPanel({ session }: { session: any }) {
   const notifier = session?.notifier
   const eventsLen = useSyncExternalStore(
@@ -187,11 +184,8 @@ export function TrajectoryPanel({ session }: { session: any }) {
   const turns = useMemo(() => buildTrajectory(session?.events ?? []), [session, eventsLen])
 
   const [actualTime, setActualTime] = useState(true)
-  const [turnsOpen, setTurnsOpen] = useState(true)
-  const [callsOpen, setCallsOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [openCalls, setOpenCalls] = useState<Set<string>>(new Set())
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const maxDuration = useMemo(() => {
     let max = 1
@@ -209,6 +203,7 @@ export function TrajectoryPanel({ session }: { session: any }) {
     const dur = Math.max(0, (end ?? Date.now()) - start)
     return `${Math.max(3, Math.round((dur / maxDuration) * 100))}%`
   }
+  const durationMs = (start: number, end: number | null): number => Math.max(0, (end ?? Date.now()) - start)
 
   const q = query.trim().toLowerCase()
   const matchCall = (call: TrajCall): boolean =>
@@ -216,21 +211,16 @@ export function TrajectoryPanel({ session }: { session: any }) {
   const matchStep = (step: TrajStep): boolean => q === '' || step.text.toLowerCase().includes(q) || step.calls.some(matchCall)
   const matchTurn = (turn: TrajTurn): boolean => q === '' || turn.userText.toLowerCase().includes(q) || turn.steps.some(matchStep)
 
-  const toggleCall = (callId: string) => {
-    setOpenCalls((prev) => {
-      const next = new Set(prev)
-      if (next.has(callId)) next.delete(callId)
-      else next.add(callId)
-      return next
-    })
-  }
-  const toggleCollapse = (key: string) => {
-    setCollapsed((prev) => {
+  const toggle = (key: string) => {
+    setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
       return next
     })
+  }
+  const jumpToChat = () => {
+    window.dispatchEvent(new CustomEvent('evo-traj-jump-chat'))
   }
 
   const totalTokens = useMemo(() => {
@@ -247,37 +237,31 @@ export function TrajectoryPanel({ session }: { session: any }) {
   return jsxs('div', {
     className: 'evo-traj',
     children: [
-      // ── 工具栏 ──
+      // ── 工具栏：时长模式 + 汇总 + 搜索（无全局展开按钮，点击行即展开）──
       jsxs('div', {
         className: 'evo-traj-toolbar',
         children: [
           jsx(Timer, {}),
-          jsx('button', {
-            type: 'button',
-            className: 'evo-traj-chip',
-            'data-on': actualTime || undefined,
-            onClick: () => setActualTime(true),
-            children: t('trajActualTime'),
-          }),
-          jsx('button', {
-            type: 'button',
-            className: 'evo-traj-chip',
-            'data-on': !actualTime || undefined,
-            onClick: () => setActualTime(false),
-            children: t('trajEqualWidth'),
-          }),
-          jsx('span', { className: 'evo-traj-sep' }),
-          jsx('button', {
-            type: 'button',
-            className: 'evo-traj-chip',
-            onClick: () => setTurnsOpen((v) => !v),
-            children: turnsOpen ? t('trajCollapseTurns') : t('trajExpandTurns'),
-          }),
-          jsx('button', {
-            type: 'button',
-            className: 'evo-traj-chip',
-            onClick: () => setCallsOpen((v) => !v),
-            children: callsOpen ? t('trajCollapseCalls') : t('trajExpandCalls'),
+          jsxs('div', {
+            className: 'evo-traj-seg',
+            children: [
+              jsx('button', {
+                type: 'button',
+                className: 'evo-traj-chip',
+                'data-on': actualTime || undefined,
+                title: t('trajActualTimeHint'),
+                onClick: () => setActualTime(true),
+                children: t('trajActualTime'),
+              }),
+              jsx('button', {
+                type: 'button',
+                className: 'evo-traj-chip',
+                'data-on': !actualTime || undefined,
+                title: t('trajEqualWidthHint'),
+                onClick: () => setActualTime(false),
+                children: t('trajEqualWidth'),
+              }),
+            ],
           }),
           jsx('span', { style: { flex: 1 } }),
           jsx('span', { className: 'evo-traj-totals', children: `Σ ${totalTokens.input}→${totalTokens.output} tokens` }),
@@ -302,16 +286,16 @@ export function TrajectoryPanel({ session }: { session: any }) {
         children: turns.length === 0
           ? jsx('div', { className: 'evo-traj-empty', children: t('trajEmpty') })
           : turns.map((turn) => {
-              const turnVisible = matchTurn(turn)
-              if (!turnVisible) return null
+              if (!matchTurn(turn)) return null
               const turnKey = `t${turn.turn}`
-              const turnOpen = turnsOpen && !collapsed.has(turnKey)
+              const turnOpen = expanded.has(turnKey) || q !== ''
               return jsxs('div', {
                 className: 'evo-traj-turn',
                 children: [
                   jsxs('div', {
                     className: 'evo-traj-row evo-traj-turn-row',
-                    onClick: () => toggleCollapse(turnKey),
+                    title: t('trajClickExpand'),
+                    onClick: () => toggle(turnKey),
                     children: [
                       turnOpen ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
                       jsx(MessageSquareText, {}),
@@ -321,69 +305,114 @@ export function TrajectoryPanel({ session }: { session: any }) {
                       jsx('span', { className: 'evo-traj-dur', children: fmtDuration(turn.start, turn.end) }),
                     ],
                   }),
-                  turnOpen && turn.steps.map((step) => {
-                    const stepKey = `${turnKey}:s${step.step}`
-                    const stepVisible = matchStep(step)
-                    if (!stepVisible) return null
-                    const stepOpen = !collapsed.has(stepKey)
-                    return jsxs('div', {
-                      className: 'evo-traj-step',
-                      children: [
-                        jsxs('div', {
-                          className: 'evo-traj-row evo-traj-step-row',
-                          onClick: () => toggleCollapse(stepKey),
+                  turnOpen && jsxs('div', {
+                    className: 'evo-traj-turn-body',
+                    children: [
+                      turn.userText !== '' && jsxs('div', {
+                        className: 'evo-traj-quote',
+                        children: [
+                          jsxs('div', { className: 'evo-traj-quote-head', children: [jsx(User, {}), jsx('span', { children: t('trajUserMessage') })] }),
+                          jsx('div', { className: 'evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(turn.userText) } }),
+                        ],
+                      }),
+                      turn.steps.map((step) => {
+                        if (!matchStep(step)) return null
+                        const stepKey = `${turnKey}:s${step.step}`
+                        const stepOpen = expanded.has(stepKey) || q !== ''
+                        const slow = durationMs(step.start, step.end) > 3000
+                        return jsxs('div', {
+                          className: 'evo-traj-step',
                           children: [
-                            stepOpen ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
-                            jsx(Zap, {}),
-                            jsx('span', { className: 'evo-traj-label', children: `${t('step')} ${step.step}` }),
-                            step.usage !== null && jsx('span', { className: 'evo-traj-tokens', children: fmtTokens(step.usage) }),
-                            jsx('span', { className: 'evo-traj-steptext', children: truncate(step.text, 70) }),
-                            jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(step.start, step.end) } }) }),
-                            jsx('span', { className: 'evo-traj-dur', children: fmtDuration(step.start, step.end) }),
+                            jsxs('div', {
+                              className: 'evo-traj-row evo-traj-step-row',
+                              title: t('trajClickExpand'),
+                              onClick: () => toggle(stepKey),
+                              children: [
+                                stepOpen ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
+                                jsx(Zap, {}),
+                                jsx('span', { className: 'evo-traj-label', children: `${t('step')} ${step.step}` }),
+                                step.usage !== null && jsx('span', { className: 'evo-traj-tokens', children: fmtTokens(step.usage) }),
+                                jsx('span', { className: 'evo-traj-steptext', children: truncate(step.text, 70) }),
+                                jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(step.start, step.end) } }) }),
+                                jsx('span', { className: `evo-traj-dur${slow ? ' slow' : ''}`, children: fmtDuration(step.start, step.end) }),
+                              ],
+                            }),
+                            stepOpen && jsxs('div', {
+                              className: 'evo-traj-step-body',
+                              children: [
+                                // 完整对话文本（Markdown 渲染）
+                                step.text !== '' && jsxs('div', {
+                                  className: 'evo-traj-detail',
+                                  children: [
+                                    jsxs('div', {
+                                      className: 'evo-traj-detail-head',
+                                      children: [
+                                        jsx('span', { children: t('trajStepText') }),
+                                        jsx('span', { style: { flex: 1 } }),
+                                        jsx('button', {
+                                          type: 'button',
+                                          className: 'evo-traj-goto',
+                                          title: t('trajGotoChat'),
+                                          onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); jumpToChat() },
+                                          children: jsxs(Fragment, { children: [jsx(CornerDownRight, {}), jsx('span', { children: t('trajGotoChat') })] }),
+                                        }),
+                                      ],
+                                    }),
+                                    jsx('div', { className: 'evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(step.text) } }),
+                                    step.usage !== null && jsx('div', {
+                                      className: 'evo-traj-meta',
+                                      children: `${t('trajTokens')}: ${step.usage.input}→${step.usage.output}（${t('trajCacheRead')} ${step.usage.cacheRead}，${t('trajReasoning')} ${step.usage.reasoning}）`,
+                                    }),
+                                  ],
+                                }),
+                                step.calls.map((call) => {
+                                  if (!matchCall(call)) return null
+                                  const callOpen = expanded.has(call.callId)
+                                  const statusIcon = call.end === null ? jsx(CircleDashed, {}) : call.isError ? jsx(XCircle, {}) : jsx(CheckCircle2, {})
+                                  const callSlow = durationMs(call.start, call.end) > 3000
+                                  return jsxs('div', {
+                                    className: 'evo-traj-call',
+                                    children: [
+                                      jsxs('div', {
+                                        className: 'evo-traj-row evo-traj-call-row',
+                                        title: t('trajClickExpand'),
+                                        onClick: () => toggle(call.callId),
+                                        children: [
+                                          callOpen ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
+                                          jsx(Wrench, {}),
+                                          jsx('span', { className: 'evo-traj-label', children: call.name }),
+                                          jsx('span', { className: 'evo-traj-args', children: truncate(call.args, 60) }),
+                                          jsx('span', { className: `evo-traj-status${call.isError ? ' error' : ''}`, children: statusIcon }),
+                                          jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(call.start, call.end) } }) }),
+                                          jsx('span', { className: `evo-traj-dur${callSlow ? ' slow' : ''}`, children: fmtDuration(call.start, call.end) }),
+                                        ],
+                                      }),
+                                      callOpen && jsxs('div', {
+                                        className: 'evo-traj-call-detail',
+                                        children: [
+                                          call.args !== '' && jsxs(Fragment, {
+                                            children: [
+                                              jsx('div', { className: 'evo-traj-detail-head', children: t('trajArgs') }),
+                                              jsx('pre', { className: 'evo-traj-detail-pre', children: truncate(call.args, 2000) }),
+                                            ],
+                                          }),
+                                          (call.result !== '' || call.end === null) && jsxs(Fragment, {
+                                            children: [
+                                              jsx('div', { className: 'evo-traj-detail-head', children: t('trajResult') }),
+                                              jsx('pre', { className: `evo-traj-detail-pre${call.isError ? ' error' : ''}`, children: call.end === null ? '…' : truncate(call.result, 3000) }),
+                                            ],
+                                          }),
+                                        ],
+                                      }),
+                                    ],
+                                  }, call.callId)
+                                }),
+                              ],
+                            }),
                           ],
-                        }),
-                        stepOpen && step.calls.map((call) => {
-                          if (!matchCall(call)) return null
-                          const callOpen = callsOpen || openCalls.has(call.callId)
-                          const statusIcon = call.end === null ? jsx(CircleDashed, {}) : call.isError ? jsx(XCircle, {}) : jsx(CheckCircle2, {})
-                          return jsxs('div', {
-                            className: 'evo-traj-call',
-                            children: [
-                              jsxs('div', {
-                                className: 'evo-traj-row evo-traj-call-row',
-                                onClick: () => toggleCall(call.callId),
-                                children: [
-                                  callOpen ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
-                                  jsx(Wrench, {}),
-                                  jsx('span', { className: 'evo-traj-label', children: call.name }),
-                                  jsx('span', { className: 'evo-traj-args', children: truncate(call.args, 60) }),
-                                  jsx('span', { className: 'evo-traj-status', children: statusIcon }),
-                                  jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(call.start, call.end) } }) }),
-                                  jsx('span', { className: 'evo-traj-dur', children: fmtDuration(call.start, call.end) }),
-                                ],
-                              }),
-                              callOpen && jsxs('div', {
-                                className: 'evo-traj-call-detail',
-                                children: [
-                                  call.args !== '' && jsxs(Fragment, {
-                                    children: [
-                                      jsx('div', { className: 'evo-traj-detail-head', children: t('trajArgs') }),
-                                      jsx('pre', { className: 'evo-traj-detail-pre', children: truncate(call.args, 2000) }),
-                                    ],
-                                  }),
-                                  (call.result !== '' || call.end === null) && jsxs(Fragment, {
-                                    children: [
-                                      jsx('div', { className: 'evo-traj-detail-head', children: t('trajResult') }),
-                                      jsx('pre', { className: `evo-traj-detail-pre${call.isError ? ' error' : ''}`, children: call.end === null ? '…' : truncate(call.result, 3000) }),
-                                    ],
-                                  }),
-                                ],
-                              }),
-                            ],
-                          }, call.callId)
-                        }),
-                      ],
-                    }, stepKey)
+                        }, stepKey)
+                      }),
+                    ],
                   }),
                 ],
               }, turnKey)

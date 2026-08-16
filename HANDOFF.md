@@ -153,6 +153,19 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 首 token 平均延迟、输出 tok/s、缓存命中率、输入 token（K/M 缩写）。
 20px 高、11px 小字、固定贴底（实测 bottom == viewport 高度）。
 
+### 3.10 设置文案改名 + 标签栏重设计 + 轨迹交互重构（视觉模型评审闭环）
+
+- 设置面板：`写代码模型`→**`代码文本模型`**、`语音识别`→**`语音识别模型`**（settings.ts + i18n）
+- 标签栏：圆角胶囊 + 品牌色选中态（实底白字）+ hover 反馈；去掉旧式"上边框高亮"
+- 轨迹面板（用户反馈：按钮意义不明/详情查看不便）：
+  - 工具栏**移除**"展开回合/展开调用"全局按钮——点击行本身即展开/收起
+  - 时长模式改名 `按耗时 / 等宽视图`（带 tooltip 解释），分组为分段控件
+  - 回合展开 → **用户消息引用块**（User 标签 + Markdown 渲染全文）
+  - 步骤展开 → **模型回复全文（Markdown 渲染）** + token 明细 + 「查看对话」跳转按钮
+  - 调用展开 → 参数/结果（保持）；耗时 >3s 的品牌色加粗高亮
+  - 时间轴竖线串联 回合→步骤→调用；设置导航选中态改为左侧竖条指示器 + 微亮背景
+- 视觉验证固化：`scripts/visual-review.mjs`（截图 → mimo-v2.5 评审），最终评审「全部 OK」
+
 ### 3.9 轨迹面板（DSH Trajectory 复刻，EvoResearch 风格）
 
 - `packages/evoresearch-app/src/client/trajectory.ts`：数据源 = `session.events`

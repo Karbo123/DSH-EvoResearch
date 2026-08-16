@@ -751,6 +751,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     window.addEventListener('evo-open-tab', onOpenTab)
     return () => window.removeEventListener('evo-open-tab', onOpenTab)
   }, [])
+  // 轨迹面板「查看对话」→ 切回对话标签
+  useEffect(() => {
+    const onJumpChat = () => { setActiveTabId('chat'); setTabMenuOpen(false) }
+    window.addEventListener('evo-traj-jump-chat', onJumpChat)
+    return () => window.removeEventListener('evo-traj-jump-chat', onJumpChat)
+  }, [])
   // 编辑标签保存（写入工作区；root 为当前会话 cwd）
   const saveTabEditor = (tab: WorkspaceTab) => {
     if (tab.kind !== 'editor' || tab.filePath === undefined || tab.root === undefined) return

@@ -491,9 +491,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-btn-back svg { width: 15px; height: 15px; }
 .evo-settings-body { display: flex; flex: 1; min-height: 0; }
 .evo-settings-nav { width: 176px; flex-shrink: 0; border-right: 1px solid var(--color-border-light); padding: 10px 8px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
-.evo-settings-tab { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: none; border-radius: 9px; background: transparent; color: var(--color-text-secondary); font-size: 13.5px; cursor: pointer; text-align: left; font: inherit; }
+.evo-settings-tab { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: none; border-radius: 9px; background: transparent; color: var(--color-text-secondary); font-size: 13.5px; cursor: pointer; text-align: left; font: inherit; position: relative; }
 .evo-settings-tab:hover { background: var(--hover-bg); }
-.evo-settings-tab[data-active] { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand); font-weight: 600; }
+.evo-settings-tab[data-active] { background: color-mix(in srgb, var(--brand) 8%, transparent); color: var(--brand); font-weight: 600; }
+.evo-settings-tab[data-active]::before { content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px; border-radius: 3px; background: var(--brand); }
 .evo-settings-tab svg { width: 16px; height: 16px; flex-shrink: 0; }
 .evo-settings-content { flex: 1; min-width: 0; overflow-y: auto; padding: 14px 16px; }
 .evo-tier-grid { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
@@ -788,18 +789,19 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-cmd-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
 .evo-cmd-dismiss:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-cmd-dismiss svg { width: 13px; height: 13px; }
-/* ── 标签栏（§5.2 浏览器式标签）── */
+/* ── 标签栏（§5.2 浏览器式标签；视觉评审后重设计：圆角胶囊 + 品牌选中态）── */
 .evo-tabwrap { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1; }
-.evo-tabbar { display: flex; align-items: center; gap: 4px; padding: 6px 10px 0; background: var(--color-background); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; }
-.evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 8px 5px 12px; border: 1px solid var(--color-border); border-bottom: none; border-radius: 8px 8px 0 0; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; }
-.evo-tab[data-active] { color: var(--color-text-primary); border-color: var(--brand); box-shadow: inset 0 2px 0 var(--brand); background: var(--color-surface); }
+.evo-tabbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--color-background); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; }
+.evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; transition: background 0.12s ease, color 0.12s ease; }
+.evo-tab:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-tab[data-active] { background: var(--brand-solid); border-color: var(--brand-solid); color: var(--brand-foreground); font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
 .evo-tab-title { overflow: hidden; text-overflow: ellipsis; }
-.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 5px; cursor: pointer; padding: 0; flex-shrink: 0; }
-.evo-tab-close:hover { background: var(--hover-bg); color: var(--color-text-primary); }
-.evo-tab-close svg { width: 12px; height: 12px; }
-.evo-tab-new-wrap { position: relative; display: inline-flex; align-items: center; }
-.evo-tab-new { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; }
-.evo-tab-new:hover:not(:disabled) { color: var(--brand); border-color: var(--brand); }
+.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: 5px; cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0.65; }
+.evo-tab-close:hover { background: rgba(255, 255, 255, 0.22); opacity: 1; }
+.evo-tab-close svg { width: 11px; height: 11px; }
+.evo-tab-new-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 2px; }
+.evo-tab-new { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--color-text-tertiary); cursor: pointer; flex-shrink: 0; transition: background 0.12s ease, color 0.12s ease; }
+.evo-tab-new:hover:not(:disabled) { background: var(--hover-bg); color: var(--brand); }
 .evo-tab-new:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-tab-new svg { width: 14px; height: 14px; }
 .evo-tab-menu { position: absolute; top: 32px; left: 0; z-index: 60; min-width: 240px; padding: 6px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14); display: flex; flex-direction: column; gap: 4px; }
@@ -880,8 +882,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-traj { display: flex; flex-direction: column; flex: 1; min-height: 0; background: var(--color-background); }
 .evo-traj-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--color-border); flex-shrink: 0; flex-wrap: wrap; }
 .evo-traj-toolbar > svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
-.evo-traj-chip { display: inline-flex; align-items: center; padding: 4px 11px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12px; cursor: pointer; }
-.evo-traj-chip[data-on] { background: color-mix(in srgb, var(--brand) 12%, var(--color-surface)); border-color: var(--brand); color: var(--brand); font-weight: 600; }
+.evo-traj-seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); flex-shrink: 0; }
+.evo-traj-chip { display: inline-flex; align-items: center; padding: 3px 10px; border: none; border-radius: 999px; background: transparent; color: var(--color-text-secondary); font-size: 12px; cursor: pointer; }
+.evo-traj-chip:hover { color: var(--color-text-primary); }
+.evo-traj-chip[data-on] { background: color-mix(in srgb, var(--brand) 12%, var(--color-surface)); color: var(--brand); font-weight: 600; }
 .evo-traj-sep { width: 1px; height: 16px; background: var(--color-border); margin: 0 4px; flex-shrink: 0; }
 .evo-traj-totals { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .evo-traj-search { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); flex-shrink: 0; }
@@ -889,8 +893,15 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-traj-search-input { width: 140px; border: none; outline: none; background: none; color: var(--color-text-primary); font-size: 12px; }
 .evo-traj-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px 16px; }
 .evo-traj-empty { padding: 30px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
-.evo-traj-turn { border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 8px; background: var(--color-surface); overflow: hidden; }
+.evo-traj-turn { border: 1px solid var(--color-border); border-left: 3px solid color-mix(in srgb, var(--brand) 55%, var(--color-border)); border-radius: 10px; margin-bottom: 8px; background: var(--color-surface); overflow: hidden; }
+.evo-traj-turn-body { border-top: 1px solid var(--color-border-light); padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+/* 时间轴竖线：回合 → 步骤 → 调用 串联 */
+.evo-traj-turn-body { position: relative; margin-left: 13px; padding-left: 17px; border-left: 1px solid var(--color-border); }
+.evo-traj-quote { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: 9px; background: color-mix(in srgb, var(--brand) 6%, var(--color-background)); }
+.evo-traj-quote-head { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--brand); }
+.evo-traj-quote-head svg { width: 12px; height: 12px; }
 .evo-traj-step { border-top: 1px solid var(--color-border-light); }
+.evo-traj-step-body { border-top: 1px dashed var(--color-border-light); padding: 6px 10px 10px 26px; display: flex; flex-direction: column; gap: 6px; }
 .evo-traj-call { border-top: 1px dashed var(--color-border-light); background: color-mix(in srgb, var(--color-background) 55%, transparent); }
 .evo-traj-row { display: flex; align-items: center; gap: 7px; padding: 6px 10px; font-size: 12.5px; color: var(--color-text-primary); cursor: pointer; min-width: 0; }
 .evo-traj-row:hover { background: var(--hover-bg); }
@@ -905,12 +916,17 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-traj-bar { flex: 1; min-width: 30px; height: 5px; background: var(--hover-bg); border-radius: 999px; overflow: hidden; flex-shrink: 0; }
 .evo-traj-bar-fill { display: block; height: 100%; background: color-mix(in srgb, var(--brand) 55%, var(--color-border)); border-radius: 999px; }
 .evo-traj-dur { flex-shrink: 0; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+.evo-traj-dur.slow { color: var(--brand); font-weight: 700; }
 .evo-traj-status { flex-shrink: 0; display: inline-flex; }
 .evo-traj-status svg { width: 13px; height: 13px; color: var(--color-success); }
-.evo-traj-status svg:has(+ *) { color: inherit; }
-.evo-traj-call-row .evo-traj-status { color: var(--color-error); }
+.evo-traj-status.error svg { color: var(--color-error); }
 .evo-traj-call-detail { padding: 2px 12px 10px 30px; display: flex; flex-direction: column; gap: 4px; }
-.evo-traj-detail-head { font-size: 11px; color: var(--color-text-tertiary); font-weight: 600; margin-top: 4px; }
+.evo-traj-detail { display: flex; flex-direction: column; gap: 4px; }
+.evo-traj-detail-head { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--color-text-tertiary); font-weight: 600; margin-top: 4px; }
+.evo-traj-goto { display: inline-flex; align-items: center; gap: 4px; border: none; background: none; color: var(--brand); font-size: 11px; font-weight: 600; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.evo-traj-goto:hover { background: var(--hover-bg); }
+.evo-traj-goto svg { width: 12px; height: 12px; }
+.evo-traj-meta { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
 .evo-traj-detail-pre { margin: 0; padding: 8px 10px; background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); max-height: 240px; overflow-y: auto; }
 .evo-traj-detail-pre.error { color: var(--color-error); }
 /* ── 底部状态栏（§状态栏：DSH 式，页面最底部、小字号）── */
