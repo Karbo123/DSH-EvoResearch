@@ -272,24 +272,33 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
           // 连线层（防御：graph 字段缺失时按空数组渲染）
           jsx('svg', {
             className: 'evo-graph-svg',
-            children: (graph?.edges ?? []).map((edge) => {
+            children: [
+              // 箭头定义（context/memory 各自颜色）
+              jsx('defs', { children: [
+                jsx('marker', { id: 'evo-arrow-ctx', markerWidth: 7, markerHeight: 7, refX: 6, refY: 3.5, orient: 'auto', children: jsx('path', { d: 'M0,0 L7,3.5 L0,7 Z', fill: 'var(--brand)' }) }),
+                jsx('marker', { id: 'evo-arrow-mem', markerWidth: 7, markerHeight: 7, refX: 6, refY: 3.5, orient: 'auto', children: jsx('path', { d: 'M0,0 L7,3.5 L0,7 Z', fill: 'var(--color-success)' }) }),
+              ]}),
+              ...(graph?.edges ?? []).map((edge) => {
               const from = nodeById(edge.from)
               const to = nodeById(edge.to)
               if (from === undefined || to === undefined) return null
               const fp = portPos(from, 'output')
               const tp = portPos(to, edge.toPort)
+              const isCtx = edge.toPort === 'context'
               return jsx('path', {
                 d: edgePath(fp, tp),
-                className: `evo-graph-edge${edge.toPort === 'context' ? ' evo-graph-edge-ctx' : ''}`,
+                className: `evo-graph-edge${isCtx ? ' evo-graph-edge-ctx' : ' evo-graph-edge-mem'}`,
+                markerEnd: `url(#${isCtx ? 'evo-arrow-ctx' : 'evo-arrow-mem'})`,
               }, edge.id)
             }),
-            ...(linking !== null ? (() => {
-              const from = nodeById(linking.from)
-              if (from === undefined) return []
-              const fp = portPos(from, 'output')
-              return [jsx('path', { d: edgePath(fp, { x: linking.toX, y: linking.toY }), className: 'evo-graph-edge evo-graph-edge-linking' }, 'link-tmp')]
-            })() : []),
-          }),
+              ...(linking !== null ? (() => {
+                const from = nodeById(linking.from)
+                if (from === undefined) return []
+                const fp = portPos(from, 'output')
+                return [jsx('path', { d: edgePath(fp, { x: linking.toX, y: linking.toY }), className: 'evo-graph-edge evo-graph-edge-linking' }, 'link-tmp')]
+              })() : []),
+              ],
+            }),
           // 节点层（防御：graph 字段缺失时按空数组渲染）
           ...(graph?.nodes ?? []).map((node) => {
             const selected = selectedId === node.id
@@ -357,7 +366,14 @@ export function ChatGraphPanel({ cwd, onOpenSession, onCreateSession }: ChatGrap
                       jsx('span', { className: 'evo-graph-node-tag', children: 'chat' }),
                       jsx('span', { className: 'evo-graph-node-sid', title: node.sessionId, children: (node.sessionId ?? '').slice(0, 8) }),
                     ]})
-                  : jsx('div', { className: 'evo-graph-node-sub', children: jsx('span', { className: 'evo-graph-node-tag', children: node.scope === 'global' ? t('graphGlobal') : t('graphProject') }) }),
+                  : jsxs('div', { className: 'evo-graph-node-sub evo-graph-node-memprev', children: [
+                      jsx('span', { className: 'evo-graph-node-tag', children: node.scope === 'global' ? t('graphGlobal') : t('graphProject') }),
+                      (node.content ?? '').trim() !== '' && jsx('span', {
+                        className: 'evo-graph-node-preview',
+                        title: node.content,
+                        children: (node.content ?? '').replace(/\s+/g, ' ').slice(0, 18) + ((node.content ?? '').length > 18 ? '…' : ''),
+                      }),
+                    ]}),
               ],
             }, node.id)
           }),
