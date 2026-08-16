@@ -693,6 +693,19 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [newFileName, setNewFileName] = useState('')
   const [tabBusy, setTabBusy] = useState(false)
   const tabFileInputRef = useRef<HTMLInputElement | null>(null)
+  const tabNewRef = useRef<HTMLDivElement | null>(null)
+  // + 菜单位置（fixed 定位：脱离 tabbar 的 overflow 裁剪）
+  const [tabMenuPos, setTabMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const toggleTabMenu = () => {
+    const next = !tabMenuOpen
+    setTabMenuOpen(next)
+    if (next) {
+      // 菜单固定定位在标签栏下方（以 tabbar 底边为基准，避免与标签栏重叠）
+      const tabbar = document.querySelector<HTMLElement>('.evo-tabbar')
+      const r = tabbar?.getBoundingClientRect()
+      setTabMenuPos(r === undefined ? null : { top: Math.round(r.bottom + 4), left: Math.max(8, Math.round(r.left)) })
+    }
+  }
   // 菜单外点击关闭（+ 菜单）
   useEffect(() => {
     if (!tabMenuOpen) return
@@ -1107,6 +1120,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           ],
                         }, tab.id)),
                         jsxs('div', {
+                          ref: tabNewRef,
                           className: 'evo-tab-new-wrap',
                           children: [
                             jsx('button', {
@@ -1114,11 +1128,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                               className: 'evo-tab-new',
                               title: t('newTab'),
                               'aria-label': t('newTab'),
-                              onClick: () => setTabMenuOpen((v) => !v),
+                              onClick: toggleTabMenu,
                               children: jsx(Plus, {}),
                             }),
                             tabMenuOpen && jsxs('div', {
                               className: 'evo-tab-menu',
+                              style: tabMenuPos ?? undefined,
                               children: [
                                 // 从工作区打开（懒加载目录树）
                                 jsx('button', {

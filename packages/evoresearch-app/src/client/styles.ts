@@ -858,7 +858,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tab-new:hover:not(:disabled) { background: var(--hover-bg); color: var(--brand); }
 .evo-tab-new:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-tab-new svg { width: 14px; height: 14px; }
-.evo-tab-menu { position: absolute; top: 32px; left: 0; z-index: 60; min-width: 260px; max-width: 340px; padding: 6px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14); display: flex; flex-direction: column; gap: 4px; }
+/* + 菜单：fixed 定位（坐标由 JS 按「+」按钮实时计算），脱离 tabbar 的 overflow 裁剪 */
+.evo-tab-menu { position: fixed; top: 32px; left: 0; z-index: 90; min-width: 260px; max-width: 340px; padding: 6px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14); display: flex; flex-direction: column; gap: 4px; }
 .evo-tab-menu-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: none; background: none; border-radius: 7px; color: var(--color-text-primary); font-size: 12.5px; cursor: pointer; text-align: left; }
 .evo-tab-menu-item:hover:not(:disabled) { background: var(--hover-bg); }
 .evo-tab-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }

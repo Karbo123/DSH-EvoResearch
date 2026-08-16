@@ -966,15 +966,19 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     e.preventDefault()
     const el = taRef.current
     if (el === null) return
-    composerResizeRef.current = { startY: e.clientY, startH: composerHeight ?? el.offsetHeight }
+    composerResizeRef.current = { startY: e.clientY, startH: composerHeight ?? el.offsetHeight, moved: false }
     e.currentTarget.setPointerCapture(e.pointerId)
     e.currentTarget.dataset.dragging = '1'
   }
   const onComposerResizeMove = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number }) => {
     const ref = composerResizeRef.current
     if (ref === null || !e.currentTarget.hasPointerCapture(e.pointerId)) return
+    // 阈值 3px：仅"点击"（含捕获建立时的零位移 move / 手抖）不改变高度
+    const dy = e.clientY - ref.startY
+    if (Math.abs(dy) < 3) return
+    ref.moved = true
     // 上拖 = 增高（用户直觉：向上拖拽扩大输入区）
-    const next = ref.startH - (e.clientY - ref.startY)
+    const next = ref.startH - dy
     setComposerHeight(Math.min(composerMaxHeight(), Math.max(composerMinHeight(), next)))
   }
   const onComposerResizeEnd = () => {
