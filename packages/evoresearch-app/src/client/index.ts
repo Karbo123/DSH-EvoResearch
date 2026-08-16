@@ -15,7 +15,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef, useSyncExternalStore, Component } from 'react'
 import {
   PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, SquarePen,
-  MessagesSquare, Moon, Sun, Settings, Languages,
+  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, Save,
 } from 'lucide-react'
 import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
@@ -29,6 +29,7 @@ import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
 import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
+import { ExperimentsPanel } from './experiments'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
 
@@ -233,7 +234,29 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     },
   )
   const chatLegacy = sessionSnapshot?.chat?.legacy
-  const nodes: ChatNode[] = (chatLegacy?.nodes ?? []).filter((n: any) => n !== null && n.visibility === 'visible')
+  // Bug #3：系统级上下文不得泄漏到聊天界面——dsh-system-prompt 的 runtime context /
+  // 策略说明与科研记忆/身份/代码模式 XML 包会以 visibility='visible' 的节点出现，
+  // 渲染前按文本前缀过滤（内容匹配，与可见性无关，防御上游变更）。
+  const SYSTEM_LEAK_PREFIXES = [
+    'Current runtime context',
+    'Current DSH file policy',
+    'Approval prompts are disabled',
+    '<code_mode>',
+    '<research_memory_packet>',
+    '<identity_profile>',
+  ]
+  const isSystemLeak = (n: any): boolean => {
+    if (n === null || n.data === undefined) return false
+    const blocks = n.data.blocks
+    if (Array.isArray(blocks)) {
+      for (const b of blocks) {
+        if (b?.kind === 'text' && typeof b.text === 'string' && SYSTEM_LEAK_PREFIXES.some((p) => b.text.trimStart().startsWith(p))) return true
+      }
+    }
+    const text = n.data.text
+    return typeof text === 'string' && SYSTEM_LEAK_PREFIXES.some((p) => text.trimStart().startsWith(p))
+  }
+  const nodes: ChatNode[] = (chatLegacy?.nodes ?? []).filter((n: any) => n !== null && n.visibility === 'visible' && !isSystemLeak(n))
   const partial: ChatNode | null = chatLegacy?.partial ?? null
   const promptError: string | null = sessionSnapshot?.promptError?.error?.message ?? null
 
@@ -254,8 +277,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setView(null)
     // Home 操作清除 thread/project/定位状态（§43.5），关闭不合适的面板
     patchUrl({ threadId: null, view: null })
-    // 创建空白会话并打开（host 侧默认工作目录；目录选择接入后经 pickDirectory）
-    void sessionsService?.create({}).then((id) => sessionsService?.open(id))
+    // 新对话继承当前会话所在项目工作区（同一科研项目下开新聊天）；无则空白
+    const cwd = current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
+    void sessionsService?.create(cwd === undefined ? {} : { cwd }).then((id) => sessionsService?.open(id))
   }
 
   // §43.5/§33.4：URL threadId 恢复（刷新或分享链接打开对应会话）
@@ -557,6 +581,20 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }
   }
 
+  // ── 复制历史到新对话（§5.3）：fork 出独立会话后「提升」为主聊天 ──
+  // 官方 fork 的子会话带 parentSessionId 血缘，前端据此归入 Side chats；提升后
+  // 该 id 进入 promotedIds（localStorage 持久化），从侧聊集合剔除并出现在 Recents。
+  const PROMOTED_KEY = 'evoresearch-promoted'
+  const readPromoted = (): Set<string> => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PROMOTED_KEY) ?? '[]')
+      return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
+    } catch {
+      return new Set()
+    }
+  }
+  const [promotedIds, setPromotedIds] = useState<Set<string>>(readPromoted)
+
   // ── Side chats 列表（§22.3-22.4）：当前 workspace 的 fork 子会话 + 空白侧聊 ──
   const [, setSideTick] = useState(0)
   useEffect(() => {
@@ -574,7 +612,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const sideChats: Array<{ id: string; title: string; kind: 'fork' | 'blank' }> = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
     // cwd 未设置时镜像字段为 undefined，统一 null 化后再与 cwdNow 比较（§22.4 只展示当前 workspace）
-    .filter((s) => s !== undefined && !deletedIds.has(s.id) && (s.cwd ?? null) === cwdNow)
+    .filter((s) => s !== undefined && !deletedIds.has(s.id) && (s.cwd ?? null) === cwdNow && !promotedIds.has(s.id))
     // fork 子会话（parentSessionId 或本地记录）或本地记录的空白侧聊（§22.4 只展示当前 workspace）
     .filter((s) => s.parentSessionId !== undefined || readSideChats(cwdNow).includes(s.id))
     .map((s) => ({
@@ -590,17 +628,175 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       void createBlankSideChat(cwdNow).then(() => setSideTick((v) => v + 1))
     }
   }
+
+  const promoteSession = (id: string) => {
+    setPromotedIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      try { localStorage.setItem(PROMOTED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
+      return next
+    })
+    forgetSideChat(cwdNow, id)
+  }
+  const copyHistoryToNewChat = async (id: string): Promise<{ ok: boolean; id?: string; error?: string }> => {
+    const result = await forkSideChat(id)
+    if (result.ok && result.id !== undefined) {
+      promoteSession(result.id)
+      sessionsService?.open(result.id)
+      window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
+      toast('History copied to new chat', 'success')
+      return result
+    }
+    return result
+  }
+
+  // ── 浏览器式标签栏（§5.2）：聊天（固定）/ PDF 预览 / 文本编辑器 ──
+  interface WorkspaceTab {
+    id: string
+    kind: 'chat' | 'pdf' | 'editor'
+    title: string
+    filePath?: string
+    root?: string
+    draft?: string
+  }
+  const [tabs, setTabs] = useState<WorkspaceTab[]>([{ id: 'chat', kind: 'chat', title: t('chatTab') }])
+  const [activeTabId, setActiveTabId] = useState<string>('chat')
+  const [tabMenuOpen, setTabMenuOpen] = useState(false)
+  const [newFileName, setNewFileName] = useState('')
+  const [tabBusy, setTabBusy] = useState(false)
+  const tabFileInputRef = useRef<HTMLInputElement | null>(null)
+  // 同步镜像（setState updater 在 React 18 是延迟执行的，不能在里面捕获 targetId）
+  const tabsRef = useRef<WorkspaceTab[]>(tabs)
+  tabsRef.current = tabs
+  const tabNameOf = (path: string): string => path.slice(path.lastIndexOf('\\') + 1).slice(path.lastIndexOf('/') + 1) || path
+  const activateTab = (id: string) => { setActiveTabId(id); setTabMenuOpen(false) }
+  const openTabPdf = (path: string, root: string) => {
+    const existing = tabsRef.current.find((tab) => tab.kind === 'pdf' && tab.filePath === path)
+    if (existing !== undefined) { setActiveTabId(existing.id); setTabMenuOpen(false); return }
+    const tab: WorkspaceTab = { id: `pdf-${Date.now().toString(36)}`, kind: 'pdf', title: tabNameOf(path), filePath: path, root }
+    setTabs((prev) => [...prev, tab])
+    setActiveTabId(tab.id)
+    setTabMenuOpen(false)
+  }
+  const openTabEditor = (path: string, root: string, draft?: string) => {
+    const existing = tabsRef.current.find((tab) => tab.kind === 'editor' && tab.filePath === path)
+    if (existing !== undefined) { setActiveTabId(existing.id); setTabMenuOpen(false); return }
+    const tab: WorkspaceTab = { id: `editor-${Date.now().toString(36)}`, kind: 'editor', title: tabNameOf(path), filePath: path, root, draft }
+    setTabs((prev) => [...prev, tab])
+    setActiveTabId(tab.id)
+    setTabMenuOpen(false)
+  }
+  const updateTabDraft = (id: string, draft: string) => {
+    setTabs((prev) => prev.map((tab) => (tab.id === id ? { ...tab, draft } : tab)))
+  }
+  const closeTab = (id: string) => {
+    setTabs((prev) => {
+      const next = prev.filter((tab) => tab.id !== id)
+      if (activeTabId === id) setActiveTabId('chat')
+      return next
+    })
+  }
+  const createTabEditor = (root: string) => {
+    const name = newFileName.trim()
+    if (name === '' || root === '') return
+    setTabBusy(true)
+    // 允许子目录（如 notes/draft.md）；仅净化危险字符
+    const safe = name.replace(/[<>:"|?*\u0000-\u001f]/g, '_')
+    const path = `${root.replace(/[\\/]$/, '')}\\${safe.replace(/\//g, '\\')}`
+    void fetch('/evoresearch/fs/write', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ root, path, text: '' }),
+    }).then((res) => res.json()).then((json) => {
+      setTabBusy(false)
+      if (json.ok === true) { setNewFileName(''); openTabEditor(path, root, '') }
+      else toast(json.error?.message ?? '创建文件失败', 'error')
+    }).catch(() => { setTabBusy(false); toast('创建文件失败', 'error') })
+  }
+  const uploadPdfTab = (root: string, file: File) => {
+    if (root === '') return
+    setTabBusy(true)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? '')
+      const data = dataUrl.slice(dataUrl.indexOf(',') + 1)
+      const safe = file.name.replace(/[^\w.\- ]/g, '_')
+      void fetch('/evoresearch/fs/upload', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ root, path: `papers/${safe}`, data }),
+      }).then((r) => r.json()).then((json) => {
+        setTabBusy(false)
+        if (json.ok === true) openTabPdf(json.value.path, root)
+        else toast(json.error?.message ?? '上传失败', 'error')
+      }).catch(() => { setTabBusy(false); toast('上传失败', 'error') })
+    }
+    reader.readAsDataURL(file)
+  }
+  // 工作区文件「在标签页打开」（workspace-files.ts 派发 evo-open-tab 事件）
+  useEffect(() => {
+    const onOpenTab = (e: Event) => {
+      const detail = (e as CustomEvent<{ path?: string; root?: string; kind?: string }>).detail
+      if (typeof detail?.path !== 'string' || detail.path === '') return
+      const root = typeof detail.root === 'string' && detail.root !== '' ? detail.root : cwdNow ?? ''
+      if (detail.kind === 'pdf') openTabPdf(detail.path, root)
+      else openTabEditor(detail.path, root)
+    }
+    window.addEventListener('evo-open-tab', onOpenTab)
+    return () => window.removeEventListener('evo-open-tab', onOpenTab)
+  }, [])
+  // 编辑标签保存（写入工作区；root 为当前会话 cwd）
+  const saveTabEditor = (tab: WorkspaceTab) => {
+    if (tab.kind !== 'editor' || tab.filePath === undefined || tab.root === undefined) return
+    void fetch('/evoresearch/fs/write', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ root: tab.root, path: tab.filePath, text: tab.draft ?? '' }),
+    }).then((res) => res.json()).then((json) => {
+      if (json.ok === true) toast('Saved', 'success')
+      else toast(json.error?.message ?? '保存失败', 'error')
+    }).catch(() => { toast('保存失败', 'error') })
+  }
+
   const toggleLanguage = () => {
     setLang(readLang() === 'zh' ? 'en' : 'zh')
     location.reload()
   }
   const sendMessage = (text: string, images?: Array<{ data: string; mediaType: string; name?: string }>) => {
-    const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
-    if (s === undefined || text.trim() === '') return
+    if (text.trim() === '') return
     // content 是内容块数组（§23.7 附件：文本 + 图片块），mode 必填（queue = 追加到当前轮次之后）
     const content: Array<{ type: string; text?: string; data?: string; mediaType?: string; name?: string }> = [{ type: 'text', text }]
     for (const image of images ?? []) content.push({ type: 'image', data: image.data, mediaType: image.mediaType, ...(image.name !== undefined ? { name: image.name } : {}) })
-    void s.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+    const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
+    if (s !== undefined) {
+      void s.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+      return
+    }
+    // 欢迎页无活跃会话：自动创建项目工作区 + 会话后发送（否则首条消息会被静默丢弃；
+    // 项目让记忆/实验/文件都落在 <dataRoot>/projects/<slug>/ 下）
+    void (async () => {
+      let cwd: string | undefined
+      try {
+        const res = await fetch('/evoresearch/fs/projects-auto', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ description: text }),
+        })
+        const json = await res.json()
+        if (json.ok && typeof json.value?.path === 'string') cwd = json.value.path
+      } catch { /* 自动建项目失败时退回空白会话 */ }
+      const id = await sessionsService?.create(cwd === undefined ? {} : { cwd })
+      if (id === undefined) return
+      sessionsService?.open(id)
+      for (let i = 0; i < 20; i++) {
+        const created = sessionsService?.binding(id)?.session
+        if (created !== undefined) {
+          await created.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+          return
+        }
+        await new Promise((r) => setTimeout(r, 150))
+      }
+    })()
   }
 
   const persistPanels = (p: { left: number; right: number }) => {
@@ -754,6 +950,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   hasActive: (sessions.ids ?? []).some((id: string) => sessions.byId[id]?.blank !== true),
                   onRename: renameSession,
                   onForkSideChat: forkSideChat,
+                  onCopyHistory: copyHistoryToNewChat,
                   onExport: exportSession,
                   pinnedIds,
                   onTogglePin: togglePin,
@@ -765,6 +962,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   archivedIds,
                   onToggleArchive: toggleArchive,
                   runningIds,
+                  promotedIds,
                 }),
               }),
               jsx('div', {
@@ -793,20 +991,156 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                             ? jsx(ChannelsPanel, {})
                             : view === 'team'
                               ? jsx(TeamPanel, {})
-                              : null,
+                              : view === 'experiments'
+                                ? jsx(ExperimentsPanel, { cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null), sessionId: current ?? null, onOpenSession: openSession })
+                                : null,
                 })
-              : jsx(ChatArea, {
-                  nodes,
-                  partial,
-                  running,
-                  error: promptError,
-                  currentTitle,
-                  sessionId: current ?? null,
-                  session: sessionObj,
-                  cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
-                  jobs: currentJobs,
-                  onOpenThread: openSession,
-                  onSend: sendMessage,                }),
+              : jsxs('div', {
+                  className: 'evo-tabwrap',
+                  children: [
+                    // ── 浏览器式标签栏（§5.2）──
+                    jsxs('div', {
+                      className: 'evo-tabbar',
+                      children: [
+                        tabs.map((tab) => jsxs('div', {
+                          className: 'evo-tab',
+                          'data-active': activeTabId === tab.id || undefined,
+                          onClick: () => activateTab(tab.id),
+                          children: [
+                            jsx('span', { className: 'evo-tab-title', children: tab.title }),
+                            tab.kind !== 'chat' && jsx('button', {
+                              type: 'button',
+                              className: 'evo-tab-close',
+                              title: t('closeTab'),
+                              'aria-label': t('closeTab'),
+                              onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); closeTab(tab.id) },
+                              children: jsx(X, {}),
+                            }),
+                          ],
+                        }, tab.id)),
+                        jsxs('div', {
+                          className: 'evo-tab-new-wrap',
+                          children: [
+                            jsx('button', {
+                              type: 'button',
+                              className: 'evo-tab-new',
+                              title: t('newTab'),
+                              'aria-label': t('newTab'),
+                              disabled: cwdNow === null,
+                              onClick: () => setTabMenuOpen((v) => !v),
+                              children: jsx(Plus, {}),
+                            }),
+                            tabMenuOpen && cwdNow !== null && jsxs('div', {
+                              className: 'evo-tab-menu',
+                              children: [
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tab-menu-item',
+                                  disabled: tabBusy,
+                                  onClick: () => tabFileInputRef.current?.click(),
+                                  children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: t('openPdfTab') })] }),
+                                }),
+                                jsx('input', {
+                                  ref: tabFileInputRef,
+                                  type: 'file',
+                                  accept: 'application/pdf,.pdf',
+                                  hidden: true,
+                                  onChange: (e) => {
+                                    const file = e.currentTarget.files?.[0]
+                                    if (file !== undefined) uploadPdfTab(cwdNow ?? '', file)
+                                    e.currentTarget.value = ''
+                                  },
+                                }),
+                                jsxs('div', {
+                                  className: 'evo-tab-menu-item evo-tab-menu-newfile',
+                                  children: [
+                                    jsx(FileCode2, {}),
+                                    jsx('input', {
+                                      type: 'text',
+                                      className: 'evo-tab-newfile-input',
+                                      placeholder: t('newFileName'),
+                                      value: newFileName,
+                                      disabled: tabBusy,
+                                      onInput: (e) => setNewFileName(e.currentTarget.value),
+                                      onKeyDown: (e) => {
+                                        if (e.key === 'Enter' && cwdNow !== null) createTabEditor(cwdNow)
+                                      },
+                                    }),
+                                    jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-tab-newfile-go',
+                                      disabled: tabBusy || newFileName.trim() === '',
+                                      onClick: () => { if (cwdNow !== null) createTabEditor(cwdNow) },
+                                      children: t('create'),
+                                    }),
+                                  ],
+                                }),
+                              ],
+                            }),
+                          ],
+                        }),
+                      ],
+                    }),
+                    // ── 标签内容 ──
+                    (() => {
+                      const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
+                      if (activeTab === undefined) return null
+                      if (activeTab.kind === 'pdf' && activeTab.filePath !== undefined) {
+                        return jsx('div', {
+                          className: 'evo-tab-body',
+                          children: jsx('iframe', {
+                            className: 'evo-tab-frame',
+                            src: `/evoresearch/fs/file?path=${encodeURIComponent(activeTab.filePath)}`,
+                            title: activeTab.title,
+                            sandbox: '',
+                          }),
+                        })
+                      }
+                      if (activeTab.kind === 'editor' && activeTab.filePath !== undefined) {
+                        return jsxs('div', {
+                          className: 'evo-tab-body evo-tab-editor-body',
+                          children: [
+                            jsxs('div', {
+                              className: 'evo-tab-editor-head',
+                              children: [
+                                jsx('span', { className: 'evo-tab-editor-path', children: activeTab.filePath }),
+                                jsx('span', { style: { flex: 1 } }),
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-btn evo-btn-run',
+                                  onClick: () => saveTabEditor(activeTab),
+                                  children: jsxs(Fragment, { children: [jsx(Save, {}), jsx('span', { children: t('save') })] }),
+                                }),
+                              ],
+                            }),
+                            jsx('textarea', {
+                              className: 'evo-tab-editor',
+                              value: activeTab.draft ?? '',
+                              spellCheck: false,
+                              onInput: (e) => updateTabDraft(activeTab.id, e.currentTarget.value),
+                              onKeyDown: (e) => {
+                                if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveTabEditor(activeTab) }
+                              },
+                            }),
+                          ],
+                        })
+                      }
+                      return jsx(ChatArea, {
+                        nodes,
+                        partial,
+                        running,
+                        error: promptError,
+                        currentTitle,
+                        sessionId: current ?? null,
+                        session: sessionObj,
+                        cwd: cwdNow,
+                        jobs: currentJobs,
+                        onOpenThread: openSession,
+                        onSend: sendMessage,
+                      })
+                    })(),
+                  ],
+                }),
           }),
           inspector && jsxs(Fragment, {
             children: [
