@@ -275,6 +275,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
 
   const openSession = (id: string) => {
     sessionsService?.open(id)
+    // Bug：仅 patchUrl 清 view 会造成 state/URL 失步（面板残留主区域）——state 一并清
+    setView(null)
     patchUrl({ threadId: id, view: null })
   }
   const startNewChat = () => {

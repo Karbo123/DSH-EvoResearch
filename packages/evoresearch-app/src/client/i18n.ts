@@ -214,7 +214,7 @@ const DICT: Record<string, [string, string]> = {
   newProjectName: ['Project name', '项目名称'],
   create: ['Create', '创建'],
   creating: ['Creating…', '创建中…'],
-  messagingChannels: ['Messaging channels', '消息通道'],
+  messagingChannels: ['Adapter status', '适配器状态'],
   noChannels: ['No messaging channels are available', '暂无可用消息通道'],
   researchExperts: ['Research experts', '科研专家'],
   clear: ['Clear', '清空'],
