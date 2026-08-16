@@ -28,6 +28,7 @@ import { ChannelManager } from './channels/index.js'
 import { builtinAdapters } from './channels/adapters.js'
 import type { ChannelMessage } from './channels/base.js'
 import { AutoSkillsService, type AutoSkillsConfig } from './autoskills.js'
+import { ChatGraphService } from './chat-graph.js'
 import { ExpertService, type ExpertConfig } from './experts.js'
 import { ExperimentService } from './experiments.js'
 import { ProjectEnvService } from './project-env.js'
@@ -136,6 +137,9 @@ function apply(ctx: Context): void {
   // 5.7) 回溯服务（§回溯：Git 工作区 + 会话截断）
   const rewind = new RewindService(dataRoot)
 
+  // 5.8) Chat Graph（节点/连线图，按项目存储）
+  const chatGraph = new ChatGraphService(dataRoot)
+
   // 5.7.1) 每回合完成 → 自动提交项目工作区（debounce 2s，为回溯提供还原点）
   const rewindTimers = new Map<string, NodeJS.Timeout>()
   const disposeRewindHook = ctx.on('session/event', (session: any, event: any) => {
@@ -163,7 +167,7 @@ function apply(ctx: Context): void {
   })
 
   // 6) Remote API（构造即注册 services.evoresearch）
-  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, projectEnv, rewind }
+  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, chatGraph, projectEnv, rewind }
   void new EvoResearchApiService(ctx, services)
 
   // 7) 斜杠命令

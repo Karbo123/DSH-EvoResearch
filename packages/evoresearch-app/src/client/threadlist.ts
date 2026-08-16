@@ -342,12 +342,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                                   children: jsxs(Fragment, { children: [jsx(Archive, {}), jsx('span', { children: t('archive') })] }),
                                 }),
                                 jsx('div', { className: 'evo-tl-menu-sep' }),
-                                jsx('button', {
-                                  type: 'button',
-                                  className: 'evo-tl-menu-item',
-                                  onClick: () => { setMenuFor(null); forkRow(s.id) },
-                                  children: jsxs(Fragment, { children: [jsx(MessagesSquare, {}), jsx('span', { children: t('menuSideChat') })] }),
-                                }),
+                                // §ChatGraph：侧边对话入口已整合进图谱（chat graph）——
+                                // 复制历史仍保留（生成独立会话）
                                 jsx('button', {
                                   type: 'button',
                                   className: 'evo-tl-menu-item',

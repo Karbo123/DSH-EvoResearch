@@ -31,6 +31,7 @@ import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
 import { ExperimentsPanel } from './experiments'
 import { TrajectoryPanel } from './trajectory'
+import { ChatGraphPanel } from './chatgraph'
 import { StatusBar } from './statusbar'
 import { WorkspaceTabPicker } from './tab-files'
 
@@ -674,10 +675,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return result
   }
 
-  // ── 浏览器式标签栏（§5.2）：聊天（固定）/ PDF 预览 / 文本编辑器 ──
+  // ── 浏览器式标签栏（§5.2）：聊天/图谱/轨迹（固定）/ PDF 预览 / 文本编辑器 ──
   interface WorkspaceTab {
     id: string
-    kind: 'chat' | 'pdf' | 'editor' | 'trajectory'
+    kind: 'chat' | 'pdf' | 'editor' | 'trajectory' | 'chatgraph'
     title: string
     filePath?: string
     root?: string
@@ -685,6 +686,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const [tabs, setTabs] = useState<WorkspaceTab[]>([
     { id: 'chat', kind: 'chat', title: t('chatTab') },
+    { id: 'chatgraph', kind: 'chatgraph', title: t('chatGraphTab') },
     { id: 'trajectory', kind: 'trajectory', title: t('trajectoryTab') },
   ])
   const [activeTabId, setActiveTabId] = useState<string>('chat')
@@ -1201,6 +1203,25 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                       if (activeTab === undefined) return null
                       if (activeTab.kind === 'trajectory') {
                         return jsx(TrajectoryPanel, { session: sessionObj })
+                      }
+                      if (activeTab.kind === 'chatgraph') {
+                        // Chat Graph：右键新建/连线，双击 chat 节点打开会话（并切回对话标签）
+                        return jsx(ChatGraphPanel, {
+                          cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
+                          onOpenSession: (id: string) => {
+                            openSession(id)
+                            setActiveTabId('chat')
+                          },
+                          onCreateSession: async () => {
+                            const cwdNow = current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
+                            try {
+                              const id = await sessionsService?.create(cwdNow === undefined ? {} : { cwd: cwdNow })
+                              return typeof id === 'string' && id !== '' ? id : null
+                            } catch {
+                              return null
+                            }
+                          },
+                        })
                       }
                       if (activeTab.kind === 'pdf' && activeTab.filePath !== undefined) {
                         return jsx('div', {

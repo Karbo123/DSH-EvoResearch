@@ -15,6 +15,7 @@ import type { ChannelManager } from './channels/index.js'
 import type { AutoSkillsService } from './autoskills.js'
 import type { ExpertService } from './experts.js'
 import type { ExperimentService } from './experiments.js'
+import type { ChatGraphService } from './chat-graph.js'
 import type { ProjectEnvService, ProjectEnvInfo } from './project-env.js'
 import type { RewindService } from './rewind.js'
 import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
@@ -29,6 +30,7 @@ export interface HostServices {
   readonly autoskills: AutoSkillsService
   readonly experts: ExpertService
   readonly experiments: ExperimentService
+  readonly chatGraph: ChatGraphService
   readonly projectEnv: ProjectEnvService
   readonly rewind: RewindService
 }
@@ -589,6 +591,59 @@ export class EvoResearchApiService extends TypertRemoteService {
   experimentsDelete(args: { workspaceDir?: string; id: string }): { ok: boolean } | { error: string } {
     try {
       return this.services.experiments.delete(this.experimentArgs(args), String(args?.id ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── Chat Graph ────────────────────────────────────────────────────────────
+
+  /** 项目名 → 图（按项目隔离；会话 cwd 派生项目名）。 */
+  private graphProjectOf(args: { workspaceDir?: string }): string {
+    const ws = args?.workspaceDir && args.workspaceDir !== this.services.memory.config.dataRoot
+      ? String(args.workspaceDir)
+      : undefined
+    const name = ws !== undefined
+      ? (() => {
+          const v = this.services.workspace.validateWorkspace(ws)
+          return v.kind === 'project' ? v.name : undefined
+        })()
+      : undefined
+    if (name === undefined) throw new Error('未绑定项目工作区')
+    return name
+  }
+
+  @Remote('graphGet')
+  graphGet(args: { workspaceDir?: string }): unknown {
+    try {
+      return this.services.chatGraph.get(this.graphProjectOf(args))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphSave')
+  graphSave(args: { workspaceDir?: string; graph: unknown }): { ok: boolean; error?: string } {
+    try {
+      return this.services.chatGraph.save(this.graphProjectOf(args), (args?.graph ?? { nodes: [], edges: [] }) as never)
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphAddNode')
+  graphAddNode(args: { workspaceDir?: string; node: unknown }): unknown {
+    try {
+      return this.services.chatGraph.addNode(this.graphProjectOf(args), args?.node as never)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphAddEdge')
+  graphAddEdge(args: { workspaceDir?: string; edge: unknown }): unknown {
+    try {
+      return this.services.chatGraph.addEdge(this.graphProjectOf(args), args?.edge as never)
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

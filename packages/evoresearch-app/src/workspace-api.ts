@@ -941,6 +941,27 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── Chat Graph（节点/连线图，按项目存储）──
+        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge') {
+          const serviceMethod = method === 'graph-get' ? 'graphGet'
+            : method === 'graph-save' ? 'graphSave'
+              : method === 'graph-add-node' ? 'graphAddNode'
+                : 'graphAddEdge'
+          const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = {}
+          if (typeof payload.workspaceDir === 'string') args.workspaceDir = payload.workspaceDir
+          if (payload.graph !== undefined) args.graph = payload.graph
+          if (payload.node !== undefined) args.node = payload.node
+          if (payload.edge !== undefined) args.edge = payload.edge
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
         writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown method ${method ?? ''}` } })
       } catch (error) {
         writeError(res, error)

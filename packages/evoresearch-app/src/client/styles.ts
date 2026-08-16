@@ -600,6 +600,47 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-btn-danger:hover { background: color-mix(in srgb, var(--color-error) 24%, transparent); }
 .evo-btn-run { background: var(--brand-solid); color: var(--brand-foreground); }
 .evo-btn-run:hover { background: var(--brand-hover); }
+/* ── Chat Graph（§ChatGraph：节点/连线画布）── */
+.evo-graph { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.evo-graph-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
+.evo-graph-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+.evo-graph-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12px; cursor: pointer; font: inherit; }
+.evo-graph-btn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+.evo-graph-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.evo-graph-btn svg { width: 13px; height: 13px; }
+.evo-graph-canvas { position: relative; flex: 1; min-height: 300px; overflow: auto; background:
+  radial-gradient(circle, var(--color-border-light) 1px, transparent 1px) 0 0 / 24px 24px; }
+.evo-graph-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.evo-graph-edge { fill: none; stroke: color-mix(in srgb, var(--color-text-tertiary) 55%, transparent); stroke-width: 1.6px; }
+.evo-graph-edge-ctx { stroke: var(--brand); stroke-width: 2px; }
+.evo-graph-edge-linking { stroke: var(--brand); stroke-dasharray: 6 4; }
+.evo-graph-node { position: absolute; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 8px 10px; cursor: grab; user-select: none; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18); }
+.evo-graph-node:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--color-border)); }
+.evo-graph-node-sel { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 25%, transparent); }
+.evo-graph-node-chat { border-left: 3px solid var(--brand); }
+.evo-graph-node-memory { border-left: 3px solid color-mix(in srgb, var(--color-success) 70%, var(--color-border)); }
+.evo-graph-node-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.evo-graph-node-head svg { width: 13px; height: 13px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-graph-node-title { font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evo-graph-node-sub { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
+.evo-graph-node-tag { font-size: 10px; color: var(--color-text-tertiary); background: var(--hover-bg); border-radius: 4px; padding: 1px 5px; }
+.evo-graph-node-sid { font-size: 10px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
+.evo-graph-port { position: absolute; width: 10px; height: 10px; border-radius: 999px; border: 2px solid var(--color-surface); cursor: crosshair; }
+.evo-graph-port-in { left: -6px; }
+.evo-graph-port-ctx { top: 17px; background: var(--brand); }
+.evo-graph-port-mem { top: 39px; background: var(--color-success); }
+.evo-graph-port-out { right: -6px; top: 28px; background: var(--brand-hover); }
+.evo-graph-node-memory .evo-graph-port-out { top: 18px; }
+.evo-graph-port:hover { transform: scale(1.35); }
+.evo-graph-menu { position: absolute; z-index: 50; min-width: 168px; padding: 5px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 9px; box-shadow: 0 8px 26px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; gap: 2px; }
+.evo-graph-menu-item { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border: none; background: none; border-radius: 6px; color: var(--color-text-primary); font-size: 12.5px; cursor: pointer; text-align: left; font: inherit; }
+.evo-graph-menu-item:hover:not(:disabled) { background: var(--hover-bg); }
+.evo-graph-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+.evo-graph-menu-item svg { width: 13px; height: 13px; color: var(--color-text-tertiary); }
+.evo-graph-menu-danger { color: var(--color-error); }
+.evo-graph-menu-danger svg { color: var(--color-error); }
+.evo-graph-hint { padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--color-text-tertiary); font-size: 12.5px; text-align: center; line-height: 1.6; }
+.evo-graph-hint svg { width: 34px; height: 34px; color: var(--color-border); }
 /* ── Channels / Team ── */
 .evo-channel-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-tertiary); flex-shrink: 0; text-transform: capitalize; }
 .evo-channel-badge.online { background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }
