@@ -961,11 +961,11 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const [composerHeight, setComposerHeight] = useState<number | null>(null)
   const composerResizeRef = useRef<{ startY: number; startH: number } | null>(null)
   const composerMinHeight = () => Math.max(80, Math.round((typeof window !== 'undefined' ? window.innerHeight : 900) / 4))
-  // 最大高度与视口联动：预留标签栏+状态栏+消息区最小高度+输入框壳（≈420px），
-  // 拖大输入框不把上面的消息/欢迎区压扁、不溢出
+  // 输入框合理上限：最多 ~35% 视口；同时保证消息区保底 ~40% 视口
+  // （vh - 消息区 40% - 顶栏/输入框壳等固定占用 ~230px）——拖不出一条缝
   const composerMaxHeight = () => {
     const vh = typeof window !== 'undefined' ? window.innerHeight : 900
-    return Math.max(composerMinHeight(), Math.min(Math.round(vh * 2 / 3), vh - 420))
+    return Math.max(composerMinHeight(), Math.min(Math.round(vh * 0.35), vh - Math.round(vh * 0.40) - 230))
   }
   const onComposerResizeStart = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void }) => {
     e.preventDefault()
@@ -982,12 +982,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     const dy = e.clientY - ref.startY
     if (Math.abs(dy) < 3) return
     ref.moved = true
-    // 上拖 = 增高（用户直觉：向上拖拽扩大输入区）
+    // 上拖 = 增高（用户直觉：向上拖拽扩大输入区）；上限 = 合理最大高度
     const next = ref.startH - dy
-    // 上限动态计算：textarea 底部不得超过视口底 - 消息区最小高度（200px）——任何布局都不溢出
-    const taTop = taRef.current?.getBoundingClientRect().top ?? 0
-    const dynamicMax = Math.max(composerMinHeight(), Math.round((typeof window !== 'undefined' ? window.innerHeight : 900) - taTop - 200 - 12))
-    setComposerHeight(Math.min(dynamicMax, Math.max(composerMinHeight(), next)))
+    setComposerHeight(Math.min(composerMaxHeight(), Math.max(composerMinHeight(), next)))
   }
   const onComposerResizeEnd = () => {
     composerResizeRef.current = null
