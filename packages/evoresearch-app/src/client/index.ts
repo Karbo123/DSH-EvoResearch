@@ -31,6 +31,7 @@ import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
 import { ExperimentsPanel } from './experiments'
 import { TrajectoryPanel } from './trajectory'
+import { StatusBar } from './statusbar'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
 
@@ -1183,6 +1184,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
         ],
       }),
+      // §状态栏：页面最底部（输入框之外），DSH 式统计（回合/步骤/时长/速率/缓存/输入）
+      jsx(StatusBar, { session: sessionObj }),
     ],
   })
 }

@@ -136,10 +136,22 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
   已实测：隐藏全部 uv 后重启 → 自动安装成功 → 建项目环境自动创建（Python 3.12.13）。
   环境卡片在 uv 缺失时显示「正在自动安装 UV…」+ 重试按钮
 
-### 3.8 Markdown 行距收紧（用户反馈）
+### 3.8 Markdown 行距收紧 + 聊天界面打磨（用户反馈 ×2 + 视觉模型评审闭环）
 
-`styles.ts` `.evo-md`：line-height 1.75→1.58、段距 16→10px、标题上距 24→18px、
-li 间距 4→2px（实测计算样式 22.12px）。
+两轮收紧（均以截图 + 视觉模型 mimo-v2.5 评审验证）：
+- 第一轮：line-height 1.75→1.58、段距 16→10px
+- 第二轮（视觉评审后）：**line-height 1.45**（20.3px）、**段距 6px**、标题 14/8px、
+  列表项 3px、pre/table/引用 8px；气泡内边距 10/14px、圆角 13px、行高 1.5；
+  消息列表 gap 18→13px、顶部 padding 24→18px
+- 复核结论（视觉模型）：行距/段距/气泡/状态栏全部「已改善/OK」
+
+### 3.9 底部状态栏（DSH 式，页面最底端、输入框之外）
+
+`packages/evoresearch-app/src/client/statusbar.ts` + `computeStats()`（与轨迹面板同源，
+从 session.events 实时计算）：`1 轮 · 1 步 | LLM 0s · 工具调用 0s | 首 token 平均 0.7s ·
+0 tok/s | 缓存命中 0% | 输入 10K token`——回合/步骤数、LLM 总时长、工具总时长、
+首 token 平均延迟、输出 tok/s、缓存命中率、输入 token（K/M 缩写）。
+20px 高、11px 小字、固定贴底（实测 bottom == viewport 高度）。
 
 ### 3.9 轨迹面板（DSH Trajectory 复刻，EvoResearch 风格）
 

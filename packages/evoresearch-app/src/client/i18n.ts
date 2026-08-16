@@ -407,6 +407,14 @@ const DICT: Record<string, [string, string]> = {
   trajResult: ['Result', '结果'],
   turn: ['Turn', '回合'],
   step: ['Step', '步骤'],
+  // 底部状态栏（§状态栏：DSH 式统计）
+  statTurns: [' turns', ' 轮'],
+  statSteps: [' steps', ' 步'],
+  statTools: ['tools', '工具调用'],
+  statFirstToken: ['avg first token', '首 token 平均'],
+  statCacheHit: ['cache hit', '缓存命中'],
+  statInput: ['input', '输入'],
+  statTokenUnit: ['tokens', 'token'],
 }
 
 export function t(key: string): string {
