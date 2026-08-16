@@ -126,6 +126,12 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 | 实验：新建/阶段/检查点（快照落盘 3 文件）/回退（rolledBack）/分支/切分支/删除 | ✅ |
 | 项目自动创建（AI slug `rag-4090-*`） | ✅ |
 | 多轮续聊（同会话追问文献）→ 引用真实基准（HALLMARK/FaithfulRAG/ARES）并承接前文给出"修订后的推荐" | ✅ |
+| **科研全流程（可见窗口监督版，verify-simple*.mjs）**： | |
+| 第 3 步 做实验：纯标准库 BM25 脚本 → `write` 落盘 → `pwsh` 执行 `python bm25_recall.py` → 结果表渲染（recall@1/3 = 1.00） | ✅ |
+| 第 4 步 写论文：英文 Related Work（引 Lewis 2020/Shuster 2021，回扣本实验）Markdown 标题渲染 | ✅ |
+| 第 5 步 优化迭代：按要求精简 + 补 Self-RAG（reflection tokens）/CRAG（corrective actions）对比，紧扣前文 | ✅ |
+| Ask User 提问卡片：模型实验前问方向/数据 → 界面作答 → 立即继续（完整闭环） | ✅ |
+| 重型自主流程（诊断真实环境：torch DLL 失败修复、QASPER 下载、pip 竞态排查，24+ 工具步） | ✅（因装 torch 数 GB 耗时，用户要求改轻量后主动停止） |
 
 ## 五、已知限制 / 后续建议
 
@@ -152,6 +158,7 @@ data.text 两种形态）。E2E 验证：真实对话前后 `document.body.inner
 | `packages/evoresearch-plugin/src/host/memory/tools.ts` | workspaceOf（Bug #2/#4 修复） |
 | `packages/evoresearch-plugin/src/shared/types.ts` | Experiment* 类型 |
 | `scripts/verify-newfeatures.mjs` | 本轮功能 E2E 验证脚本 |
+| `scripts/verify-simple.mjs` / `verify-simple2.mjs` | 科研全流程轻量 E2E（可见窗口监督；BM25 实验 + Related Work + 迭代） |
 | `scripts/verify-mobile-dark.mjs` | 移动端（375px）与暗色模式探测 |
 | `scripts/verify-multiturn.mjs` | 多轮续聊 E2E（记忆一致性/web_search/Markdown 渲染/泄漏复检） |
 
