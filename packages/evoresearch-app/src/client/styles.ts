@@ -1024,10 +1024,26 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 @keyframes evo-jump-flash { 0% { background: color-mix(in srgb, var(--brand) 26%, transparent); } 100% { background: transparent; } }
 /* ── Recents 操作（§26.3）与 Side Chat（§22.3-22.4）── */
 .evo-tl-row { display: flex; align-items: center; gap: 4px; }
-.evo-tl-row[draggable="true"] { cursor: grab; }
-.evo-tl-row[draggable="true"]:active { cursor: grabbing; opacity: .72; }
-.evo-tl-drag-grip { width: 13px; height: 13px; color: var(--color-text-tertiary); flex-shrink: 0; }
-.evo-tl-project-row .evo-tl-drag-grip { width: 13px; height: 13px; }
+.evo-tl-drag-grip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 28px; margin: -4px 0 -4px -5px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-tertiary); cursor: grab; flex: 0 0 24px; touch-action: none; }
+.evo-tl-drag-grip:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-tl-drag-grip:active, .evo-tl[data-dragging] .evo-tl-drag-grip { cursor: grabbing; }
+.evo-tl-drag-grip svg { width: 13px; height: 13px; }
+.evo-tl-project-row .evo-tl-drag-grip { width: 24px; height: 28px; }
+.evo-tl[data-dragging] { user-select: none; }
+.evo-tl-row-dragging { opacity: .42; }
+.evo-tl-row-dragging .evo-tl-row-acts { opacity: 0; }
+.evo-tl-drop-placeholder { height: 44px; margin: 2px 0; border: 1px dashed color-mix(in srgb, var(--brand) 48%, var(--color-border)); border-radius: 8px; background: color-mix(in srgb, var(--brand) 7%, transparent); position: relative; transition: height 160ms cubic-bezier(.16, 1, .3, 1), background 120ms ease, border-color 120ms ease; }
+.evo-tl-drop-placeholder::before { content: ''; position: absolute; left: 10px; right: 10px; top: 50%; height: 2px; border-radius: 999px; background: color-mix(in srgb, var(--brand) 58%, transparent); transform: translateY(-50%); }
+.evo-tl-drag-preview { position: fixed; z-index: 1000; display: flex; align-items: center; gap: 9px; width: min(230px, calc(100vw - 28px)); min-height: 42px; padding: 8px 11px; border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 10px; background: color-mix(in srgb, var(--color-surface) 78%, transparent); color: var(--color-text-primary); box-shadow: 0 12px 28px rgb(0 0 0 / 20%), 0 2px 7px rgb(0 0 0 / 12%); backdrop-filter: blur(12px) saturate(145%); pointer-events: none; opacity: .9; transform: translate3d(0, 0, 0); }
+.evo-tl-drag-preview > svg { width: 16px; height: 16px; color: var(--brand); flex: 0 0 auto; }
+.evo-tl-drag-preview > span { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.evo-tl-drag-preview strong, .evo-tl-drag-preview small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-tl-drag-preview strong { font-size: 12.5px; font-weight: 600; }
+.evo-tl-drag-preview small { color: var(--color-text-tertiary); font-size: 10.5px; }
+@media (prefers-reduced-motion: reduce) {
+  .evo-tl-drop-placeholder { transition: none; }
+  .evo-tl-drag-preview { backdrop-filter: none; }
+}
 .evo-tl-row-main { flex: 1; min-width: 0; text-align: left; border: none; background: none; padding: 0; cursor: pointer; }
 .evo-tl-row-acts { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; align-items: center; }
 .evo-tl-row:hover .evo-tl-row-acts, .evo-tl-row:focus-within .evo-tl-row-acts { opacity: 1; }

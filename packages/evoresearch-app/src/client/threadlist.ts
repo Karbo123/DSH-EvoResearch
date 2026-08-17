@@ -129,11 +129,24 @@ function hitSessionId(hit: any): string | null {
   return null
 }
 
-function moveId(ids: string[], from: string, to: string): string[] {
-  const next = ids.filter((id) => id !== from)
-  const index = next.indexOf(to)
-  next.splice(index < 0 ? next.length : index, 0, from)
+function moveIdToIndex(ids: string[], id: string, index: number): string[] {
+  const next = ids.filter((value) => value !== id)
+  next.splice(Math.max(0, Math.min(index, next.length)), 0, id)
   return next
+}
+
+type DragScope = 'projects' | 'chats'
+type DragState = {
+  scope: DragScope
+  id: string
+  label: string
+  detail: string
+  startX: number
+  startY: number
+  clientX: number
+  clientY: number
+  insertIndex: number
+  active: boolean
 }
 
 export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, archivedIds, onToggleArchive, runningIds, promotedIds }: ThreadListProps) {
@@ -179,6 +192,9 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   const [renameValue, setRenameValue] = useState('')
   const [forkError, setForkError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [dragState, setDragState] = useState<DragState | null>(null)
+  const dragRef = useRef<DragState | null>(null)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
   // §ChatGraph/§二级聊天：左侧按项目分类——null = 项目列表视图；非 null = 该项目子聊天列表
   const [projectMode, setProjectMode] = useState<{ name: string; path: string } | null>(null)
   // 菜单内两段式删除确认：第一次点击进入确认态，5 秒无操作还原
@@ -250,6 +266,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
     })
   }
   const searchNeedle = query.trim().toLocaleLowerCase()
+  const canReorder = sortMode === 'manual' && searchNeedle === ''
   const matchesSession = (s: any): boolean => searchNeedle === '' || sessionSearchText(s).includes(searchNeedle) || contentHitIds.has(s.id)
   useEffect(() => {
     const needle = query.trim()
@@ -310,29 +327,102 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
     const base = cwdBase(cur?.cwd)
     return base === null ? null : (base.split(/[\\/]/).pop() ?? base)
   })()
-  const reorderProjects = (from: string, to: string) => {
-    const ids = projectList.map((p) => p.path)
-    persistOrder({ ...manualOrder, projects: moveId(ids, from, to) })
+  const finishDrag = () => {
+    const session = dragRef.current
+    dragCleanupRef.current?.()
+    dragRef.current = null
+    setDragState(null)
+    if (session === null || !session.active) return
+    if (session.scope === 'projects') {
+      const ids = projectList.map((p) => p.path)
+      persistOrder({ ...manualOrder, projects: moveIdToIndex(ids, session.id, session.insertIndex) })
+    } else {
+      const scope = projectMode?.path ?? ''
+      const ids = sortSessions(rows.filter((s) => cwdBase(s.cwd) === scope), scope).map((s) => s.id)
+      persistOrder({ ...manualOrder, chats: { ...manualOrder.chats, [scope]: moveIdToIndex(ids, session.id, session.insertIndex) } })
+    }
   }
-  const reorderChats = (from: string, to: string) => {
-    const scope = projectMode?.path ?? ''
-    const ids = sortSessions(rows.filter((s) => cwdBase(s.cwd) === scope), scope).map((s) => s.id)
-    persistOrder({ ...manualOrder, chats: { ...manualOrder.chats, [scope]: moveId(ids, from, to) } })
-  }
-  const dragStart = (id: string) => (e: { dataTransfer?: { setData(type: string, value: string): void } }) => {
-    e.dataTransfer?.setData('text/plain', id)
-  }
-  const dragOver = (e: { preventDefault(): void }) => e.preventDefault()
-  const dropProject = (to: string) => (e: { preventDefault(): void; dataTransfer?: { getData(type: string): string } }) => {
+  const startPointerDrag = (scope: DragScope, id: string, label: string, detail: string) => (e: { clientX: number; clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void; stopPropagation(): void }) => {
     e.preventDefault()
-    const from = e.dataTransfer?.getData('text/plain') ?? ''
-    if (from !== '' && from !== to) reorderProjects(from, to)
+    e.stopPropagation()
+    dragCleanupRef.current?.()
+    const initial: DragState = { scope, id, label, detail, startX: e.clientX, startY: e.clientY, clientX: e.clientX, clientY: e.clientY, insertIndex: 0, active: false }
+    dragRef.current = initial
+    const grip = e.currentTarget
+    grip.setPointerCapture(e.pointerId)
+    const update = (event: PointerEvent) => {
+      const session = dragRef.current
+      if (session === null) return
+      const distance = Math.hypot(event.clientX - session.startX, event.clientY - session.startY)
+      if (!session.active && distance < 6) return
+      const row = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-evo-dnd-id]')
+      const sameScope = row?.dataset.evoDndScope === session.scope
+      const targetId = sameScope ? row?.dataset.evoDndId : undefined
+      const items = session.scope === 'projects'
+        ? projectList.map((p) => p.path)
+        : sortSessions(rows.filter((s) => cwdBase(s.cwd) === (projectMode?.path ?? '')), projectMode?.path ?? '').map((s) => s.id)
+      const sourceIndex = Math.max(0, items.indexOf(session.id))
+      let insertIndex = sourceIndex
+      if (targetId !== undefined && targetId !== session.id) {
+        const remaining = items.filter((item) => item !== session.id)
+        const targetIndex = remaining.indexOf(targetId)
+        if (targetIndex >= 0) insertIndex = targetIndex + (event.clientY >= (row?.getBoundingClientRect().top ?? 0) + (row?.getBoundingClientRect().height ?? 0) / 2 ? 1 : 0)
+      }
+      const next = { ...session, clientX: event.clientX, clientY: event.clientY, insertIndex, active: true }
+      dragRef.current = next
+      setDragState(next)
+    }
+    const end = () => finishDrag()
+    const cancel = () => {
+      dragCleanupRef.current = null
+      dragRef.current = null
+      setDragState(null)
+      document.removeEventListener('pointermove', update)
+      document.removeEventListener('pointerup', end)
+      document.removeEventListener('pointercancel', cancel)
+    }
+    dragCleanupRef.current = cancel
+    document.addEventListener('pointermove', update)
+    document.addEventListener('pointerup', end)
+    document.addEventListener('pointercancel', cancel)
   }
-  const dropChat = (to: string) => (e: { preventDefault(): void; dataTransfer?: { getData(type: string): string } }) => {
-    e.preventDefault()
-    const from = e.dataTransfer?.getData('text/plain') ?? ''
-    if (from !== '' && from !== to) reorderChats(from, to)
-  }
+  useEffect(() => () => { dragCleanupRef.current?.() }, [])
+
+  const isDragging = (scope: DragScope, id: string) => dragState?.active === true && dragState.scope === scope && dragState.id === id
+  const placeholder = (key: string) => jsx('div', { className: 'evo-tl-drop-placeholder', 'aria-hidden': true, key })
+  const dragGrip = (scope: DragScope, id: string, label: string, detail: string) => jsx('button', {
+    type: 'button',
+    className: 'evo-tl-drag-grip',
+    title: t('dragToReorder'),
+    'aria-label': `${t('dragToReorder')}：${label}`,
+    onPointerDown: startPointerDrag(scope, id, label, detail),
+    onClick: (event: { stopPropagation(): void }) => event.stopPropagation(),
+    children: jsx(GripVertical, {}),
+  })
+
+  const projectRenderItems: Array<{ kind: 'project'; value: typeof projectList[number] } | { kind: 'placeholder'; key: string }> = (() => {
+    const source = dragState?.scope === 'projects' && dragState.active ? projectList.filter((p) => p.path !== dragState.id) : projectList
+    if (dragState?.scope !== 'projects' || !dragState.active) return source.map((value) => ({ kind: 'project', value }))
+    const result: typeof projectRenderItems = []
+    source.forEach((value, index) => {
+      if (index === dragState.insertIndex) result.push({ kind: 'placeholder', key: `project-drop-${index}` })
+      result.push({ kind: 'project', value })
+    })
+    if (dragState.insertIndex >= source.length) result.push({ kind: 'placeholder', key: `project-drop-${source.length}` })
+    return result
+  })()
+
+  const chatRenderItems: Array<{ kind: 'chat'; value: any } | { kind: 'placeholder'; key: string }> = (() => {
+    const source = dragState?.scope === 'chats' && dragState.active ? scopedRows.filter((s) => s.id !== dragState.id) : scopedRows
+    if (dragState?.scope !== 'chats' || !dragState.active) return source.map((value) => ({ kind: 'chat', value }))
+    const result: typeof chatRenderItems = []
+    source.forEach((value, index) => {
+      if (index === dragState.insertIndex) result.push({ kind: 'placeholder', key: `chat-drop-${index}` })
+      result.push({ kind: 'chat', value })
+    })
+    if (dragState.insertIndex >= source.length) result.push({ kind: 'placeholder', key: `chat-drop-${source.length}` })
+    return result
+  })()
 
   const isActive = (key: string) =>
     (key === 'skills' && view === 'skills') ||
@@ -347,6 +437,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
 
   return jsxs('div', {
     className: 'evo-tl',
+    'data-dragging': dragState?.active || undefined,
     children: [
       jsxs('div', {
         className: 'evo-tl-head',
@@ -445,27 +536,31 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                       jsx('div', { children: t('noProjectsYet') }),
                     ],
                   })
-                : projectList.map((p) => jsxs('div', {
-                    className: 'evo-tl-row evo-tl-project-row',
-                    'data-active': currentProject === p.name || undefined,
-                    draggable: sortMode === 'manual' || undefined,
-                    onDragStart: sortMode === 'manual' ? dragStart(p.path) : undefined,
-                    onDragOver: sortMode === 'manual' ? dragOver : undefined,
-                    onDrop: sortMode === 'manual' ? dropProject(p.path) : undefined,
-                    onClick: () => { setProjectMode({ name: p.name, path: p.path }); setMenuFor(null) },
-                    children: [
-                      sortMode === 'manual' && jsx(GripVertical, { className: 'evo-tl-drag-grip', title: t('dragToReorder') }),
-                      jsx(FolderGit2, {}),
-                      jsxs('div', {
-                        className: 'evo-tl-project-main',
-                        children: [
-                          jsx('span', { className: 'evo-tl-title-text', children: p.name }),
-                          jsx('span', { className: 'evo-tl-row-sub', children: t('subchatCount').replace('{n}', String(p.count)) }),
-                        ],
-                      }),
-                      jsx(ChevronRight, {}),
-                    ],
-                  }, p.path))
+                : projectRenderItems.map((item) => item.kind === 'placeholder'
+                  ? placeholder(item.key)
+                  : (() => {
+                    const p = item.value
+                    return jsxs('div', {
+                      className: `evo-tl-row evo-tl-project-row${isDragging('projects', p.path) ? ' evo-tl-row-dragging' : ''}`,
+                      'data-active': currentProject === p.name || undefined,
+                      'data-evo-dnd-id': p.path,
+                      'data-evo-dnd-scope': 'projects',
+                      onClick: () => { setProjectMode({ name: p.name, path: p.path }); setMenuFor(null) },
+                      children: [
+                        canReorder && dragGrip('projects', p.path, p.name, t('subchatCount').replace('{n}', String(p.count))),
+                        jsx(FolderGit2, {}),
+                        jsxs('div', {
+                          className: 'evo-tl-project-main',
+                          children: [
+                            jsx('span', { className: 'evo-tl-title-text', children: p.name }),
+                            jsx('span', { className: 'evo-tl-row-sub', children: t('subchatCount').replace('{n}', String(p.count)) }),
+                          ],
+                        }),
+                        jsx(ChevronRight, {}),
+                      ],
+                    }, p.path)
+                  })
+                )
             : // ── 项目内子聊天列表（对应图谱 Chat Node）──
               jsxs(Fragment, {
                 children: [
@@ -499,7 +594,10 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                   jsx('div', { children: hasActive ? t('noMatchingResearch') : t('noResearchYet') }),
                 ],
               })
-            : scopedRows.map((s) => {
+            : chatRenderItems.map((item) => item.kind === 'placeholder'
+              ? placeholder(item.key)
+              : (() => {
+                const s = item.value
                 if (renaming === s.id) {
                   return jsxs('div', {
                     className: 'evo-tl-row evo-tl-rename',
@@ -530,14 +628,12 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                   }, s.id)
                 }
                 return jsxs('div', {
-                  className: 'evo-tl-row',
+                  className: `evo-tl-row${isDragging('chats', s.id) ? ' evo-tl-row-dragging' : ''}`,
                   'data-active': s.id === currentId || undefined,
-                  draggable: sortMode === 'manual' || undefined,
-                  onDragStart: sortMode === 'manual' ? dragStart(s.id) : undefined,
-                  onDragOver: sortMode === 'manual' ? dragOver : undefined,
-                  onDrop: sortMode === 'manual' ? dropChat(s.id) : undefined,
+                  'data-evo-dnd-id': s.id,
+                  'data-evo-dnd-scope': 'chats',
                   children: [
-                    sortMode === 'manual' && jsx(GripVertical, { className: 'evo-tl-drag-grip', title: t('dragToReorder') }),
+                    canReorder && dragGrip('chats', s.id, s.displayTitle ?? s.id.slice(0, 12), formatWhen(s.titleTime ?? s.updatedAt)),
                     jsx('button', {
                       type: 'button',
                       className: 'evo-tl-row-main',
@@ -674,7 +770,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                     }),
                   ],
                 }, s.id)
-              }),
+              })()),
                 ],
               }),
         // ── 已归档分区（§26.3 Archive：保留数据，可恢复）──
@@ -727,6 +823,20 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                   }),
                 ],
               }, s.id)),
+            }),
+          ],
+        }),
+        dragState?.active === true && jsxs('div', {
+          className: 'evo-tl-drag-preview',
+          'aria-hidden': true,
+          style: { left: dragState.clientX + 14, top: dragState.clientY + 14 },
+          children: [
+            jsx(dragState.scope === 'projects' ? FolderGit2 : MessageSquare, {}),
+            jsxs('span', {
+              children: [
+                jsx('strong', { children: dragState.label }),
+                dragState.detail !== '' && jsx('small', { children: dragState.detail }),
+              ],
             }),
           ],
         }),
