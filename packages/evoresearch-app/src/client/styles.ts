@@ -379,7 +379,8 @@ body { margin: 0; }
 .evo-msg-body { min-width: 0; max-width: 78%; display: flex; flex-direction: column; gap: 4px; }
 .evo-msg-user-body { min-width: 0; max-width: 78%; }
 .evo-msg-bubble { padding: 10px 14px; border-radius: 13px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-.evo-msg-bubble-user { background: var(--color-user-message-bg); color: var(--color-user-message); border-bottom-right-radius: 4px; }
+.evo-msg-bubble-user { padding-block: 7px; background: var(--color-user-message-bg); color: var(--color-user-message); border-bottom-right-radius: 4px; }
+.evo-msg-bubble-user .evo-md > p:only-child { margin-block: 0; }
 .evo-msg-bubble-assistant { background: var(--color-surface); border: 1px solid var(--color-border-light); border-bottom-left-radius: 4px; color: var(--color-text-primary); }
 .evo-msg-text { white-space: pre-wrap; word-break: break-word; }
 .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 3px; text-align: right; }
@@ -1190,6 +1191,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tab-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-tab-menu-item svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
 .evo-tab-menu-hint { padding: 4px 10px 6px; font-size: 11.5px; color: var(--color-text-tertiary); line-height: 1.5; border-top: 1px solid var(--color-border-light); margin-top: 2px; }
+.evo-tab-menu-help { border-top: 0; margin: -2px 0 2px; padding-top: 0; }
 .evo-tab-menu-newfile { gap: 6px; }
 .evo-tab-newfile-input { flex: 1; min-width: 0; border: 1px solid var(--color-border); border-radius: 7px; background: var(--input-bg); color: var(--color-text-primary); font-size: 12.5px; padding: 5px 8px; outline: none; }
 .evo-tab-newfile-input:focus { border-color: var(--brand); }

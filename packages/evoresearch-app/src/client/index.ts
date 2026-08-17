@@ -1178,6 +1178,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                                   children: jsxs(Fragment, { children: [jsx(FolderOpen, {}), jsx('span', { children: t('openFromWorkspace') })] }),
                                 }),
                                 tabPickerOpen && cwdNow !== null && jsx(WorkspaceTabPicker, { root: cwdNow, onPick: pickWorkspaceFile }),
+                                cwdNow !== null && jsx('div', { className: 'evo-tab-menu-hint evo-tab-menu-help', children: t('workspaceTabHelp') }),
                                 // 本地上传 PDF → 预览标签
                                 jsx('button', {
                                   type: 'button',
@@ -1218,7 +1219,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                                       className: 'evo-tab-newfile-go',
                                       disabled: tabBusy || newFileName.trim() === '' || cwdNow === null,
                                       onClick: () => { if (cwdNow !== null) { createTabEditor(cwdNow); closeTabMenu() } },
-                                      children: t('create'),
+                                      children: t('newFileCreate'),
                                     }),
                                   ],
                                 }),
