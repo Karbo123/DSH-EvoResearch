@@ -35,7 +35,6 @@ import { ResearchNotesPanel } from './research-notes'
 import { LibraryPanel } from './library-panel'
 import { TrajectoryPanel } from './trajectory'
 import { ChatGraphPanel } from './chatgraph'
-import { StatusBar } from './statusbar'
 import { WorkspaceTabPicker } from './tab-files'
 
 const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
@@ -1348,8 +1347,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
         ],
       }),
-      // §状态栏：页面最底部（输入框之外），DSH 式统计（回合/步骤/时长/速率/缓存/输入）
-      jsx(StatusBar, { session: sessionObj }),
     ],
   })
 }

@@ -1,5 +1,5 @@
 /**
- * 底部状态栏（§状态栏：仿 DSH 设计，置于页面最底部、输入框之外，小字号）。
+ * 会话统计栏（仿 DSH 设计，置于聊天输入框外部，小字号）。
  *
  * 数据：session.events 实时计算——回合/步骤数、LLM 总时长、工具调用总时长、
  * 首 token 平均延迟、输出 tok/s、缓存命中率、输入 token 总量。
@@ -100,7 +100,7 @@ function fmtTokens(n: number): string {
   return String(n)
 }
 
-/** 页面底部状态栏（始终渲染；无会话时显示占位）。 */
+/** 会话统计栏（始终渲染；无会话时显示占位）。 */
 export function StatusBar({ session }: { session: any }) {
   const notifier = session?.notifier
   const eventsLen = useSyncExternalStore(

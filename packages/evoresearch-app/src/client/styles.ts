@@ -609,10 +609,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-status-ro { color: var(--color-warning); }
 .evo-status-full { color: var(--color-error); }
 .evo-stats-line { display: flex; align-items: center; gap: 8px; padding: 6px 14px 9px; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* 会话统计行（输入框圆角框下方外部、水平居中、紧贴）：flex-basis 100% 强制换行，
-   max-width 与输入框一致，justify-content 水平居中 */
-.evo-composer-stats { flex-basis: 100%; max-width: var(--chat-max-width); margin-top: 4px; }
-.evo-composer-stats .evo-stats-line { padding: 2px 4px 0; justify-content: center; }
+/* 会话统计行：与输入框同宽，位于圆角框外部正下方。 */
+.evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: var(--chat-max-width); margin: 0 auto; }
+.evo-composer-stats .evo-statusbar { width: 100%; height: auto; min-height: 16px; padding: 0; border-top: 0; background: transparent; flex-wrap: wrap; row-gap: 0; overflow: visible; white-space: normal; line-height: 16px; }
+.evo-composer-stats .evo-statusbar-empty { line-height: 16px; }
 .evo-stats-sep { color: var(--color-border); margin-right: 8px; }
 /* ── 插件清单 ── */
 .evo-plugin-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
@@ -1327,7 +1327,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-traj-meta { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
 .evo-traj-detail-pre { margin: 0; padding: 8px 10px; background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); max-height: 240px; overflow-y: auto; }
 .evo-traj-detail-pre.error { color: var(--color-error); }
-/* ── 底部状态栏（§状态栏：DSH 式，页面最底部、小字号）── */
+/* ── 会话统计栏（紧邻输入框、小字号）── */
 .evo-statusbar { flex-shrink: 0; height: 20px; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px; border-top: 1px solid var(--color-border); background: var(--color-background); font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; overflow: hidden; white-space: nowrap; }
 .evo-statusbar-empty { color: var(--color-text-tertiary); opacity: 0.55; }
 .evo-statusbar-item { display: inline-flex; align-items: center; gap: 4px; }

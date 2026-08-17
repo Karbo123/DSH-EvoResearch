@@ -17,7 +17,8 @@ import {
 } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
-import { SessionStatusLine, SessionStatsLine } from './session-dock'
+import { SessionStatusLine } from './session-dock'
+import { StatusBar } from './statusbar'
 import { renderMarkdown, renderMermaidBlocks } from './markdown'
 import {
   CandidatePopup, buildCandidates, detectTrigger, pushHistory, readHistory,
@@ -1646,7 +1647,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           // 会话统计行：位于输入框圆角框下方外部、水平居中、紧贴（不在输入框内部）
           !userOnly && jsx('div', {
             className: 'evo-composer-stats',
-            children: jsx(SessionStatsLine, { session }),
+            children: jsx(StatusBar, { session }),
           }),
         ],
       }),
