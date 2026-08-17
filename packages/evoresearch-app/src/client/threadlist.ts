@@ -5,7 +5,7 @@
  * 数据来自 framework kit 的 useSessions（DSH client-runtime 镜像）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical } from 'lucide-react'
 import { t } from './i18n'
 
@@ -141,6 +141,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   const currentId = sessions.current
   const [colorFor, setColorFor] = useState<string | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [sortOpen, setSortOpen] = useState(false)
+  const sortRef = useRef<HTMLDivElement | null>(null)
   // 「⋯」更多菜单外点击关闭
   useEffect(() => {
     if (menuFor === null) return
@@ -148,6 +150,15 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [menuFor])
+  useEffect(() => {
+    if (!sortOpen) return
+    const onDoc = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node) || !sortRef.current?.contains(target)) setSortOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [sortOpen])
   const isPromoted = (id: string): boolean => promotedIds.has(id)
   // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表；
   // §5.3 提升后的复制会话除外——它已是独立主聊天）
@@ -212,8 +223,16 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   }
   const updateSortMode = (value: SortMode) => {
     setSortMode(value)
+    setSortOpen(false)
     try { localStorage.setItem(SORT_KEY, value) } catch { /* 离线缓存失败不影响当前排序 */ }
   }
+  const sortOptions: Array<{ value: SortMode; label: string; icon: typeof ListFilter }> = [
+    { value: 'recent', label: t('sortRecent'), icon: Clock },
+    { value: 'title', label: t('sortTitle'), icon: ListFilter },
+    { value: 'updated', label: t('sortUpdated'), icon: Pencil },
+    { value: 'manual', label: t('sortManual'), icon: GripVertical },
+  ]
+  const activeSortLabel = sortOptions.find((option) => option.value === sortMode)?.label ?? t('sortRecent')
   const orderWithManual = <T extends { id?: string; path?: string }>(items: T[], scope: 'projects' | 'chats', key: string): T[] => {
     const stored = scope === 'projects' ? manualOrder.projects : (manualOrder.chats[key] ?? [])
     const ids = items.map((item) => scope === 'projects' ? item.path ?? '' : item.id ?? '')
@@ -332,7 +351,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
       jsxs('div', {
         className: 'evo-tl-head',
         children: [
-          jsx('span', { className: 'evo-tl-head-title', children: t('projects') }),
+          jsx('span', { className: 'evo-tl-head-title', children: t('workbench') }),
         ],
       }),
       jsx('nav', {
@@ -373,21 +392,41 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
               searching && jsx('span', { className: 'evo-tl-searching', 'aria-live': 'polite', children: t('searchRunning') }),
             ],
           }),
-          jsxs('label', {
-            className: 'evo-tl-sort',
-            title: t('searchSort'),
+          jsxs('div', {
+            ref: sortRef,
+            className: 'evo-tl-sort-wrap',
             children: [
-              jsx(ListFilter, {}),
-              jsx('select', {
-                value: sortMode,
+              jsx('button', {
+                type: 'button',
+                className: 'evo-tl-sort-btn',
+                title: `${t('searchSort')}：${activeSortLabel}`,
+                'aria-label': `${t('searchSort')}：${activeSortLabel}`,
+                'aria-expanded': sortOpen,
+                'aria-haspopup': 'menu',
+                onClick: () => setSortOpen((open) => !open),
+                children: jsx(ListFilter, {}),
+              }),
+              sortOpen && jsx('div', {
+                className: 'evo-tl-sort-menu',
+                role: 'menu',
                 'aria-label': t('searchSort'),
-                onChange: (e) => updateSortMode(e.currentTarget.value as SortMode),
-                children: [
-                  jsx('option', { value: 'recent', children: t('sortRecent') }),
-                  jsx('option', { value: 'title', children: t('sortTitle') }),
-                  jsx('option', { value: 'updated', children: t('sortUpdated') }),
-                  jsx('option', { value: 'manual', children: t('sortManual') }),
-                ],
+                children: sortOptions.map((option) => {
+                  const Icon = option.icon
+                  const active = option.value === sortMode
+                  return jsxs('button', {
+                    type: 'button',
+                    className: 'evo-tl-sort-option',
+                    'data-active': active || undefined,
+                    role: 'menuitemradio',
+                    'aria-checked': active,
+                    onClick: () => updateSortMode(option.value),
+                    children: [
+                      jsx(Icon, {}),
+                      jsx('span', { children: option.label }),
+                      active && jsx(Check, {}),
+                    ],
+                  }, option.value)
+                }),
               }),
             ],
           }),

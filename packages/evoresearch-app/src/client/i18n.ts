@@ -31,6 +31,7 @@ const DICT: Record<string, [string, string]> = {
   team: ['Team', '科研团队'],
   searchResearch: ['Search title or content...', '搜索标题或内容...'],
   searchSort: ['Sort conversations', '排序方式'],
+  workbench: ['Workbench', '科研工作台'],
   sortRecent: ['Recently created', '最近创建'],
   sortTitle: ['Title A–Z', '标题顺序'],
   sortUpdated: ['Recently edited', '最近编辑'],

@@ -216,9 +216,16 @@ body { margin: 0; }
 .evo-tl-search input { flex: 1; border: none; outline: none; background: none; color: var(--color-text-primary); font-size: 13px; }
 .evo-tl-search input::placeholder { color: var(--color-text-tertiary); }
 .evo-tl-searching { color: var(--color-text-tertiary); font-size: 10px; white-space: nowrap; }
-.evo-tl-sort { display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 5px 6px; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text-tertiary); background: var(--input-bg); }
-.evo-tl-sort svg { width: 14px; height: 14px; flex-shrink: 0; }
-.evo-tl-sort select { max-width: 86px; border: none; outline: none; color: var(--color-text-secondary); background: transparent; font-size: 11px; cursor: pointer; }
+.evo-tl-sort-wrap { position: relative; flex: 0 0 auto; }
+.evo-tl-sort-btn { display: inline-flex; align-items: center; justify-content: center; width: 31px; height: 31px; padding: 0; border: 1px solid var(--color-border); border-radius: 7px; color: var(--color-text-tertiary); background: var(--input-bg); cursor: pointer; }
+.evo-tl-sort-btn:hover, .evo-tl-sort-btn[aria-expanded='true'] { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 55%, var(--color-border)); background: color-mix(in srgb, var(--brand) 8%, var(--input-bg)); }
+.evo-tl-sort-btn svg { width: 15px; height: 15px; }
+.evo-tl-sort-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 90; min-width: 164px; padding: 5px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; gap: 1px; }
+.evo-tl-sort-option { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 6px 8px; border: none; border-radius: 6px; background: transparent; color: var(--color-text-secondary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.evo-tl-sort-option:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-tl-sort-option[data-active] { background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); }
+.evo-tl-sort-option svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.evo-tl-sort-option span { flex: 1; min-width: 0; }
 .evo-tl-body { flex: 1; overflow-y: auto; padding: 6px 8px 16px; min-height: 0; }
 .evo-tl-section { padding: 10px 10px 4px; display: flex; align-items: center; justify-content: space-between; }
 .evo-tl-section-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
