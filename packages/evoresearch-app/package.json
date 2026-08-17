@@ -25,6 +25,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-host-frontend-static": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": "^3.18.1",
+    "@toast-ui/editor": "^3.2.2",
     "@xyflow/react": "^12.8.4",
     "dompurify": "^3.4.13",
     "elkjs": "^0.11.0",

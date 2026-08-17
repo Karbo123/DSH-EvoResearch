@@ -1426,4 +1426,36 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-ews-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-secondary); flex-shrink: 0; white-space: nowrap; }
 .evo-ews-badge.ref { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
 .evo-ews-badge.copy { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
+/* ── Toast UI WYSIWYG composer ── */
+.evo-composer-editor { flex: 1; min-height: 112px; height: 112px; overflow: hidden; }
+.evo-composer-editor .toastui-editor-defaultUI { height: 100% !important; min-height: 0 !important; border: 0; border-radius: 0; background: transparent; color: var(--color-text-primary); font-family: inherit; }
+.evo-composer-editor .toastui-editor-defaultUI-toolbar { height: 36px; min-height: 36px; padding: 4px 10px; border-top: 0; border-bottom: 1px solid var(--color-border-light); background: transparent; }
+.evo-composer-editor .toastui-editor-toolbar-group { margin: 0 3px 0 0; border-right-color: var(--color-border-light); }
+.evo-composer-editor .toastui-editor-defaultUI-toolbar button { width: 28px; height: 28px; border-radius: 7px; background-color: transparent; }
+.evo-composer-editor .toastui-editor-defaultUI-toolbar button:not(:disabled):hover { background-color: var(--hover-bg); }
+.evo-composer-editor .toastui-editor-toolbar-icons { opacity: .72; }
+.evo-composer-editor .toastui-editor-defaultUI-toolbar button.active { background-color: color-mix(in srgb, var(--brand) 14%, transparent); }
+.evo-composer-editor .toastui-editor-defaultUI-toolbar button.active .toastui-editor-toolbar-icons { opacity: 1; }
+.evo-composer-editor .toastui-editor-main { min-height: 0; height: calc(100% - 36px); background: transparent; }
+.evo-composer-editor .toastui-editor-ww-container { height: 100%; background: transparent; }
+.evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100%; }
+.evo-composer-editor .toastui-editor-ww-container .toastui-editor-contents { height: 100%; overflow-y: auto; padding: 10px 14px 12px; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; }
+.evo-composer-editor .toastui-editor-contents p { margin: 0 0 7px; }
+.evo-composer-editor .toastui-editor-contents p:last-child { margin-bottom: 0; }
+.evo-composer-editor .toastui-editor-contents h1, .evo-composer-editor .toastui-editor-contents h2, .evo-composer-editor .toastui-editor-contents h3 { color: var(--color-text-primary); border-bottom-color: var(--color-border-light); }
+.evo-composer-editor .toastui-editor-contents blockquote { border-left-color: var(--brand); color: var(--color-text-secondary); }
+.evo-composer-editor .toastui-editor-contents pre { background: var(--hover-bg); border-color: var(--color-border-light); }
+.evo-composer-editor .toastui-editor-contents code { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-composer-editor .toastui-editor-contents a { color: var(--brand); }
+.evo-composer-markdown-state { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-tertiary); font-size: 11px; }
+.evo-composer-markdown-state::before { content: 'M'; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 5px; color: var(--brand); font-size: 10px; font-weight: 700; }
+html.dark .evo-composer-editor .toastui-editor-toolbar-icons { filter: invert(1); }
+html.dark .evo-composer-editor .toastui-editor-contents pre { background: color-mix(in srgb, var(--color-background) 72%, white 4%); }
+@media (prefers-reduced-motion: reduce) { .evo-composer-editor .toastui-editor-defaultUI-toolbar button { transition: none; } }
+@media (max-width: 620px) {
+  .evo-composer-editor .toastui-editor-defaultUI-toolbar { padding-inline: 5px; overflow-x: auto; }
+  .evo-composer-editor .toastui-editor-toolbar-group { margin-right: 1px; }
+  .evo-composer-editor .toastui-editor-defaultUI-toolbar button { width: 25px; }
+  .evo-composer-markdown-state { display: none; }
+}
 `

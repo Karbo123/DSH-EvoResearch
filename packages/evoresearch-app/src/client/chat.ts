@@ -8,8 +8,9 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import ToastEditor, { type Editor as ToastEditorInstance } from '@toast-ui/editor'
 import {
-  Paperclip, ShieldCheck, Send, Wrench, User, Copy, Check, PenLine, Eye,
+  Paperclip, ShieldCheck, Send, Wrench, User, Copy, Check, PenLine,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
   ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History, GitBranch,
   ThumbsUp, ThumbsDown, MessageSquareText,
@@ -17,7 +18,7 @@ import {
 import { t } from './i18n'
 import { toast } from './toast'
 import { SessionStatusLine, SessionStatsLine } from './session-dock'
-import { renderMarkdown, renderComposerDeco, renderMermaidBlocks } from './markdown'
+import { renderMarkdown, renderMermaidBlocks } from './markdown'
 import {
   CandidatePopup, buildCandidates, detectTrigger, pushHistory, readHistory,
   resolveMentions, useCommandCatalog, useFileTree,
@@ -507,7 +508,6 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
 
 export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onBranchFromMessage, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
-  const [preview, setPreview] = useState(false)
     // §21.4 Auto-approve：按 Thread 持久化（localStorage evoresearch-auto-approve:<sessionId>）；
   // 开启前先弹风险确认，关闭直接生效。
   const [autoApprove, setAutoApprove] = useState(false)
@@ -525,8 +525,18 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     }
   }
   const listRef = useRef<HTMLDivElement | null>(null)
-  const taRef = useRef<HTMLTextAreaElement | null>(null)
-  const decoRef = useRef<HTMLDivElement | null>(null)
+  const composerEditorHostRef = useRef<HTMLDivElement | null>(null)
+  const composerEditorRef = useRef<ToastEditorInstance | null>(null)
+  const submitRef = useRef<() => void>(() => {})
+  const candidatesRef = useRef<Candidate[]>([])
+  const activeIndexRef = useRef(0)
+  const runningRef = useRef(running)
+  runningRef.current = running
+  const setComposerMarkdown = (value: string, cursorToEnd = false) => {
+    setInput(value)
+    const editor = composerEditorRef.current
+    if (editor !== null && editor.getMarkdown() !== value) editor.setMarkdown(value, cursorToEnd)
+  }
   // 滚动容器 = 中间栏（消息区内容自适应、页面整体滚动；输入框 sticky 常驻底部）
   const scrollBox = () => document.querySelector<HTMLElement>('.evo-center')
 
@@ -558,37 +568,6 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     }
   }, [userOnly])
 
-  // ── Markdown 快捷键（§composer）：Ctrl/Cmd+B 加粗、I 斜体、K 链接、Shift+` 行内代码、Shift+X 删除线 ──
-  // 有选区 → 包裹；已包裹 → 取消包裹；无选区 → 插入标记对（光标置中）
-  const kbdWrap = (ta: HTMLTextAreaElement | null, before: string, after: string, mid?: string) => {
-    if (ta === null) return
-    const start = ta.selectionStart
-    const end = ta.selectionEnd
-    const value = ta.value
-    if (start >= before.length && value.slice(start - before.length, start) === before && value.slice(end, end + after.length) === after) {
-      const next = value.slice(0, start - before.length) + value.slice(start, end) + value.slice(end + after.length)
-      setInput(next)
-      refreshTrigger(next, Math.max(0, start - before.length))
-      requestAnimationFrame(() => { ta.selectionStart = Math.max(0, start - before.length); ta.selectionEnd = Math.max(0, end - after.length) })
-      return
-    }
-    const next = value.slice(0, start) + before + value.slice(start, end) + after + value.slice(end)
-    setInput(next)
-    let selStart: number
-    let selEnd: number
-    if (end > start) {
-      selStart = start + before.length
-      selEnd = end + before.length
-    } else if (mid !== undefined) {
-      selStart = start + before.length
-      selEnd = start + before.length + mid.length
-    } else {
-      selStart = start + before.length
-      selEnd = selStart
-    }
-    refreshTrigger(next, selStart)
-    requestAnimationFrame(() => { ta.selectionStart = selStart; ta.selectionEnd = selEnd })
-  }
   const [jumpKey, setJumpKey] = useState<string | null>(null)
 
   // 状态条模型 chip → 打开模型选择器（§25.2：模型名本身是按钮）
@@ -738,15 +717,12 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
 
   // 用户消息编辑（§31.6 编辑图标）：回填输入框并聚焦（host 无已发消息修改 API）
   const editUserMessage = (text: string) => {
-    setInput(text)
-    setPreview(false)
+    setComposerMarkdown(text, true)
     setTrigger(null)
-    requestAnimationFrame(() => {
-      const el = taRef.current
-      if (el === null) return
-      el.focus()
-      el.selectionStart = el.selectionEnd = el.value.length
-    })
+    const editor = composerEditorRef.current
+    if (editor !== null) {
+      requestAnimationFrame(() => { editor.focus(); editor.moveCursorToEnd(true) })
+    }
   }
 
   // ── §回溯/编辑重发：fork 截断子会话 + git 工作区恢复（index.ts 处理 promote/open）──
@@ -790,11 +766,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [trigger, setTrigger] = useState<Trigger | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
+  const applyCandidateRef = useRef<(candidate: Candidate) => void>(() => {})
 
   // workspace 切换时重载历史（§23.5：不读取/覆盖其他 workspace 的键）
   useEffect(() => { setHistory(readHistory(cwd)); setHistoryIndex(-1) }, [cwd])
 
   const candidates = trigger === null ? [] : buildCandidates(trigger, commandCatalog, fileTree, history)
+  candidatesRef.current = candidates
+  activeIndexRef.current = activeIndex
 
   const refreshTrigger = (value: string, pos: number) => {
     const next = detectTrigger(value, pos)
@@ -803,27 +782,22 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
 
   const applyCandidate = (c: Candidate) => {
-    const el = taRef.current
-    const pos = el?.selectionStart ?? input.length
-    const t = detectTrigger(input, pos)
+    const editor = composerEditorRef.current
+    const current = editor?.getMarkdown() ?? input
+    const pos = current.length
+    const t = detectTrigger(current, pos)
     let next: string
-    let nextCursor: number
     if (t !== null && (t.kind === 'mention' || t.kind === 'command')) {
-      next = input.slice(0, t.start) + c.insert + input.slice(pos)
-      nextCursor = t.start + c.insert.length
+      next = current.slice(0, t.start) + c.insert + current.slice(pos)
     } else {
       next = c.insert
-      nextCursor = next.length
     }
-    setInput(next)
+    setComposerMarkdown(next, true)
     setTrigger(null)
     setHistoryIndex(-1)
-    requestAnimationFrame(() => {
-      if (el === null) return
-      el.focus()
-      el.selectionStart = el.selectionEnd = nextCursor
-    })
+    requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
   }
+  applyCandidateRef.current = applyCandidate
 
   const browseHistory = (delta: -1 | 1) => {
     if (history.length === 0) return
@@ -832,11 +806,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (current === -1) next = delta === -1 ? 0 : history.length - 1
     else next = Math.min(Math.max(current + delta, 0), history.length - 1)
     setHistoryIndex(next)
-    setInput(history[next])
-    requestAnimationFrame(() => {
-      const el = taRef.current
-      if (el !== null) el.selectionStart = el.selectionEnd = el.value.length
-    })
+    setComposerMarkdown(history[next] ?? '', true)
+    const editor = composerEditorRef.current
+    requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
   }
 
   // ── 历史分页与滚动行为（移植规范 §9）──
@@ -859,9 +831,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (running) return
     const root = listRef.current
     if (root !== null) void renderMermaidBlocks(root)
-    const previewEl = document.querySelector<HTMLElement>('.evo-composer-preview')
-    if (previewEl !== null) void renderMermaidBlocks(previewEl)
-  }, [nodes, running, preview])
+  }, [nodes, running])
 
   // 展开更早历史后恢复原视觉位置（§9.2 滚动锚定）
   useLayoutEffect(() => {
@@ -930,7 +900,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
 
   const submit = async () => {
-    const text = input.trim()
+    const rawInput = composerEditorRef.current?.getMarkdown() ?? input
+    const text = rawInput.trim()
     // Pending 审批时禁用发送（§21.2：避免新消息污染待审批工具调用）
     if (!text || pendingApprovals.length > 0) return
     // 附件未就绪（仍在读取）时禁用发送
@@ -941,7 +912,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       if (matched) {
         pushHistory(cwd, text)
         setHistory(readHistory(cwd))
-        setInput('')
+        setComposerMarkdown('')
         setTrigger(null)
         setHistoryIndex(-1)
         return
@@ -964,12 +935,68 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     onSend(resolved, images.length > 0 ? images : undefined)
     pushHistory(cwd, text)
     setHistory(readHistory(cwd))
-    setInput('')
+    setComposerMarkdown('')
     setTrigger(null)
     setHistoryIndex(-1)
-    setPreview(false)
     setPendingImages([])
   }
+
+  submitRef.current = () => { void submit() }
+
+  // Toast UI 的编辑器是唯一的输入 DOM；React state 只保存其 Markdown 序列化结果。
+  useEffect(() => {
+    const host = composerEditorHostRef.current
+    if (host === null) return
+    const editor = new ToastEditor({
+      el: host,
+      height: '100%',
+      minHeight: '72px',
+      initialValue: input,
+      initialEditType: 'wysiwyg',
+      hideModeSwitch: true,
+      usageStatistics: false,
+      autofocus: false,
+      placeholder: t('askAnything'),
+      toolbarItems: [
+        ['heading', 'bold', 'italic', 'strike'],
+        ['hr', 'quote', 'ul', 'ol', 'task'],
+        ['table', 'link', 'code', 'codeblock'],
+      ],
+      events: {
+        change: () => {
+          const next = editor.getMarkdown()
+          setInput(next)
+          setHistoryIndex(-1)
+          setTrigger(detectTrigger(next, next.length))
+        },
+        keydown: (_editorType, event) => {
+          const currentCandidates = candidatesRef.current
+          if (currentCandidates.length > 0) {
+            if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((index) => (index + 1) % currentCandidates.length); return }
+            if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((index) => (index - 1 + currentCandidates.length) % currentCandidates.length); return }
+            if (event.key === 'Tab') { event.preventDefault(); applyCandidateRef.current(currentCandidates[activeIndexRef.current] ?? currentCandidates[0]!); return }
+            if (event.key === 'Escape') { event.preventDefault(); setTrigger(null); return }
+          }
+          if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+            event.preventDefault()
+            submitRef.current()
+            return
+          }
+          if (event.key === 'Escape' && runningRef.current) {
+            event.preventDefault()
+            stopTurn()
+          }
+        },
+      },
+    })
+    composerEditorRef.current = editor
+    return () => {
+      editor.destroy()
+      composerEditorRef.current = null
+    }
+  // The editor must be mounted once; its content is synchronized below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── 附件（§23.7）：图片拖放/粘贴/文件选择 → prompt image 块；单文件 ≤5MB、一次 ≤20 张 ──
   const MAX_IMAGES_PER_MESSAGE = 20
@@ -1034,18 +1061,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   // ── 输入框高度拖动（§23.1）：顶边缘热区，只有实际移动才改变高度 ──
   const [composerHeight, setComposerHeight] = useState<number | null>(null)
   const composerResizeRef = useRef<{ startY: number; startH: number; moved: boolean } | null>(null)
+  const composerResizeCleanupRef = useRef<(() => void) | null>(null)
+  const composerResizeHandleRef = useRef<HTMLElement | null>(null)
   const composerMinHeight = () => {
-    const el = taRef.current
-    if (el === null) return 44
-    // 受控高度下 scrollHeight 可能等于当前高度，测量前先恢复自然高度。
-    const previousHeight = el.style.height
-    const previousMaxHeight = el.style.maxHeight
-    el.style.height = 'auto'
-    el.style.maxHeight = '220px'
-    const naturalHeight = el.scrollHeight
-    el.style.height = previousHeight
-    el.style.maxHeight = previousMaxHeight
-    return Math.max(44, Math.min(220, naturalHeight))
+    return 112
   }
   // 高度上限按视口计算，但不改变单击时的自然高度。
   const composerMaxHeight = () => {
@@ -1054,28 +1073,47 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   const onComposerResizeStart = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void }) => {
     e.preventDefault()
-    const el = taRef.current
+    const el = composerEditorHostRef.current
     if (el === null) return
+    composerResizeCleanupRef.current?.()
     composerResizeRef.current = { startY: e.clientY, startH: composerHeight ?? el.offsetHeight, moved: false }
+    composerResizeHandleRef.current = e.currentTarget
     e.currentTarget.setPointerCapture(e.pointerId)
     e.currentTarget.dataset.dragging = '1'
-  }
-  const onComposerResizeMove = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number }) => {
-    const ref = composerResizeRef.current
-    if (ref === null || !e.currentTarget.hasPointerCapture(e.pointerId)) return
-    // 阈值 4px：点击、轻微手抖和 pointer capture 建立时的零位移不改变高度。
-    const dy = e.clientY - ref.startY
-    if (Math.abs(dy) < 4) return
-    ref.moved = true
-    // 上拖 = 增高；下拖 = 减小。直到真正移动后才进入受控高度模式。
-    const next = ref.startH - dy
-    setComposerHeight(Math.min(composerMaxHeight(), Math.max(composerMinHeight(), next)))
+    const onMove = (event: PointerEvent) => {
+      const ref = composerResizeRef.current
+      if (ref === null) return
+      // 阈值 4px：点击、轻微手抖和 pointer capture 建立时的零位移不改变高度。
+      const dy = event.clientY - ref.startY
+      if (Math.abs(dy) < 4) return
+      ref.moved = true
+      // 上拖 = 增高；下拖 = 减小。直到真正移动后才进入受控高度模式。
+      const next = ref.startH - dy
+      setComposerHeight(Math.min(composerMaxHeight(), Math.max(composerMinHeight(), next)))
+    }
+    const onMouseMove = (event: MouseEvent) => onMove({ clientY: event.clientY } as PointerEvent)
+    const onEnd = () => {
+      composerResizeRef.current = null
+      const handle = composerResizeHandleRef.current
+      if (handle !== null) delete handle.dataset.dragging
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onEnd)
+      document.removeEventListener('pointercancel', onEnd)
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onEnd)
+      composerResizeCleanupRef.current = null
+    }
+    composerResizeCleanupRef.current = onEnd
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onEnd)
+    document.addEventListener('pointercancel', onEnd)
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onEnd)
   }
   const onComposerResizeEnd = () => {
-    composerResizeRef.current = null
-    const el = document.querySelector<HTMLElement>('.evo-composer-resize')
-    if (el !== null) delete el.dataset.dragging
+    composerResizeCleanupRef.current?.()
   }
+  useEffect(() => () => { composerResizeCleanupRef.current?.() }, [])
 
   const hasMessages = nodes.length > 0 || partial !== null
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)
@@ -1196,8 +1234,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       title: t('suggestionHint'),
                       'aria-label': `${p}（${t('suggestionHint')}）`,
                       onClick: () => {
-                        setInput(p)
-                        requestAnimationFrame(() => taRef.current?.focus())
+                        setComposerMarkdown(p, true)
+                        const editor = composerEditorRef.current
+                        requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
                       },
                       children: p,
                     }, p)),
@@ -1428,7 +1467,6 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 className: 'evo-composer-resize',
                 title: t('dragToResize'),
                 onPointerDown: onComposerResizeStart,
-                onPointerMove: onComposerResizeMove,
                 onPointerUp: onComposerResizeEnd,
                 onPointerCancel: onComposerResizeEnd,
               }),
@@ -1450,128 +1488,27 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     onClick: stopTurn,
                     children: jsx(Square, {}),
                   }),
-                  // Markdown 输入预览：Write / Preview 切换
-                  jsx('div', {
-                    className: 'evo-md-toggle',
-                    role: 'group',
-                    'aria-label': t('markdownPreview'),
-                    children: [
-                      jsx('button', {
-                        type: 'button',
-                        className: 'evo-md-toggle-btn',
-                        'data-active': !preview || undefined,
-                        title: t('write'),
-                        'aria-label': t('write'),
-                        onClick: () => setPreview(false),
-                        children: jsx(PenLine, {}),
-                      }, 'write'),
-                      jsx('button', {
-                        type: 'button',
-                        className: 'evo-md-toggle-btn',
-                        'data-active': preview || undefined,
-                        title: t('preview'),
-                        'aria-label': t('preview'),
-                        onClick: () => setPreview(true),
-                        children: jsx(Eye, {}),
-                      }, 'preview'),
-                      jsx('button', {
-                        type: 'button',
-                        className: 'evo-md-toggle-btn',
-                        title: t('markdownShortcuts'),
-                        'aria-label': t('markdownShortcuts'),
-                        children: jsx(Keyboard, {}),
-                      }, 'shortcuts-hint'),
-                    ],
+                  jsx('span', {
+                    className: 'evo-composer-markdown-state',
+                    children: t('markdownWysiwyg'),
                   }),
                 ],
               }),
-              preview
-                ? jsx('div', {
-                    className: 'evo-composer-preview evo-md',
-                    children: input.trim() === ''
-                      ? jsx('span', { className: 'evo-composer-preview-empty', children: t('previewEmpty') })
-                      : jsx(Fragment, { children: [jsx('div', { dangerouslySetInnerHTML: { __html: renderMarkdown(input) } })] }),
-                  })
-                : jsxs('div', {
-                    // 双层编辑器（§composer）：底层装饰层实时渲染 Markdown 样式
-                    // （标记字符隐藏但占位，光标映射零偏移），上层 textarea 透明文字编辑
-                    className: 'evo-composer-input',
-                    children: [
-                      jsx('div', {
-                        ref: decoRef,
-                        className: 'evo-composer-deco',
-                        'data-empty': input === '' || undefined,
-                        dangerouslySetInnerHTML: { __html: renderComposerDeco(input) },
-                      }),
-                      jsx('textarea', {
-                ref: taRef,
-                className: 'evo-composer-textarea',
-                placeholder: t('askAnything'),
-                rows: 1,
-                value: input,
-                role: 'combobox',
+              jsx('div', {
+                ref: composerEditorHostRef,
+                className: 'evo-composer-editor',
+                role: 'textbox',
+                'aria-label': t('askAnything'),
                 'aria-expanded': candidates.length > 0 || undefined,
                 'aria-autocomplete': 'list',
-                'aria-activedescendant': candidates.length > 0 && activeIndex < candidates.length ? `evo-cand-${activeIndex}` : undefined,
-                style: composerHeight !== null ? { height: `${composerHeight}px`, maxHeight: 'none' } : undefined,
-                onScroll: (e) => {
-                  // 装饰层与 textarea 同步滚动（内容超高时）
-                  if (decoRef.current !== null) decoRef.current.scrollTop = e.currentTarget.scrollTop
-                },
-                onInput: (e) => {
-                  setInput(e.currentTarget.value)
-                  // 手动拖动设定高度后不再自动伸缩（§23.1）
-                  if (composerHeight === null) {
-                    e.currentTarget.style.height = 'auto'
-                    e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 220)}px`
-                  }
-                  refreshTrigger(e.currentTarget.value, e.currentTarget.selectionStart)
-                },
-                onKeyUp: (e) => {
-                  if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
-                    refreshTrigger(e.currentTarget.value, e.currentTarget.selectionStart)
-                  }
-                },
-                onClick: (e) => refreshTrigger(e.currentTarget.value, e.currentTarget.selectionStart),
+                style: composerHeight !== null ? { height: `${composerHeight}px` } : undefined,
                 onPaste: onPasteImages,
-                onKeyDown: (e) => {
-                  // 候选弹层键盘导航（§23.2：Tab 应用、上下移动、Esc 关闭）
-                  if (candidates.length > 0) {
-                    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex((i) => (i + 1) % candidates.length); return }
-                    if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex((i) => (i - 1 + candidates.length) % candidates.length); return }
-                    if (e.key === 'Tab') { e.preventDefault(); applyCandidate(candidates[activeIndex]); return }
-                    if (e.key === 'Escape') { e.preventDefault(); setTrigger(null); return }
-                  }
-                  // 空输入上下键浏览输入历史（§23.5）
-                  if (e.key === 'ArrowUp' && input === '') { e.preventDefault(); browseHistory(-1); return }
-                  if (e.key === 'ArrowDown' && input === '' && historyIndex !== -1) { e.preventDefault(); browseHistory(1); return }
-                  // Markdown 快捷键（§composer）：Ctrl/Cmd+B 加粗、I 斜体、K 链接、
-                  // Shift+` 行内代码、Shift+X 删除线；框选文本时包裹，再按一次取消
-                  if (!e.nativeEvent.isComposing && (e.ctrlKey || e.metaKey) && !e.altKey) {
-                    const k = e.key.toLowerCase()
-                    if (k === 'b') { e.preventDefault(); kbdWrap(taRef.current, '**', '**'); return }
-                    if (k === 'i') { e.preventDefault(); kbdWrap(taRef.current, '*', '*'); return }
-                    if (k === 'k') { e.preventDefault(); kbdWrap(taRef.current, '[', '](url)', 'url'); return }
-                    if (e.shiftKey && k === '`') { e.preventDefault(); kbdWrap(taRef.current, '`', '`'); return }
-                    if (e.shiftKey && k === 'x') { e.preventDefault(); kbdWrap(taRef.current, '~~', '~~'); return }
-                  }
-                  // Ctrl/Cmd+Enter 也发送（§23.2）
-                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault()
-                    void submit()
-                    return
-                  }
-                  // Esc：运行中停止本轮（§23.2；候选框存在时上面已处理关闭）
-                  if (e.key === 'Escape' && running) {
-                    e.preventDefault()
-                    stopTurn()
-                    return
-                  }
-                  // Enter 保留为普通换行；仅 Ctrl/Cmd+Enter 发送。
+                onKeyDown: (e: { key: string }) => {
+                  // Toast UI 捕获主要键盘事件；这里保留空输入历史的 React 侧入口。
+                  if (e.key === 'ArrowUp' && input === '') browseHistory(-1)
+                  if (e.key === 'ArrowDown' && input === '' && historyIndex !== -1) browseHistory(1)
                 },
               }),
-                    ],
-                  }),
               candidates.length > 0 && jsx(CandidatePopup, {
                 candidates,
                 active: activeIndex,
