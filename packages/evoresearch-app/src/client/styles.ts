@@ -1445,7 +1445,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-ews-badge.ref { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
 .evo-ews-badge.copy { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
 /* ── Toast UI WYSIWYG composer ── */
-.evo-composer-editor { flex: 1; min-height: 112px; height: 112px; overflow: hidden; }
+.evo-composer-editor { flex: 0 0 auto; min-height: 112px; height: 112px; overflow: hidden; }
 .evo-composer-editor .toastui-editor-defaultUI { height: 100% !important; min-height: 0 !important; border: 0; border-radius: 0; background: transparent; color: var(--color-text-primary); font-family: inherit; }
 .evo-composer-editor .toastui-editor-defaultUI-toolbar { height: 36px; min-height: 36px; padding: 4px 10px; border-top: 0; border-bottom: 1px solid var(--color-border-light); background: transparent; }
 .evo-composer-editor .toastui-editor-toolbar-group { margin: 0 3px 0 0; border-right-color: var(--color-border-light); }

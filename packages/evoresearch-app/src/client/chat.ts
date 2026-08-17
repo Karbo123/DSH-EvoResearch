@@ -1078,9 +1078,15 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (el === null) return
     composerResizeCleanupRef.current?.()
     composerResizeRef.current = { startY: e.clientY, startH: composerHeight ?? el.offsetHeight, moved: false }
-    composerResizeHandleRef.current = e.currentTarget
-    e.currentTarget.setPointerCapture(e.pointerId)
-    e.currentTarget.dataset.dragging = '1'
+    const handle = e.currentTarget
+    composerResizeHandleRef.current = handle
+    // Pointer capture is useful when the pointer leaves the 9px hot zone, but
+    // it can reject an invalid/stale pointer id in embedded browsers. The
+    // document listeners below are the fallback and must still be installed.
+    try {
+      if (e.pointerId > 0) handle.setPointerCapture(e.pointerId)
+    } catch { /* document-level tracking keeps the drag usable */ }
+    handle.dataset.dragging = '1'
     const onMove = (event: PointerEvent) => {
       const ref = composerResizeRef.current
       if (ref === null) return
