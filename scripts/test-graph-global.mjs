@@ -7,7 +7,8 @@ import { ChatGraphService } from '../packages/evoresearch-plugin/lib/host/chat-g
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'graph-svc-'))
 const svc = new ChatGraphService(tmp)
 let pass = 0
-const check = (name, cond) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}`); if (cond) pass += 1 }
+let total = 0
+const check = (name, cond) => { total += 1; console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}`); if (cond) pass += 1 }
 
 // 1) P1 创建 global + project 节点
 const g1 = svc.addNode('p1', { type: 'memory', title: '全局规范', x: 10, y: 10, scope: 'global', content: '科研规范：先复现再创新。' })
@@ -36,6 +37,7 @@ check('边引用 global 节点成功', edge.toPort === 'memory')
 const g1r3 = svc.get('p1')
 check('P1 图含 global 边', g1r3.edges.some((e) => e.from === g1.id && e.to === chat1.id))
 
-console.log(`\n${pass}/8 passed`)
+// 断言计数自动跟随实际 check() 调用数，避免「全过仍 exit 1」的计数过期（BASE-02 约定）
+console.log(`\n${pass}/${total} passed`)
 fs.rmSync(tmp, { recursive: true, force: true })
-process.exit(pass === 8 ? 0 : 1)
+process.exit(pass === total ? 0 : 1)

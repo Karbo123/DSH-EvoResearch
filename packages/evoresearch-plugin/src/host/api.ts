@@ -16,12 +16,64 @@ import type { ChannelManager } from './channels/index.js'
 import type { AutoSkillsService } from './autoskills.js'
 import type { ExpertService } from './experts.js'
 import type { ExperimentService } from './experiments.js'
-import type { ChatGraphService } from './chat-graph.js'
+import type { ChatGraphService, GraphGroup, GraphNode, GraphEdge } from './chat-graph.js'
 import type { ProjectEnvService, ProjectEnvInfo } from './project-env.js'
 import type { RewindService } from './rewind.js'
+import type { NotesService } from './notes.js'
+import type { ExperimentWorkspaceService, ExperimentWorkspaceInfo, ExperimentWorkspaceDetail, ExperimentWorkspaceEntry, ExperimentWorkspaceTree } from './experiment-workspace.js'
+import type { ExperimentProcessService, RunRecord, ExperimentGraphRef, ExperimentGraphRefResolution } from './experiment-process.js'
+import type { WorktreeService } from './worktrees.js'
+import type { LibraryIndexer, LibrarySearch } from './library/index.js'
+import type {
+  AddPaperResult,
+  IndexLibraryResult,
+  PaperSummary,
+  SearchHit,
+  SearchOptions,
+  TextRange,
+  BibEntry,
+  LibraryRef,
+  ResolvedLibraryRef,
+} from './library/index.js'
+import type {
+  ManuscriptService,
+  ManuscriptInfo,
+  ManuscriptContext,
+  QuoteCheckInput,
+  QuoteCheckResult,
+  DraftDiff,
+  CompileResult,
+  LatexTool,
+} from './manuscript.js'
+import type { SignalStore } from './evolution/signals.js'
+import { aggregateWeaknesses, weaknessMarkdown } from './evolution/signals.js'
+import type { EvolutionSignal, EvolutionSignalType } from './evolution/signals.js'
+import type { CandidateRegistry, CandidateStatus, EvolutionCandidate } from './evolution/registry.js'
+import { evaluateCandidate } from './evolution/evaluator.js'
+import type { EvaluationResult, EvaluationSample } from './evolution/evaluator.js'
+import type { SkillRunResult } from './autoskills.js'
+import type { ContextWindowRuntime, PressureSessionLike } from './context/guard.js'
+import type { ContextRuntime, ProjectionQueryOptions, ProjectionQueryResult, LineageResult } from './platform/context-runtime.js'
+import type { ContextAssembler, AssembleInput, EffectQuery, AssemblyResult, ReferencePreview, EffectSignalRecord } from './context/assembler.js'
+import type { CompactionQuery, GraphConnectionInfo, PressureReport, CompactionRecord, ContextSourceReport, SurfaceEventInfo } from './context/types.js'
 import { readSessionEvents } from './rewind.js'
 import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
+import type { ApprovalPolicy, ApprovalDecision } from './platform/approval-policy.js'
+import { decideApproval, defaultApprovalPolicy, validateApprovalPolicy } from './platform/approval-policy.js'
+import type { FallbackState, ModelRoute, SelectModelOptions } from './platform/models-selector.js'
+import { emptyFallbackState, routeKey, selectModel, recordFailure, recordSuccess } from './platform/models-selector.js'
+import type { ToolDef } from './platform/tools-selector.js'
+import { selectToolsForTurn, BASE_TOOL_WHITELIST } from './platform/tools-selector.js'
+import type { SubagentRecord, SubagentCreateRequest, SubagentMode, SubagentOpResult } from './platform/subagents.js'
+import type { SubagentRegistry, SubagentProviderRegistry, SubagentFacade } from './platform/subagents.js'
+import type { MessageFeedback, MessageFeedbackInput, MessageFeedbackRating } from './platform/diagnostics.js'
+import { exportSessionDiagnostics, type SessionDiagnostics, type DiagnosticEventLike, type DiagnosticCompaction } from './platform/diagnostics.js'
+import type { McpSupervisor } from './mcp/supervisor.js'
+import type { McpServerConfig, McpServerStatus } from './mcp/supervisor.js'
+import type { LayeredSkillRegistry, SkillLayer, SkillEntry } from './skills/registry.js'
+import type { ScienceLoopService, ScienceLoop, ScienceLoopAction } from './science/loops.js'
+import type { ScienceChatGraphBridge } from './science/chat-graph-bridge.js'
 
 /** 各服务集合（host 入口注入）。 */
 export interface HostServices {
@@ -35,6 +87,71 @@ export interface HostServices {
   readonly chatGraph: ChatGraphService
   readonly projectEnv: ProjectEnvService
   readonly rewind: RewindService
+  /** 自由文本研究笔记（NOTE-01..09；§整合 3.1）。 */
+  readonly notes?: NotesService
+  /** 实验工作区（§7 自由形式实验管理；EXP-02..04，整合 §3.3）。 */
+  readonly experimentWorkspace?: ExperimentWorkspaceService
+  /** 实验进程与日志（§7.2 运行账本；EXP-05..12，整合 §3.4）。 */
+  readonly experimentProcess?: ExperimentProcessService
+  /** Git worktree（§7.4；ENV-01/02）。 */
+  readonly worktrees?: WorktreeService
+  /** 科学自演化循环（SCI-08/09），状态快照可跨重启恢复。 */
+  readonly scienceLoops?: ScienceLoopService
+  /** RA/EA/EMA 到 Chat Graph/Evolution 的明确边界桥接。 */
+  readonly scienceGraphBridge?: ScienceChatGraphBridge
+  /** 文献索引（LIB-01..08）：注册/提取/搜索/笔记/参考文献/BibTeX/图引用。 */
+  readonly libraryIndexer?: LibraryIndexer
+  /** 文献检索与引用解析（LIB-03/07/08）。 */
+  readonly librarySearch?: LibrarySearch
+  /** 稿件目录与 LaTeX 写作（WRITE-01..08）。 */
+  readonly manuscript?: ManuscriptService
+  /** 自进化运行时（EVO-01..06；t15 交付，P1 接入）。 */
+  readonly evo?: {
+    readonly signals: SignalStore
+    readonly registry: CandidateRegistry
+  }
+  /** 上下文窗口保护层（CTX-13..19；P2）。 */
+  readonly contextGuard?: ContextWindowRuntime
+  /** 平台上下文运行时（PLAT-03..07）：压缩、裁剪、投影和谱系的统一门面。 */
+  readonly contextRuntime?: ContextRuntime
+  /** ContextAssembler（CTX-01..12；P2）。 */
+  readonly contextAssembler?: ContextAssembler
+  /** 平台能力层（PLAT-13..20；t19 交付，按需接线）。 */
+  readonly platform?: PlatformServices
+}
+
+/** 平台能力服务集合（PLAT-13..20；可选接线）。 */
+export interface PlatformServices {
+  /** 模型路由状态（PLAT-13：多模型 Fallback 计数）。 */
+  readonly modelFallbackState?: FallbackState
+  /** 记录一次失败（增加计数）。 */
+  readonly recordModelFailure?: (route: ModelRoute) => FallbackState
+  /** 记录一次成功（清零计数）。 */
+  readonly recordModelSuccess?: (route: ModelRoute) => FallbackState
+  /** 选择当前路由（PLAT-13 纯函数）。 */
+  readonly selectModelRoute?: (routes: { primary: ModelRoute; fallbacks?: ModelRoute[] }, options?: SelectModelOptions) => ModelRoute | null
+  /** 工具选择（PLAT-14）。 */
+  readonly selectToolsForTurn?: (tools: readonly ToolDef[], query: string, options?: { required?: readonly string[]; maxTools?: number }) => ToolDef[]
+  /** 审批策略（PLAT-15：默认 ask + 默认危险清单）。 */
+  readonly approvalPolicy?: ApprovalPolicy
+  /** 同步审批判定（PLAT-15 纯函数）。 */
+  readonly decideApproval?: (toolName: string) => ApprovalDecision
+  /** 子代理运行时（PLAT-16/19）。 */
+  readonly subagents?: {
+    readonly registry: SubagentRegistry
+    readonly providers: SubagentProviderRegistry
+    readonly facade: SubagentFacade
+  }
+  /** 消息反馈存储（PLAT-20）。 */
+  readonly feedback?: {
+    readonly record: (input: MessageFeedbackInput) => MessageFeedback
+    readonly list: (sessionId?: string) => MessageFeedback[]
+  }
+  /** MCP supervisor（PLAT-11/12）。 */
+  readonly mcp?: McpSupervisor
+  /** 分层 Skill 注册表（PLAT-08..10；按工作区创建视图）。 */
+  readonly skillRegistry?: LayeredSkillRegistry
+  readonly skillRegistryFor?: (workspaceDir?: string) => LayeredSkillRegistry
 }
 
 /** JSON 化的记忆包（不含内部引用）。 */
@@ -562,9 +679,10 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   @Remote('experimentsRollback')
-  experimentsRollback(args: { workspaceDir?: string; id: string; checkpointId: string }): { ok: boolean; restored: number; checkpointId: string; name: string } | { error: string } {
+  experimentsRollback(args: { workspaceDir?: string; id: string; checkpointId: string; confirm?: boolean }): { ok: boolean; restored: number; checkpointId: string; name: string } | { error: string } {
     try {
-      const result = this.services.experiments.rollback(this.experimentArgs(args), String(args?.id ?? ''), String(args?.checkpointId ?? ''))
+      // EXP-13 破坏性保护：覆盖工作区文件前必须显式 confirm:true（前端先弹确认框）
+      const result = this.services.experiments.rollback(this.experimentArgs(args), String(args?.id ?? ''), String(args?.checkpointId ?? ''), { confirm: args?.confirm === true })
       return { ok: true, ...result }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
@@ -593,6 +711,549 @@ export class EvoResearchApiService extends TypertRemoteService {
   experimentsDelete(args: { workspaceDir?: string; id: string }): { ok: boolean } | { error: string } {
     try {
       return this.services.experiments.delete(this.experimentArgs(args), String(args?.id ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 实验工作区（§7 自由形式实验管理；EXP-02..04，t39 片段）────────────────
+
+  @Remote('experimentWorkspaceCreate')
+  experimentWorkspaceCreate(args: { project: string; name: string }): ExperimentWorkspaceInfo | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
+      return svc.createWorkspace(String(args?.project ?? ''), String(args?.name ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentWorkspaceImport')
+  experimentWorkspaceImport(args: { project: string; sourceDir: string; name?: string; copy?: boolean }): ExperimentWorkspaceInfo | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
+      return svc.importExisting(String(args?.project ?? ''), String(args?.sourceDir ?? ''), {
+        ...(typeof args?.name === 'string' && args.name.trim() !== '' ? { name: args.name } : {}),
+        ...(args?.copy === true ? { copy: true } : {}),
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentWorkspaceList')
+  experimentWorkspaceList(args: { workspaceDir?: string }): ExperimentWorkspaceInfo[] {
+    const svc = this.services.experimentWorkspace
+    if (svc === undefined) return []
+    return svc.list(String(args?.workspaceDir ?? ''))
+  }
+
+  @Remote('experimentWorkspaceDetail')
+  experimentWorkspaceDetail(args: { workspaceDir?: string; slug: string }): ExperimentWorkspaceDetail | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
+      return svc.listDetail(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentWorkspaceReadNote')
+  experimentWorkspaceReadNote(args: { workspaceDir?: string; slug: string }): { content: string } | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
+      return { content: svc.readNote(String(args?.workspaceDir ?? ''), String(args?.slug ?? '')) }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentWorkspaceWriteNote')
+  experimentWorkspaceWriteNote(args: { workspaceDir?: string; slug: string; content: string; append?: boolean }): { ok: true; bytes: number } | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
+      return svc.writeNote(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''), String(args?.content ?? ''), {
+        append: args?.append === true,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentWorkspaceTree')
+  experimentWorkspaceTree(args: { workspaceDir?: string; slug: string; depth?: number; maxItems?: number }): ExperimentWorkspaceTree | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
+      return svc.listContents(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''), {
+        ...(typeof args?.depth === 'number' ? { depth: args.depth } : {}),
+        ...(typeof args?.maxItems === 'number' ? { maxItems: args.maxItems } : {}),
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 实验进程与日志（§7.2 运行账本；EXP-05..12，t39 片段）──────────────────
+
+  @Remote('experimentRunStart')
+  experimentRunStart(args: { workspaceDir?: string; slug: string; command: string; cwd?: string; pythonPath?: string; env?: Record<string, string> }): { run: RunRecord } | { error: string } {
+    try {
+      const svc = this.services.experimentProcess
+      if (svc === undefined) return { error: 'experimentProcess 服务不可用' }
+      const run = svc.run(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''), {
+        command: String(args?.command ?? ''),
+        ...(typeof args?.cwd === 'string' && args.cwd.trim() !== '' ? { cwd: args.cwd } : {}),
+        ...(typeof args?.pythonPath === 'string' && args.pythonPath.trim() !== '' ? { pythonPath: args.pythonPath } : {}),
+        ...(args?.env !== undefined ? { env: args.env } : {}),
+      })
+      return { run }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentRunList')
+  experimentRunList(args: { workspaceDir?: string; slug: string }): { runs: RunRecord[] } {
+    const svc = this.services.experimentProcess
+    if (svc === undefined) return { runs: [] }
+    return { runs: svc.list(String(args?.workspaceDir ?? ''), String(args?.slug ?? '')) }
+  }
+
+  @Remote('experimentRunStatus')
+  experimentRunStatus(args: { workspaceDir?: string; slug: string }): { runs: RunRecord[]; running: RunRecord | null; latest: RunRecord | null } {
+    const svc = this.services.experimentProcess
+    if (svc === undefined) return { runs: [], running: null, latest: null }
+    return svc.status(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''))
+  }
+
+  @Remote('experimentRunStop')
+  experimentRunStop(args: { workspaceDir?: string; slug: string; runId?: string }): { ok: true; run: RunRecord } | { error: string } {
+    try {
+      const svc = this.services.experimentProcess
+      if (svc === undefined) return { error: 'experimentProcess 服务不可用' }
+      return svc.stop(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''), {
+        ...(typeof args?.runId === 'string' && args.runId !== '' ? { runId: args.runId } : {}),
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLogRead')
+  experimentLogRead(args: { workspaceDir?: string; slug: string; stream?: 'stdout' | 'stderr'; offset?: number; limit?: number; tail?: number }): { text: string; nextOffset: number; eof: boolean; size: number } | { error: string } {
+    try {
+      const svc = this.services.experimentProcess
+      if (svc === undefined) return { error: 'experimentProcess 服务不可用' }
+      const stream = args?.stream === 'stderr' ? 'stderr' : 'stdout'
+      return svc.readLog(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''), stream, {
+        ...(typeof args?.offset === 'number' ? { offset: args.offset } : {}),
+        ...(typeof args?.limit === 'number' ? { limit: args.limit } : {}),
+        ...(typeof args?.tail === 'number' ? { tail: args.tail } : {}),
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLogInfo')
+  experimentLogInfo(args: { workspaceDir?: string; slug: string }): { stdout: { path: string; size: number }; stderr: { path: string; size: number } } {
+    const svc = this.services.experimentProcess
+    if (svc === undefined) return { stdout: { path: '', size: 0 }, stderr: { path: '', size: 0 } }
+    return svc.logInfo(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''))
+  }
+
+  @Remote('experimentRecover')
+  experimentRecover(args: { workspaceDir?: string; slug: string }): { checked: number; changed: number; notes: string[] } {
+    const svc = this.services.experimentProcess
+    if (svc === undefined) return { checked: 0, changed: 0, notes: [] }
+    return svc.restartRecovery(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''))
+  }
+
+  @Remote('experimentRetrospectiveDraft')
+  experimentRetrospectiveDraft(args: { workspaceDir?: string; slug: string; saveDraft?: boolean }): { draft: string; draftPath: string | null } | { error: string } {
+    try {
+      const svc = this.services.experimentProcess
+      if (svc === undefined) return { error: 'experimentProcess 服务不可用' }
+      return svc.retrospectiveDraft(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''), {
+        saveDraft: args?.saveDraft === true,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentWorkspaceAppendNote')
+  experimentWorkspaceAppendNote(args: { workspaceDir?: string; slug: string; text: string; heading?: string }): { ok: true; bytes: number } | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
+      return svc.appendNote(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''), String(args?.text ?? ''), {
+        ...(typeof args?.heading === 'string' && args.heading.trim() !== '' ? { heading: args.heading } : {}),
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentWorkspaceArtifacts')
+  experimentWorkspaceArtifacts(args: { workspaceDir?: string; slug: string }): { dir: string; exists: boolean; entries: ExperimentWorkspaceEntry[]; dirs: number; files: number; totalBytes: number } | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
+      return svc.artifacts(String(args?.workspaceDir ?? ''), String(args?.slug ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentGraphRefResolve')
+  experimentGraphRefResolve(args: { ref: ExperimentGraphRef }): ExperimentGraphRefResolution | { error: string } {
+    try {
+      const svc = this.services.experimentProcess
+      if (svc === undefined) return { error: 'experimentProcess 服务不可用' }
+      return svc.resolveGraphRef(args?.ref as ExperimentGraphRef)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 文献索引（LIB；t40 片段；project=项目名非路径）────────────────────────
+
+  @Remote('libraryAddPaper')
+  async libraryAddPaper(args: { project: string; pdfPath: string }): Promise<AddPaperResult | { error: string }> {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return await svc.addPaper(String(args?.project ?? ''), String(args?.pdfPath ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryIndex')
+  async libraryIndex(args: { project: string; scanDir: string }): Promise<IndexLibraryResult | { error: string }> {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return await svc.indexLibrary(String(args?.project ?? ''), String(args?.scanDir ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryList')
+  libraryList(args: { project: string; includeMissing?: boolean; limit?: number; offset?: number }): PaperSummary[] | { error: string } {
+    try {
+      const svc = this.services.librarySearch
+      if (svc === undefined) return { error: 'librarySearch 服务不可用' }
+      return svc.listPapers(String(args?.project ?? ''), {
+        includeMissing: args?.includeMissing,
+        limit: args?.limit,
+        offset: args?.offset,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryGet')
+  libraryGet(args: { project: string; paperId: string }): PaperSummary | null | { error: string } {
+    try {
+      const svc = this.services.librarySearch
+      if (svc === undefined) return { error: 'librarySearch 服务不可用' }
+      return svc.getPaper(String(args?.project ?? ''), String(args?.paperId ?? '')) ?? null
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('librarySearch')
+  librarySearch(args: {
+    project: string
+    query: string
+    fields?: SearchOptions['fields']
+    limit?: number
+    includeLocations?: boolean
+    locationsPerPaper?: number
+  }): SearchHit[] | { error: string } {
+    try {
+      const svc = this.services.librarySearch
+      if (svc === undefined) return { error: 'librarySearch 服务不可用' }
+      return svc.search(String(args?.project ?? ''), String(args?.query ?? ''), {
+        fields: args?.fields,
+        limit: args?.limit,
+        includeLocations: args?.includeLocations,
+        locationsPerPaper: args?.locationsPerPaper,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryGetTextRange')
+  libraryGetTextRange(args: { project: string; paperId: string; page: number; offset: number; length: number }): TextRange | { error: string } {
+    try {
+      const svc = this.services.librarySearch
+      if (svc === undefined) return { error: 'librarySearch 服务不可用' }
+      return svc.getTextRange(
+        String(args?.project ?? ''),
+        String(args?.paperId ?? ''),
+        Number(args?.page ?? 1),
+        Number(args?.offset ?? 0),
+        Number(args?.length ?? 0),
+      )
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryGetPageText')
+  libraryGetPageText(args: { project: string; paperId: string; page: number }): { filePath: string; page: number; text: string } | null | { error: string } {
+    try {
+      const svc = this.services.librarySearch
+      if (svc === undefined) return { error: 'librarySearch 服务不可用' }
+      return svc.getPageText(String(args?.project ?? ''), String(args?.paperId ?? ''), Number(args?.page ?? 1)) ?? null
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('librarySetNotes')
+  librarySetNotes(args: { project: string; paperId: string; notes: string }): PaperSummary | { error: string } {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return svc.setNotes(String(args?.project ?? ''), String(args?.paperId ?? ''), String(args?.notes ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryGetNotes')
+  libraryGetNotes(args: { project: string; paperId: string }): string | { error: string } {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return svc.getNotes(String(args?.project ?? ''), String(args?.paperId ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('librarySetReferences')
+  librarySetReferences(args: { project: string; paperId: string; references: string[] }): PaperSummary | { error: string } {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return svc.setReferences(String(args?.project ?? ''), String(args?.paperId ?? ''), args?.references ?? [])
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryGetReferences')
+  libraryGetReferences(args: { project: string; paperId: string }): string[] | { error: string } {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return svc.getReferences(String(args?.project ?? ''), String(args?.paperId ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('librarySetBibtex')
+  librarySetBibtex(args: { project: string; paperId: string; bibtex: string }): PaperSummary | { error: string } {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return svc.setBibtex(String(args?.project ?? ''), String(args?.paperId ?? ''), String(args?.bibtex ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryGetBibtex')
+  libraryGetBibtex(args: { project: string; paperId: string }): string | { error: string } {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return svc.getBibtex(String(args?.project ?? ''), String(args?.paperId ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryImportBibtex')
+  libraryImportBibtex(args: { project: string; bibtex: string }): { attached: Array<{ paperId: string; title: string }>; unmatched: BibEntry[] } | { error: string } {
+    try {
+      const svc = this.services.libraryIndexer
+      if (svc === undefined) return { error: 'libraryIndexer 服务不可用' }
+      return svc.importBibtex(String(args?.project ?? ''), String(args?.bibtex ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryResolveRef')
+  libraryResolveRef(args: { project: string; ref: LibraryRef }): ResolvedLibraryRef | null | { error: string } {
+    try {
+      const svc = this.services.librarySearch
+      if (svc === undefined) return { error: 'librarySearch 服务不可用' }
+      return svc.resolveRef(String(args?.project ?? ''), args?.ref ?? { kind: 'paper' }) ?? null
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryToGraphRef')
+  libraryToGraphRef(args: { project: string; ref: LibraryRef }): { kind: 'pdf'; path: string } | null | { error: string } {
+    try {
+      const svc = this.services.librarySearch
+      if (svc === undefined) return { error: 'librarySearch 服务不可用' }
+      return svc.toGraphRef(String(args?.project ?? ''), args?.ref ?? { kind: 'paper' }) ?? null
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('libraryScanPages')
+  libraryScanPages(args: { project: string; query: string; paperId?: string; limit?: number }):
+    Array<{ paperId: string; title: string; filePath: string; page: number; offset: number; snippet: string }> | { error: string } {
+    try {
+      const svc = this.services.librarySearch
+      if (svc === undefined) return { error: 'librarySearch 服务不可用' }
+      return svc.scanPages(String(args?.project ?? ''), String(args?.query ?? ''), {
+        paperId: args?.paperId,
+        hitLimit: args?.limit,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 稿件写作（WRITE；t40 片段）────────────────────────────────────────────
+
+  @Remote('manuscriptCreate')
+  manuscriptCreate(args: { project: string; dirName?: string }): ManuscriptInfo | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.createManuscript(String(args?.project ?? ''), args?.dirName)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptList')
+  manuscriptList(args: { project: string }): ManuscriptInfo[] | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.listManuscripts(String(args?.project ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptGet')
+  manuscriptGet(args: { project: string; dir?: string }): ManuscriptInfo | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.getManuscript(String(args?.project ?? ''), args?.dir)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptListFiles')
+  manuscriptListFiles(args: { project: string; dir?: string; sub?: string }): string[] | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.listFiles(String(args?.project ?? ''), args?.dir, args?.sub)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptReadFile')
+  manuscriptReadFile(args: { project: string; dir?: string; relPath: string }): { path: string; content: string } | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.readFile(String(args?.project ?? ''), args?.dir, String(args?.relPath ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptWriteFile')
+  manuscriptWriteFile(args: { project: string; dir?: string; relPath: string; content: string }): { path: string } | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.writeFile(String(args?.project ?? ''), args?.dir, String(args?.relPath ?? ''), String(args?.content ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptCompile')
+  async manuscriptCompile(args: { project: string; dir?: string; tool?: LatexTool; timeoutMs?: number }): Promise<CompileResult | { error: string }> {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return await svc.compileManuscript(String(args?.project ?? ''), args?.dir, {
+        tool: args?.tool,
+        timeoutMs: args?.timeoutMs,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptContext')
+  manuscriptContext(args: { project: string; refs: unknown[] }): ManuscriptContext | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.resolveManuscriptContext(String(args?.project ?? ''), args?.refs ?? [])
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptQuoteCheck')
+  manuscriptQuoteCheck(args: QuoteCheckInput & { project: string }): QuoteCheckResult | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.quoteCheck(String(args?.project ?? ''), {
+        text: args?.text,
+        number: args?.number,
+        paperId: args?.paperId,
+        experimentDir: args?.experimentDir,
+        resultFile: args?.resultFile,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('manuscriptDiffDraft')
+  manuscriptDiffDraft(args: { project: string; dir?: string; newContent: string }): DraftDiff | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.diffDraft(String(args?.project ?? ''), args?.dir, String(args?.newContent ?? ''))
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -633,7 +1294,7 @@ export class EvoResearchApiService extends TypertRemoteService {
       if (typeof args?.rev === 'number' && this.services.chatGraph.rev(name) !== args.rev) {
         return { ok: false, conflict: true, error: '图谱已在其他窗口修改，请刷新后重试' }
       }
-      const result = this.services.chatGraph.save(name, (args?.graph ?? { nodes: [], edges: [] }) as never)
+      const result = this.services.chatGraph.save(name, (args?.graph ?? { nodes: [], edges: [] }) as never, args?.rev)
       if (!result.ok) return result
       return { ok: true, rev: this.services.chatGraph.rev(name) }
     } catch (error) {
@@ -642,20 +1303,20 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   @Remote('graphAddNode')
-  graphAddNode(args: { workspaceDir?: string; node: unknown }): unknown {
+  graphAddNode(args: { workspaceDir?: string; node: unknown; operationId?: string }): unknown {
     try {
       const name = this.graphProjectOf(args)
-      return { node: this.services.chatGraph.addNode(name, args?.node as never), rev: this.services.chatGraph.rev(name) }
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({ node: this.services.chatGraph.addNode(name, args?.node as never), rev: this.services.chatGraph.rev(name) }))
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
   }
 
   @Remote('graphAddEdge')
-  graphAddEdge(args: { workspaceDir?: string; edge: unknown }): unknown {
+  graphAddEdge(args: { workspaceDir?: string; edge: unknown; operationId?: string }): unknown {
     try {
       const name = this.graphProjectOf(args)
-      return { edge: this.services.chatGraph.addEdge(name, args?.edge as never), rev: this.services.chatGraph.rev(name) }
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({ edge: this.services.chatGraph.addEdge(name, args?.edge as never), rev: this.services.chatGraph.rev(name) }))
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -665,9 +1326,12 @@ export class EvoResearchApiService extends TypertRemoteService {
    * 上下文初始化继承（§ChatGraph）：context 连线时一次性执行——
    * 把源 chat 会话的完整历史 fork 为新的独立会话（一层继承，非递归、非运行时注入），
    * 并将目标节点重新绑定到该会话。
+   *
+   * 原子性（GRAPH-03）：fork 成功（await agents.create）后才换绑并落盘；
+   * fork 失败直接返回错误，不改动图——避免图指向不存在的会话。
    */
   @Remote('graphInherit')
-  graphInherit(args: { workspaceDir?: string; fromNodeId: string; toNodeId: string }): { ok: boolean; sessionId?: string; replaced?: boolean; notice?: string; error?: string; rev?: number } {
+  async graphInherit(args: { workspaceDir?: string; fromNodeId: string; toNodeId: string; sourceEventSeq?: number }): Promise<{ ok: boolean; sessionId?: string; replaced?: boolean; notice?: string; error?: string; rev?: number }> {
     try {
       const name = this.graphProjectOf(args)
       const graph = this.services.chatGraph.get(name)
@@ -682,12 +1346,26 @@ export class EvoResearchApiService extends TypertRemoteService {
       // 过滤不符合官方 seed envelope 的事件（如会话头事件 session{type,id,cwd}）
       let seedEvents: unknown[]
       let cwd: string | undefined
+      let sourceEventSeq: number | undefined
+      let sourceMessageId: string | undefined
       try {
         const raw = readSessionEvents(from.sessionId) as Array<Record<string, unknown>>
+        const requestedSeq = typeof args?.sourceEventSeq === 'number' && Number.isFinite(args.sourceEventSeq)
+          ? Math.max(0, Math.floor(args.sourceEventSeq))
+          : undefined
+        const availableSeqs = raw.map((event) => typeof event.seq === 'number' ? event.seq : -1).filter((seq) => seq >= 0)
+        const latestSeq = availableSeqs.length > 0 ? Math.max(...availableSeqs) : 0
+        const bounded = requestedSeq === undefined ? raw : raw.filter((event) => typeof event.seq === 'number' && event.seq <= Math.min(requestedSeq, latestSeq))
+        const lastEvent = bounded[bounded.length - 1]
+        sourceEventSeq = typeof requestedSeq === 'number' ? Math.min(requestedSeq, latestSeq) : (typeof lastEvent?.seq === 'number' ? lastEvent.seq : undefined)
+        const lastMessage = [...bounded].reverse().find((event) => event.type === 'user/message' || event.type === 'assistant/message')
+        const messageData = lastMessage?.data as { messageId?: unknown; id?: unknown } | undefined
+        const messageId = messageData?.messageId ?? messageData?.id
+        sourceMessageId = typeof messageId === 'string' && messageId !== '' ? messageId : undefined
         const allowed = new Set(['type', 'seq', 'time', 'data', 'surfaceOp', 'sourceEventSeqs', 'ignorable'])
         // 过滤非法 envelope 事件，重排 seq 并丢弃 sourceEventSeqs（其引用旧 seq，
         // seed 回放不需要；官方要求 seed 从 0 连续且引用必须更早）
-        seedEvents = raw
+        seedEvents = bounded
           .filter((ev) => {
             if (typeof ev.type !== 'string') return false
             if (typeof ev.seq !== 'number' || typeof ev.time !== 'number' || ev.data === undefined) return false
@@ -712,18 +1390,28 @@ export class EvoResearchApiService extends TypertRemoteService {
       }
       const childId = `session-${randomUUID()}`
       const seed = Array.isArray(seedEvents) ? seedEvents : []
-      void agents.create({
-        sessionId: childId,
-        seed,
-        meta: {
-          ...(typeof cwd === 'string' && cwd !== '' ? { cwd } : {}),
-          parentSession: from.sessionId,
-          seedLength: seed.length,
-          inherited: true,
-        },
-        agentOptions: {},
-      })
-      const replaced = to.sessionId !== childId
+      // 原子性关键：fork 必须成功才继续——失败时返回错误且不改动图
+      let created: unknown
+      try {
+        created = await agents.create({
+          sessionId: childId,
+          seed,
+          meta: {
+            ...(typeof cwd === 'string' && cwd !== '' ? { cwd } : {}),
+            parentSession: from.sessionId,
+            seedLength: seed.length,
+            inherited: true,
+          },
+          agentOptions: {},
+        })
+      } catch (error) {
+        return { ok: false, error: `会话 fork 失败: ${error instanceof Error ? error.message : String(error)}` }
+      }
+      // 以实际创建的会话 id 为准（handle 可能是 { session: { id } } 或直接 id）
+      const realSessionId = (created as { session?: { id?: unknown } } | undefined)?.session?.id
+        ?? (created as { id?: unknown } | undefined)?.id
+      const finalId = typeof realSessionId === 'string' && realSessionId !== '' ? realSessionId : childId
+      const replaced = to.sessionId !== finalId
       // 目标旧会话已有内容时提示（重新继承会换绑新会话，原会话保留但不再显示）
       let notice: string | undefined
       if (replaced && to.sessionId !== undefined) {
@@ -735,12 +1423,800 @@ export class EvoResearchApiService extends TypertRemoteService {
       // （与前端拖线共用一个写入口，避免 graph-save 与 graph-inherit 竞争覆盖）
       const edges = graph.edges
         .filter((e) => !(e.to === to.id && e.toPort === 'context'))
-        .concat([{ id: `e${Date.now().toString(36)}`, from: from.id, to: to.id, toPort: 'context' }])
-      const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: childId } : n)), edges }
-      this.services.chatGraph.save(name, next)
-      return { ok: true, sessionId: childId, replaced, notice, rev: this.services.chatGraph.rev(name) }
+        .concat([{
+          id: `e${Date.now().toString(36)}`,
+          from: from.id,
+          to: to.id,
+          toPort: 'context' as const,
+          behavior: 'fork' as const,
+          forkAnchor: { sourceSessionId: from.sessionId, sourceEventSeq, sourceMessageId, targetSessionId: finalId },
+        }])
+      const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: finalId } : n)), edges }
+      const saved = this.services.chatGraph.save(name, next)
+      if (!saved.ok) return { ok: false, error: saved.error ?? '图谱保存失败' }
+      return { ok: true, sessionId: finalId, replaced, notice, rev: this.services.chatGraph.rev(name) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── Chat Graph 资料引用（GRAPH-04/06/08：文件/笔记引用节点预览与转笔记）──
+
+  @Remote('graphPreview')
+  graphPreview(args: { workspaceDir?: string; nodeId: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      const node = this.services.chatGraph.get(name).nodes.find((n) => n.id === String(args?.nodeId ?? ''))
+      if (node === undefined) return { error: '节点不存在' }
+      return { nodeId: node.id, preview: this.services.chatGraph.previewOf(node, String(args?.workspaceDir ?? '')) }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphConvertNote')
+  graphConvertNote(args: { workspaceDir?: string; nodeId: string }): { ok: boolean; noteId?: string; fileName?: string; node?: unknown; error?: string } {
+    try {
+      const name = this.graphProjectOf(args)
+      const notes = this.services.notes
+      if (notes === undefined) return { ok: false, error: 'notes 服务不可用' }
+      const result = this.services.chatGraph.convertToNote(name, String(args?.nodeId ?? ''), String(args?.workspaceDir ?? ''), notes)
+      if (!result.ok) return { ok: false, error: result.error }
+      return { ok: true, noteId: result.noteId, fileName: result.fileName, node: result.node }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 自由文本研究笔记（NOTE-01..09；§整合 3.1，P0）─────────────────────────
+
+  private notesService(): NotesService {
+    const notes = this.services.notes
+    if (notes === undefined) throw new Error('notes 服务不可用')
+    return notes
+  }
+
+  @Remote('notesList')
+  notesList(args: { workspaceDir?: string; includeLegacy?: boolean; source?: string; limit?: number; offset?: number }): unknown {
+    try {
+      const list = this.notesService().listNotes({
+        workspaceDir: args?.workspaceDir,
+        source: args?.source === 'legacy' || args?.source === 'observation' ? 'observation' : undefined,
+        limit: args?.limit,
+        offset: args?.offset,
+      })
+      return args?.includeLegacy === true
+        ? [...list, ...this.notesService().listLegacyObservations(String(args?.workspaceDir ?? ''))]
+        : list
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesRead')
+  notesRead(args: { workspaceDir?: string; noteId: string; offset?: number; limit?: number }): unknown {
+    try {
+      return this.notesService().readNote({
+        workspaceDir: args?.workspaceDir,
+        noteId: String(args?.noteId ?? ''),
+        offset: args?.offset,
+        limit: args?.limit,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesCreate')
+  notesCreate(args: { workspaceDir?: string; title?: string; body: string }): unknown {
+    try {
+      return this.notesService().createNote({ workspaceDir: args?.workspaceDir, title: args?.title, body: String(args?.body ?? '') })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesWrite')
+  notesWrite(args: { workspaceDir?: string; noteId: string; body: string }): unknown {
+    try {
+      return this.notesService().writeNote({ workspaceDir: args?.workspaceDir, noteId: String(args?.noteId ?? ''), body: String(args?.body ?? '') })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesDelete')
+  notesDelete(args: { workspaceDir?: string; noteId: string }): { ok: boolean; error?: string } {
+    try {
+      return this.notesService().deleteNote({ workspaceDir: args?.workspaceDir, noteId: String(args?.noteId ?? '') })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesSearch')
+  notesSearch(args: { workspaceDir?: string; query: string; limit?: number; noteIds?: string[] }): unknown {
+    try {
+      return this.notesService().searchIndex({
+        workspaceDir: args?.workspaceDir,
+        query: String(args?.query ?? ''),
+        limit: args?.limit,
+        noteIds: args?.noteIds,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesRebuildIndex')
+  notesRebuildIndex(args: { workspaceDir?: string; noteIds?: string[] }): { ok: boolean; indexed: number; error?: string } {
+    try {
+      return this.notesService().rebuildIndex({ workspaceDir: args?.workspaceDir, noteIds: args?.noteIds })
+    } catch (error) {
+      return { ok: false, indexed: 0, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesClearIndex')
+  notesClearIndex(args: { workspaceDir?: string }): { ok: boolean; error?: string } {
+    try {
+      return this.notesService().clearIndex({ workspaceDir: args?.workspaceDir })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesBackgroundRead')
+  notesBackgroundRead(args: { workspaceDir?: string; kind: string }): unknown {
+    try {
+      return this.notesService().readBackgroundDoc({ workspaceDir: args?.workspaceDir, kind: String(args?.kind ?? '') as never })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesBackgroundReadAll')
+  notesBackgroundReadAll(args: { workspaceDir?: string }): unknown {
+    try {
+      return this.notesService().readAllBackgroundDocs({ workspaceDir: args?.workspaceDir })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesBackgroundWrite')
+  notesBackgroundWrite(args: { workspaceDir?: string; kind: string; content: string }): { ok: boolean; fileName?: string; error?: string } {
+    try {
+      return this.notesService().writeBackgroundDoc({ workspaceDir: args?.workspaceDir, kind: String(args?.kind ?? '') as never, content: String(args?.content ?? '') })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesDraftUpdate')
+  notesDraftUpdate(args: { workspaceDir?: string; kind: string; draft: string; note?: string }): unknown {
+    try {
+      return this.notesService().updateDraft({ workspaceDir: args?.workspaceDir, kind: String(args?.kind ?? '') as never, draft: String(args?.draft ?? ''), note: args?.note })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesDraftList')
+  notesDraftList(args: { workspaceDir?: string; kind?: string }): unknown {
+    try {
+      return this.notesService().listDrafts({ workspaceDir: args?.workspaceDir, kind: args?.kind as never })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesDraftRead')
+  notesDraftRead(args: { workspaceDir?: string; draftId: string }): unknown {
+    try {
+      return this.notesService().readDraft({ workspaceDir: args?.workspaceDir, draftId: String(args?.draftId ?? '') })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesDraftApply')
+  notesDraftApply(args: { workspaceDir?: string; draftId: string; force?: boolean }): { ok: boolean; target?: string; conflict?: boolean; error?: string } {
+    try {
+      return this.notesService().applyDraft({ workspaceDir: args?.workspaceDir, draftId: String(args?.draftId ?? ''), force: args?.force === true })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('notesDraftDiscard')
+  notesDraftDiscard(args: { workspaceDir?: string; draftId: string }): { ok: boolean; error?: string } {
+    try {
+      return this.notesService().discardDraft({ workspaceDir: args?.workspaceDir, draftId: String(args?.draftId ?? '') })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 自进化（EVO/SCI；P1，t41 片段）────────────────────────────────────────
+
+  private evoRuntime(): NonNullable<HostServices['evo']> {
+    const evo = this.services.evo
+    if (evo === undefined) throw new Error('evo 运行时未接线')
+    return evo
+  }
+
+  @Remote('evolutionSignalsList')
+  evolutionSignalsList(args: { types?: EvolutionSignalType[]; since?: number; limit?: number }): EvolutionSignal[] {
+    return this.evoRuntime().signals.listSignals({ types: args?.types, since: args?.since, limit: args?.limit })
+  }
+
+  @Remote('evolutionWeaknessesMarkdown')
+  evolutionWeaknessesMarkdown(): string {
+    return weaknessMarkdown(aggregateWeaknesses(this.evoRuntime().signals.listSignals()))
+  }
+
+  @Remote('evolutionCandidatesList')
+  evolutionCandidatesList(args: { status?: CandidateStatus }): EvolutionCandidate[] {
+    return this.evoRuntime().registry.listCandidates(args?.status)
+  }
+
+  @Remote('evolutionCandidatePropose')
+  evolutionCandidatePropose(args: { component: string; description: string; diff: string; content?: string }): EvolutionCandidate {
+    return this.evoRuntime().registry.propose({
+      component: String(args?.component ?? ''),
+      description: String(args?.description ?? ''),
+      diff: String(args?.diff ?? ''),
+      content: args?.content,
+    })
+  }
+
+  @Remote('evolutionCandidateEvaluate')
+  async evolutionCandidateEvaluate(args: { candidateId: string; samples: EvaluationSample[] }): Promise<EvaluationResult> {
+    return evaluateCandidate(this.evoRuntime().registry, String(args?.candidateId ?? ''), args?.samples ?? [])
+  }
+
+  @Remote('evolutionCandidateActivate')
+  evolutionCandidateActivate(args: { candidateId: string }): { ok: boolean; previousVersion?: number } {
+    try {
+      const registry = this.evoRuntime().registry
+      const candidate = registry.getCandidate(String(args?.candidateId ?? ''))
+      if (!candidate) return { ok: false }
+      const previousVersion = registry.currentVersion(candidate.component)
+      registry.activate(String(args?.candidateId ?? ''))
+      return { ok: true, previousVersion }
+    } catch {
+      return { ok: false }
+    }
+  }
+
+  @Remote('evolutionCandidateRollback')
+  evolutionCandidateRollback(args: { candidateId: string }): { ok: boolean } {
+    try {
+      return { ok: this.evoRuntime().registry.rollback(String(args?.candidateId ?? '')) }
+    } catch {
+      return { ok: false }
+    }
+  }
+
+  @Remote('evolutionCandidateReject')
+  evolutionCandidateReject(args: { candidateId: string }): { ok: boolean } {
+    try {
+      return { ok: this.evoRuntime().registry.reject(String(args?.candidateId ?? '')) }
+    } catch {
+      return { ok: false }
+    }
+  }
+
+  @Remote('autoskillsGenerateFromTraces')
+  autoskillsGenerateFromTraces(args: { texts?: string[]; minOccurrences?: number; workspaceDir?: string }): { created: number } {
+    return {
+      created: this.services.autoskills.generateFromTraces({
+        texts: args?.texts,
+        minOccurrences: args?.minOccurrences,
+        workspaceDir: args?.workspaceDir,
+      }),
+    }
+  }
+
+  @Remote('autoskillsUpdateProposalContent')
+  autoskillsUpdateProposalContent(args: { proposalId: string; content: string }): { ok: boolean } {
+    return { ok: this.services.autoskills.updateProposalContent(String(args?.proposalId ?? ''), String(args?.content ?? '')) }
+  }
+
+  @Remote('autoskillsRunSkill')
+  async autoskillsRunSkill(args: { proposalId: string }): Promise<SkillRunResult> {
+    return this.services.autoskills.runSkill(String(args?.proposalId ?? ''))
+  }
+
+  /** 从当前聊天的具体消息创建分支（CG-UX-01/02）：目标节点与 fork 一起建立。 */
+  @Remote('graphForkFromMessage')
+  async graphForkFromMessage(args: { workspaceDir?: string; sourceSessionId: string; sourceEventSeq: number }): Promise<{ ok: boolean; sessionId?: string; nodeId?: string; error?: string; rev?: number }> {
+    try {
+      const name = this.graphProjectOf(args)
+      const graph = this.services.chatGraph.get(name)
+      let source = graph.nodes.find((node) => node.type === 'chat' && node.sessionId === args.sourceSessionId)
+      // 从消息分支是主聊天区入口，不要求用户事先打开图；首次使用时
+      // 自动把当前会话加入研究地图，之后仍复用同一个稳定节点。
+      if (source === undefined) {
+        source = this.services.chatGraph.addNode(name, {
+          type: 'chat',
+          title: '当前聊天',
+          x: 48,
+          y: 48,
+          sessionId: args.sourceSessionId,
+          workspaceDir: args.workspaceDir,
+          origin: 'user',
+        })
+      }
+      const target = this.services.chatGraph.addNode(name, {
+        type: 'chat',
+        title: '从消息分出的新方向',
+        x: source.x + 240,
+        y: source.y + 96,
+        workspaceDir: args.workspaceDir,
+      })
+      const result = await this.graphInherit({
+        workspaceDir: args.workspaceDir,
+        fromNodeId: source.id,
+        toNodeId: target.id,
+        sourceEventSeq: args.sourceEventSeq,
+      })
+      if (!result.ok) {
+        const current = this.services.chatGraph.get(name)
+        this.services.chatGraph.save(name, {
+          ...current,
+          nodes: current.nodes.filter((node) => node.id !== target.id),
+          edges: current.edges.filter((edge) => edge.from !== target.id && edge.to !== target.id),
+        })
+        return { ok: false, error: result.error }
+      }
+      return { ok: true, sessionId: result.sessionId, nodeId: target.id, rev: result.rev }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphMigrate')
+  graphMigrate(args: { workspaceDir?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      const result = this.services.chatGraph.migrate(name)
+      return { ok: true, graph: result.graph, report: result.report, rev: this.services.chatGraph.rev(name) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 新建空白 Markdown Memory，不复用图中已有 locator。 */
+  @Remote('graphMemoryCreate')
+  graphMemoryCreate(args: { workspaceDir?: string; title?: string; scope?: 'project' | 'global'; x?: number; y?: number }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      const node = this.services.chatGraph.createBlankMemory(name, args.workspaceDir, {
+        title: args.title, scope: args.scope, x: args.x, y: args.y,
+      })
+      return { ok: true, node, rev: this.services.chatGraph.rev(name) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 复制 Memory 正文/链接到独立 Markdown 文件，之后不联动。 */
+  @Remote('graphMemoryCopy')
+  graphMemoryCopy(args: { workspaceDir?: string; nodeId: string; title?: string; x?: number; y?: number }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      const node = this.services.chatGraph.copyMemory(name, String(args.nodeId ?? ''), args.workspaceDir, {
+        title: args.title, x: args.x, y: args.y,
+      })
+      return { ok: true, node, rev: this.services.chatGraph.rev(name) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 新建逻辑 Memory Collection；图中仍保持唯一节点。 */
+  @Remote('graphMemoryCollection')
+  graphMemoryCollection(args: { workspaceDir?: string; title?: string; scope?: 'project' | 'global'; x?: number; y?: number }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      const node = this.services.chatGraph.createMemoryCollection(name, args.workspaceDir, {
+        title: args.title, scope: args.scope, x: args.x, y: args.y,
+      })
+      return { ok: true, node, rev: this.services.chatGraph.rev(name) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** Explicit editor path for a referenced or legacy Memory node. */
+  @Remote('graphMemoryWrite')
+  graphMemoryWrite(args: { workspaceDir?: string; nodeId: string; content: string; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.writeMemory(name, String(args.nodeId ?? ''), args.workspaceDir, String(args.content ?? '')),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── RA / EA / EMA → Chat Graph（CG-AUTO / CG-INTEG）──────────────────────
+
+  @Remote('scienceRaCandidateAdd')
+  scienceRaCandidateAdd(args: Parameters<ScienceChatGraphBridge['raCandidateAdd']>[0]): unknown {
+    try { return this.services.scienceGraphBridge?.raCandidateAdd(args) ?? { ok: false, error: 'science graph bridge 不可用' } }
+    catch (error) { return { ok: false, error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceCandidateAccept')
+  async scienceCandidateAccept(args: Parameters<ScienceChatGraphBridge['candidateAccept']>[0]): Promise<unknown> {
+    try { return this.services.scienceGraphBridge ? await this.services.scienceGraphBridge.candidateAccept(args) : { ok: false, error: 'science graph bridge 不可用' } }
+    catch (error) { return { ok: false, error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceEaAttemptAdd')
+  scienceEaAttemptAdd(args: Parameters<ScienceChatGraphBridge['eaAttemptAdd']>[0]): unknown {
+    try { return this.services.scienceGraphBridge?.eaAttemptAdd(args) ?? { ok: false, error: 'science graph bridge 不可用' } }
+    catch (error) { return { ok: false, error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceEmaCandidateRecord')
+  scienceEmaCandidateRecord(args: Parameters<ScienceChatGraphBridge['emaCandidateRecord']>[0]): unknown {
+    try { return this.services.scienceGraphBridge?.emaCandidateRecord(args) ?? { ok: false, error: 'science graph bridge 不可用' } }
+    catch (error) { return { ok: false, error: this.errMessage(error) } }
+  }
+
+  // ── 科学自演化循环（SCI-08/09）───────────────────────────────────────────
+
+  @Remote('scienceLoopCreate')
+  scienceLoopCreate(args: {
+    kind: 'idea-explore' | 'experiment-try'
+    title: string
+    authorizedBy: string
+    budget?: { maxSteps?: number }
+    steps?: Array<{ label: string; appendTo?: { kind: 'graph-node' | 'experiment'; ref: string } }>
+    reportTo?: string
+    workspaceDir?: string
+  }): ScienceLoop | { error: string } {
+    try {
+      const service = this.services.scienceLoops
+      if (!service) return { error: 'scienceLoops 服务不可用' }
+      if (String(args?.authorizedBy ?? '').trim() === '') return { error: '自动循环必须记录用户授权者' }
+      return service.create({
+        kind: args.kind,
+        title: String(args.title ?? ''),
+        authorizedBy: String(args.authorizedBy),
+        budget: args.budget,
+        steps: args.steps,
+        reportTo: args.reportTo,
+        workspaceDir: args.workspaceDir,
+      })
+    } catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceLoopList')
+  scienceLoopList(): ScienceLoop[] | { error: string } {
+    try { return this.services.scienceLoops?.list() ?? [] }
+    catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceLoopGet')
+  scienceLoopGet(args: { loopId: string }): ScienceLoop | null | { error: string } {
+    try { return this.services.scienceLoops?.get(String(args?.loopId ?? '')) ?? null }
+    catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceLoopRun')
+  async scienceLoopRun(args: { loopId: string }): Promise<ScienceLoop | { error: string }> {
+    try {
+      const service = this.services.scienceLoops
+      if (!service) return { error: 'scienceLoops 服务不可用' }
+      return await service.run(String(args?.loopId ?? ''))
+    } catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceLoopPause')
+  scienceLoopPause(args: { loopId: string }): ScienceLoop | null | { error: string } {
+    try { return this.services.scienceLoops?.pause(String(args?.loopId ?? '')) ?? null }
+    catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceLoopResume')
+  async scienceLoopResume(args: { loopId: string }): Promise<ScienceLoop | { error: string }> {
+    try {
+      const service = this.services.scienceLoops
+      if (!service) return { error: 'scienceLoops 服务不可用' }
+      return await service.resume(String(args?.loopId ?? ''))
+    } catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceLoopCancel')
+  async scienceLoopCancel(args: { loopId: string }): Promise<ScienceLoop | null | { error: string }> {
+    try {
+      const service = this.services.scienceLoops
+      if (!service) return { error: 'scienceLoops 服务不可用' }
+      return (await service.cancel(String(args?.loopId ?? ''))) ?? null
+    } catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('scienceLoopTransition')
+  scienceLoopTransition(args: { loopId: string; action: ScienceLoopAction; stepId?: string; output?: string; error?: string }): ScienceLoop | null | { error: string } {
+    try {
+      const service = this.services.scienceLoops
+      if (!service) return { error: 'scienceLoops 服务不可用' }
+      return service.transition(String(args?.loopId ?? ''), args.action, args.stepId, { output: args.output, error: args.error }) ?? null
+    } catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('graphUpdateNode')
+  graphUpdateNode(args: { workspaceDir?: string; nodeId: string; patch: unknown; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.updateNode(name, String(args.nodeId ?? ''), (args.patch ?? {}) as Partial<Omit<GraphNode, 'id'>>),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphRemoveNode')
+  graphRemoveNode(args: { workspaceDir?: string; nodeId: string; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.removeNode(name, String(args.nodeId ?? '')),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphUpdateEdge')
+  graphUpdateEdge(args: { workspaceDir?: string; edgeId: string; patch: unknown; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.updateEdge(name, String(args.edgeId ?? ''), (args.patch ?? {}) as Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>>),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphRemoveEdge')
+  graphRemoveEdge(args: { workspaceDir?: string; edgeId: string; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.removeEdge(name, String(args.edgeId ?? '')),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphMoveNodes')
+  graphMoveNodes(args: { workspaceDir?: string; positions: unknown; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      const positions = Array.isArray(args.positions) ? args.positions.filter((item): item is { id: string; x: number; y: number; pinned?: boolean } => {
+        const value = item as Record<string, unknown>
+        return typeof value.id === 'string' && typeof value.x === 'number' && typeof value.y === 'number'
+      }) : []
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.moveNodes(name, positions),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphAddGroup')
+  graphAddGroup(args: { workspaceDir?: string; group: unknown; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.addGroup(name, args.group as GraphGroup),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphUpdateGroup')
+  graphUpdateGroup(args: { workspaceDir?: string; groupId: string; patch: unknown; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.updateGroup(name, String(args.groupId ?? ''), args.patch as Partial<Omit<GraphGroup, 'id'>>),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('graphRemoveGroup')
+  graphRemoveGroup(args: { workspaceDir?: string; groupId: string; operationId?: string }): unknown {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.applyOperation(args.operationId, () => ({
+        ...this.services.chatGraph.removeGroup(name, String(args.groupId ?? '')),
+        rev: this.services.chatGraph.rev(name),
+      }))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('autoskillsInstallGit')
+  autoskillsInstallGit(args: { source: string; name?: string }): unknown {
+    return this.services.autoskills.installFromGit(String(args?.source ?? ''), args?.name)
+  }
+
+  // ── CTX 窗口保护层与组装器（P2，t42 片段）────────────────────────────────
+
+  private errMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error)
+  }
+
+  /** 按 sessionId 解析活动会话（detectPressure 需要会话对象而非 id）。 */
+  private sessionOf(sessionId: string): PressureSessionLike | undefined {
+    if (sessionId === '') return undefined
+    const sessions = this.hostCtx.get('sessions') as { get?: (id: string) => unknown } | undefined
+    const getSession = sessions?.get
+    if (getSession === undefined) return undefined
+    return getSession.call(sessions, sessionId) as PressureSessionLike | undefined
+  }
+
+  @Remote('contextStatus')
+  contextStatus(): unknown {
+    try {
+      const runtime = this.services.contextRuntime
+      if (runtime !== undefined) return runtime.status()
+      const guard = this.services.contextGuard
+      if (guard === undefined) return { error: 'contextGuard 服务不可用' }
+      return guard.status()
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  @Remote('contextPressure')
+  contextPressure(args: { sessionId: string; model?: string }): PressureReport | { error: string } {
+    try {
+      const guard = this.services.contextGuard
+      if (guard === undefined) return { error: 'contextGuard 服务不可用' }
+      const session = this.sessionOf(String(args?.sessionId ?? ''))
+      if (session === undefined) return { error: `会话不存在: ${String(args?.sessionId ?? '')}` }
+      return guard.detectPressure(session, args?.model)
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  @Remote('contextCompactions')
+  contextCompactions(args: CompactionQuery = {}): readonly CompactionRecord[] | { error: string } {
+    try {
+      const guard = this.services.contextGuard
+      if (guard === undefined) return { error: 'contextGuard 服务不可用' }
+      return guard.queryCompactions(args ?? {})
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  @Remote('contextSources')
+  async contextSources(args: { sessionId: string; graphConnections?: readonly GraphConnectionInfo[] }): Promise<ContextSourceReport | { error: string }> {
+    try {
+      const guard = this.services.contextGuard
+      if (guard === undefined) return { error: 'contextGuard 服务不可用' }
+      return await guard.queryContextSources(String(args?.sessionId ?? ''), {
+        graphConnections: args?.graphConnections,
+      })
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  @Remote('contextRepairs')
+  contextRepairs(args: { sessionId?: string } = {}): readonly unknown[] | { error: string } {
+    try {
+      const guard = this.services.contextGuard
+      if (guard === undefined) return { error: 'contextGuard 服务不可用' }
+      return guard.repairRecords(args?.sessionId)
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  @Remote('contextPreview')
+  async contextPreview(args: AssembleInput): Promise<ReferencePreview | { error: string }> {
+    try {
+      const assembler = this.services.contextAssembler
+      if (assembler === undefined) return { error: 'contextAssembler 服务不可用' }
+      return await assembler.preview(args)
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  @Remote('contextAssemble')
+  async contextAssemble(args: AssembleInput): Promise<AssemblyResult | { error: string }> {
+    try {
+      const assembler = this.services.contextAssembler
+      if (assembler === undefined) return { error: 'contextAssembler 服务不可用' }
+      return await assembler.assemble(args)
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  /** PLAT-07：读取会话当前/被压缩/仅日志事件，支持 bounded read。 */
+  @Remote('contextProjection')
+  async contextProjection(args: { sessionId: string; projection?: ProjectionQueryOptions['projection']; bounded?: ProjectionQueryOptions['bounded'] }): Promise<ProjectionQueryResult | { error: string }> {
+    try {
+      const runtime = this.services.contextRuntime
+      if (runtime === undefined) return { error: 'contextRuntime 服务不可用' }
+      return await runtime.queryProjection(String(args?.sessionId ?? ''), {
+        projection: args?.projection,
+        bounded: args?.bounded,
+      })
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  /** PLAT-07：读取 fork/parentSession 谱系。 */
+  @Remote('contextLineage')
+  async contextLineage(args: { sessionId: string }): Promise<LineageResult | { error: string }> {
+    try {
+      const runtime = this.services.contextRuntime
+      if (runtime === undefined) return { error: 'contextRuntime 服务不可用' }
+      return await runtime.queryLineage(String(args?.sessionId ?? ''))
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  /** PLAT-04：读取工具结果裁剪归档索引，作为继续读取入口。 */
+  @Remote('contextPrunes')
+  contextPrunes(args: { sessionId?: string }): unknown {
+    const runtime = this.services.contextRuntime
+    if (runtime === undefined) return { error: 'contextRuntime 服务不可用' }
+    return runtime.pruneRecords(args?.sessionId)
+  }
+
+  @Remote('contextAssembleDeep')
+  async contextAssembleDeep(args: AssembleInput): Promise<AssemblyResult | { error: string }> {
+    try {
+      const assembler = this.services.contextAssembler
+      if (assembler === undefined) return { error: 'contextAssembler 服务不可用' }
+      return await assembler.assembleDeep(args)
+    } catch (error) {
+      return { error: this.errMessage(error) }
+    }
+  }
+
+  @Remote('contextEffects')
+  contextEffects(args: EffectQuery = {}): readonly EffectSignalRecord[] | { error: string } {
+    try {
+      const assembler = this.services.contextAssembler
+      if (assembler === undefined) return { error: 'contextAssembler 服务不可用' }
+      return assembler.queryEffects(args ?? {})
+    } catch (error) {
+      return { error: this.errMessage(error) }
     }
   }
 
@@ -891,6 +2367,11 @@ export class EvoResearchApiService extends TypertRemoteService {
     return this.services.experts.list(this.hostCtx)
   }
 
+  @Remote('expertsContext')
+  expertsContext(args: { workspaceDir?: string; maxChars?: number }): unknown {
+    return this.services.experts.agentsContext(args?.workspaceDir, args?.maxChars)
+  }
+
   @Remote('expertInvite')
   async expertInvite(args: { name: string }): Promise<{ ok: boolean }> {
     return { ok: await this.services.experts.invite(this.hostCtx, args.name) }
@@ -939,5 +2420,331 @@ export class EvoResearchApiService extends TypertRemoteService {
   safety(): { dangerousMode: boolean } {
     // 第一版：返回 false（危险模式由 DSH 权限预设管理，此处预留聚合）
     return { dangerousMode: false }
+  }
+
+  // ── 平台能力层（PLAT-13..20，t19 交付） ───────────────────────────────────
+
+  // ── PLAT-13：模型 Fallback selector ────────────────────────────────────────
+
+  @Remote('modelsSelectorState')
+  modelsSelectorState(): FallbackState | { error: string } {
+    const state = this.services.platform?.modelFallbackState
+    if (!state) return { error: 'platform.services 未接线' }
+    return state
+  }
+
+  @Remote('modelsSelectorReset')
+  modelsSelectorReset(): FallbackState | { error: string } {
+    const reset = this.services.platform?.recordModelSuccess
+    if (!reset) return { error: 'platform.services 未接线' }
+    // 用 current() 当作 route 重置当前路由——若 current 为空则返回空状态
+    const adapters = this.hostCtx.get('agentDefaultModel') as { currentSelection?(): { provider: string; model: string } } | undefined
+    const current = adapters?.currentSelection?.()
+    if (!current) return emptyFallbackState()
+    return reset({ provider: current.provider, model: current.model })
+  }
+
+  @Remote('modelsSelectRoute')
+  modelsSelectRoute(args: { primary: ModelRoute; fallbacks?: ModelRoute[]; maxRetriesPerRoute?: number }): { ok: boolean; route: ModelRoute | null; error?: string } {
+    const selector = this.services.platform?.selectModelRoute
+    if (!selector) return { ok: false, route: null, error: 'platform.services 未接线' }
+    const route = selector({ primary: args.primary, fallbacks: args.fallbacks }, { maxRetriesPerRoute: args.maxRetriesPerRoute })
+    return { ok: true, route }
+  }
+
+  // ── PLAT-14：per-turn 自适应工具选择 ─────────────────────────────────────
+
+  @Remote('toolsSelectForTurn')
+  toolsSelectForTurn(args: { tools: ToolDef[]; query: string; required?: string[]; maxTools?: number }): { tools: ToolDef[]; whitelisted: number } {
+    const selector = this.services.platform?.selectToolsForTurn
+    if (!selector) {
+      // 兜底：原样返回，标记无白名单
+      return { tools: args.tools, whitelisted: 0 }
+    }
+    const selected = selector(args.tools, args.query, { required: args.required, maxTools: args.maxTools })
+    return { tools: selected, whitelisted: BASE_TOOL_WHITELIST.length }
+  }
+
+  @Remote('toolsWhitelist')
+  toolsWhitelist(): readonly string[] {
+    return BASE_TOOL_WHITELIST
+  }
+
+  // ── PLAT-15：统一审批与危险操作策略 ───────────────────────────────────────
+
+  @Remote('approvalDecide')
+  approvalDecide(args: { toolName: string }): ApprovalDecision | { error: string } {
+    const policy = this.services.platform?.approvalPolicy
+    const decider = this.services.platform?.decideApproval
+    if (!policy || !decider) return { error: 'platform.services 未接线' }
+    return decider(args.toolName)
+  }
+
+  @Remote('approvalPolicyGet')
+  approvalPolicyGet(): ApprovalPolicy | { error: string } {
+    const policy = this.services.platform?.approvalPolicy
+    if (!policy) return { error: 'platform.services 未接线' }
+    return policy
+  }
+
+  @Remote('approvalPolicyDefault')
+  approvalPolicyDefault(): ApprovalPolicy {
+    return defaultApprovalPolicy()
+  }
+
+  @Remote('approvalPolicyValidate')
+  approvalPolicyValidate(args: { policy: ApprovalPolicy }): { ok: boolean; error?: string } {
+    return validateApprovalPolicy(args.policy)
+  }
+
+  // ── PLAT-17：自然语言调度器 ───────────────────────────────────────────────
+
+  @Remote('schedulerAddNatural')
+  schedulerAddNatural(args: { text: string; prompt: string; workspaceDir?: string; name?: string }): ScheduledTask | { error: string } {
+    try {
+      return this.services.scheduler.addNatural({
+        text: args.text,
+        prompt: args.prompt,
+        workspaceDir: args.workspaceDir ?? '',
+        name: args.name,
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('schedulerPause')
+  schedulerPause(args: { taskId: string }): { ok: boolean } {
+    return { ok: this.services.scheduler.pause(args.taskId) }
+  }
+
+  @Remote('schedulerResume')
+  schedulerResume(args: { taskId: string }): { ok: boolean } {
+    return { ok: this.services.scheduler.resume(args.taskId) }
+  }
+
+  // ── PLAT-16/19：子代理运行时 ─────────────────────────────────────────────
+
+  @Remote('subagentsProviders')
+  subagentsProviders(): string[] | { error: string } {
+    const providers = this.services.platform?.subagents?.providers
+    if (!providers) return { error: 'platform.subagents 未接线' }
+    return providers.list()
+  }
+
+  @Remote('subagentsList')
+  subagentsList(args: { parentSessionId?: string }): SubagentRecord[] | { error: string } {
+    const registry = this.services.platform?.subagents?.registry
+    if (!registry) return { error: 'platform.subagents 未接线' }
+    return registry.list(args.parentSessionId)
+  }
+
+  @Remote('subagentsDescendants')
+  subagentsDescendants(args: { rootSessionId: string }): SubagentRecord[] | { error: string } {
+    const registry = this.services.platform?.subagents?.registry
+    if (!registry) return { error: 'platform.subagents 未接线' }
+    return registry.descendants(args.rootSessionId)
+  }
+
+  @Remote('subagentsCreate')
+  async subagentsCreate(args: SubagentCreateRequest): Promise<{ ok: boolean; subagentId?: string; error?: string }> {
+    const facade = this.services.platform?.subagents?.facade
+    if (!facade) return { ok: false, error: 'platform.subagents 未接线' }
+    const result = await facade.create(args)
+    if (!result.ok || !result.record) return { ok: false, error: result.error }
+    return { ok: true, subagentId: result.record.subagentId }
+  }
+
+  @Remote('subagentsContinue')
+  async subagentsContinue(args: { subagentId: string; message: string }): Promise<SubagentOpResult | { error: string }> {
+    const facade = this.services.platform?.subagents?.facade
+    if (!facade) return { error: 'platform.subagents 未接线' }
+    return facade.continue(args.subagentId, args.message)
+  }
+
+  @Remote('subagentsInterrupt')
+  async subagentsInterrupt(args: { subagentId: string }): Promise<SubagentOpResult | { error: string }> {
+    const facade = this.services.platform?.subagents?.facade
+    if (!facade) return { error: 'platform.subagents 未接线' }
+    return facade.interrupt(args.subagentId)
+  }
+
+  @Remote('subagentsReport')
+  async subagentsReport(args: { subagentId: string }): Promise<SubagentOpResult | { error: string }> {
+    const facade = this.services.platform?.subagents?.facade
+    if (!facade) return { error: 'platform.subagents 未接线' }
+    return facade.report(args.subagentId)
+  }
+
+  @Remote('subagentsCancel')
+  async subagentsCancel(args: { subagentId: string }): Promise<SubagentOpResult | { error: string }> {
+    const facade = this.services.platform?.subagents?.facade
+    if (!facade) return { error: 'platform.subagents 未接线' }
+    return facade.cancel(args.subagentId)
+  }
+
+  // ── PLAT-20：消息反馈 ──────────────────────────────────────────────────────
+
+  @Remote('feedbackRecord')
+  feedbackRecord(args: MessageFeedbackInput): MessageFeedback | { error: string } {
+    const feedback = this.services.platform?.feedback
+    if (!feedback) return { error: 'platform.feedback 未接线' }
+    return feedback.record(args)
+  }
+
+  @Remote('feedbackList')
+  feedbackList(args: { sessionId?: string }): MessageFeedback[] | { error: string } {
+    const feedback = this.services.platform?.feedback
+    if (!feedback) return { error: 'platform.feedback 未接线' }
+    return feedback.list(args.sessionId)
+  }
+
+  // ── PLAT-20：会话诊断导出 ──────────────────────────────────────────────────
+
+  @Remote('diagnosticsExport')
+  async diagnosticsExport(args: { sessionId: string }): Promise<SessionDiagnostics | { error: string }> {
+    const sessions = this.hostCtx.get('sessions') as { get?(id: string): { log?: unknown[] } | undefined } | undefined
+    const sessionPersistence = this.hostCtx.get('sessionPersistence') as { load?(id: string): Promise<{ events?: unknown[] } | undefined> } | undefined
+    let events: unknown[] = []
+    if (sessions?.get) {
+      const live = sessions.get(args.sessionId)
+      if (live && Array.isArray(live.log)) events = live.log
+    }
+    if (events.length === 0 && sessionPersistence?.load) {
+      try {
+        const loaded = await sessionPersistence.load(args.sessionId)
+        if (loaded && Array.isArray(loaded.events)) events = loaded.events
+      } catch { /* 持久化读失败 */ }
+    }
+    if (events.length === 0) return { error: `会话 ${args.sessionId} 找不到任何事件` }
+    return exportSessionDiagnostics(args.sessionId, events as DiagnosticEventLike[])
+  }
+
+  // ── PLAT-11/12：MCP supervisor ─────────────────────────────────────────────
+
+  @Remote('mcpServerAdd')
+  async mcpServerAdd(args: { config: McpServerConfig }): Promise<McpServerStatus | { error: string }> {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { error: 'platform.mcp 未接线' }
+    try {
+      const result = mcp.addServer(args.config)
+      return result.status
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('mcpServerRemove')
+  async mcpServerRemove(args: { serverId: string }): Promise<{ ok: boolean; error?: string }> {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { ok: false, error: 'platform.mcp 未接线' }
+    try {
+      const ok = await mcp.removeServer(args.serverId)
+      return { ok }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('mcpServerList')
+  mcpServerList(): McpServerStatus[] | { error: string } {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { error: 'platform.mcp 未接线' }
+    return mcp.list()
+  }
+
+  @Remote('mcpServerGet')
+  mcpServerGet(args: { serverId: string }): McpServerStatus | { error: string } {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { error: 'platform.mcp 未接线' }
+    const status = mcp.get(args.serverId)
+    return status ?? { error: `MCP 服务器不存在: ${args.serverId}` }
+  }
+
+  @Remote('mcpServerStart')
+  async mcpServerStart(args: { serverId: string }): Promise<McpServerStatus | { error: string }> {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { error: 'platform.mcp 未接线' }
+    try { return await mcp.startServer(args.serverId) }
+    catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  @Remote('mcpServerStop')
+  async mcpServerStop(args: { serverId: string }): Promise<McpServerStatus | { error: string }> {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { error: 'platform.mcp 未接线' }
+    try { return await mcp.stop(args.serverId) }
+    catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  @Remote('mcpServerReconnect')
+  async mcpServerReconnect(args: { serverId: string }): Promise<McpServerStatus | { error: string }> {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { error: 'platform.mcp 未接线' }
+    try { return await mcp.restart(args.serverId) }
+    catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  @Remote('mcpServerUpdateConfig')
+  async mcpServerUpdateConfig(args: { serverId: string; patch: Partial<Omit<McpServerConfig, 'serverId'>> }): Promise<McpServerStatus | { error: string }> {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { error: 'platform.mcp 未接线' }
+    try {
+      return await mcp.updateConfig(args.serverId, args.patch)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('mcpServerToolsFor')
+  mcpServerToolsFor(args: { agentId?: string }): { name: string; description?: string }[] | { error: string } {
+    const mcp = this.services.platform?.mcp
+    if (!mcp) return { error: 'platform.mcp 未接线' }
+    return mcp.toolsFor(args.agentId)
+  }
+
+  // ── PLAT-08/09/10：分层 Skill 注册表 ────────────────────────────────────
+
+  private skillRegistryOf(workspaceDir?: string): LayeredSkillRegistry {
+    const registry = this.services.platform?.skillRegistryFor?.(workspaceDir)
+      ?? this.services.platform?.skillRegistry
+    if (!registry) throw new Error('platform.skillRegistry 未接线')
+    return registry
+  }
+
+  @Remote('skillsListLayered')
+  skillsListLayered(args: { workspaceDir?: string; layer?: SkillLayer }): SkillEntry[] | { error: string } {
+    try { return this.skillRegistryOf(args?.workspaceDir).list(args?.layer) }
+    catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('skillsReadLayered')
+  skillsReadLayered(args: { workspaceDir?: string; name: string; layer?: SkillLayer }): { entry: SkillEntry; body: string } | { error: string } {
+    try {
+      const registry = this.skillRegistryOf(args?.workspaceDir)
+      const entry = registry.get(String(args?.name ?? ''), args?.layer)
+      if (!entry) return { error: `技能不存在: ${String(args?.name ?? '')}` }
+      const body = registry.readBody(entry.name, entry.layer)
+      if (body === undefined) return { error: `技能正文不可读: ${entry.name}` }
+      return { entry, body }
+    } catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('skillsInstallLocal')
+  skillsInstallLocal(args: { workspaceDir?: string; layer: SkillLayer; source: string; name?: string }): SkillEntry | { error: string } {
+    try { return this.skillRegistryOf(args?.workspaceDir).installFromLocal(args.layer, args.source, { name: args.name }) }
+    catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('skillsInstallGit')
+  async skillsInstallGit(args: { workspaceDir?: string; layer: SkillLayer; source: string; name?: string; ref?: string }): Promise<SkillEntry | { error: string }> {
+    try { return await this.skillRegistryOf(args?.workspaceDir).installFromGit(args.layer, args.source, { name: args.name, ref: args.ref }) }
+    catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  @Remote('skillsUninstallLayered')
+  skillsUninstallLayered(args: { workspaceDir?: string; layer: SkillLayer; name: string }): { ok: boolean; fallback?: SkillEntry } | { error: string } {
+    try { return this.skillRegistryOf(args?.workspaceDir).uninstall(args.name, args.layer) }
+    catch (error) { return { error: this.errMessage(error) } }
   }
 }

@@ -84,12 +84,15 @@ async function main() {
   // 模拟窄屏（500px 宽）
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 500, height: 900, deviceScaleFactor: 1, mobile: false })
   await sleep(800)
-  report.narrowClosed = await cdp.eval(leftStyle)
+  report.narrowOpenInitial = await cdp.eval(leftStyle)
 
-  // 打开侧栏（当前 URL sidebar=1 已开 → 应该显示；先关再开验证遮罩）
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-icon-btn')).find(function(b){ return b.title === '隐藏导航' || b.title === 'Show navigation' }); if (btn) btn.click(); return true })()`)
-  await sleep(300)
-  await cdp.eval(`(function(){ const btn = Array.from(document.querySelectorAll('.evo-icon-btn')).find(function(b){ return b.title === '隐藏导航' || b.title === 'Show navigation' }); if (btn) btn.click(); return true })()`)
+  const clickNavigation = `(() => { const btn = [...document.querySelectorAll('.evo-icon-btn')].find((b) => /导航|navigation/i.test(b.title || '')); if (!btn) return 'no-btn'; btn.click(); return btn.title || 'clicked' })()`
+  // URL sidebar=1 starts open; close it and assert the hidden drawer state.
+  report.closeNavigation = await cdp.eval(clickNavigation)
+  await sleep(500)
+  report.narrowClosed = await cdp.eval(leftStyle)
+  // Re-open it and assert the mask and fixed drawer state.
+  report.openNavigation = await cdp.eval(clickNavigation)
   await sleep(800)
   report.narrowOpen = await cdp.eval(leftStyle)
   report.maskStyle = await cdp.eval(`(function(){ const m = document.querySelector('.evo-drawer-mask'); if (!m) return null; const cs = getComputedStyle(m); return { background: cs.backgroundColor, position: cs.position, zIndex: cs.zIndex } })()`)
@@ -98,12 +101,23 @@ async function main() {
   await sleep(600)
   report.afterMaskClick = await cdp.eval(leftStyle)
 
+  const checks = {
+    wideStatic: report.wide?.position === 'static',
+    narrowInitialFixed: report.narrowOpenInitial?.position === 'fixed' && report.narrowOpenInitial?.width === 320,
+    narrowClosedHidden: report.narrowClosed === null,
+    narrowOpenFixed: report.narrowOpen?.position === 'fixed' && report.narrowOpen?.width === 320,
+    maskVisible: report.maskStyle?.background === 'rgba(0, 0, 0, 0.4)' && report.maskStyle?.position === 'fixed' && report.maskStyle?.zIndex === '280',
+    maskClosesDrawer: report.maskClick === 'clicked' && report.afterMaskClick === null,
+  }
+  report.checks = checks
+
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
   const out = join(ROOT, '.tmp-port', `responsive-${port}.png`)
   writeFileSync(out, Buffer.from(shot.data, 'base64'))
   report.screenshot = out
 
   console.log(JSON.stringify(report, null, 2))
+  if (Object.values(checks).some((value) => value !== true)) throw new Error(`响应式验收失败: ${Object.entries(checks).filter(([, value]) => value !== true).map(([name]) => name).join(', ')}`)
   cdp.close()
 }
 

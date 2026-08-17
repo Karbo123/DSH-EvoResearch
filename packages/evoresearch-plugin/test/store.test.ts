@@ -45,8 +45,12 @@ describe('ResearchMemoryStore', () => {
     store.close()
   })
 
-  it('Observation 写入（Markdown 文件 + 索引）', () => {
+  it('Observation 写入（Markdown 文件 + 索引）', (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-obs-'))
+    // 测试卫生（BASE-02）：用例结束（含失败路径）清理临时目录
+    t.after(() => {
+      fs.rmSync(dir, { recursive: true, force: true })
+    })
     const store = ResearchMemoryStore.openMemory()
     const meta = store.writeObservation(dir, {
       observationId: 'O-test1',

@@ -13,14 +13,24 @@
  *
  * 关键约定：
  * - 所有时间戳为毫秒 epoch；
- * - FTS5 表由触发器与内容表保持同步（可重建：research_turns_fts 由 rebuild 维护）；
+ * - FTS5 表由触发器与内容表保持同步（可重建：rebuildFtsIndexes() 一键重建）；
  * - 写操作走事务，PRAGMA synchronous=FULL 保证崩溃对账以持久化边界为准。
+ *
+ * MEM-09 数据角色约定（最终兜底原文 vs 可重建镜像）：
+ * - DSH session log（<DSH_HOME>/sessions/.../session.jsonl[.zstd]）是对话原文的
+ *   最终兜底：完整保留 user/assistant/chunk/tool 事件，永不删除、不可被摘要替代；
+ * - 本数据库（research_memory.db 及其 FTS 索引）只是方便检索的镜像，不是唯一副本：
+ *   轮次原文缺失时可由 recovery.ts 从 session log 经 session-text.ts 还原补回
+ *   （recoverMissingAssistantText / reconcileStore），FTS 索引可用
+ *   rebuildFtsIndexes() 重建，数据库本身可整体删除后由归档流程重建；
+ * - Raw Turn Archive（turn_segments）与 archives/ 目录是二次落盘副本，同样可重建。
  */
 import { DatabaseSync } from 'node:sqlite'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
 import { evoresearchDb, type Migration, cleanForIndex } from '../core/db.js'
+import type { ToolEventItem, TurnArchiveEvent } from '../session-text.js'
 import {
   type TurnRecord,
   type TurnStatus,
@@ -254,10 +264,72 @@ export const RESEARCH_MEMORY_MIGRATIONS: readonly Migration[] = [
       `)
     },
   },
+  {
+    // RET-01/RET-02：消息/自然段级片段索引（turn_fragments）+ FTS 镜像 + 断点进度。
+    // 片段只用于搜索，不改变原始文本；位置 = (session_id, seg_seq, char_offset)，
+    // seg_seq 指向 Raw Turn Archive（turn_segments.seq），可经 read_conversation_range
+    // 回到原文前后文。索引可重建：清空 turn_fragments 后由 backfillFragmentIndex /
+    // buildTurnFragments 重灌（RET-09：FTS 不可用时退化为 LIKE 原文扫描）。
+    version: 6,
+    up(db) {
+      db.exec(`
+        CREATE TABLE turn_fragments (
+          fragment_id TEXT PRIMARY KEY,
+          turn_id TEXT NOT NULL REFERENCES research_turns(turn_id),
+          session_id TEXT NOT NULL,
+          seg_seq INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          frag_index INTEGER NOT NULL DEFAULT 0,
+          char_offset INTEGER NOT NULL DEFAULT 0,
+          char_len INTEGER NOT NULL DEFAULT 0,
+          content TEXT NOT NULL,
+          source_seqs TEXT NOT NULL DEFAULT '[]',
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_fragments_turn ON turn_fragments(turn_id, seg_seq, frag_index);
+        CREATE INDEX idx_fragments_session ON turn_fragments(session_id, seg_seq, frag_index);
+
+        CREATE VIRTUAL TABLE turn_fragments_fts USING fts5(
+          content,
+          content='turn_fragments', content_rowid='rowid',
+          tokenize = 'trigram'
+        );
+        CREATE TRIGGER turn_fragments_ai AFTER INSERT ON turn_fragments BEGIN
+          INSERT INTO turn_fragments_fts(rowid, content) VALUES (new.rowid, new.content);
+        END;
+        CREATE TRIGGER turn_fragments_ad AFTER DELETE ON turn_fragments BEGIN
+          INSERT INTO turn_fragments_fts(turn_fragments_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+        END;
+        CREATE TRIGGER turn_fragments_au AFTER UPDATE ON turn_fragments BEGIN
+          INSERT INTO turn_fragments_fts(turn_fragments_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+          INSERT INTO turn_fragments_fts(rowid, content) VALUES (new.rowid, new.content);
+        END;
+
+        CREATE TABLE fragment_index_progress (
+          memory_dir TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          source_version TEXT NOT NULL,
+          status TEXT NOT NULL,
+          progress TEXT NOT NULL DEFAULT '{}',
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (memory_dir, project_id)
+        );
+      `)
+    },
+  },
 ]
 
 /** 数据库行（宽松类型，读取后立即转换为领域对象）。 */
 type Row = Record<string, unknown>
+
+/**
+ * MEM-06 长文本落盘阈值：工具调用参数/结果超过该字节数时，完整内容写入
+ * <workspace>/.evoresearch-data/archives/<turnId>/ 文件，数据库只存可检索前缀 + 文件位置。
+ */
+export const LONG_TEXT_THRESHOLD = 64 * 1024
+
+/** 长文本入库的可检索前缀长度（保留开头，保证搜索可用）。 */
+export const LONG_TEXT_INDEX_CHARS = 32 * 1024
 
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
@@ -315,6 +387,98 @@ function turnFromRow(row: Row): TurnRecord {
     partialNote: row.partial_note === null || row.partial_note === undefined ? undefined : asString(row.partial_note),
     workingSummary: row.working_summary === null || row.working_summary === undefined ? undefined : asString(row.working_summary),
   }
+}
+
+/** 从数据库行还原 TurnFragment（RET-01）。 */
+function fragmentFromRow(row: Row): TurnFragment {
+  const kind = asString(row.kind, 'assistant') as TurnFragment['kind']
+  return {
+    fragmentId: asString(row.fragment_id),
+    turnId: asString(row.turn_id),
+    sessionId: asString(row.session_id),
+    segSeq: asNumber(row.seg_seq),
+    kind,
+    fragIndex: asNumber(row.frag_index),
+    charOffset: asNumber(row.char_offset),
+    charLen: asNumber(row.char_len),
+    content: asString(row.content),
+    sourceSeqs: parseJsonArray<number>(row.source_seqs),
+    createdAt: asNumber(row.created_at),
+  }
+}
+
+/**
+ * 消息/自然段级切分（RET-01）：只用于搜索，不改变原始文本。
+ * 切分策略：空行段落优先；归档文本经 cleanForIndex 压缩空白后无空行，
+ * 退化为句末标点（。！？；.!?;）切句；单句超长再按 MAX_PIECE 截断。
+ * 返回每段的序号与在原文（trim 后）中的字符偏移。
+ */
+function splitFragments(text: string): Array<{ index: number; offset: number; text: string }> {
+  const trimmed = text.trim()
+  if (trimmed === '') return []
+  const SENTENCE_END = new Set(['。', '！', '？', '；', '.', '!', '?', ';', '\n'])
+  const MAX_PIECE = 2000
+  const pieces: Array<{ index: number; offset: number; text: string }> = []
+  let start = 0
+  let cut = 0
+  for (let i = 0; i < trimmed.length; i++) {
+    if (!SENTENCE_END.has(trimmed[i]!)) continue
+    cut = i + 1 // 句末标点留在前一段
+    if (cut - start >= 20 || i === trimmed.length - 1) {
+      const piece = trimmed.slice(start, cut).trim()
+      if (piece !== '') pieces.push({ index: pieces.length, offset: start, text: piece })
+      start = cut
+    }
+  }
+  if (start < trimmed.length) {
+    const tail = trimmed.slice(start).trim()
+    if (tail !== '') pieces.push({ index: pieces.length, offset: start, text: tail })
+  }
+  // 超长片段按 MAX_PIECE 再切（防止单句过长成为不可用的巨段）
+  const result: Array<{ index: number; offset: number; text: string }> = []
+  for (const piece of pieces) {
+    if (piece.text.length <= MAX_PIECE) {
+      result.push(piece)
+      continue
+    }
+    for (let i = 0; i < piece.text.length; i += MAX_PIECE) {
+      result.push({ index: result.length, offset: piece.offset + i, text: piece.text.slice(i, i + MAX_PIECE) })
+    }
+  }
+  return result
+}
+
+/** 工具事件的可读文本（片段索引用）。 */
+function toolReadableText(tool: ToolEventItem): string {
+  const parts: string[] = [`[tool:${tool.kind}]`]
+  if (tool.name !== undefined) parts.push(tool.name)
+  if (tool.arguments !== undefined) parts.push(tool.arguments.slice(0, 4000))
+  if (tool.result !== undefined) parts.push('⇒ ' + tool.result.slice(0, 4000))
+  if (tool.error !== undefined) parts.push(`(error: ${tool.error.slice(0, 500)})`)
+  return parts.join(' ')
+}
+
+/** 工具段 payload（JSON）的可读文本（会话阅读视图/片段索引用）。 */
+function toolPayloadReadableText(payload: string): string {
+  const parsed = JSON.parse(payload) as {
+    kind?: unknown
+    callId?: unknown
+    name?: unknown
+    arguments?: unknown
+    result?: unknown
+    error?: unknown
+  }
+  const parts: string[] = [`[tool:${String(parsed.kind ?? '')}]`]
+  if (typeof parsed.name === 'string') parts.push(parsed.name)
+  if (typeof parsed.arguments === 'string') parts.push(parsed.arguments.slice(0, 4000))
+  if (typeof parsed.result === 'string') parts.push('⇒ ' + parsed.result.slice(0, 4000))
+  if (parsed.error !== undefined) parts.push(`(error: ${String(parsed.error).slice(0, 500)})`)
+  return parts.join(' ')
+}
+
+/** LIKE 模式转义（% _ \ 字面匹配，RET-09 回退路径）。 */
+function escapeLikePattern(text: string): string {
+  return text.replace(/[\\%_]/g, (ch) => `\\${ch}`)
 }
 
 /** Observation frontmatter 字段名。 */
@@ -400,23 +564,52 @@ export function renderObservationFile(meta: {
   return lines.join('\n')
 }
 
+/**
+ * RET-01：消息/自然段级片段索引行（只用于搜索，不改变原始文本）。
+ * 位置回到会话原文：session_id（会话）+ seg_seq（Raw Turn Archive 段序号，
+ * turn_segments.seq）+ char_offset/char_len（段内偏移）。
+ */
+export interface TurnFragment {
+  readonly fragmentId: string
+  readonly turnId: string
+  readonly sessionId: string
+  readonly segSeq: number
+  readonly kind: 'user' | 'assistant' | 'tool' | 'summary' | 'note'
+  /** 段内自然段序号（0 = 整段/未分段）。 */
+  readonly fragIndex: number
+  /** 片段在段 payload 中的起始偏移（字符）。 */
+  readonly charOffset: number
+  readonly charLen: number
+  readonly content: string
+  /** 来源 DSH 事件 seq（工具片段为工具事件 seq；其余为空）。 */
+  readonly sourceSeqs: readonly number[]
+  readonly createdAt: number
+}
+
 /** 科研记忆 存储门面：封装 research_memory.db 的全部读写。 */
 export class ResearchMemoryStore {
   readonly db: evoresearchDb
+  /** 原始档案目录（长工具结果/参数落盘位置；内存库测试可显式传入）。 */
+  readonly archivesDir: string | undefined
+  /** 持久化源目录；恢复备份必须从这里复制数据库，而不是从备份目录复制。 */
+  readonly memoryDir: string | undefined
 
-  private constructor(db: evoresearchDb) {
+  private constructor(db: evoresearchDb, archivesDir?: string, memoryDir?: string) {
     this.db = db
+    this.archivesDir = archivesDir
+    this.memoryDir = memoryDir
   }
 
-  /** 打开项目记忆库（目录不存在时自动创建）。 */
+  /** 打开项目记忆库（目录不存在时自动创建）；archives 目录 = memories 的兄弟目录。 */
   static open(memoryDir: string): ResearchMemoryStore {
     const file = path.join(memoryDir, 'research_memory.db')
-    return new ResearchMemoryStore(evoresearchDb.open(file, RESEARCH_MEMORY_MIGRATIONS))
+    const archivesDir = path.join(memoryDir, '..', 'archives')
+    return new ResearchMemoryStore(evoresearchDb.open(file, RESEARCH_MEMORY_MIGRATIONS), archivesDir, memoryDir)
   }
 
-  /** 内存库（测试用）。 */
-  static openMemory(): ResearchMemoryStore {
-    return new ResearchMemoryStore(evoresearchDb.openMemory(RESEARCH_MEMORY_MIGRATIONS))
+  /** 内存库（测试用）；可选传入 archivesDir 以测试长文本落盘。 */
+  static openMemory(archivesDir?: string): ResearchMemoryStore {
+    return new ResearchMemoryStore(evoresearchDb.openMemory(RESEARCH_MEMORY_MIGRATIONS), archivesDir)
   }
 
   // ── Turn Catalog ──────────────────────────────────────────────────────────
@@ -584,12 +777,18 @@ export class ResearchMemoryStore {
 
   // ── Raw Turn Archive（v3：原始轮次分页归档） ──────────────────────────────
 
-  /** 追加一段原始轮次内容（分段归档，原始历史永不清除）。 */
-  appendSegment(input: { segmentId: string; turnId: string; kind: 'user' | 'assistant' | 'tool' | 'summary' | 'note'; payload: string }): void {
+  /**
+   * 追加一段原始轮次内容（分段归档，原始历史永不清除）。
+   * MEM-07 幂等：按 segment_id INSERT OR IGNORE，同一段重复追加不会产生重复行
+   * （segment_id 由调用方按确定性规则生成，如 archiveTurn 的 s-<turnId>-<suffix>）。
+   * @returns 是否实际插入（false = 已存在，幂等跳过）。
+   */
+  appendSegment(input: { segmentId: string; turnId: string; kind: 'user' | 'assistant' | 'tool' | 'summary' | 'note'; payload: string }): boolean {
     const nextSeq = this.nextSegmentSeq(input.turnId)
-    this.db.db
-      .prepare('INSERT INTO turn_segments (segment_id, turn_id, seq, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    const result = this.db.db
+      .prepare('INSERT OR IGNORE INTO turn_segments (segment_id, turn_id, seq, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(input.segmentId, input.turnId, nextSeq, input.kind, input.payload, Date.now())
+    return result.changes > 0
   }
 
   /** 某轮下一个 segment 序号。 */
@@ -615,20 +814,325 @@ export class ResearchMemoryStore {
   }
 
   /**
-   * 整轮归档：把轮次快照写入 segments（用户消息/回答/摘要/打断说明）。
+   * 整轮归档：把轮次快照写入 segments（用户消息/回答/工具事件/摘要/打断说明）。
    * research_turns 记录本身保留（活跃投影），segments 为不可变原始档案。
+   *
+   * MEM-06：extra.tools 中的工具调用与结果按原事件顺序（seq 升序）写入
+   * kind='tool' 的 segment；参数/结果超过 LONG_TEXT_THRESHOLD 时完整内容写入
+   * archives/ 目录文件，payload 只保留可检索前缀 + 文件位置。
+   *
+   * MEM-07 幂等：所有 segment_id 确定性生成 + appendSegment 的 INSERT OR IGNORE，
+   * 重复执行（含崩溃后重跑）不会产生重复 segment；已归档但缺某段（如对账补回
+   * assistantText 后缺 assistant 段）时重跑会自动补齐缺失段。
+   * @returns 本次实际插入的 segment 数（0 = 全部已存在）。
    */
-  archiveTurn(turn: TurnRecord): void {
-    this.appendSegment({ segmentId: `s-${turn.turnId}-u`, turnId: turn.turnId, kind: 'user', payload: turn.userText })
-    if (turn.assistantText) {
-      this.appendSegment({ segmentId: `s-${turn.turnId}-a`, turnId: turn.turnId, kind: 'assistant', payload: turn.assistantText })
+  archiveTurn(turn: TurnRecord, extra: { tools?: readonly ToolEventItem[]; events?: readonly TurnArchiveEvent[] } = {}): number {
+    let inserted = 0
+    const events = extra.events !== undefined && extra.events.length > 0
+      ? [...extra.events]
+      : this.legacyArchiveEvents(turn, extra.tools ?? [])
+    const usedIds = new Set<string>()
+    let assistantIndex = 0
+    let toolIndex = 0
+    for (const event of events.sort((a, b) => a.order - b.order)) {
+      if (event.kind === 'user') {
+        const id = `s-${turn.turnId}-u`
+        if (usedIds.has(id)) continue
+        usedIds.add(id)
+        inserted += this.appendSegment({ segmentId: id, turnId: turn.turnId, kind: 'user', payload: event.text ?? turn.userText }) ? 1 : 0
+        continue
+      }
+      if (event.kind === 'assistant') {
+        const text = event.text ?? ''
+        if (text === '') continue
+        const id = assistantIndex === 0 ? `s-${turn.turnId}-a` : `s-${turn.turnId}-a-${event.step ?? assistantIndex}`
+        assistantIndex += 1
+        if (usedIds.has(id)) continue
+        usedIds.add(id)
+        inserted += this.appendSegment({ segmentId: id, turnId: turn.turnId, kind: 'assistant', payload: text }) ? 1 : 0
+        continue
+      }
+      const tool = event.tool
+      if (tool === undefined) continue
+      const base = `s-${turn.turnId}-t-${tool.seq}`
+      const id = usedIds.has(base) ? `${base}-${toolIndex}` : base
+      usedIds.add(id)
+      toolIndex += 1
+      const payload = this.toolSegmentPayload(turn.turnId, tool)
+      inserted += this.appendSegment({ segmentId: id, turnId: turn.turnId, kind: 'tool', payload }) ? 1 : 0
+    }
+    // 兼容旧 accumulator：如果事件投影没有正文，仍补齐 TurnRecord 中的原文。
+    if (turn.userText && !events.some((event) => event.kind === 'user')) {
+      inserted += this.appendSegment({ segmentId: `s-${turn.turnId}-u`, turnId: turn.turnId, kind: 'user', payload: turn.userText }) ? 1 : 0
+    }
+    if (turn.assistantText && !events.some((event) => event.kind === 'assistant')) {
+      inserted += this.appendSegment({ segmentId: `s-${turn.turnId}-a`, turnId: turn.turnId, kind: 'assistant', payload: turn.assistantText }) ? 1 : 0
     }
     if (turn.workingSummary) {
-      this.appendSegment({ segmentId: `s-${turn.turnId}-s`, turnId: turn.turnId, kind: 'summary', payload: turn.workingSummary })
+      inserted += this.appendSegment({ segmentId: `s-${turn.turnId}-s`, turnId: turn.turnId, kind: 'summary', payload: turn.workingSummary }) ? 1 : 0
     }
     if (turn.partialNote) {
-      this.appendSegment({ segmentId: `s-${turn.turnId}-n`, turnId: turn.turnId, kind: 'note', payload: turn.partialNote })
+      inserted += this.appendSegment({ segmentId: `s-${turn.turnId}-n`, turnId: turn.turnId, kind: 'note', payload: turn.partialNote }) ? 1 : 0
     }
+    return inserted
+  }
+
+  /** 旧调用没有有序事件时保持历史行为，同时按工具 seq 排序。 */
+  private legacyArchiveEvents(turn: TurnRecord, tools: readonly ToolEventItem[]): TurnArchiveEvent[] {
+    const events: TurnArchiveEvent[] = []
+    if (turn.userText) events.push({ order: Number.NEGATIVE_INFINITY, kind: 'user', text: turn.userText })
+    if (turn.assistantText) events.push({ order: 0, kind: 'assistant', step: 0, text: turn.assistantText })
+    for (const tool of [...tools].sort((a, b) => a.seq - b.seq)) {
+      events.push({ order: tool.seq + 1, kind: 'tool', tool })
+    }
+    return events
+  }
+
+  /**
+   * 工具事件 segment 的 payload（JSON）：含事件原序 seq、callId、名称/参数/结果；
+   * 超长参数或结果 → 完整内容落盘 archives/，payload 只存可检索前缀 + 文件位置。
+   */
+  private toolSegmentPayload(turnId: string, tool: ToolEventItem): string {
+    const payload: Record<string, unknown> = { seq: tool.seq, kind: tool.kind, callId: tool.callId }
+    if (tool.name !== undefined) payload.name = tool.name
+    if (tool.arguments !== undefined) {
+      const stored = this.stashLongText(turnId, `t${tool.seq}-args`, tool.arguments)
+      payload.arguments = stored.text
+      if (stored.file !== undefined) payload.argumentsFile = stored.file
+    }
+    if (tool.result !== undefined) {
+      const stored = this.stashLongText(turnId, `t${tool.seq}-result`, tool.result)
+      payload.result = stored.text
+      if (stored.file !== undefined) payload.resultFile = stored.file
+    }
+    if (tool.error !== undefined) payload.error = tool.error
+    return JSON.stringify(payload)
+  }
+
+  /** 超长文本落盘：完整内容写入 archives/<turnId>/，返回可检索前缀与文件位置。 */
+  private stashLongText(turnId: string, tag: string, text: string): { text: string; file?: string } {
+    if (text.length <= LONG_TEXT_THRESHOLD || this.archivesDir === undefined) return { text }
+    const dir = path.join(this.archivesDir, turnId)
+    fs.mkdirSync(dir, { recursive: true })
+    const safeTag = tag.replace(/[^A-Za-z0-9_-]/g, '_')
+    const file = path.join(dir, `${safeTag}.txt`)
+    fs.writeFileSync(file, text, 'utf8')
+    const prefix = text.slice(0, LONG_TEXT_INDEX_CHARS)
+    return { text: `${prefix}\n…（完整内容 ${text.length} 字符已归档: ${file}）`, file }
+  }
+
+  // ── Fragment Index（RET-01/02/09：消息/自然段级片段索引） ───────────────────
+
+  /** 从归档 segments 重建某轮的片段索引（幂等：先清后建，返回片段数）。 */
+  buildTurnFragments(turnId: string): number {
+    const turn = this.getTurn(turnId)
+    if (!turn) return 0
+    const segments = this.listSegments(turnId)
+    if (segments.length === 0) return 0
+    return this.replaceTurnFragments(
+      turnId,
+      turn.sessionId,
+      segments.map((segment) => this.fragmentPartForSegment(segment)),
+    )
+  }
+
+  /**
+   * 从轮次原文（userText/assistantText/tools）建片段索引——无归档（Raw Turn
+   * Archive 缺 user 段）时由 RET-02 从 DSH session log 还原后调用（兜底路径）。
+   * seg_seq 使用合成序号（0=user, 1=assistant, 2+=tools），位置仍可读。
+   */
+  buildTurnFragmentsFromParts(input: {
+    turnId: string
+    sessionId: string
+    userText: string
+    assistantText: string
+    tools?: readonly ToolEventItem[]
+  }): number {
+    const parts: Array<{ segSeq: number; kind: 'user' | 'assistant' | 'tool'; text: string }> = []
+    if (input.userText) parts.push({ segSeq: 0, kind: 'user', text: input.userText })
+    if (input.assistantText) parts.push({ segSeq: 1, kind: 'assistant', text: input.assistantText })
+    for (const tool of input.tools ?? []) {
+      parts.push({ segSeq: 2 + parts.length, kind: 'tool', text: toolReadableText(tool) })
+    }
+    return this.replaceTurnFragments(input.turnId, input.sessionId, parts)
+  }
+
+  /** 某轮的片段数（RET-02 断点续做：>0 视为已索引）。 */
+  countTurnFragments(turnId: string): number {
+    const row = this.db.db.prepare('SELECT COUNT(*) AS n FROM turn_fragments WHERE turn_id = ?').get(turnId) as Row
+    return asNumber(row.n)
+  }
+
+  /** 读取某轮的片段（按 seg_seq, frag_index 升序）。 */
+  listTurnFragments(turnId: string): TurnFragment[] {
+    const rows = this.db.db
+      .prepare('SELECT * FROM turn_fragments WHERE turn_id = ? ORDER BY seg_seq ASC, frag_index ASC')
+      .all(turnId) as Row[]
+    return rows.map(fragmentFromRow)
+  }
+
+  /** 整轮重建：事务内删除旧片段并插入新片段（可重复执行）。 */
+  private replaceTurnFragments(
+    turnId: string,
+    sessionId: string,
+    parts: ReadonlyArray<{ segSeq: number; kind: 'user' | 'assistant' | 'tool' | 'summary' | 'note'; text: string }>,
+  ): number {
+    const now = Date.now()
+    const insert = this.db.db.prepare(
+      `INSERT INTO turn_fragments (fragment_id, turn_id, session_id, seg_seq, kind, frag_index, char_offset, char_len, content, source_seqs, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    return this.db.transaction(() => {
+      this.db.db.prepare('DELETE FROM turn_fragments WHERE turn_id = ?').run(turnId)
+      let count = 0
+      for (const part of parts) {
+        for (const piece of splitFragments(part.text)) {
+          insert.run(
+            `fr-${turnId}-${part.segSeq}-${piece.index}`,
+            turnId,
+            sessionId,
+            part.segSeq,
+            part.kind,
+            piece.index,
+            piece.offset,
+            piece.text.length,
+            piece.text,
+            '[]',
+            now,
+          )
+          count += 1
+        }
+      }
+      return count
+    })
+  }
+
+  /** segment → 片段文本（工具段解析 JSON 为可读文本；超长截断）。 */
+  private fragmentPartForSegment(segment: { seq: number; kind: string; payload: string }): {
+    segSeq: number
+    kind: 'user' | 'assistant' | 'tool' | 'summary' | 'note'
+    text: string
+  } {
+    if (segment.kind === 'tool') {
+      try {
+        return { segSeq: segment.seq, kind: 'tool', text: toolPayloadReadableText(segment.payload) }
+      } catch {
+        return { segSeq: segment.seq, kind: 'tool', text: segment.payload.slice(0, 8000) }
+      }
+    }
+    const kind = segment.kind === 'user' || segment.kind === 'assistant' || segment.kind === 'summary' || segment.kind === 'note'
+      ? segment.kind
+      : 'assistant'
+    return { segSeq: segment.seq, kind, text: segment.payload }
+  }
+
+  /**
+   * 片段检索（RET-03/RET-09）：FTS5 优先，失败自动退化为 LIKE 原文扫描；
+   * 可按会话过滤（find_in_conversation，RET-04）。mode 显式指定时不做自动退化。
+   */
+  searchFragments(
+    query: string,
+    limit: number,
+    options: { sessionId?: string; mode?: 'auto' | 'fts' | 'like' } = {},
+  ): Array<{ fragment: TurnFragment; score: number }> {
+    const mode = options.mode ?? 'auto'
+    const ftsQuery = ResearchMemoryStore.toFtsQuery(query)
+    if (mode !== 'like' && ftsQuery.length > 0) {
+      try {
+        const sql = options.sessionId
+          ? `SELECT f.*, bm25(turn_fragments_fts) AS score
+             FROM turn_fragments_fts t
+             JOIN turn_fragments f ON f.rowid = t.rowid
+             WHERE turn_fragments_fts MATCH ? AND f.session_id = ?
+             ORDER BY score LIMIT ?`
+          : `SELECT f.*, bm25(turn_fragments_fts) AS score
+             FROM turn_fragments_fts t
+             JOIN turn_fragments f ON f.rowid = t.rowid
+             WHERE turn_fragments_fts MATCH ?
+             ORDER BY score LIMIT ?`
+        const rows = options.sessionId
+          ? (this.db.db.prepare(sql).all(ftsQuery, options.sessionId, limit) as Row[])
+          : (this.db.db.prepare(sql).all(ftsQuery, limit) as Row[])
+        return rows.map((row) => ({ fragment: fragmentFromRow(row), score: Math.abs(asNumber(row.score, 0)) }))
+      } catch (error) {
+        if (mode === 'fts') throw error
+        // auto：FTS5 不可用/查询失败 → 退化为 LIKE 原文扫描（RET-09）
+      }
+    }
+    return this.searchFragmentsLike(query, limit, options.sessionId)
+  }
+
+  /** LIKE 原文扫描回退路径（RET-09；对 % _ 转义，不破坏查询语义）。 */
+  searchFragmentsLike(query: string, limit: number, sessionId?: string): Array<{ fragment: TurnFragment; score: number }> {
+    const tokens = query
+      .split(/[\s\p{P}\p{S}]+/u)
+      .map((token) => token.replace(/[^\p{L}\p{N}]+/gu, ''))
+      .filter((token) => token !== '')
+      .slice(0, 16)
+    // Trigram FTS cannot match short CJK terms. Require all query terms in the
+    // raw text so a two-term Chinese query does not become an impossible
+    // literal substring search (for example: "编剧 档期").
+    if (tokens.length > 1) {
+      const predicates = tokens.map(() => `content LIKE ? ESCAPE '\\'`).join(' AND ')
+      const params = tokens.map((token) => `%${escapeLikePattern(token)}%`)
+      const sql = sessionId
+        ? `SELECT * FROM turn_fragments WHERE ${predicates} AND session_id = ? ORDER BY length(content) ASC, created_at DESC LIMIT ?`
+        : `SELECT * FROM turn_fragments WHERE ${predicates} ORDER BY length(content) ASC, created_at DESC LIMIT ?`
+      const rows = (this.db.db.prepare(sql).all(...params, ...(sessionId === undefined ? [] : [sessionId]), limit) as Row[])
+      if (rows.length > 0) return rows.map((row) => ({ fragment: fragmentFromRow(row), score: 0.5 + tokens.length / 100 }))
+    }
+    const pattern = `%${escapeLikePattern(query)}%`
+    const rows = sessionId
+      ? (this.db.db
+          .prepare(`SELECT * FROM turn_fragments WHERE content LIKE ? ESCAPE '\\' AND session_id = ? ORDER BY length(content) ASC, created_at DESC LIMIT ?`)
+          .all(pattern, sessionId, limit) as Row[])
+      : (this.db.db
+          .prepare(`SELECT * FROM turn_fragments WHERE content LIKE ? ESCAPE '\\' ORDER BY length(content) ASC, created_at DESC LIMIT ?`)
+          .all(pattern, limit) as Row[])
+    return rows.map((row) => ({ fragment: fragmentFromRow(row), score: 0.5 }))
+  }
+
+  /** 轮次级 LIKE 回退（RET-09：FTS 不可用时仍可搜 research_turns 原文）。 */
+  searchTurnsLike(query: string, limit: number): Array<{ turn: TurnRecord; score: number }> {
+    const pattern = `%${escapeLikePattern(query)}%`
+    const rows = this.db.db
+      .prepare(`SELECT * FROM research_turns WHERE user_text LIKE ? ESCAPE '\\' OR assistant_text LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT ?`)
+      .all(pattern, pattern, limit) as Row[]
+    return rows.map((row) => ({ turn: turnFromRow(row), score: 0.5 }))
+  }
+
+  /** Observation 级 LIKE 回退（RET-09）。 */
+  searchObservationsLike(query: string, limit: number): Array<{ observation: ObservationMeta; score: number }> {
+    const pattern = `%${escapeLikePattern(query)}%`
+    const rows = this.db.db
+      .prepare(`SELECT * FROM observation_search_index WHERE title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' ORDER BY updated_at DESC LIMIT ?`)
+      .all(pattern, pattern, limit) as Row[]
+    return rows
+      .map((row) => ({ observation: this.getObservation(asString(row.observation_id))!, score: 0.5 }))
+      .filter((entry) => entry.observation !== undefined)
+  }
+
+  /**
+   * 会话级原文序列（RET-05/08 的阅读视图）：按时间升序把该会话各轮归档段
+   * 拍平成列表；工具段解析为可读文本。位置 = (turnId, segSeq)。
+   */
+  conversationSegments(sessionId: string, limitTurns = 200): Array<{ turnId: string; segSeq: number; kind: string; text: string; turnCreatedAt: number }> {
+    const turns = this.listTurns(sessionId, limitTurns).reverse() // listTurns 最新优先 → 升序
+    const items: Array<{ turnId: string; segSeq: number; kind: string; text: string; turnCreatedAt: number }> = []
+    for (const turn of turns) {
+      for (const segment of this.listSegments(turn.turnId)) {
+        let text = segment.payload
+        if (segment.kind === 'tool') {
+          try {
+            text = toolPayloadReadableText(segment.payload)
+          } catch {
+            text = segment.payload.slice(0, 8000)
+          }
+        }
+        items.push({ turnId: turn.turnId, segSeq: segment.seq, kind: segment.kind, text, turnCreatedAt: turn.createdAt })
+      }
+    }
+    return items
   }
 
   // ── Topic State ───────────────────────────────────────────────────────────
@@ -946,6 +1450,17 @@ export class ResearchMemoryStore {
   }
 
   /**
+   * 一键重建全部 FTS5 索引（MEM-09/RET-09：索引可重建）。
+   * FTS5 外部内容表的触发器保持同步；索引损坏或回滚后执行标准 rebuild 即可恢复，
+   * 不触碰内容表（research_turns / category_states / observation_search_index / turn_fragments）。
+   */
+  rebuildFtsIndexes(): void {
+    for (const table of ['research_turns_fts', 'category_states_fts', 'observation_search_index_fts', 'turn_fragments_fts'] as const) {
+      this.db.db.exec(`INSERT INTO ${table}(${table}) VALUES('rebuild')`)
+    }
+  }
+
+  /**
    * 把用户查询转换为 FTS5 查询串（trigram tokenizer）：
    * 按空白/标点分词 → 剥离 token 内全部非字母数字（FTS 运算符 `-` `*` `"` `(` 等
    * 及 CJK 标点会破坏 MATCH 语法，如 "xxx】" 被解析为列名）→ 过滤 <3 字符
@@ -1129,6 +1644,31 @@ export class ResearchMemoryStore {
            source_version = excluded.source_version, status = excluded.status, updated_at = excluded.updated_at`,
       )
       .run(memoryDir, projectId, sourceVersion, status, Date.now())
+  }
+
+  /** RET-02：片段索引断点进度（镜像 research_index_progress 机制）。 */
+  getFragmentIndexProgress(memoryDir: string, projectId: string): { status: string; sourceVersion: string; progress: Record<string, unknown> } | undefined {
+    const row = this.db.db
+      .prepare('SELECT status, source_version, progress FROM fragment_index_progress WHERE memory_dir = ? AND project_id = ?')
+      .get(memoryDir, projectId) as Row | undefined
+    if (!row) return undefined
+    return {
+      status: asString(row.status),
+      sourceVersion: asString(row.source_version),
+      progress: parseJsonObject<Record<string, unknown>>(row.progress),
+    }
+  }
+
+  setFragmentIndexProgress(memoryDir: string, projectId: string, sourceVersion: string, status: string, progress: Record<string, unknown>): void {
+    this.db.db
+      .prepare(
+        `INSERT INTO fragment_index_progress (memory_dir, project_id, source_version, status, progress, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(memory_dir, project_id) DO UPDATE SET
+           source_version = excluded.source_version, status = excluded.status,
+           progress = excluded.progress, updated_at = excluded.updated_at`,
+      )
+      .run(memoryDir, projectId, sourceVersion, status, JSON.stringify(progress), Date.now())
   }
 
   /** 关闭数据库。 */

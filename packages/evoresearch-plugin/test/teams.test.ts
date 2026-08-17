@@ -43,7 +43,8 @@ describe('ExpertService 内置团队邀请', () => {
   })
 
   afterEach(() => {
-    // 清理
+    // 测试卫生（BASE-02）：清理 beforeEach 创建的临时数据根
+    fs.rmSync(dataRoot, { recursive: true, force: true })
   })
 
   it('邀请内置团队（无需技能目录）', async () => {

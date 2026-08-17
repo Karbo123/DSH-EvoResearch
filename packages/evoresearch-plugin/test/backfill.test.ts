@@ -100,6 +100,8 @@ describe('工具收据钩子（session/event tool/call 与 tool/result）', () =
 
   afterEach(() => {
     dispose()
+    // 测试卫生（BASE-02）：清理 beforeEach 创建的临时数据根
+    fs.rmSync(dataRoot, { recursive: true, force: true })
   })
 })
 

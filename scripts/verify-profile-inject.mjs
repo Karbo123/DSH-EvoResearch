@@ -40,5 +40,21 @@ rmSync(join(PROFILE_DIR, 'SOUL.md'), { force: true })
 rmSync(join(PROFILE_DIR, 'USER_PROFILE.md'), { force: true })
 report.empty = rt.profileContextText() === ''
 
-console.log(JSON.stringify(report, null, 1))
-process.exit(0)
+// 自动计数断言（BASE-02/t22 约定：pass/total 跟随实际 check() 调用数；
+// 断言与报告保持一致，避免只生成报告而漏掉失败。
+let pass = 0
+let total = 0
+const check = (name, cond, detail = '') => {
+  total += 1
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}`)
+  if (cond) pass += 1
+}
+check('全文注入：identity_profile 包裹', report.fullInjection.hasWrapper === true)
+check('全文注入：SOUL.md 内容', report.fullInjection.hasSoul === true)
+check('全文注入：USER_PROFILE.md 内容', report.fullInjection.hasUser === true)
+check('超限：只给清单含按需读取', report.overLimit.hasListing === true)
+check('超限：不含大文件正文', report.overLimit.notFullBody === true)
+check('超限：清单含 SOUL.md 入口', report.overLimit.hasSoulListing === true)
+check('空目录：注入为空串', report.empty === true)
+console.log(`\n${pass}/${total} passed`)
+process.exit(pass === total ? 0 : 1)

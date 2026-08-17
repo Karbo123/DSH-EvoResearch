@@ -1,6 +1,7 @@
 // 视觉模型评审：统计行外部居中 + Markdown 实时装饰层
 import fs from 'node:fs'
-const apiKey = process.env.NEW_API_API_KEY ?? 'sk-ehuqNkIOuBzeR9GsWDHRqchtHYqFB7hBrsTK5joJJ3X3kQcx'
+const apiKey = process.env.NEW_API_API_KEY
+if (!apiKey) throw new Error('NEW_API_API_KEY is required for visual review')
 const shots = ['visual-composer.png']
 const res = await fetch('http://127.0.0.1:3000/v1/chat/completions', {
   method: 'POST',

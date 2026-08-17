@@ -51,7 +51,7 @@ describe('EvoResearchApiService', () => {
     }
   })
 
-  it('Remote 方法调用返回 JSON 结果（projectsList 空列表）', async () => {
+  it('Remote 方法调用返回 JSON 结果（projectsList 空列表）', async (t) => {
     const ctx = new Context()
     // 用真实 WorkspaceService（临时目录，无项目）验证 Remote 方法的实际行为
     const { WorkspaceService } = await import('../src/host/workspace.js')
@@ -59,6 +59,10 @@ describe('EvoResearchApiService', () => {
     const os = await import('node:os')
     const path = await import('node:path')
     const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-api-'))
+    // 测试卫生（BASE-02）：用例结束（含失败路径）清理临时目录
+    t.after(() => {
+      fs.rmSync(dataRoot, { recursive: true, force: true })
+    })
     const workspace = new WorkspaceService({ dataRoot })
     const service = new EvoResearchApiService(ctx, {
       workspace,

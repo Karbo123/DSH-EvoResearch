@@ -62,7 +62,8 @@ if (MODE === 'all' || MODE === 'settings') {
 }
 
 // 送视觉模型评审
-const apiKey = process.env.NEW_API_API_KEY ?? 'sk-ehuqNkIOuBzeR9GsWDHRqchtHYqFB7hBrsTK5joJJ3X3kQcx'
+const apiKey = process.env.NEW_API_API_KEY
+if (!apiKey) throw new Error('NEW_API_API_KEY is required for visual review')
 const messages = [{
   role: 'user',
   content: [

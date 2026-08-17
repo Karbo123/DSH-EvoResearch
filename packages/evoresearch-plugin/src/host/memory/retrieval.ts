@@ -89,8 +89,11 @@ export async function retrieve(
   const sources: Array<Array<{ hit: MemoryHit; score: number }>> = []
 
   if (ftsQuery.length > 0) {
-    // 轮次检索
-    const turns = store.searchTurnsFts(ftsQuery, perSource)
+    // 轮次检索（RET-09：FTS5 不可用时退化为 LIKE 原文扫描）
+    const turns = tryFts(
+      () => store.searchTurnsFts(ftsQuery, perSource),
+      () => store.searchTurnsLike(query, perSource),
+    )
     sources.push(
       turns.map(({ turn, score }) => ({
         hit: {
@@ -105,8 +108,11 @@ export async function retrieve(
         score: Math.abs(score),
       })),
     )
-    // Observation 检索（默认只出 ACTIVE）
-    const observations = store.searchObservationsFts(ftsQuery, perSource)
+    // Observation 检索（默认只出 ACTIVE；RET-09 退化 LIKE）
+    const observations = tryFts(
+      () => store.searchObservationsFts(ftsQuery, perSource),
+      () => store.searchObservationsLike(query, perSource),
+    )
     sources.push(
       observations.map(({ observation, score }) => ({
         hit: {
@@ -123,7 +129,14 @@ export async function retrieve(
     )
     // Topic states 检索
     if (options.includeStates !== false) {
-      const states = store.searchTopicStatesFts(ftsQuery, perSource)
+      // Topic State 是旧数据的导航来源，不能因为它的 FTS 表损坏而让
+      // research_turns / observations 的原文检索整体失败。部分旧数据库
+      // 没有 topic_states_fts；这里明确把它当成可选来源，沿用 RET-09
+      // 的“尽可能继续工作”语义。
+      const states = tryFts(
+        () => store.searchTopicStatesFts(ftsQuery, perSource),
+        () => [],
+      )
       sources.push(
         states.map((state, index) => ({
           hit: {
@@ -141,30 +154,35 @@ export async function retrieve(
     }
   }
 
-  // 向量召回（可选）：query 与候选文本的相似度作为额外来源
+  // 向量召回（可选）：query 与候选文本的相似度作为额外来源；
+  // RET-09：embedding 失败（未就绪/超时/异常）时静默跳过，不阻塞 FTS 结果
   if (options.embeddings?.ready) {
-    const embeddings = options.embeddings
-    const queryVector = await embeddings.embed(query)
-    const turnCandidates = store.listTurns(undefined, 50)
-    const vectorCandidates: Array<{ hit: MemoryHit; score: number }> = []
-    for (const turn of turnCandidates) {
-      const vector = turnVectorCache.get(turn.turnId)
-      if (!vector) continue
-      vectorCandidates.push({
-        hit: {
-          kind: 'turn',
-          id: turn.turnId,
-          score: embeddings.similarity(queryVector, vector),
-          category: turn.categories[0],
-          topicKey: turn.topicKeys[0],
-          snippet: turn.userText.slice(0, 200),
-          createdAt: turn.createdAt,
-        },
-        score: 0,
-      })
+    try {
+      const embeddings = options.embeddings
+      const queryVector = await embeddings.embed(query)
+      const turnCandidates = store.listTurns(undefined, 50)
+      const vectorCandidates: Array<{ hit: MemoryHit; score: number }> = []
+      for (const turn of turnCandidates) {
+        const vector = turnVectorCache.get(turn.turnId)
+        if (!vector) continue
+        vectorCandidates.push({
+          hit: {
+            kind: 'turn',
+            id: turn.turnId,
+            score: embeddings.similarity(queryVector, vector),
+            category: turn.categories[0],
+            topicKey: turn.topicKeys[0],
+            snippet: turn.userText.slice(0, 200),
+            createdAt: turn.createdAt,
+          },
+          score: 0,
+        })
+      }
+      vectorCandidates.sort((a, b) => b.hit.score - a.hit.score)
+      sources.push(vectorCandidates.slice(0, perSource))
+    } catch {
+      // embedding 失败：退化 FTS/LIKE 结果，不阻塞主回答
     }
-    vectorCandidates.sort((a, b) => b.hit.score - a.hit.score)
-    sources.push(vectorCandidates.slice(0, perSource))
   }
 
   // 类别加权（不硬过滤）：命中类别 ×1.5
@@ -175,6 +193,15 @@ export async function retrieve(
     return hit
   })
   return weighted.slice(0, limit)
+}
+
+/** RET-09：优先 FTS，异常时退化为 LIKE 原文扫描。 */
+function tryFts<T>(fts: () => T, like: () => T): T {
+  try {
+    return fts()
+  } catch {
+    return like()
+  }
 }
 
 /** 轮次向量缓存（EmbeddingProvider 后台预热；内存级，重启丢失可重建）。 */

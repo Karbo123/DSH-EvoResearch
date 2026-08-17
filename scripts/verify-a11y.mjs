@@ -84,7 +84,7 @@ async function main() {
   report.focusInDialog = await cdp.eval(`(function(){ const d = document.querySelector('.evo-modal'); return d !== null && d.contains(document.activeElement) })()`)
   report.activeEl = await cdp.eval(`(function(){ const el = document.activeElement; return el ? el.tagName + (el.title ? '#' + el.title : '') : null })()`)
   // 2) 关闭 → 焦点恢复触发按钮
-  await cdp.eval(`(function(){ const btn = document.querySelector('.evo-modal-head .evo-icon-btn'); if (btn) btn.click(); return true })()`)
+  await cdp.eval(`(function(){ const btn = document.querySelector('.evo-btn-back, [aria-label="返回"]'); if (!btn) return false; btn.click(); return true })()`)
   await sleep(600)
   report.focusRestored = await cdp.eval(`(function(){ const el = document.activeElement; return el ? el.title ?? el.tagName : null })()`)
   // 3) 候选 activedescendant
@@ -96,12 +96,35 @@ async function main() {
   await sleep(400)
   report.reducedMotion = await cdp.eval(`(function(){ const el = document.querySelector('.evo-toast-host') || document.querySelector('.evo-app'); const cs = getComputedStyle(el); const t = document.createElement('div'); t.style.transition = 'all 0.3s'; document.body.appendChild(t); const cst = getComputedStyle(t); const dur = cst.transitionDuration; t.remove(); return { bodyTransition: dur, appTransition: cs.transitionDuration } })()`)
 
+  report.chatGraph = await cdp.eval(`(function(){
+    const tab = Array.from(document.querySelectorAll('.evo-tab')).find(function(el){ return /图谱|Chat Graph/i.test(el.textContent || '') })
+    if (tab) tab.click()
+    return { clicked: !!tab }
+  })()`)
+  await sleep(600)
+  report.chatGraph = { ...report.chatGraph, ...(await cdp.eval(`(function(){
+    const flow = document.querySelector('.react-flow[aria-label="Chat Graph 研究上下文图"]')
+    const controls = document.querySelector('[aria-label="图谱缩放与适配控制"]')
+    const minimap = document.querySelector('[aria-label="图谱小地图"]')
+    return { canvas: !!flow, controls: !!controls, minimap: !!minimap, nodes: document.querySelectorAll('[data-node-id][role="group"]').length }
+  })()`)) }
+
+  report.checks = {
+    dialog: report.dialog?.role === 'dialog' && report.dialog?.ariaModal === 'true',
+    focusInDialog: report.focusInDialog === true,
+    focusRestored: report.focusRestored === '设置',
+    comboboxAttributes: report.combobox?.expanded === 'true' && report.combobox?.auto === 'list' && typeof report.combobox?.active === 'string' && report.combobox.active.length > 0 && report.combobox.options > 0,
+    reducedMotion: ['0s', '1e-05s'].includes(report.reducedMotion?.bodyTransition) || ['0s', '1e-05s'].includes(report.reducedMotion?.appTransition),
+    chatGraphSurface: report.chatGraph?.canvas === true && report.chatGraph?.controls === true && report.chatGraph?.minimap === true,
+  }
+
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
   const out = join(ROOT, '.tmp-port', `a11y-${port}.png`)
   writeFileSync(out, Buffer.from(shot.data, 'base64'))
   report.screenshot = out
 
   console.log(JSON.stringify(report, null, 2))
+  if (Object.values(report.checks).some((value) => value !== true)) throw new Error(`无障碍验收失败: ${Object.entries(report.checks).filter(([, value]) => value !== true).map(([name]) => name).join(', ')}`)
   cdp.close()
 }
 

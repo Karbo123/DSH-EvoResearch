@@ -10,8 +10,12 @@ import { ResearchMemoryStore } from '../src/host/memory/store.js'
 import { reconcileStore, rotateBackup, reconcileMemoryDir } from '../src/host/memory/recovery.js'
 
 describe('rotateBackup', () => {
-  it('双份轮换备份：依次创建 v3.1、v3.2，之后覆盖较旧一份', () => {
+  it('双份轮换备份：依次创建 v3.1、v3.2，之后覆盖较旧一份', (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-recover-'))
+    // 测试卫生（BASE-02）：用例结束（含失败路径）清理临时目录
+    t.after(() => {
+      fs.rmSync(dir, { recursive: true, force: true })
+    })
     const memoryDir = path.join(dir, 'memories')
     fs.mkdirSync(memoryDir, { recursive: true })
     const dbFile = path.join(memoryDir, 'research_memory.db')
@@ -29,8 +33,11 @@ describe('rotateBackup', () => {
     assert.equal(backups.length, 2)
   })
 
-  it('源库不存在时返回 false', () => {
+  it('源库不存在时返回 false', (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-recover-'))
+    t.after(() => {
+      fs.rmSync(dir, { recursive: true, force: true })
+    })
     assert.equal(rotateBackup(path.join(dir, 'nope'), path.join(dir, 'b')), false)
   })
 })
@@ -65,8 +72,11 @@ describe('reconcileStore', () => {
     store.close()
   })
 
-  it('损坏库：跳过全部写操作', () => {
+  it('损坏库：跳过全部写操作', (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-recover-'))
+    t.after(() => {
+      fs.rmSync(dir, { recursive: true, force: true })
+    })
     const memoryDir = path.join(dir, 'memories')
     fs.mkdirSync(memoryDir, { recursive: true })
     // 直接写坏文件（非 SQLite 格式）
@@ -80,8 +90,11 @@ describe('reconcileStore', () => {
     assert.equal(fs.existsSync(path.join(dir, 'backups')), false)
   })
 
-  it('库不存在时 reconcileMemoryDir 返回 undefined', () => {
+  it('库不存在时 reconcileMemoryDir 返回 undefined', (t) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-recover-'))
+    t.after(() => {
+      fs.rmSync(dir, { recursive: true, force: true })
+    })
     assert.equal(reconcileMemoryDir(path.join(dir, 'no-memories')), undefined)
   })
 })

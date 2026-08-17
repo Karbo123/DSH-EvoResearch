@@ -33,6 +33,33 @@ export const CSS = `
   --chat-max-width: 900px;
   --input-bg: #ffffff;
   --hover-bg: #f0ebe1;
+  /* Chat Graph tokens: deliberately separate from the general surface scale
+     so a light canvas remains readable without hard-coded dark-only colors. */
+  --graph-canvas: #f3f0ea;
+  --graph-grid: #d4cec2;
+  --graph-node-surface: #fffdf8;
+  --graph-node-surface-alt: #f4f0e8;
+  --graph-node-border: #b9b1a4;
+  --graph-node-title: #2f2b25;
+  --graph-chat: #2e6f95;
+  --graph-memory: #2d8158;
+  --graph-global: #7653a0;
+  --graph-resource: #94652b;
+  --graph-fork: #2e72a0;
+  --graph-reference: #2d8158;
+  --graph-relation: #77736c;
+  --graph-disabled: #8e887f;
+  --graph-edge-label: #3c3933;
+  --graph-control: #fffdf8;
+  --graph-control-border: #b9b1a4;
+  --graph-minimap: rgb(255 253 248 / 92%);
+  --graph-minimap-group: #7653a0;
+  --graph-minimap-chat: #2e6f95;
+  --graph-minimap-resource: #2d8158;
+  --graph-trace: #b66f16;
+  --graph-candidate: #7653a0;
+  --graph-status-missing: #a33e34;
+  --graph-status-running: #94652b;
 }
 html.dark {
   color-scheme: dark;
@@ -57,8 +84,35 @@ html.dark {
   --brand-foreground: #ffffff;
   --input-bg: #1c1a17;
   --hover-bg: #332f2a;
+  --graph-canvas: #1b1b1e;
+  --graph-grid: #3a3a42;
+  --graph-node-surface: #2e2e33;
+  --graph-node-surface-alt: #29292d;
+  --graph-node-border: #19191d;
+  --graph-node-title: #f2f2f2;
+  --graph-chat: #4a90d9;
+  --graph-memory: #5dbe85;
+  --graph-global: #c39bf0;
+  --graph-resource: #c98b3d;
+  --graph-fork: #4a90d9;
+  --graph-reference: #5dbe85;
+  --graph-relation: #8a8a94;
+  --graph-disabled: #777780;
+  --graph-edge-label: #b8b8bd;
+  --graph-control: #28282d;
+  --graph-control-border: #53535c;
+  --graph-minimap: rgb(22 22 25 / 82%);
+  --graph-minimap-group: #8a789e;
+  --graph-minimap-chat: #4a90d9;
+  --graph-minimap-resource: #5dbe85;
+  --graph-trace: #e8a33d;
+  --graph-candidate: #c39bf0;
+  --graph-status-missing: #c96d6d;
+  --graph-status-running: #d6a455;
 }
 * { box-sizing: border-box; }
+button, input, textarea, select, [role='button'], [role='group'] { touch-action: manipulation; }
+*:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 /* 全局细滚动条（消息列表/侧栏/面板一致）：细、圆角、半透明，hover 加深——避免默认粗条视觉噪音 */
 * { scrollbar-width: thin; scrollbar-color: rgba(128, 128, 128, 0.38) transparent; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -113,6 +167,11 @@ body { margin: 0; }
   .evo-cols[data-narrow] .evo-left { transform: none; }
   .evo-cols[data-narrow] .evo-right { transform: none; }
   .evo-resize-handle { display: none; }
+  .evo-graph-toolbar { flex-wrap: wrap; padding: 6px 8px; }
+  .evo-graph-toolbar .evo-graph-search { order: 5; flex: 1 1 100%; }
+  .evo-graph-search input { width: 100%; }
+  .evo-graph-canvas { overflow: auto; }
+  .evo-graph-minimap, .evo-graph-inspector { display: none; }
 }
 /* ── 左侧栏 ── */
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -570,6 +629,12 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-msg-copy:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-msg-copy.confirming { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
 .evo-msg-copy svg { width: 13px; height: 13px; }
+.evo-msg-feedback { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; border: 1px solid transparent; background: transparent; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; padding: 0; }
+.evo-msg-feedback:hover:not(:disabled) { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-msg-feedback.selected { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 14%, transparent); border-color: color-mix(in srgb, var(--color-success) 35%, transparent); }
+.evo-msg-feedback.selected.negative { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 12%, transparent); border-color: color-mix(in srgb, var(--color-error) 32%, transparent); }
+.evo-msg-feedback:disabled { opacity: 0.45; cursor: wait; }
+.evo-msg-feedback svg { width: 14px; height: 14px; }
 /* 用户消息内联编辑（§回溯：编辑并重发覆盖） */
 .evo-msg-edit { display: flex; flex-direction: column; gap: 7px; min-width: 320px; max-width: 620px; }
 .evo-msg-edit-textarea { width: 100%; min-height: 76px; max-height: 220px; padding: 10px 12px; border: 1px solid var(--brand); border-radius: 12px; background: var(--color-surface); color: var(--color-text-primary); font-size: 14px; font-family: inherit; line-height: 1.5; outline: none; resize: vertical; }
@@ -619,43 +684,90 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-btn svg { width: 13px; height: 13px; }
 /* 画布：Blender 节点编辑器风格深色底 + 点阵网格 */
 .evo-graph-canvas { position: relative; flex: 1; min-height: 300px; overflow: auto; background:
-  radial-gradient(circle, #3a3a42 1.2px, transparent 1.2px) 0 0 / 20px 20px,
-  #1b1b1e; }
-.evo-graph-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  radial-gradient(circle, var(--graph-grid) 1.2px, transparent 1.2px) 0 0 / 20px 20px,
+  var(--graph-canvas); }
+.evo-graph-canvas .react-flow { position: absolute; inset: 0; direction: ltr; background: transparent; }
+.evo-graph-canvas .react-flow__container, .evo-graph-canvas .react-flow__renderer, .evo-graph-canvas .react-flow__pane { position: absolute; inset: 0; width: 100%; height: 100%; }
+.evo-graph-canvas .react-flow__viewport { transform-origin: 0 0; z-index: 2; pointer-events: none; }
+.evo-graph-canvas .react-flow__nodes { pointer-events: none; transform-origin: 0 0; }
+.evo-graph-canvas .react-flow__node { position: absolute; user-select: none; pointer-events: all; transform-origin: 0 0; box-sizing: border-box; }
+.evo-graph-canvas .react-flow__nodes, .evo-graph-canvas .react-flow__edges { position: absolute; }
+.evo-graph-canvas .react-flow__edges svg { position: absolute; overflow: visible; pointer-events: none; }
+.evo-graph-canvas .react-flow__edge { pointer-events: visibleStroke; }
+.evo-graph-canvas .react-flow__edge-path, .evo-graph-canvas .react-flow__connection-path { fill: none; }
+.evo-graph-canvas .react-flow__edgelabel-renderer { position: absolute; inset: 0; pointer-events: none; user-select: none; }
+.evo-graph-canvas .react-flow__panel { position: absolute; z-index: 5; margin: 15px; }
+.evo-graph-canvas .react-flow__node { cursor: grab; }
+.evo-graph-canvas .react-flow__node.dragging { cursor: grabbing; }
+.evo-graph-canvas .react-flow__handle { width: 9px; height: 9px; min-width: 9px; min-height: 9px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.75); box-shadow: 0 0 3px rgba(0,0,0,.5); }
+.evo-graph-canvas .react-flow__handle-left { left: -5px; }
+.evo-graph-canvas .react-flow__handle-right { right: -5px; }
+.evo-graph-canvas .react-flow__handle.evo-graph-socket-ctx { background: var(--graph-fork); }
+.evo-graph-canvas .react-flow__handle.evo-graph-socket-mem { background: var(--graph-reference); }
+.evo-graph-canvas .react-flow__handle.evo-graph-socket-out { background: var(--graph-resource); }
+.evo-graph-canvas .react-flow__handle:hover { transform: translateY(-50%) scale(1.45) !important; }
+.evo-graph-canvas .react-flow__controls { overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 7px; box-shadow: 0 4px 14px rgb(0 0 0 / 24%); }
+.evo-graph-canvas .react-flow__controls-button { width: 26px; height: 26px; border: 0; border-bottom: 1px solid var(--graph-control-border); background: var(--graph-control); color: var(--color-text-primary); fill: var(--color-text-primary); }
+.evo-graph-canvas .react-flow__controls-button:last-child { border-bottom: 0; }
+.evo-graph-canvas .react-flow__minimap { right: 12px; bottom: 12px; overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 6px; background: var(--graph-minimap); }
+.evo-graph-canvas .react-flow__edge-path { stroke: var(--graph-disabled); stroke-width: 2px; }
+.evo-graph-canvas .react-flow__edge.selected .react-flow__edge-path { stroke: var(--graph-trace); }
+.evo-graph-canvas .react-flow__node .evo-graph-node { position: relative; left: auto; top: auto; }
+.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-ctx { position: absolute; left: 14px; top: 29px; }
+.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-mem { position: absolute; left: 14px; top: 47px; }
+.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-out { position: absolute; right: 14px; top: 38px; }
+.evo-graph-canvas .evo-graph-node .evo-graph-node-sid { position: absolute; right: 8px; top: 47px; max-width: 58px; }
+.evo-graph-canvas .evo-graph-node > .evo-graph-node-body { position: static; }
+.evo-graph-canvas .react-flow__edge-textbg { fill: var(--graph-node-surface-alt); }
+.evo-graph-canvas .react-flow__edge-text { fill: var(--graph-edge-label); font-size: 10px; }
 /* 节点卡片：Blender 节点编辑器风格——类型色标题栏 + 深灰主体 + socket 行（顶部内高光增强浮起感） */
-.evo-graph-node { position: absolute; background: linear-gradient(180deg, #2e2e33, #29292d); border: 1px solid #19191d; border-radius: 5px; padding: 0; cursor: grab; user-select: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 3px 12px rgba(0, 0, 0, 0.4); transition: border-color 0.15s, box-shadow 0.15s; display: flex; flex-direction: column; }
-.evo-graph-node:hover { border-color: #4a4a52; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 5px 18px rgba(0, 0, 0, 0.45); }
-.evo-graph-node-sel { border-color: #e8a33d; box-shadow: 0 0 0 1.5px rgba(232, 163, 61, 0.55), 0 5px 18px rgba(0, 0, 0, 0.42); }
-.evo-graph-node-dragging { z-index: 30; cursor: grabbing; box-shadow: 0 0 0 1.5px rgba(232, 163, 61, 0.4), 0 10px 28px rgba(0, 0, 0, 0.5); }
+.evo-graph-node { position: absolute; background: linear-gradient(180deg, var(--graph-node-surface), var(--graph-node-surface-alt)); border: 1px solid var(--graph-node-border); border-radius: 7px; padding: 0; cursor: grab; user-select: none; box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), 0 3px 12px rgb(0 0 0 / 24%); transition: border-color 0.15s, box-shadow 0.15s; display: flex; flex-direction: column; }
+.evo-graph-node:hover { border-color: color-mix(in srgb, var(--brand) 55%, var(--graph-node-border)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), 0 5px 18px rgb(0 0 0 / 30%); }
+.evo-graph-node-sel { border-color: var(--graph-trace); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--graph-trace) 55%, transparent), 0 5px 18px rgb(0 0 0 / 28%); }
+.evo-graph-node[data-pinned] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-trace) 42%, transparent), inset 0 1px 0 rgb(255 255 255 / 10%), 0 3px 12px rgb(0 0 0 / 24%); }
+.evo-graph-node-dragging { z-index: 30; cursor: grabbing; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--graph-trace) 40%, transparent), 0 10px 28px rgb(0 0 0 / 34%); }
 /* 标题栏：类型色渐变（Blender 节点 header 风格） */
 .evo-graph-node-titlebar { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 4px 4px 0 0; flex-shrink: 0; }
-.evo-graph-node-chat .evo-graph-node-titlebar { background: linear-gradient(180deg, #2d4a68, #243a52); }
-.evo-graph-node-memory .evo-graph-node-titlebar { background: linear-gradient(180deg, #2d5440, #23422f); }
-.evo-graph-node-memory[data-global] .evo-graph-node-titlebar { background: linear-gradient(180deg, #4a3d63, #382e4d); }
+.evo-graph-node-chat .evo-graph-node-titlebar { background: color-mix(in srgb, var(--graph-chat) 28%, var(--graph-node-surface-alt)); }
+.evo-graph-node-memory .evo-graph-node-titlebar { background: color-mix(in srgb, var(--graph-memory) 28%, var(--graph-node-surface-alt)); }
+.evo-graph-node-memory[data-global] .evo-graph-node-titlebar { background: color-mix(in srgb, var(--graph-global) 30%, var(--graph-node-surface-alt)); }
+.evo-graph-node-resource { border-style: dashed; }
+.evo-graph-node-resource .evo-graph-node-titlebar { background: color-mix(in srgb, var(--graph-resource) 28%, var(--graph-node-surface-alt)); }
+.evo-graph-node[data-status='missing'], .evo-graph-node[data-status='failed'] { border-color: var(--graph-status-missing); }
+.evo-graph-node[data-status='running'], .evo-graph-node[data-status='indexing'] { border-color: var(--graph-status-running); }
+.evo-graph-node-candidate { border-style: dashed; border-color: var(--graph-candidate); }
+.evo-graph-node-trace::after { content: '本轮已读取'; position: absolute; right: 6px; bottom: 4px; padding: 1px 4px; border-radius: 3px; background: color-mix(in srgb, var(--graph-trace) 16%, var(--graph-node-surface)); color: var(--graph-trace); font-size: 8px; line-height: 1.2; }
 .evo-graph-node-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--color-text-secondary); flex-shrink: 0; }
-.evo-graph-node-chat .evo-graph-node-dot { background: #7fb3e8; }
-.evo-graph-node-memory .evo-graph-node-dot { background: #7fd8a0; }
-.evo-graph-node-memory[data-global] .evo-graph-node-dot { background: #c39bf0; }
-.evo-graph-node-title { font-size: 12px; font-weight: 600; color: #f2f2f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.evo-graph-node-chat .evo-graph-node-dot { background: color-mix(in srgb, var(--graph-chat) 68%, white); }
+.evo-graph-node-memory .evo-graph-node-dot { background: color-mix(in srgb, var(--graph-memory) 68%, white); }
+.evo-graph-node-memory[data-global] .evo-graph-node-dot { background: var(--graph-global); }
+.evo-graph-node-title { font-size: 12px; font-weight: 650; color: var(--graph-node-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 /* 主体：socket 行 */
 .evo-graph-node-body { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 5px 7px 6px; min-width: 0; }
 .evo-graph-socket-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .evo-graph-socket-row-out { margin-top: 1px; }
 /* Blender socket：8px 实心圆 + 亮描边 */
 .evo-graph-socket { width: 9px; height: 9px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, 0.75); cursor: crosshair; flex-shrink: 0; transition: transform 0.12s, box-shadow 0.12s; box-shadow: 0 0 3px rgba(0, 0, 0, 0.5); }
-.evo-graph-socket-ctx { background: #4a90d9; }
-.evo-graph-socket-mem { background: #5dbe85; }
-.evo-graph-socket-out { background: #c98b3d; }
+.evo-graph-socket-ctx { background: var(--graph-fork); }
+.evo-graph-socket-mem { background: var(--graph-reference); }
+.evo-graph-socket-out { background: var(--graph-resource); }
+.evo-graph-socket-hidden { visibility: hidden; pointer-events: none; }
 .evo-graph-socket:hover { transform: scale(1.45); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18); }
-.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: #9d9da3; white-space: nowrap; }
-.evo-graph-node-tag { font-size: 9.5px; color: #a8a8ad; background: rgba(255, 255, 255, 0.07); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; }
-.evo-graph-node-sid { font-size: 9.5px; color: #7a7a80; font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.evo-graph-node-preview { font-size: 10px; color: #b8b8bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--color-text-secondary); white-space: nowrap; }
+.evo-graph-node-tag { font-size: 9.5px; color: var(--color-text-secondary); background: color-mix(in srgb, var(--color-text-primary) 8%, transparent); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; }
+.evo-graph-node-sid { font-size: 9.5px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-graph-node-preview { font-size: 10px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* 连线：粗贝塞尔 + 类型色（Blender 风格：线在 socket 处衔接） */
-.evo-graph-edge { fill: none; stroke: #6a6a72; stroke-width: 2px; }
-.evo-graph-edge-ctx { stroke: #4a90d9; stroke-width: 2.2px; }
-.evo-graph-edge-mem { stroke: #5dbe85; stroke-width: 2px; }
-.evo-graph-edge-linking { stroke: #e8a33d; stroke-dasharray: 6 4; stroke-width: 2.2px; }
+.evo-graph-edge { fill: none; stroke: var(--graph-disabled); stroke-width: 2px; }
+.evo-graph-edge-ctx { stroke: var(--graph-fork); stroke-width: 2.2px; }
+.evo-graph-edge-mem { stroke: var(--graph-reference); stroke-width: 2px; }
+.evo-graph-edge-relation { stroke: var(--graph-relation); stroke-width: 1.6px; stroke-dasharray: 5 4; }
+.evo-graph-canvas .react-flow__edge-path.evo-graph-edge-ctx { stroke: var(--graph-fork) !important; stroke-width: 2.2px; }
+.evo-graph-canvas .react-flow__edge-path.evo-graph-edge-mem { stroke: var(--graph-reference) !important; stroke-width: 2px; }
+.evo-graph-canvas .react-flow__edge-path.evo-graph-edge-relation { stroke: var(--graph-relation) !important; stroke-width: 1.6px; stroke-dasharray: 5 4; }
+.evo-graph-edge-disabled { opacity: 0.35; }
+.evo-graph-edge-label-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.evo-graph-edge-linking { stroke: var(--graph-trace); stroke-dasharray: 6 4; stroke-width: 2.2px; }
 /* 右键菜单：与面板同语言 */
 .evo-graph-menu { position: absolute; z-index: 50; min-width: 176px; padding: 5px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); display: flex; flex-direction: column; gap: 2px; }
 .evo-graph-menu-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border: none; background: none; border-radius: 7px; color: var(--color-text-primary); font-size: 12.5px; cursor: pointer; text-align: left; font: inherit; transition: background 0.12s; }
@@ -666,6 +778,16 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-menu-danger svg { color: var(--color-error); }
 .evo-graph-hint { padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--color-text-tertiary); font-size: 12.5px; text-align: center; line-height: 1.6; }
 .evo-graph-hint svg { width: 34px; height: 34px; color: var(--color-border); }
+/* compound group：标题是原生按钮，折叠不依赖颜色或精确点击坐标 */
+.evo-graph-group { position: relative; width: 100%; height: 100%; overflow: visible; border: 1px solid color-mix(in srgb, var(--graph-global) 55%, var(--graph-node-border)); border-radius: 10px; background: color-mix(in srgb, var(--graph-global) 8%, transparent); pointer-events: all; }
+.evo-graph-group-experiment { border-color: color-mix(in srgb, var(--graph-resource) 65%, var(--graph-node-border)); background: color-mix(in srgb, var(--graph-resource) 8%, transparent); }
+.evo-graph-group-exploration { border-color: color-mix(in srgb, var(--graph-candidate) 65%, var(--graph-node-border)); background: color-mix(in srgb, var(--graph-candidate) 8%, transparent); }
+.evo-graph-group.collapsed { background: color-mix(in srgb, var(--graph-global) 16%, var(--graph-node-surface)); box-shadow: 0 3px 12px rgb(0 0 0 / 18%); }
+.evo-graph-group-header { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 5px 3px 8px; }
+.evo-graph-group-toggle { display: inline-flex; align-items: center; min-width: 0; flex: 1; padding: 3px 5px; border: 0; border-radius: 5px; background: transparent; color: var(--color-text-primary); cursor: pointer; font: inherit; text-align: left; }
+.evo-graph-group-toggle:hover { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.evo-graph-group-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 650; }
+.evo-graph-group-count { flex: 0 0 auto; min-width: 20px; padding: 1px 5px; border-radius: 999px; background: color-mix(in srgb, var(--color-text-primary) 10%, transparent); color: var(--color-text-secondary); font-size: 10px; text-align: center; }
 /* 记忆节点内容编辑弹窗 */
 .evo-graph-editor-mask { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; }
 .evo-graph-editor { width: min(520px, calc(100vw - 48px)); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3); display: flex; flex-direction: column; padding: 12px; gap: 10px; }
@@ -675,6 +797,80 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-editor-text:focus { border-color: color-mix(in srgb, var(--brand) 45%, var(--color-border)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 12%, transparent); }
 .evo-graph-editor-foot { display: flex; align-items: center; gap: 8px; }
 .evo-graph-editor-hint { font-size: 11px; color: var(--color-text-tertiary); }
+/* GRAPH-04/08：引用节点展示（图标 + 文件名 + 实时预览） */
+.evo-graph-node-ref-icon { width: 12px; height: 12px; color: var(--color-text-secondary); flex-shrink: 0; }
+.evo-graph-node-ref-name { font-size: 10px; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.evo-graph-node-preview-muted { color: var(--color-text-tertiary); }
+.evo-graph-node-preview-err { color: var(--graph-status-missing); }
+/* GRAPH-11：工具栏节点搜索框 */
+.evo-graph-search { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-background); color: var(--color-text-tertiary); }
+.evo-graph-search svg { width: 12px; height: 12px; flex-shrink: 0; }
+.evo-graph-search input { border: none; outline: none; background: none; color: var(--color-text-primary); font-size: 12px; width: 130px; font: inherit; }
+.evo-graph-search input::placeholder { color: var(--color-text-tertiary); }
+/* GRAPH-07：连线说明文字（svg text；描边底保证可读） */
+.evo-graph-edge-label { min-width: 52px; max-width: 280px; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--graph-edge-label) 22%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--graph-node-surface) 94%, transparent); color: var(--graph-edge-label); font-size: 10px; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; word-break: break-word; pointer-events: none; user-select: none; box-shadow: 0 1px 3px rgb(0 0 0 / 14%); }
+/* GRAPH-07/09：连线可右键（编辑说明/删除）；svg 层 pointer-events:none，仅 path 命中 stroke */
+.evo-graph-edge-hit { pointer-events: stroke; cursor: pointer; }
+.evo-graph-edge-hit:hover { filter: brightness(1.35); }
+.evo-graph-canvas .react-flow__minimap { left: 50%; right: auto; transform: translateX(-50%); }
+/* GRAPH-04/08：引用只读预览弹窗 */
+.evo-graph-viewer { width: min(640px, calc(100vw - 48px)); }
+.evo-graph-viewer-path { font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; margin-left: 8px; }
+.evo-graph-viewer-text { width: 100%; min-height: 180px; max-height: 55vh; overflow: auto; margin: 0; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); color: var(--color-text-primary); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.evo-graph-viewer-error { width: 100%; padding: 14px 11px; border: 1px solid color-mix(in srgb, var(--color-error) 40%, var(--color-border)); border-radius: 8px; background: color-mix(in srgb, var(--color-error) 8%, var(--color-background)); color: var(--color-error); font-size: 12.5px; }
+.evo-graph-narrow-list { display: none; }
+@media (max-width: 767px) {
+  .evo-graph-narrow-list { display: block; min-height: 100%; background: var(--color-surface); }
+  .evo-graph-canvas > .react-flow { display: none; }
+}
+.evo-graph-narrow-item { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 10px; border: 0; border-bottom: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-primary); text-align: left; font: inherit; }
+.evo-graph-narrow-item.active { background: color-mix(in srgb, var(--brand) 10%, var(--color-surface)); }
+.evo-graph-narrow-kind, .evo-graph-narrow-meta { flex: 0 0 auto; font-size: 11px; color: var(--color-text-tertiary); }
+.evo-graph-narrow-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.evo-graph-inspector { position: absolute; z-index: 45; right: 12px; bottom: 12px; width: min(280px, calc(100% - 24px)); max-height: min(52vh, 360px); overflow: auto; padding: 10px; background: color-mix(in srgb, var(--color-surface) 96%, transparent); border: 1px solid var(--color-border); border-radius: 8px; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24); color: var(--color-text-primary); }
+.evo-graph-inspector-head, .evo-graph-inspector-meta { display: flex; align-items: center; gap: 7px; }
+.evo-graph-inspector-head { margin-bottom: 8px; font-size: 13px; }
+.evo-graph-inspector-meta { flex-wrap: wrap; margin-bottom: 7px; font-size: 11px; color: var(--color-text-tertiary); }
+.evo-graph-inspector code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 4px 0; padding: 4px 6px; background: var(--color-background); color: var(--color-text-secondary); font-size: 10px; }
+.evo-graph-inspector-preview { margin: 8px 0; color: var(--color-text-secondary); font-size: 11px; line-height: 1.5; }
+.evo-graph-inspector-action, .evo-graph-inspector-links button { border: 1px solid var(--color-border); border-radius: 6px; padding: 5px 8px; background: var(--color-background); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 11px; }
+.evo-graph-inspector-action { margin: 3px 4px 3px 0; }
+.evo-graph-inspector-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--color-text-tertiary); }
+.evo-graph-inspector-reopen { position: absolute; z-index: 45; right: 12px; bottom: 12px; border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 9px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 11px; }
+.evo-graph-minimap { position: absolute; z-index: 20; right: 12px; top: 12px; width: 142px; height: 86px; overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 6px; background: var(--graph-minimap); pointer-events: none; }
+.evo-graph-minimap-dot { position: absolute; width: 8px; height: 5px; border-radius: 2px; background: var(--graph-minimap-resource); opacity: 0.72; }
+.evo-graph-minimap-dot.active { background: var(--graph-trace); opacity: 1; box-shadow: 0 0 0 1px var(--color-surface); }
+.evo-graph-status-missing, .evo-graph-status-failed { color: var(--graph-status-missing); }
+.evo-graph-status-running, .evo-graph-status-indexing { color: var(--graph-status-running); }
+.evo-context-trace { position: fixed; z-index: 900; top: 0; right: 0; bottom: 0; width: min(520px, 94vw); display: flex; flex-direction: column; gap: 10px; padding: 14px; overflow-y: auto; overscroll-behavior: contain; background: var(--color-surface); color: var(--color-text-primary); border-left: 1px solid var(--color-border); box-shadow: -10px 0 30px rgb(0 0 0 / 18%); }
+.evo-context-trace-head { display: flex; align-items: flex-start; gap: 10px; flex-shrink: 0; }
+.evo-context-trace-head > div { min-width: 0; flex: 1; }
+.evo-context-trace-head strong { display: block; font-size: 15px; }
+.evo-context-trace-head p { margin: 2px 0 0; color: var(--color-text-tertiary); font-size: 11.5px; }
+.evo-context-trace-question { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.evo-context-trace-question label, .evo-context-trace-section h3 { font-size: 11.5px; font-weight: 650; color: var(--color-text-secondary); }
+.evo-context-trace-question textarea { width: 100%; min-height: 54px; resize: vertical; padding: 7px 9px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-background); color: var(--color-text-primary); font: inherit; font-size: 12px; line-height: 1.45; }
+.evo-context-trace-actions, .evo-context-trace-item-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.evo-context-trace-section { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.evo-context-trace-section h3 { margin: 2px 0 0; }
+.evo-context-trace-item, .evo-context-trace-link { min-width: 0; padding: 9px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); }
+.evo-context-trace-item.excluded { opacity: .58; }
+.evo-context-trace-item-head, .evo-context-trace-link-line { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
+.evo-context-trace-item-head strong { min-width: 0; flex: 1; overflow-wrap: anywhere; font-size: 12.5px; }
+.evo-context-trace-item-head span { flex-shrink: 0; color: var(--color-text-tertiary); font-size: 10.5px; }
+.evo-context-trace-item-head span.connected { color: var(--color-success); }
+.evo-context-trace-item p { margin: 5px 0 7px; color: var(--color-text-secondary); font-size: 11.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.evo-context-trace-item-actions button, .evo-context-trace-link button { min-height: 28px; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 11px; }
+.evo-context-trace-item-actions button:hover, .evo-context-trace-link button:hover { border-color: var(--brand); color: var(--brand); }
+.evo-context-trace-link-line button { min-width: 0; flex: 1; border: 0; background: none; padding: 0; text-align: left; overflow-wrap: anywhere; color: var(--brand); }
+.evo-context-trace-link-line code { max-width: 54%; min-width: 0; color: var(--color-text-secondary); overflow-wrap: anywhere; white-space: normal; font-size: 10.5px; }
+.evo-context-trace-link small { display: block; margin: 6px 0; color: var(--color-text-tertiary); line-height: 1.45; overflow-wrap: anywhere; }
+.evo-context-trace-error, .evo-context-trace-degraded { padding: 8px 9px; border-radius: 7px; font-size: 11.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.evo-context-trace-error { border: 1px solid color-mix(in srgb, var(--color-error) 45%, var(--color-border)); color: var(--color-error); background: color-mix(in srgb, var(--color-error) 7%, var(--color-background)); }
+.evo-context-trace-degraded { border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--color-border)); color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 7%, var(--color-background)); }
+.evo-context-trace-loading, .evo-context-trace-empty { padding: 16px 8px; text-align: center; color: var(--color-text-tertiary); font-size: 12px; }
+.evo-context-trace-close-bottom { align-self: flex-end; min-height: 30px; padding: 5px 12px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 12px; }
+@media (max-width: 767px) { .evo-context-trace { width: 100vw; max-width: none; border-left: 0; } .evo-context-trace-link code { max-width: 42%; } }
 /* ── Channels / Team ── */
 .evo-channel-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-tertiary); flex-shrink: 0; text-transform: capitalize; }
 .evo-channel-badge.online { background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }
@@ -1091,4 +1287,112 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-statusbar-item b { font-weight: 600; color: var(--color-text-secondary); }
 .evo-statusbar-label { color: var(--color-text-tertiary); }
 .evo-statusbar-sep { opacity: 0.5; margin: 0 1px; }
+/* ── 研究笔记面板（NOTE-UI：列表 / 阅读分页 / 草稿 / 背景资料）── */
+.evo-note-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-note-search { flex: 1; min-width: 160px; padding: 7px 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); color: var(--color-text-primary); font-size: 13px; outline: none; }
+.evo-note-search:focus { border-color: var(--brand); }
+.evo-note-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); cursor: pointer; text-align: left; font: inherit; width: 100%; transition: border-color 0.12s; }
+.evo-note-card:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--color-border)); }
+.evo-note-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.evo-note-card-title { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.evo-note-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; flex-shrink: 0; white-space: nowrap; }
+.evo-note-badge.note { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
+.evo-note-badge.legacy { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
+.evo-note-badge.fm { background: var(--hover-bg); color: var(--color-text-tertiary); }
+.evo-note-card-preview { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.evo-note-card-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-text-tertiary); flex-wrap: wrap; }
+.evo-note-detail { display: flex; flex-direction: column; gap: 10px; }
+.evo-note-detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-note-detail-title { font-size: 15px; font-weight: 700; color: var(--color-text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.evo-note-detail-acts { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; }
+.evo-note-body { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); }
+.evo-note-fm { border: 1px dashed var(--color-border); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--color-text-tertiary); background: var(--color-background); }
+.evo-note-fm-toggle { border: none; background: none; color: var(--brand); font-size: 12px; cursor: pointer; padding: 0; font: inherit; }
+.evo-note-fm-grid { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin-top: 6px; word-break: break-word; }
+.evo-note-fm-key { font-family: ui-monospace, Consolas, monospace; color: var(--color-text-secondary); }
+.evo-note-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.evo-note-pager-info { font-size: 11.5px; color: var(--color-text-tertiary); }
+.evo-note-editor { display: flex; flex-direction: column; gap: 8px; }
+.evo-note-textarea { width: 100%; min-height: 220px; max-height: 60vh; resize: vertical; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); color: var(--color-text-primary); font-size: 13px; line-height: 1.55; font-family: ui-monospace, Consolas, monospace; outline: none; }
+.evo-note-textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 12%, transparent); }
+.evo-note-textarea-sm { min-height: 120px; }
+.evo-note-hit { display: flex; align-items: flex-start; gap: 8px; padding: 7px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-background); cursor: pointer; text-align: left; font: inherit; width: 100%; transition: border-color 0.12s; }
+.evo-note-hit:hover { border-color: color-mix(in srgb, var(--brand) 45%, var(--color-border)); }
+.evo-note-hit-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.evo-note-hit-title { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); }
+.evo-note-hit-snippet { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.evo-note-hit-meta { font-size: 11px; color: var(--color-text-tertiary); }
+.evo-note-draft { border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); display: flex; flex-direction: column; overflow: hidden; }
+.evo-note-draft-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; }
+.evo-note-draft-target { font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; }
+.evo-note-draft-note { font-size: 11.5px; color: var(--color-text-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-note-draft-body { border-top: 1px solid var(--color-border-light); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.evo-note-draft-text { max-height: 40vh; overflow: auto; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; padding: 8px 10px; }
+.evo-note-draft-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.evo-note-conflict { padding: 7px 10px; border: 1px solid color-mix(in srgb, var(--color-error) 50%, var(--color-border)); background: color-mix(in srgb, var(--color-error) 10%, var(--color-surface)); color: var(--color-error); border-radius: 8px; font-size: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-note-doc { border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.evo-note-doc-head { display: flex; align-items: center; gap: 8px; }
+.evo-note-doc-name { font-size: 13px; font-weight: 600; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; }
+.evo-note-doc-acts { margin-left: auto; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.evo-note-doc-body { max-height: 45vh; overflow: auto; }
+.evo-note-doc-missing { font-size: 12px; color: var(--color-text-tertiary); }
+/* ── 文献与稿件面板（LIB-UI） ── */
+.evo-lib-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; flex-shrink: 0; white-space: nowrap; background: var(--hover-bg); color: var(--color-text-tertiary); }
+.evo-lib-badge.ok { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
+.evo-lib-badge.no { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
+.evo-lib-badge.fail { background: color-mix(in srgb, var(--color-error) 14%, transparent); color: var(--color-error); }
+.evo-lib-badge.miss { background: color-mix(in srgb, var(--color-error) 10%, transparent); color: var(--color-error); }
+.evo-lib-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--color-text-secondary); }
+.evo-lib-check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px; color: var(--color-text-secondary); }
+.evo-lib-check input { accent-color: var(--brand); }
+.evo-lib-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-lib-path { flex: 1; min-width: 160px; }
+.evo-lib-num { width: 84px; }
+.evo-lib-scan { flex: 1; min-width: 160px; }
+.evo-lib-pagetext { display: flex; flex-direction: column; gap: 6px; }
+.evo-lib-log { max-height: 45vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5; font-family: ui-monospace, Consolas, monospace; background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; padding: 8px 10px; color: var(--color-text-secondary); }
+.evo-lib-list { display: flex; flex-direction: column; gap: 6px; }
+.evo-lib-block { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); padding: 10px 12px; }
+.evo-lib-tree { display: flex; flex-direction: column; gap: 2px; max-height: 30vh; overflow: auto; }
+.evo-lib-file { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: none; background: none; border-radius: 6px; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; text-align: left; font-family: ui-monospace, Consolas, monospace; }
+.evo-lib-file:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-lib-file[data-active] { background: var(--hover-bg); color: var(--brand); }
+.evo-lib-file svg { width: 13px; height: 13px; flex-shrink: 0; }
+.evo-lib-err { font-size: 12px; color: var(--color-error); font-family: ui-monospace, Consolas, monospace; padding: 4px 8px; background: color-mix(in srgb, var(--color-error) 8%, transparent); border-radius: 6px; }
+.evo-lib-project { max-width: 220px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-background); color: var(--color-text-primary); font-size: 12px; margin-left: auto; }
+/* ── 实验工作区面板（EXP-UI：Tab 切换 / 笔记 / 运行 / 日志 / 复盘 / 产物）── */
+.evo-ews-tabs { display: flex; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border); margin-bottom: 14px; }
+.evo-ews-tab { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: none; border-radius: 8px; background: transparent; color: var(--color-text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; font: inherit; }
+.evo-ews-tab:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-ews-tab[data-active] { background: color-mix(in srgb, var(--brand) 12%, var(--color-surface)); color: var(--brand); }
+.evo-ews-tab svg { width: 14px; height: 14px; }
+.evo-ews-section { border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.evo-ews-section-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary); flex-wrap: wrap; }
+.evo-ews-section-head > svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
+.evo-ews-section-head > span { flex: 1; }
+.evo-ews-note-view { font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; padding: 8px 10px; max-height: 300px; overflow-y: auto; }
+.evo-ews-run-form { display: flex; flex-direction: column; gap: 6px; }
+.evo-ews-status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; flex-shrink: 0; }
+.evo-ews-status-badge[data-status='running'] { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
+.evo-ews-status-badge[data-status='success'] { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
+.evo-ews-status-badge[data-status='failed'] { background: color-mix(in srgb, var(--color-error) 14%, transparent); color: var(--color-error); }
+.evo-ews-status-badge[data-status='user-stopped'], .evo-ews-status-badge[data-status='unknown'] { background: var(--hover-bg); color: var(--color-text-secondary); }
+.evo-ews-run-meta { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-tertiary); word-break: break-all; }
+.evo-ews-log-view { background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.5; color: var(--color-text-secondary); white-space: pre-wrap; word-break: break-word; max-height: 280px; overflow-y: auto; padding: 8px 10px; }
+.evo-ews-log-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-ews-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); cursor: pointer; }
+.evo-ews-check input { accent-color: var(--brand); }
+.evo-ews-tree { display: flex; flex-direction: column; gap: 1px; font-size: 12px; max-height: 320px; overflow-y: auto; }
+.evo-ews-tree-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 6px; color: var(--color-text-secondary); min-width: 0; }
+.evo-ews-tree-row:hover { background: var(--hover-bg); }
+.evo-ews-tree-row > svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--color-text-tertiary); }
+.evo-ews-tree-row[data-dir] > svg { color: var(--brand); }
+.evo-ews-tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-ews-tree-size { margin-left: auto; font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-ews-tree-children { padding-left: 16px; display: flex; flex-direction: column; gap: 1px; }
+.evo-ews-retro { max-height: 40vh; overflow: auto; font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; padding: 8px 10px; }
+.evo-ews-item-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11.5px; color: var(--color-text-tertiary); }
+.evo-ews-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-secondary); flex-shrink: 0; white-space: nowrap; }
+.evo-ews-badge.ref { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
+.evo-ews-badge.copy { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
 `

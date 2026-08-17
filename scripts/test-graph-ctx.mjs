@@ -1,8 +1,10 @@
-// 单测：会话历史提取（chunk 合并/reasoning 过滤）+ 递归上下文继承 + 循环保护 + 缓存
+// 单测：会话历史提取（chunk 合并/reasoning 过滤/多结构消息/缓存）
+// 注：graphContextText 递归注入旧函数已随 GRAPH-02（context 一次性 fork 语义）删除，
+// 相应断言一并移除；context 语义测试见 packages/evoresearch-plugin/test/graph-semantics.test.ts。
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { sessionHistoryText, graphContextText } from '../packages/evoresearch-plugin/lib/host/chat-graph.js'
+import { sessionHistoryText } from '../packages/evoresearch-plugin/lib/host/chat-graph.js'
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'graph-ctx-'))
 const enc = encodeURIComponent('D:\\tmp\\p')
@@ -27,7 +29,8 @@ fs.writeFileSync(path.join(dirs['sess-c'], 'session.jsonl'), '', 'utf8')
 process.env.DSH_HOME = tmp
 
 let pass = 0
-const check = (n, c, d = '') => { console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${d ? `  ${d}` : ''}`); if (c) pass += 1 }
+let total = 0
+const check = (n, c, d = '') => { total += 1; console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${d ? `  ${d}` : ''}`); if (c) pass += 1 }
 
 // 1) chunk 合并 + reasoning 过滤
 const h = sessionHistoryText('sess-a')
@@ -38,33 +41,9 @@ check('用户消息两种结构都提取', h.includes('A 的用户问题一') &&
 // 2) 缓存命中（第二次调用结果一致且来自缓存路径）
 const h2 = sessionHistoryText('sess-a')
 check('缓存结果一致', h === h2)
-// 3) 递归继承 A→B→C
-const graph = {
-  nodes: [
-    { id: 'nA', type: 'chat', title: 'A', sessionId: 'sess-a' },
-    { id: 'nB', type: 'chat', title: 'B', sessionId: 'sess-b' },
-    { id: 'nC', type: 'chat', title: 'C', sessionId: 'sess-c' },
-  ],
-  edges: [
-    { id: 'e1', from: 'nA', to: 'nB', toPort: 'context' },
-    { id: 'e2', from: 'nB', to: 'nC', toPort: 'context' },
-  ],
-}
-const ctxC = graphContextText(graph, 'sess-c')
-check('C 继承 B 历史', ctxC !== null && ctxC.text.includes('B 的问题'))
-check('C 递归继承 A 历史（含完整回复）', ctxC !== null && ctxC.text.includes('你好，我是完整回复'))
-check('来源标注', ctxC !== null && ctxC.text.includes('【A】') && ctxC.text.includes('【B】'))
-// 4) 循环保护
-const loop = { nodes: graph.nodes, edges: [
-  { id: 'e1', from: 'nA', to: 'nB', toPort: 'context' },
-  { id: 'e2', from: 'nB', to: 'nA', toPort: 'context' },
-] }
-const ctxLoop = graphContextText(loop, 'sess-a')
-check('循环边不崩溃且无重复爆量', ctxLoop !== null && ctxLoop.text.length < 500)
-// 5) 无边 / 无节点
-check('无边返回 null', graphContextText({ nodes: graph.nodes, edges: [] }, 'sess-c') === null)
-check('未知会话返回 null', graphContextText(graph, 'sess-unknown') === null)
+// 3) 空会话 / 未知会话
+check('空会话为空', sessionHistoryText('sess-c') === '')
 
-console.log(`\n${pass}/11 passed`)
+console.log(`\n${pass}/${total} passed`)
 fs.rmSync(tmp, { recursive: true, force: true })
-process.exit(pass === 11 ? 0 : 1)
+process.exit(pass === total ? 0 : 1)

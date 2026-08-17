@@ -11,10 +11,11 @@ import { execSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes } from 'node:crypto'
-import { rmSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const exe = process.argv[2]
+const screenshotPath = process.argv[3] ?? join(ROOT, '.tmp-port', 'desktop-titlebar.png')
 const cdpPort = 9300 + Math.floor(Math.random() * 60)
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -85,6 +86,7 @@ async function main() {
   }
   if (cdp === null) { console.log(JSON.stringify({ cdpReady: false }, null, 2)); try { child.kill() } catch {} ; return }
   await cdp.send('Runtime.enable')
+  await cdp.send('Page.enable')
   // 等页面（desktop=1 标题栏）
   for (let i = 0; i < 40; i += 1) {
     const ok = await cdp.eval(`(function(){ return document.querySelector('.evo-tb') !== null })()`).catch(() => false)
@@ -106,6 +108,11 @@ async function main() {
       closeBtn: document.querySelector('.evo-tb-close') !== null,
     }
   })()`)
+
+  const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(screenshotPath, Buffer.from(shot.data, 'base64'))
+  report.screenshot = screenshotPath
+  if (!existsSync(screenshotPath)) throw new Error(`桌面 WebView 截图未生成: ${screenshotPath}`)
 
   // 2) 关闭：点击标题栏关闭按钮 → 进程退出（ACL 链路完整验证）
   report.closeClick = await cdp.eval(`(function(){ const b = document.querySelector('.evo-tb-close'); if (!b) return 'no-btn'; b.click(); return 'clicked' })()`)

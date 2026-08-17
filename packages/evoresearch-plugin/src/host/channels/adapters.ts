@@ -3,32 +3,104 @@
  *
  * - TelegramAdapter：Bot API 长轮询（getUpdates/sendMessage），零依赖（Node 全局 fetch）；
  *   令牌来自环境变量 EVORESEARCH_TELEGRAM_TOKEN。
- * - Slack/QQ/微信/飞书：第一版提供适配器骨架（start 提示未配置/待实现），
- *   与 EvoResearch 的 channels/ 目录一一对应，后续按同一接口补齐实现。
+ * - Slack/QQ/微信/飞书/Signal：统一 HTTP webhook/polling 适配器。
+ *   每个平台都使用真实 HTTP JSON 入站/出站端点，允许接入官方 Bot API、企业
+ *   网关或本地 bridge；没有配置端点时只显示为 offline，不冒充在线。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ChannelAdapter, ChannelMessage } from './base.js'
 
-/** 未实现的适配器骨架。 */
-class PendingAdapter implements ChannelAdapter {
+/**
+ * 非 Telegram 平台的真实 HTTP 适配器。
+ *
+ * 入站端点返回 `[{id,senderId,senderName,chatId,text}]` 或
+ * `{messages:[...]}`；出站端点接受 `{chat_id,text}`。端点可以是官方 Bot API
+ * 的薄封装，也可以是 Windows 上的本地 bridge。适配器本身不复制平台协议，
+ * 只负责可靠的归一化、游标去重、停止和错误隔离。
+ */
+export class PlatformHttpAdapter implements ChannelAdapter {
+  private readonly inboxUrl: string | undefined
+  private readonly sendUrl: string | undefined
+  private readonly token: string | undefined
+  private readonly pollMs: number
+  private running = false
+  private seen = new Set<string>()
+
   constructor(
     readonly id: string,
     readonly name: string,
-    private readonly envKey?: string,
-  ) {}
+    envPrefix: string,
+    env: NodeJS.ProcessEnv = process.env,
+  ) {
+    this.inboxUrl = env[`${envPrefix}_INBOX_URL`]
+    this.sendUrl = env[`${envPrefix}_SEND_URL`]
+    this.token = env[`${envPrefix}_TOKEN`]
+    const configured = Number(env.EVORESEARCH_CHANNEL_POLL_MS ?? 1500)
+    this.pollMs = Number.isFinite(configured) ? Math.max(500, configured) : 1500
+  }
 
   isConfigured(): boolean {
-    return false
+    return Boolean(this.inboxUrl && this.sendUrl)
   }
 
-  async start(): Promise<void> {
-    throw new Error(`${this.name} 适配器待实现${this.envKey ? `（需要环境变量 ${this.envKey}）` : ''}`)
+  private headers(): Record<string, string> {
+    return {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
+    }
   }
 
-  async stop(): Promise<void> {}
+  async start(_ctx: Context, onMessage: (message: ChannelMessage) => void): Promise<void> {
+    if (!this.inboxUrl || !this.sendUrl) {
+      throw new Error(`${this.name} 未配置：需要 ${this.id.toUpperCase()}_INBOX_URL 和 ${this.id.toUpperCase()}_SEND_URL`)
+    }
+    if (this.running) return
+    this.running = true
+    void this.poll(onMessage)
+  }
 
-  async send(): Promise<void> {
-    throw new Error(`${this.name} 适配器待实现`)
+  private async poll(onMessage: (message: ChannelMessage) => void): Promise<void> {
+    while (this.running) {
+      try {
+        const response = await fetch(this.inboxUrl!, { headers: this.headers() })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const body = await response.json() as unknown
+        const rows = Array.isArray(body) ? body : (body as { messages?: unknown })?.messages
+        if (Array.isArray(rows)) {
+          for (const raw of rows) {
+            const value = raw as Record<string, unknown>
+            const text = typeof value.text === 'string' ? value.text : typeof value.content === 'string' ? value.content : ''
+            const messageId = String(value.messageId ?? value.message_id ?? value.id ?? '')
+            if (!messageId || !text || this.seen.has(messageId)) continue
+            this.seen.add(messageId)
+            if (this.seen.size > 2000) this.seen = new Set([...this.seen].slice(-1000))
+            onMessage({
+              messageId,
+              senderId: String(value.senderId ?? value.sender_id ?? value.from ?? ''),
+              senderName: String(value.senderName ?? value.sender_name ?? value.username ?? ''),
+              chatId: String(value.chatId ?? value.chat_id ?? value.conversationId ?? ''),
+              text,
+              receivedAt: typeof value.receivedAt === 'number' ? value.receivedAt : Date.now(),
+            })
+          }
+        }
+      } catch (error) {
+        console.error(`[evoresearch:${this.id}] HTTP 轮询失败:`, error instanceof Error ? error.message : String(error))
+      }
+      await new Promise((resolve) => setTimeout(resolve, this.pollMs))
+    }
+  }
+
+  async stop(): Promise<void> { this.running = false }
+
+  async send(chatId: string, text: string): Promise<void> {
+    if (!this.sendUrl) throw new Error(`${this.name} 未配置出站端点`)
+    const response = await fetch(this.sendUrl, {
+      method: 'POST', headers: this.headers(),
+      body: JSON.stringify({ chat_id: chatId, text }),
+    })
+    if (!response.ok) throw new Error(`${this.name} 发送失败: HTTP ${response.status}`)
   }
 }
 
@@ -113,10 +185,10 @@ export class TelegramAdapter implements ChannelAdapter {
 export function builtinAdapters(): ChannelAdapter[] {
   return [
     new TelegramAdapter(),
-    new PendingAdapter('slack', 'Slack', 'EVORESEARCH_SLACK_TOKEN'),
-    new PendingAdapter('qq', 'QQ', 'EVORESEARCH_QQ_BOT_ID'),
-    new PendingAdapter('wechat', '微信', 'EVORESEARCH_WECHAT_HOOK'),
-    new PendingAdapter('feishu', '飞书', 'EVORESEARCH_FEISHU_APP_ID'),
-    new PendingAdapter('signal', 'Signal', 'EVORESEARCH_SIGNAL_SOCKET'),
+    new PlatformHttpAdapter('slack', 'Slack', 'EVORESEARCH_SLACK'),
+    new PlatformHttpAdapter('qq', 'QQ', 'EVORESEARCH_QQ'),
+    new PlatformHttpAdapter('wechat', '微信', 'EVORESEARCH_WECHAT'),
+    new PlatformHttpAdapter('feishu', '飞书', 'EVORESEARCH_FEISHU'),
+    new PlatformHttpAdapter('signal', 'Signal', 'EVORESEARCH_SIGNAL'),
   ]
 }

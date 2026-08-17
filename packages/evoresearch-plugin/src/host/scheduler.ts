@@ -22,6 +22,87 @@ export interface SchedulerConfig {
   readonly model?: { provider: string; model: string }
 }
 
+/* ------------------------------------------------------------------ */
+/* PLAT-17：自然语言 cron 解析（纯函数）                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 自然语言 → 5 字段 cron（PLAT-17 纯函数）。支持：
+ * - "每天早上9点" / "每天早上九点" / "每早九点" / "每早9点" → 0 9 * * *
+ * - "每天中午12点" / "每天12点" → 0 12 * * *
+ * - "每天晚上8点" / "每晚八点" → 0 20 * * *
+ * - "每小时" / "每小时执行" → 0 * * * *
+ * - "每周一上午10点" / "每周一10点" → 0 10 * * 1
+ * - "每周日晚上9点" → 0 21 * * 0
+ * - "每月1号零点" / "每月1日0点" → 0 0 1 * *
+ * 解析失败返回 null（由调用方报错，不猜）。
+ */
+export function parseNaturalCron(text: string): string | null {
+  const input = String(text ?? '').trim()
+  if (input === '') return null
+  // 小时中文数字映射
+  const cnDigits: Record<string, string> = {
+    零: '0', 一: '1', 二: '2', 两: '2', 三: '3', 四: '4', 五: '5',
+    六: '6', 七: '7', 八: '8', 九: '9', 十: '10',
+  }
+  const hourOf = (part: string): string | null => {
+    const trimmed = part.trim()
+    if (/^\d{1,2}$/.test(trimmed)) return trimmed
+    if (cnDigits[trimmed] !== undefined) return cnDigits[trimmed]
+    return null
+  }
+  // 时刻：<hour>点 / <hour>：<minute>分
+  const timeMatch = /(\d{1,2}|[零一二两三四五六七八九十]+)\s*点(?:\s*(\d{1,2}|[零一二两三四五六七八九十]+)\s*分?)?/.exec(input)
+  const hour = timeMatch ? hourOf(timeMatch[1]!) : null
+  const minute = timeMatch && timeMatch[2] ? hourOf(timeMatch[2]!) : '0'
+  if (timeMatch && hour === null) return null
+  const hasTime = timeMatch !== null
+
+  if (/每小时/.test(input)) return '0 * * * *'
+
+  // 星期
+  const weekNames: Record<string, string> = {
+    一: '1', 二: '2', 三: '3', 四: '4', 五: '5', 六: '6', 日: '0', 天: '0',
+  }
+  let week = ''
+  const weekMatch = /周([一二三四五六日天])/.exec(input)
+  if (weekMatch) week = weekNames[weekMatch[1]!]!
+
+  // 每月 N 号
+  let dayOfMonth = ''
+  const dayMatch = /月(\d{1,2})[号日]/.exec(input)
+  if (dayMatch) dayOfMonth = dayMatch[1]!
+
+  // 时段 → 小时（未写具体小时时）
+  const periodHour: Record<string, string> = { 早: '9', 上午: '10', 中午: '12', 下午: '15', 晚: '20', 晚上: '20', 深夜: '23' }
+  let resolvedHour = hour
+  if (resolvedHour === null && hasTime === false) {
+    for (const [key, value] of Object.entries(periodHour)) {
+      if (input.includes(key)) {
+        resolvedHour = value
+        break
+      }
+    }
+  }
+  // 时段偏移：晚上/深夜/下午 与显式小时组合（"晚上8点" → 20 点）
+  if (resolvedHour !== null && /(晚上|晚|深夜|下午)/.test(input)) {
+    const numeric = Number(resolvedHour)
+    if (/下午/.test(input)) {
+      if (numeric >= 1 && numeric <= 11) resolvedHour = String(numeric + 12)
+    } else {
+      // 晚/晚上/深夜：12 小时制偏移（≤11 的加 12；12 保持）
+      if (numeric >= 1 && numeric <= 11) resolvedHour = String(numeric + 12)
+    }
+  }
+  if (resolvedHour === null) return null
+  const h = Math.min(23, Number(resolvedHour))
+  const m = Math.min(59, Number(minute ?? '0'))
+
+  if (dayOfMonth !== '') return `${m} ${h} ${dayOfMonth} * *`
+  if (week !== '') return `${m} ${h} * * ${week}`
+  return `${m} ${h} * * *`
+}
+
 /** 定时任务服务。 */
 export class SchedulerService {
   private readonly file: string
@@ -73,6 +154,36 @@ export class SchedulerService {
     this.tasks.push(task)
     this.save()
     return task
+  }
+
+  /** PLAT-17 自然语言创建任务（"每早九点"→ cron；解析失败抛错）。 */
+  addNatural(input: { text: string; prompt: string; workspaceDir: string; name?: string }): ScheduledTask {
+    const cron = parseNaturalCron(input.text)
+    if (cron === null) {
+      throw new Error(`无法从自然语言解析 cron: "${input.text}"（支持如：每天早上9点 / 每周一上午10点 / 每小时）`)
+    }
+    return this.add({ name: input.name ?? input.text, cron, prompt: input.prompt, workspaceDir: input.workspaceDir })
+  }
+
+  /** PLAT-17 暂停（禁用但不删除）。 */
+  pause(taskId: string): boolean {
+    return this.setEnabled(taskId, false)
+  }
+
+  /** PLAT-17 恢复。 */
+  resume(taskId: string): boolean {
+    return this.setEnabled(taskId, true)
+  }
+
+  /** PLAT-17 结果回报查询（结果线程直达 + 最近运行时间）。 */
+  reportOf(taskId: string): { threadId?: string; lastRunAt?: number; nextRunAt?: number } {
+    const task = this.tasks.find((t) => t.taskId === taskId)
+    if (!task) return {}
+    return {
+      threadId: task.lastResultThreadId,
+      lastRunAt: task.lastRunAt,
+      nextRunAt: this.nextRunOf(task) ?? undefined,
+    }
   }
 
   remove(taskId: string): boolean {
@@ -198,7 +309,7 @@ export class SchedulerService {
     if (!agent?.followup) return Promise.reject(new Error('创建 agent 失败'))
     const message = createUserMessage({
       content: [{ type: 'text', text: `【定时任务 ${task.name}】\n${task.prompt}\n\n完成后请汇报关键结果。` }],
-      source: { kind: 'user', rpcId: `rpc-${randomUUID()}` },
+      source: { kind: 'user' },
     })
     agent.followup(message)
     return sessionId

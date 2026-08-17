@@ -18,6 +18,11 @@ export interface ActiveTeam {
   readonly invitedAt: number
 }
 
+export interface ExpertContextSource {
+  readonly path: string
+  readonly text: string
+}
+
 /** 专家服务配置。 */
 export interface ExpertConfig {
   readonly dataRoot: string
@@ -129,5 +134,40 @@ export class ExpertService {
   /** 当前活跃专家名列表（随 run 注入 configurable.active_teams）。 */
   activeTeamNames(): string[] {
     return this.teams.map((team) => team.name)
+  }
+
+  /**
+   * 读取当前项目的自然语言专家说明（PLAT-10）。项目文件优先，部署根目录
+   * 作为跨项目兜底；只读取明确的 AGENTS.md，不把任意目录内容注入模型。
+   */
+  agentsContext(workspaceDir?: string, maxChars = 24000): { text: string; sources: ExpertContextSource[] } {
+    const candidates: string[] = []
+    if (workspaceDir !== undefined && workspaceDir !== '') {
+      candidates.push(path.join(workspaceDir, 'AGENTS.md'))
+      candidates.push(path.join(workspaceDir, '.evoresearch-data', 'AGENTS.md'))
+    }
+    candidates.push(path.join(this.config.dataRoot, 'AGENTS.md'))
+    const sources: ExpertContextSource[] = []
+    let total = 0
+    for (const file of [...new Set(candidates)]) {
+      try {
+        const stat = fs.statSync(file)
+        if (!stat.isFile() || stat.size === 0) continue
+        const remaining = maxChars - total
+        if (remaining <= 0) break
+        const text = fs.readFileSync(file, 'utf8').slice(0, remaining).trim()
+        if (text === '') continue
+        sources.push({ path: file, text })
+        total += text.length
+      } catch {
+        // AGENTS.md 是可选背景资料，缺失或不可读不应阻塞聊天。
+      }
+    }
+    return {
+      text: sources.length === 0
+        ? ''
+        : `<agent_guidance>\n${sources.map((source) => `## ${source.path}\n${source.text}`).join('\n\n')}\n</agent_guidance>`,
+      sources,
+    }
   }
 }

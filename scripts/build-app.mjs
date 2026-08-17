@@ -86,6 +86,20 @@ async function buildNodeHalf() {
 async function buildClient() {
   // 生成 KaTeX CSS（字体内联为 data URL），供客户端注入
   generateKatexCss()
+  // Chat Graph 的 ELK 布局独立打包为 Worker payload，再以内联字符串注入
+  // client bundle。这样插件仍只需要 DSH 的单一 client.js 端点，布局不会
+  // 回退到主线程，也不会依赖 WebView2 对额外静态资源路由的支持。
+  const worker = await build({
+    entryPoints: [join(PKG, 'src', 'client', 'chatgraph-layout-worker.ts')],
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    write: false,
+    minify: true,
+  })
+  const workerSource = worker.outputFiles?.[0]?.text ?? ''
+  if (workerSource === '') throw new Error('Chat Graph layout worker bundle is empty')
   const tmp = join(PKG, 'lib', 'client', '.bundle.tmp.js')
   const out = join(PKG, 'lib', 'client', 'index.js')
   await build({
@@ -98,6 +112,9 @@ async function buildClient() {
     external: ['@deepseek-ai/*', 'react', 'react-dom', 'react/jsx-runtime'],
     sourcemap: false,
     minify: false,
+    define: {
+      '__CHATGRAPH_WORKER_SOURCE__': JSON.stringify(workerSource),
+    },
   })
   const body = readFileSync(tmp, 'utf8')
   const id = packageName()

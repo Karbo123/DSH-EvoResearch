@@ -1,8 +1,19 @@
 /**
- * 项目环境服务（§环境管理）：每科研项目一个独立 Python 虚拟环境，UV 管理。
+ * 项目环境服务（§环境管理 + §7.5 共享环境池；§15.8 ENV-03..07）。
  *
- * 约定：
- * - 环境目录：<projectDir>/.venv（uv 默认目标，随项目迁移，git 忽略）
+ * 两类环境并存：
+ * - 项目私有 legacy 环境：<projectDir>/.venv（uv 默认目标，随项目迁移，git 忽略；
+ *   ENV-06：保留为兼容环境，未经用户确认不删除——删除只经显式 remove()）。
+ * - 共享环境池（§7.5）：<dataRoot>/.evoresearch-data/envs/<指纹>/——
+ *   指纹 = 操作系统(platform+arch) + Python 版本 + 依赖文件内容哈希
+ *   （uv.lock / requirements.txt / pyproject.toml，缺文件以空串参与）。
+ *   相同依赖的多个 worktree 复用同一个池环境；依赖变化 → 新指纹 → 新环境，
+ *   旧实验通过运行账本（experiment-process 的 .evoresearch-run.json 中记录的
+ *   pythonPath 绝对路径）仍能找到原解释器（ENV-05）。
+ * - ENV-07：临时装包不得静默污染共享池——createDerivedEnv() 创建私有派生环境
+ *   （目标目录内新建 venv；可选从池环境「列出→重装」克隆已装包）。
+ *
+ * 既有约定（legacy，保持不动）：
  * - 配置记录：<projectDir>/.evoresearch-data/env.json（pythonVersion/createdAt）
  * - UV 解析：EVORESEARCH_UV 环境变量 → <dataRoot>/.tools/bin/uv.exe（部署目录内安装，
  *   随程序迁移，不写用户目录）→ ~/.local/bin 等既有安装 → PATH 上的 uv
@@ -19,6 +30,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { homedir } from 'node:os'
 import { spawn, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 
 /** 项目环境状态（wire JSON）。 */
 export interface ProjectEnvInfo {
@@ -32,9 +44,41 @@ export interface ProjectEnvInfo {
   readonly creating: boolean
 }
 
+/** 共享池环境信息（wire JSON，ENV-04/05）。 */
+export interface PoolEnvInfo {
+  readonly envDir: string
+  readonly pythonPath: string
+  /** 环境指纹（16 位 hex）。 */
+  readonly fingerprint: string
+  readonly exists: boolean
+  /** envFor 本次调用是否新建了环境（复用为 false）。 */
+  readonly created: boolean
+  readonly createdAt: number
+  readonly pythonVersion: string
+  readonly packages: readonly string[]
+}
+
 const DEFAULT_PYTHON_VERSION = '3.12'
 const CREATE_TIMEOUT_MS = 15 * 60 * 1000
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
+
+// ── 共享环境池（§7.5 / ENV-03..07）─────────────────────────────────────────
+
+/** 参与指纹的依赖文件（按此顺序参与哈希；缺文件以空串计）。 */
+const DEP_FILES: readonly string[] = ['uv.lock', 'requirements.txt', 'pyproject.toml']
+/** 池根相对 dataRoot：.evoresearch-data/envs/。 */
+const POOL_REL = path.join('.evoresearch-data', 'envs')
+/** 指纹格式：16 位小写 hex（防路径注入）。 */
+const POOL_FP_PATTERN = /^[0-9a-f]{16}$/
+
+/** 解析 `uv pip list` 输出中的包名（表头两行后逐行取首列）。 */
+export function parsePipList(stdout: string): string[] {
+  return stdout
+    .split(/\r?\n/)
+    .slice(2)
+    .map((line) => line.trim().split(/\s+/)[0] ?? '')
+    .filter((name) => name !== '')
+}
 
 /** 运行命令并收集 stdout（失败返回空字符串，不抛；短命令同步）。 */
 function runCapture(exe: string, args: string[], timeoutMs = 60000): string {
@@ -48,6 +92,16 @@ function runCapture(exe: string, args: string[], timeoutMs = 60000): string {
 }
 
 interface RunResult { status: number | null; stdout: string; stderr: string }
+
+/** 运行结果（wire 安全；供注入 runner 使用）。 */
+export interface UvRunResult {
+  readonly status: number | null
+  readonly stdout: string
+  readonly stderr: string
+}
+
+/** 注入的 UV 执行器（测试用）。 */
+export type UvRunner = (exe: string, args: string[], timeoutMs: number) => Promise<UvRunResult>
 
 /** 异步运行命令（长任务不阻塞事件循环）。 */
 function runAsync(exe: string, args: string[], timeoutMs: number): Promise<RunResult> {
@@ -128,7 +182,15 @@ function uvPathOf(dataRoot: string): string | null {
 
 /** 项目环境服务。 */
 export class ProjectEnvService {
-  constructor(readonly dataRoot: string) {}
+  /** 池环境创建去重（并发同指纹只建一次）。 */
+  private readonly envForCache = new Map<string, Promise<PoolEnvInfo>>()
+
+  /**
+   * @param dataRoot 部署根目录。
+   * @param options.uvPath 注入 UV 路径（测试用；缺省走既有解析/自动安装链）。
+   * @param options.run 注入 UV 执行器（测试用；缺省真实 spawn）。
+   */
+  constructor(readonly dataRoot: string, private readonly options: { uvPath?: string | null; run?: UvRunner } = {}) {}
 
   /** 解析 UV 可执行文件（null = 未安装）。 */
   uvPath(): string | null {
@@ -306,5 +368,192 @@ export class ProjectEnvService {
     const config = path.join(projectDir, '.evoresearch-data', 'env.json')
     if (fs.existsSync(config)) fs.rmSync(config, { force: true })
     return { ok: true }
+  }
+
+  // ── 共享环境池（§7.5；ENV-03..07）──────────────────────────────────────
+
+  /** 解析 UV 路径：构造函数注入优先，否则既有链（自动安装兜底）。 */
+  private async resolveUv(): Promise<string> {
+    const injected = this.options.uvPath
+    if (typeof injected === 'string' && injected.trim() !== '') return injected
+    const ensured = await this.uvEnsure()
+    if (!ensured.ok || ensured.uv === null) {
+      throw new Error(`UV 不可用且自动安装失败: ${ensured.error ?? '未安装'}`)
+    }
+    return ensured.uv
+  }
+
+  /** 执行 UV：注入 runner 优先（测试），否则真实 spawn。 */
+  private async runUv(args: string[], timeoutMs: number): Promise<UvRunResult> {
+    const injected = this.options.run
+    if (injected !== undefined) return injected('<uv>', args, timeoutMs)
+    const uv = await this.resolveUv()
+    return runAsync(uv, args, timeoutMs)
+  }
+
+  /** 池根目录（<dataRoot>/.evoresearch-data/envs）。 */
+  poolRoot(): string {
+    return path.join(this.dataRoot, POOL_REL)
+  }
+
+  /** 指纹 → 池环境目录（ENV-04；指纹格式校验防路径注入）。 */
+  poolDirOf(fingerprint: string): string {
+    const fp = String(fingerprint ?? '')
+    if (!POOL_FP_PATTERN.test(fp)) throw new Error(`非法的环境指纹: ${fingerprint}`)
+    return path.join(this.poolRoot(), fp)
+  }
+
+  /** 依赖文件内容哈希（ENV-03；缺失文件记空串参与指纹）。 */
+  dependencyDigests(projectDir: string): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const name of DEP_FILES) {
+      try {
+        const content = fs.readFileSync(path.join(projectDir, name))
+        out[name] = createHash('sha256').update(content).digest('hex')
+      } catch {
+        out[name] = ''
+      }
+    }
+    return out
+  }
+
+  /** 环境指纹计算（ENV-03 纯函数）：OS(platform+arch) + Python 版本 + 依赖文件内容。 */
+  computeEnvFingerprint(input: { platform?: string; arch?: string; pythonVersion: string; digests: Record<string, string> }): string {
+    const parts = [
+      input.platform ?? process.platform,
+      input.arch ?? process.arch,
+      input.pythonVersion,
+    ]
+    for (const name of DEP_FILES) parts.push(input.digests[name] ?? '')
+    return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 16)
+  }
+
+  /**
+   * 项目环境指纹（ENV-03）：Python 版本取 .evoresearch-data/env.json 记录
+   * （未记录用默认 3.12——与 create() 的版本选择逻辑一致，保证确定性）。
+   */
+  fingerprint(projectDir: string): string {
+    const version = this.envConfig(projectDir).pythonVersion || DEFAULT_PYTHON_VERSION
+    return this.computeEnvFingerprint({ pythonVersion: version, digests: this.dependencyDigests(projectDir) })
+  }
+
+  /**
+   * 池环境（ENV-04）：返回与项目指纹匹配的共享环境，不存在则创建。
+   * 相同依赖（同指纹）的多个 worktree 复用同一个环境；并发调用只创建一次。
+   * 依赖变化 → 新指纹 → 新环境目录（ENV-05）；旧环境保留，旧实验经运行账本
+   * （.evoresearch-run.json 的 pythonPath）仍能找到原解释器。
+   */
+  async envFor(projectDir: string): Promise<PoolEnvInfo> {
+    const fingerprint = this.fingerprint(projectDir)
+    const cached = this.envForCache.get(fingerprint)
+    if (cached !== undefined) return cached
+    const task = (async () => {
+      const envDir = this.poolDirOf(fingerprint)
+      const pythonPath = this.pythonOf(envDir)
+      const version = this.envConfig(projectDir).pythonVersion || DEFAULT_PYTHON_VERSION
+      if (fs.existsSync(pythonPath)) {
+        return this.poolInfoOf(envDir, fingerprint, version, false, false)
+      }
+      const result = await this.runUv(['venv', envDir, '--python', version, '--python-preference', 'managed'], CREATE_TIMEOUT_MS)
+      if (result.status !== 0) {
+        throw new Error(`池环境创建失败: ${result.stderr.trim().slice(0, 500) || `exit ${String(result.status)}`}`)
+      }
+      return this.poolInfoOf(envDir, fingerprint, version, false, true)
+    })()
+    this.envForCache.set(fingerprint, task)
+    try {
+      return await task
+    } finally {
+      this.envForCache.delete(fingerprint)
+    }
+  }
+
+  /** 单个池环境信息（按指纹；目录不存在返回 exists=false）。 */
+  poolInfo(fingerprint: string): PoolEnvInfo {
+    const envDir = this.poolDirOf(fingerprint)
+    const pythonPath = this.pythonOf(envDir)
+    const exists = fs.existsSync(pythonPath)
+    return this.poolInfoOf(envDir, fingerprint, '', exists, false)
+  }
+
+  /** 池环境列表（新 → 旧；供 UI 与"旧实验找原解释器"追溯）。 */
+  poolList(): PoolEnvInfo[] {
+    const root = this.poolRoot()
+    let entries: fs.Dirent[] = []
+    try {
+      entries = fs.readdirSync(root, { withFileTypes: true })
+    } catch {
+      return []
+    }
+    const out: PoolEnvInfo[] = []
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !POOL_FP_PATTERN.test(entry.name)) continue
+      out.push(this.poolInfoOf(path.join(root, entry.name), entry.name, '', true, false))
+    }
+    return out.sort((a, b) => b.createdAt - a.createdAt)
+  }
+
+  private poolInfoOf(envDir: string, fingerprint: string, fallbackVersion: string, probeVersion: boolean, created: boolean): PoolEnvInfo {
+    const pythonPath = this.pythonOf(envDir)
+    const exists = fs.existsSync(pythonPath)
+    let createdAt = 0
+    let pythonVersion = fallbackVersion
+    let packages: string[] = []
+    try {
+      const stat = fs.statSync(envDir)
+      createdAt = stat.birthtimeMs || stat.ctimeMs
+    } catch {
+      // 目录不存在
+    }
+    if (exists && probeVersion) {
+      pythonVersion = runCapture(pythonPath, ['--version'])
+      const uv = this.uvPath()
+      if (uv !== null) {
+        packages = runCapture(uv, ['pip', 'list', '--python', envDir], 120000)
+          .split(/\r?\n/)
+          .slice(2)
+          .map((line) => line.trim().split(/\s+/)[0] ?? '')
+          .filter((name) => name !== '')
+      }
+    }
+    return { envDir, pythonPath, fingerprint, exists, created, createdAt, pythonVersion, packages }
+  }
+
+  /**
+   * 派生私有环境（ENV-07）：临时装包不得静默污染共享池——
+   * 在目标目录（默认 <projectDir>/.venv，或显式传 worktree 的 .venv）新建独立
+   * venv；可选 fromFingerprint：把池环境的已装包「列出 → 重装」进派生环境
+   * （复制目录不可靠，故采用重装；包名列表来自 uv pip list）。
+   * 派生环境不与任何指纹绑定，装包只影响它自己。
+   */
+  async createDerivedEnv(
+    projectDir: string,
+    opts: { targetDir?: string; pythonVersion?: string; fromFingerprint?: string } = {},
+  ): Promise<{ envDir: string; pythonPath: string; fingerprint: string | null }> {
+    const target = typeof opts.targetDir === 'string' && opts.targetDir.trim() !== ''
+      ? path.resolve(opts.targetDir)
+      : path.join(projectDir, '.venv')
+    if (fs.existsSync(this.pythonOf(target))) {
+      throw new Error(`目标目录已有环境: ${target}`)
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    const version = (opts.pythonVersion ?? '').trim() || this.envConfig(projectDir).pythonVersion || DEFAULT_PYTHON_VERSION
+    const result = await this.runUv(['venv', target, '--python', version, '--python-preference', 'managed'], CREATE_TIMEOUT_MS)
+    if (result.status !== 0) {
+      throw new Error(`派生环境创建失败: ${result.stderr.trim().slice(0, 500) || `exit ${String(result.status)}`}`)
+    }
+    if (typeof opts.fromFingerprint === 'string' && opts.fromFingerprint !== '') {
+      const base = this.poolDirOf(opts.fromFingerprint)
+      if (!fs.existsSync(this.pythonOf(base))) throw new Error(`基础池环境不存在: ${opts.fromFingerprint}`)
+      const list = await this.runUv(['pip', 'list', '--python', base], INSTALL_TIMEOUT_MS)
+      const packages = parsePipList(list.stdout)
+      if (packages.length > 0) {
+        const inst = await this.runUv(['pip', 'install', '--python', target, ...packages], INSTALL_TIMEOUT_MS)
+        if (inst.status !== 0) {
+          throw new Error(`派生环境装包失败: ${inst.stderr.trim().slice(0, 500) || `exit ${String(inst.status)}`}`)
+        }
+      }
+    }
+    return { envDir: target, pythonPath: this.pythonOf(target), fingerprint: opts.fromFingerprint ?? null }
   }
 }

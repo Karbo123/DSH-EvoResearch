@@ -1,14 +1,20 @@
 /**
- * 实验管理面板（§5.1 Git 式分支/回退/checkpoint）。
+ * 实验管理面板（§5.1 Git 式分支/回退/checkpoint；§7 自由形式实验管理）。
  *
- * 左侧栏「实验」入口进入。数据经 /evoresearch/fs/experiments-* HTTP API
- * （host 侧 ExperimentService）。展示：实验列表 → 详情（分支 chips + 阶段
- * 时间线 + 检查点操作：回退 / 分支 / 跳转会话）。
+ * 左侧栏「实验」入口进入。顶部 Tab 切换两个体验：
+ * - Tab 1「实验工作区」（EXP-UI）：自由目录 + LAB_NOTE.md + 运行/日志/复盘/产物
+ *   （见 client/experiment-workspace.ts 的 ExperimentWorkspacePanel）；
+ * - Tab 2「旧时间线」：manifest 分支/阶段/检查点（LegacyExperimentsPanel）。
+ *
+ * 旧时间线数据经 /evoresearch/fs/experiments-* HTTP API（host 侧
+ * ExperimentService）。展示：实验列表 → 详情（分支 chips + 阶段时间线 +
+ * 检查点操作：回退（需 confirm）/ 分支 / 跳转会话）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
-import { FlaskConical, Plus, Trash2, RefreshCw, GitBranch, RotateCcw, Camera, Check, X as XIcon, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react'
+import { FlaskConical, Plus, Trash2, RefreshCw, GitBranch, RotateCcw, Camera, Check, X as XIcon, MessageSquare, ChevronRight, ChevronDown, FolderKanban, NotepadText } from 'lucide-react'
+import { ExperimentWorkspacePanel } from './experiment-workspace'
 
 interface CheckpointRow {
   id: string
@@ -180,7 +186,7 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
   const doRollback = (checkpointId: string) => {
     setConfirmRollback(null)
     void withBusy(async () => {
-      const result = await api<{ restored: number }>('experiments-rollback', { workspaceDir, id: row.id, checkpointId })
+      const result = await api<{ restored: number }>('experiments-rollback', { workspaceDir, id: row.id, checkpointId, confirm: true })
       setNotice(`${t('rollbackDone')}：${result.restored} ${t('filesRestored')}`)
       setTimeout(() => setNotice(null), 5000)
     })
@@ -436,8 +442,8 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
   })
 }
 
-/** 实验面板：列表 + 新建 + 详情。 */
-export function ExperimentsPanel({ cwd, sessionId, onOpenSession }: {
+/** 旧时间线面板：列表 + 新建 + 详情（manifest 分支/阶段/检查点）。 */
+function LegacyExperimentsPanel({ cwd, sessionId, onOpenSession }: {
   cwd: string | null
   sessionId: string | null
   onOpenSession: (id: string) => void
@@ -560,6 +566,49 @@ export function ExperimentsPanel({ cwd, sessionId, onOpenSession }: {
                 }, row.id)),
               }),
       ] }),
+    ],
+  })
+}
+
+/**
+ * 实验入口面板（Tab 切换，EXP-UI 改动最小方案）：
+ * - Tab 1「实验工作区」：新体验（ExperimentWorkspacePanel，§7 自由目录+笔记+运行）；
+ * - Tab 2「旧时间线」：原 ExperimentsPanel 完整保留（manifest/分支/阶段/检查点，
+ *   rollback 已接 confirm）。
+ * 保持导出名 ExperimentsPanel，index.ts 的注册与传参（cwd/sessionId/onOpenSession）
+ * 无需改动。
+ */
+export function ExperimentsPanel(props: {
+  cwd: string | null
+  sessionId: string | null
+  onOpenSession: (id: string) => void
+}) {
+  const [tab, setTab] = useState<'workspace' | 'legacy'>('workspace')
+  return jsxs('div', {
+    className: 'evo-panel',
+    children: [
+      jsxs('div', {
+        className: 'evo-ews-tabs',
+        children: [
+          jsx('button', {
+            type: 'button',
+            className: 'evo-ews-tab',
+            'data-active': tab === 'workspace' || undefined,
+            onClick: () => setTab('workspace'),
+            children: jsxs(Fragment, { children: [jsx(NotepadText, {}), jsx('span', { children: t('expWsTab') })] }),
+          }),
+          jsx('button', {
+            type: 'button',
+            className: 'evo-ews-tab',
+            'data-active': tab === 'legacy' || undefined,
+            onClick: () => setTab('legacy'),
+            children: jsxs(Fragment, { children: [jsx(FolderKanban, {}), jsx('span', { children: t('expWsLegacyTab') })] }),
+          }),
+        ],
+      }),
+      tab === 'workspace'
+        ? jsx(ExperimentWorkspacePanel, props)
+        : jsx(LegacyExperimentsPanel, props),
     ],
   })
 }

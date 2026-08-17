@@ -22,7 +22,7 @@ Node.js 是硬约束（后端必须 NodeJS），因此体积下限 ≈ node.exe 
 
 | 项 | 体积 | 说明 |
 |---|---|---|
-| **NSIS 安装包（实测）** | **44 MB** | `EvoResearch_0.1.0_x64-setup.exe`（LZMA，225.6MB 未压缩 → 44MB） |
+| **NSIS 安装包（实测）** | **53.0 MB** | `EvoResearch_0.1.0_x64-setup.exe`（LZMA，实测 53,009,147 bytes；仍低于 60MB 目标） |
 | 壳 exe | 2.9 MB | Tauri release + strip |
 | node.exe（v24.19.0 LTS） | 88.5 MB | 未压缩；LZMA 后约 30-35MB |
 | app/（node_modules + profiles） | ~137 MB | 裁剪后 |
@@ -82,7 +82,7 @@ desktop/
 | DSH web 后端启动 | ✅ `evoresearch: http://127.0.0.1:<port>`（自定义表面，无官方外壳） |
 | 端口文件协议 | ✅ `{"port":9430}` 写入 LOCALAPPDATA |
 | 壳 → WebView2 加载后端 | ✅ 页面 200、BOOT 图含插件、client bundle 200 |
-| 安装包 | ✅ `EvoResearch_0.1.0_x64-setup.exe` = 43.7MB（NSIS/LZMA） |
+| 安装包 | ✅ `EvoResearch_0.1.0_x64-setup.exe` = 53.0MB（53,009,147 bytes，NSIS/LZMA） |
 
 ### 调试过程中修复的问题（对 Tauri 桌面开发有普适参考价值）
 
@@ -139,12 +139,12 @@ cargo tauri build --bundles nsis
 
 ## 体积优化清单（按优先级）
 
-- [ ] NSIS 安装器（LZMA）而非 MSI/WiX；
-- [ ] `npm ci --omit=dev --production` + `pnpm deploy` 式裁剪，剔除 SDK 测试套件
+- [x] NSIS 安装器（LZMA）而非 MSI/WiX；已在 0.1.0-rc.1 实测安装包中验证（见上方体积表）。
+- [x] `npm ci --omit=dev --production` + `pnpm deploy` 式裁剪，剔除 SDK 测试套件
       （`--profile deepseek` 思路：仅保留 OpenAI-compatible/DeepSeek provider，去掉
       anthropic/google/ollama 等 SDK —— deepseek profile 思路）；
-- [ ] node.exe 用官方 x64 最小发行版（不启用 npm 全局缓存）；
-- [ ] 图标与资源压缩（`tauri icon` + 单尺寸 .ico）；
+- [x] node.exe 用官方 x64 最小发行版（不启用 npm 全局缓存）；sidecar boot 验证通过。
+- [x] 图标与资源压缩（`tauri icon` + 单尺寸 .ico）；`desktop/icons/icon-source.svg` 与前端 favicon 已纳入资源。
 - [ ] 后续可选：Node SEA 实验（若原生模块约束可解）再砍 ~10MB。
 
 ## 已知边界

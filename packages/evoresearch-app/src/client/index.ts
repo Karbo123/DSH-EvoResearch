@@ -30,6 +30,8 @@ import { t, readLang, setLang } from './i18n'
 import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
 import { ExperimentsPanel } from './experiments'
+import { ResearchNotesPanel } from './research-notes'
+import { LibraryPanel } from './library-panel'
 import { TrajectoryPanel } from './trajectory'
 import { ChatGraphPanel } from './chatgraph'
 import { StatusBar } from './statusbar'
@@ -910,6 +912,23 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     })()
   }
 
+  // 从具体用户消息分支：后端按事件 seq 截断 seed，并同时写入 Graph fork anchor。
+  const branchFromMessage = (seq: number) => {
+    if (current === undefined || cwdNow === null) return
+    void fetch('/evoresearch/fs/graph-fork-from-message', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ workspaceDir: cwdNow, sourceSessionId: current, sourceEventSeq: seq }),
+    }).then((res) => res.json()).then(async (json) => {
+      if (json.ok !== true || typeof json.value?.sessionId !== 'string') {
+        toast(json.error?.message ?? '从消息分支失败', 'error')
+        return
+      }
+      try { await (sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined)?.refreshList?.() } catch { /* 依赖会话服务下次刷新 */ }
+      openSession(json.value.sessionId)
+    }).catch(() => toast('从消息分支失败', 'error'))
+  }
+
   const persistPanels = (p: { left: number; right: number }) => {
     setPanels(p)
     try { localStorage.setItem(PANELS_KEY, JSON.stringify(p)) } catch { /* 忽略 */ }
@@ -1104,7 +1123,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                               ? jsx(TeamPanel, {})
                               : view === 'experiments'
                                 ? jsx(ExperimentsPanel, { cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null), sessionId: current ?? null, onOpenSession: openSession })
-                                : null,
+                                : view === 'notes'
+                                  ? jsx(ResearchNotesPanel, { cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null) })
+                                  : view === 'library'
+                                    ? jsx(LibraryPanel, { cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null) })
+                                    : null,
                 })
               : jsxs('div', {
                   className: 'evo-tabwrap',
@@ -1216,6 +1239,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         // Chat Graph：右键新建/连线，双击 chat 节点打开会话（并切回对话标签）
                         return jsx(ChatGraphPanel, {
                           cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
+                          currentSessionId: current ?? null,
                           onOpenSession: (id: string) => {
                             openSession(id)
                             setActiveTabId('chat')
@@ -1282,6 +1306,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         cwd: cwdNow,
                         jobs: currentJobs,
                         onOpenThread: openSession,
+                        onBranchFromMessage: branchFromMessage,
                         onSend: sendMessage,
                       })
                     })(),

@@ -10,6 +10,33 @@
  * - rollback = checkout 到某检查点（恢复快照文件，标记 rolledBack）；
  * - branch = 从某检查点分叉（新分支携带截至该检查点的阶段/检查点副本），
  *   后续阶段与检查点在新分支上推进，互不干扰。
+ *
+ * ── EXP-01 旧数据兼容性核对结论（§7.7 兼容当前实验模块）────────────────────
+ * 1. 读取路径无副作用：list/get 不删除、不移动、不改写任何文件或字段；
+ *    get() 原样返回整个 manifest（含未知/旧字段），不筛选、不转换。
+ * 2. 旧字段保留：所有写路径（update/addPhase/checkpoint/branch/switchBranch/
+ *    rollback）均基于 {...manifest}/{...branch}/{...phase} 展开后只修改已知
+ *    字段，旧字段随展开保留；checkpoint 只新增、不改写旧条目（rollback 仅
+ *    追加 rolledBack: true）；sessionIds 只追加去重。
+ * 3. 容错读取（本次补丁）：read() 只要求 id 为字符串；branches/phases/
+ *    checkpoints 缺失或非数组时按空列表容错（旧 manifest 仍可 list/get 不
+ *    崩溃）；updatedAt 缺失时排序按 0 处理；checkpoint 跨分支按 id 扫描，
+ *    不依赖旧条目 phaseId。
+ * 4. 快照：snapshots/<expId>/<checkpointId>/ 只被 checkpoint() 写入、
+ *    rollback() 只读恢复；新增只读 snapshotFiles() 可查看旧快照内容。
+ * 5. 删除仅限显式 delete()（删 manifest + snapshots/<expId>/），无隐式清理。
+ * 6. 只读扩展（供旧时间线界面使用，不写回 manifest）：
+ *    - getCheckpoint(): 跨分支按 id 定位检查点（含旧条目无 phaseId 的情况）；
+ *    - snapshotFiles(): 列出某检查点快照目录文件（相对路径 + 字节）；
+ *    - overview(): §7.7.3 自动生成只读自然语言概览（确定性文本，不调用 LLM）。
+ *
+ * 方法清单（本类）：
+ *   写：create / update / addPhase / checkpoint / rollback（EXP-13：需显式
+ *       confirm:true，覆盖工作区文件前必须经 UI 确认）/ branch /
+ *       switchBranch / delete
+ *   读：list / get / getCheckpoint / snapshotFiles / overview
+ * 注：新实验体验（自由目录 + LAB_NOTE.md）见 host/experiment-workspace.ts；
+ *    本类保留收缩，只负责旧数据兼容与旧时间线。
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -55,7 +82,8 @@ export class ExperimentService {
     const file = this.fileOf(workspaceDir, id)
     if (!fs.existsSync(file)) throw new Error(`实验不存在: ${id}`)
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as ExperimentManifest
-    if (typeof raw?.id !== 'string' || !Array.isArray(raw.branches)) throw new Error(`实验 manifest 损坏: ${id}`)
+    // EXP-01 容错：只要求 id 存在；branches 缺失/非数组按空列表容错（旧 manifest 可读）
+    if (typeof raw?.id !== 'string') throw new Error(`实验 manifest 损坏: ${id}`)
     return raw
   }
 
@@ -85,15 +113,20 @@ export class ExperimentService {
         return null
       }
     }).filter((s): s is ExperimentSummary => s !== null)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
   }
 
   private summaryOf(m: ExperimentManifest): ExperimentSummary {
     let phases = 0
     let checkpoints = 0
-    for (const branch of m.branches) {
-      phases += branch.phases.length
-      for (const phase of branch.phases) checkpoints += phase.checkpoints.length
+    // EXP-01 容错：旧数据 branches/phases/checkpoints 缺失时按空列表处理
+    const branches: readonly ExperimentBranch[] = Array.isArray(m.branches) ? m.branches : []
+    for (const branch of branches) {
+      const branchPhases: readonly ExperimentPhase[] = Array.isArray(branch.phases) ? branch.phases : []
+      phases += branchPhases.length
+      for (const phase of branchPhases) {
+        checkpoints += Array.isArray(phase.checkpoints) ? phase.checkpoints.length : 0
+      }
     }
     return {
       id: m.id,
@@ -101,7 +134,7 @@ export class ExperimentService {
       description: m.description,
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
-      branchCount: m.branches.length,
+      branchCount: branches.length,
       phaseCount: phases,
       checkpointCount: checkpoints,
       currentBranchId: m.currentBranchId,
@@ -110,6 +143,96 @@ export class ExperimentService {
 
   get(workspaceDir: string, id: string): ExperimentManifest {
     return this.read(workspaceDir, id)
+  }
+
+  /**
+   * 跨分支定位检查点（只读，EXP-01）。按 id 扫描全部分支/阶段/检查点，
+   * 不依赖旧条目是否携带 phaseId 字段。
+   */
+  getCheckpoint(workspaceDir: string, id: string, checkpointId: string): { checkpoint: ExperimentCheckpoint; branchId: string; phaseId: string } {
+    const manifest = this.read(workspaceDir, id)
+    const branches: readonly ExperimentBranch[] = Array.isArray(manifest.branches) ? manifest.branches : []
+    for (const branch of branches) {
+      const phases: readonly ExperimentPhase[] = Array.isArray(branch.phases) ? branch.phases : []
+      for (const phase of phases) {
+        const checkpoints: readonly ExperimentCheckpoint[] = Array.isArray(phase.checkpoints) ? phase.checkpoints : []
+        const checkpoint = checkpoints.find((c) => c.id === checkpointId)
+        if (checkpoint !== undefined) return { checkpoint, branchId: branch.id, phaseId: phase.id }
+      }
+    }
+    throw new Error(`检查点不存在: ${checkpointId}`)
+  }
+
+  /** 列出某检查点快照目录的全部文件（只读，EXP-01；快照缺失时 missing=true）。 */
+  snapshotFiles(workspaceDir: string, id: string, checkpointId: string): {
+    missing: boolean
+    files: Array<{ relPath: string; size: number }>
+    fileCount: number
+    totalBytes: number
+  } {
+    this.read(workspaceDir, id) // 校验实验存在
+    const snapshotAbs = path.join(this.snapshotsRootOf(workspaceDir), id, checkpointId)
+    if (!fs.existsSync(snapshotAbs)) return { missing: true, files: [], fileCount: 0, totalBytes: 0 }
+    const files: Array<{ relPath: string; size: number }> = []
+    let totalBytes = 0
+    const walk = (dir: string, depth: number): void => {
+      if (depth > SNAPSHOT_MAX_DEPTH) return
+      let entries: fs.Dirent[] = []
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          walk(full, depth + 1)
+        } else if (entry.isFile()) {
+          try {
+            const size = fs.statSync(full).size
+            files.push({ relPath: path.relative(snapshotAbs, full).split(path.sep).join('/'), size })
+            totalBytes += size
+          } catch {
+            // 单文件不可读跳过
+          }
+        }
+      }
+    }
+    walk(snapshotAbs, 0)
+    return { missing: false, files, fileCount: files.length, totalBytes }
+  }
+
+  /**
+   * 只读自然语言概览（§7.7.3：为旧实验自动生成概览，不反向覆盖 manifest）。
+   * 确定性文本、不调用 LLM；供旧时间线兼容视图的只读摘要展示。
+   */
+  overview(workspaceDir: string, id: string): string {
+    const m = this.read(workspaceDir, id)
+    const lines: string[] = []
+    const fmt = (ts: number): string => new Date(ts).toISOString().slice(0, 10)
+    lines.push(`实验「${m.name ?? id}」`)
+    if (typeof m.description === 'string' && m.description !== '') lines.push(`  描述：${m.description}`)
+    lines.push(`  创建于 ${fmt(typeof m.createdAt === 'number' ? m.createdAt : 0)}，更新于 ${fmt(typeof m.updatedAt === 'number' ? m.updatedAt : 0)}`)
+    const branches: readonly ExperimentBranch[] = Array.isArray(m.branches) ? m.branches : []
+    if (branches.length === 0) {
+      lines.push('  时间线：无分支/阶段记录（旧数据或空实验）')
+    } else {
+      for (const branch of branches) {
+        const mark = branch.id === m.currentBranchId ? '（当前）' : ''
+        lines.push(`  分支「${branch.name ?? branch.id}」${mark}`)
+        const phases: readonly ExperimentPhase[] = Array.isArray(branch.phases) ? branch.phases : []
+        for (const phase of phases) {
+          const checkpoints: readonly ExperimentCheckpoint[] = Array.isArray(phase.checkpoints) ? phase.checkpoints : []
+          const cpText = checkpoints.length === 0
+            ? ''
+            : ` → 检查点: ${checkpoints.map((c) => `「${c.name ?? c.id}」${c.rolledBack === true ? '（已回退）' : ''}`).join('、')}`
+          lines.push(`    阶段「${phase.name ?? phase.id}」${cpText}`)
+        }
+      }
+    }
+    const sessions = Array.isArray(m.sessionIds) ? m.sessionIds : []
+    if (sessions.length > 0) lines.push(`  关联会话：${sessions.join('、')}`)
+    return lines.join('\n')
   }
 
   /** 创建实验（首个分支 phase-0）。 */
@@ -240,8 +363,14 @@ export class ExperimentService {
   /**
    * 回退到某检查点：把快照文件恢复到工作区（快照内文件覆盖；
    * 快照后新增的文件保留）。标记该检查点 rolledBack。
+   *
+   * EXP-13（§7.7.5）：回退会覆盖工作区文件，必须显式确认——
+   * opts.confirm !== true 时抛错；由 UI 弹确认框后再调用。
+   * api.ts experimentsRollback 需更新为把 UI 确认结果透传（见
+   * 实验服务统一接线）。
    */
-  rollback(workspaceDir: string, id: string, checkpointId: string): { restored: number; checkpointId: string; name: string } {
+  rollback(workspaceDir: string, id: string, checkpointId: string, opts?: { confirm?: boolean }): { restored: number; checkpointId: string; name: string } {
+    if (opts?.confirm !== true) throw new Error('回退会覆盖工作区文件，需要明确确认（confirm: true）')
     const manifest = this.read(workspaceDir, id)
     const ws = this.assertWorkspace(manifest.workspaceDir)
     let target: ExperimentCheckpoint | null = null

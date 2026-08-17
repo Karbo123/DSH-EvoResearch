@@ -19,12 +19,15 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node ../../scripts/build-app.mjs"
+    "build": "node ../../scripts/build-app.mjs",
+    "test": "node --import tsx --test \"test/*.test.ts\""
   },
   "dependencies": {
     "@deepseek-ai/dsh-host-frontend-static": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": "^3.18.1",
+    "@xyflow/react": "^12.8.4",
     "dompurify": "^3.4.13",
+    "elkjs": "^0.11.0",
     "highlight.js": "^11.12.0",
     "lucide-react": "^1.31.0",
     "markdown-it": "^15.0.0",
@@ -43,7 +46,8 @@
     "@deepseek-ai/dsh-client-web": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-web-react": "^0.1.0-rc.6",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "tsx": "^4.19.0"
   },
   "dsh": {
     "bundle": {

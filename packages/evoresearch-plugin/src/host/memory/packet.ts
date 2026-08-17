@@ -3,8 +3,7 @@
  *
  * 对齐 EvoResearch memory/research/packet.py 与 middleware/memory.py：
  * - 默认 6000 token 预算（DEFAULT_PACKET_TOKEN_BUDGET）；
- * - 每个活跃类别保留 1 个最佳 state（+同类别高分补充候选入口）；
- * - 七类一行目录（category_catalog）；
+ * - 旧分类仍保留为可搜索的弱提示，不再为七类固定预留上下文空间；
  * - RRF 混合召回候选（类别/主题/近因加权）；
  * - read_more 提示（read_research_turn / read_memory 可读原始轮次）。
  */
@@ -21,8 +20,8 @@ import { retrieve, type RetrieveOptions } from './retrieval.js'
 /** 默认记忆包 token 预算（与 EvoResearch DEFAULT_PACKET_TOKEN_BUDGET=6000 一致）。 */
 export const DEFAULT_PACKET_TOKEN_BUDGET = 6000
 
-/** 每个类别最多保留的 state 数（1 最佳 + 2 补充候选）。 */
-const STATES_PER_CATEGORY = 3
+/** 相关状态最多保留的条数；旧分类不应吞掉正文预算。 */
+const MAX_RELEVANT_STATES = 8
 
 /** 记忆包构建选项。 */
 export interface PacketOptions {
@@ -50,20 +49,20 @@ export async function buildMemoryPacket(
   const counts = store.countByCategory()
   const catalog = RESEARCH_CATEGORIES.map((category) => ({ category, count: counts[category] ?? 0 }))
 
-  // 2) 每个活跃类别的最佳 state（+同类别补充候选）
+  // 2) 旧 topic state 只作为弱提示：有 query 时按词面相关性排序，
+  //    没有 query 时仅给最近少量状态；不按七类固定展开。
   const allStates = store.listTopicStates()
-  const byCategory = new Map<ResearchCategory, TopicState[]>()
-  for (const state of allStates) {
-    const list = byCategory.get(state.category) ?? []
-    list.push(state)
-    byCategory.set(state.category, list)
+  const terms = query.toLocaleLowerCase().split(/[\s,，。！？!?;；:：/]+/).filter((term) => term.length >= 2)
+  const stateScore = (state: TopicState): number => {
+    const haystack = `${state.label} ${state.topicKey} ${state.decision} ${state.openQuestions.join(' ')}`.toLocaleLowerCase()
+    return terms.reduce((score, term) => score + (haystack.includes(term) ? 3 : 0), 0)
   }
-  const states: TopicState[] = []
-  for (const category of RESEARCH_CATEGORIES) {
-    const list = (byCategory.get(category) ?? []).sort((a, b) => b.updatedAt - a.updatedAt)
-    const selected = list.slice(0, STATES_PER_CATEGORY)
-    states.push(...selected)
-  }
+  const states = allStates
+    .map((state) => ({ state, relevance: stateScore(state) }))
+    .sort((a, b) => b.relevance - a.relevance || b.state.updatedAt - a.state.updatedAt)
+    .filter((entry) => terms.length === 0 || entry.relevance > 0)
+    .slice(0, MAX_RELEVANT_STATES)
+    .map((entry) => entry.state)
 
   // 3) RRF 混合召回（类别加权不硬过滤）
   const hits = query.length > 0
@@ -93,15 +92,14 @@ export function renderPacketText(packet: Omit<MemoryPacket, 'text' | 'estimatedT
   lines.push('<research_memory_packet>')
   lines.push('【科研记忆摘要（来自本项目历史轮次与长期观察）】')
 
-  // 七类一行目录
+  // 旧分类只留一条很短的弱提示；没有活动记录时完全省略。
   lines.push('类别目录:')
   const active = packet.catalog.filter((entry) => entry.count > 0)
   if (active.length === 0) {
     lines.push('  （暂无历史科研记录）')
   } else {
-    for (const entry of packet.catalog) {
-      lines.push(`  - ${entry.category}: ${entry.count} 轮`)
-    }
+    const hint = active.map((entry) => `${entry.category} ${entry.count}`).join(' · ')
+    lines.push(`  （旧分类提示：${hint.slice(0, 220)}；实际内容以相关原文为准）`)
   }
 
   // 各主题状态

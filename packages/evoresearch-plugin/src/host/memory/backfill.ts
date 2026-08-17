@@ -1,14 +1,19 @@
 /**
- * 科研记忆 回填（backfill）：把既有会话历史批量索引进 Turn Catalog。
+ * 科研记忆 回填（backfill）：把既有会话历史批量索引进 Turn Catalog 与片段索引。
  *
  * 对齐 EvoResearch memory/research/backfill.py：
  * - 项目 Agent 构建时或首次访问 Research API 时后台 newest-first 回填；
  * - 幂等：已存在的轮次（同会话同文本）不重复创建；
  * - 断点续做：research_index_progress 表记录 (memory_dir, project_id, source_version)，
  *   source_version 指纹变化（会话新增消息）时重新回填；
+ * - RET-02：backfillFragmentIndex 从 research_turns + Raw Turn Archive（缺归档时从
+ *   DSH session log）回填消息/自然段级片段索引；逐轮跳过已索引轮次（中断后继续），
+ *   进度落 fragment_index_progress（镜像 research_index_progress 机制）；
  * - 回填不修改或替代 sessions 原始历史，仅建立科研记忆索引。
  */
 import type { ResearchMemoryStore } from './store.js'
+import { turnsFromEvents, type SessionEventLike } from '../session-text.js'
+import { cleanForIndex } from '../core/db.js'
 
 /** 回填配置。 */
 export interface BackfillOptions {
@@ -141,4 +146,75 @@ export async function backfillFromSessionQuery(
   // 断点续做：记录进度（source_version = 会话数指纹；MemoryRuntime 负责项目级去重）
   store.setIndexProgress(workspaceDir, workspaceDir.split(/[\\/]/).pop() ?? 'project', `sessions:${sessionIds.length}`, 'complete')
   return created
+}
+
+/** RET-02 片段回填选项。 */
+export interface FragmentBackfillOptions {
+  /** 记忆目录（进度记录键）。 */
+  readonly memoryDir: string
+  /** 项目 id（进度记录键，缺省取 memoryDir 目录名）。 */
+  readonly projectId?: string
+  /** 会话事件提供器（无归档轮次从 session log 还原用；测试注入）。 */
+  readonly eventsOf?: (sessionId: string) => readonly SessionEventLike[]
+  /** 最多扫描的轮次数（最新优先，默认 200）。 */
+  readonly limit?: number
+  /** source_version 指纹（进度记录）。 */
+  readonly sourceVersion?: string
+}
+
+/**
+ * RET-02：从 research_turns + Raw Turn Archive 回填片段索引（消息/自然段级）。
+ * - 已归档轮次：直接由归档 segments 建片段（不依赖 session log）；
+ * - 未归档轮次（进程在归档前崩溃遗留）：从 DSH session log 经 session-text.ts
+ *   还原原文后建片段（兜底路径）；
+ * - 断点续做：逐轮检查片段是否存在（countTurnFragments > 0 跳过），中断后重跑
+ *   只补缺失轮次；每批结束后进度落 fragment_index_progress（status/progress）。
+ *
+ * @returns 新建片段索引的轮次数与跳过数。
+ */
+export async function backfillFragmentIndex(store: ResearchMemoryStore, options: FragmentBackfillOptions): Promise<{ built: number; skipped: number }> {
+  const projectId = options.projectId ?? options.memoryDir.split(/[\\/]/).pop() ?? 'project'
+  const sourceVersion = options.sourceVersion ?? `turns:${Date.now().toString(36)}`
+  const eventsOf = options.eventsOf ?? ((_sessionId: string): readonly SessionEventLike[] => [])
+  const turns = store.listTurns(undefined, options.limit ?? 200)
+  let built = 0
+  let skipped = 0
+
+  for (const turn of turns) {
+    if (turn.status === 'pending') continue
+    // 断点续做：已索引的轮次直接跳过
+    if (store.countTurnFragments(turn.turnId) > 0) {
+      skipped += 1
+      continue
+    }
+    const segments = store.listSegments(turn.turnId)
+    const hasUserSegment = segments.some((s) => s.kind === 'user')
+    if (hasUserSegment) {
+      store.buildTurnFragments(turn.turnId)
+      built += 1
+      continue
+    }
+    // 兜底路径：无归档 → 从 session log 还原原文
+    const events = eventsOf(turn.sessionId)
+    if (events.length === 0) continue
+    const transcript = turnsFromEvents(events).find((t) => cleanForIndex(t.userText) === cleanForIndex(turn.userText))
+    if (!transcript) continue
+    store.buildTurnFragmentsFromParts({
+      turnId: turn.turnId,
+      sessionId: turn.sessionId,
+      userText: transcript.userText,
+      assistantText: transcript.assistantText,
+      tools: transcript.tools,
+    })
+    built += 1
+  }
+
+  // 断点进度：中断后重跑依据 fragment 存在性续做，进度仅记录状态与统计
+  store.setFragmentIndexProgress(options.memoryDir, projectId, sourceVersion, 'complete', {
+    built,
+    skipped,
+    scanned: turns.length,
+    at: Date.now(),
+  })
+  return { built, skipped }
 }

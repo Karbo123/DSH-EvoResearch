@@ -7,7 +7,8 @@ import { ChatGraphService, graphMemoryText } from '../packages/evoresearch-plugi
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'graph-audit-'))
 const svc = new ChatGraphService(tmp)
 let pass = 0
-const check = (n, c, d = '') => { console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${d ? `  ${d}` : ''}`); if (c) pass += 1 }
+let total = 0
+const check = (n, c, d = '') => { total += 1; console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${d ? `  ${d}` : ''}`); if (c) pass += 1 }
 
 // ── 1) global 节点删除后不再复活 ──
 const g1 = svc.addNode('p1', { type: 'memory', title: '全局A', x: 0, y: 0, scope: 'global', content: '内容A' })
@@ -44,6 +45,7 @@ const chat2 = svc.addNode('p1', { type: 'chat', title: '聊天2', x: 0, y: 0, se
 const memText2 = graphMemoryText({ ...svc.get('p1'), edges: [{ id: 'e3', from: chat1.id, to: chat2.id, toPort: 'memory' }] }, 'sess-2')
 check('chat 源不注入 memory', memText2 === '')
 
-console.log(`\n${pass}/8 passed`)
+// 断言计数自动跟随实际 check() 调用数（BASE-02/t22 约定），避免硬编码计数过期
+console.log(`\n${pass}/${total} passed`)
 fs.rmSync(tmp, { recursive: true, force: true })
-process.exit(pass === 8 ? 0 : 1)
+process.exit(pass === total ? 0 : 1)

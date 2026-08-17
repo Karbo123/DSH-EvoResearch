@@ -2,9 +2,12 @@
  * 科研记忆 模型工具注册：科研记忆的按需读取与长期 Observation 维护。
  *
  * 对齐 EvoResearch memory/research/tools.py：
- * - search_research_history：按查询检索历史轮次（压缩前的精确原文由 read_research_turn 读取）；
- * - read_research_turn：读取某一轮完整原文；
- * - search_observations / read_memory：长期 Observation 与记忆文件读取；
+ * - search_research_history：按查询检索历史轮次（RET-03：返回可定位片段，
+ *   含位置与前后文；无片段索引时回退旧混合召回）；
+ * - find_in_conversation（RET-04）：在指定会话内继续查找；
+ * - read_conversation_range（RET-05）：按位置向前/向后翻页读取会话原文；
+ * - read_research_turn：读取某一轮完整原文（RET-06：含 assistant/工具片段/中断信息）；
+ * - search_observations / read_memory（RET-07：offset/cursor 分页）：长期记忆文件读取；
  * - create_observation / update_observation / supersede_observation：长期记忆维护
  *   （supersede 保留旧文件标记 status: superseded，检索默认只出 ACTIVE）。
  */
@@ -15,6 +18,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { ResearchMemoryStore } from './store.js'
 import { parseObservationFile } from './store.js'
+import { turnDetail, readConversationRange, readMemoryFilePaged, expandFragmentHit } from './read.js'
 import type { ResearchCategory, GoalProposal } from '../../shared/types.js'
 
 /** 工具上下文：MemoryRuntime 提供的存储门面。 */
@@ -22,6 +26,8 @@ export interface MemoryToolHost {
   storeFor(workspaceDir: string): ResearchMemoryStore
   observationsDirFor(workspaceDir: string): string
   profileDirFor(workspaceDir: string): string
+  /** 新的自然语言笔记入口；未接入时 create_observation 退回旧兼容格式。 */
+  createResearchNote?: (workspaceDir: string, title: string | undefined, body: string) => unknown
 }
 
 /** 从工具执行上下文推断工作区。 */
@@ -63,8 +69,9 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
   register({
     name: 'search_research_history',
     description:
-      '检索本项目历史对话轮次（Turn Catalog）与长期 Observation 的混合召回结果。' +
-      '适合在回答科研问题前查找旧想法、方法、实验结论；需要精确原文时再调用 read_research_turn。',
+      '检索本项目历史对话轮次（RET-03：优先返回可定位片段——含回到会话原文的位置 ' +
+      '(seg_seq/char_offset) 与命中前后的相邻消息；片段索引未建立时回退为轮次/Observation ' +
+      '混合召回）。命中片段后可用 read_conversation_range 沿位置前后翻页读完整原文。',
     parameters: paramsSchema(
       {
         query: { type: 'string', description: '检索关键词（支持中文）' },
@@ -92,10 +99,18 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
     execute: async (args, exec) => {
       const input = args as { query: string; categories?: ResearchCategory[]; limit?: number }
       const store = host.storeFor(workspaceOf(exec))
+      const limit = Math.min(input.limit ?? 8, 20)
+      // RET-03：片段级检索（FTS5 优先，失败自动退化 LIKE 原文扫描，RET-09）
+      const fragments = store.searchFragments(input.query, limit * 3, { mode: 'auto' })
+      if (fragments.length > 0) {
+        const hits = fragments.slice(0, limit).map(({ fragment, score }) => expandFragmentHit(store, fragment, score))
+        return { hits }
+      }
+      // 兼容回退：片段索引未建立（旧库未回填）时沿用旧混合召回
       const { retrieve } = await import('./retrieval.js')
       const hits = await retrieve(store, input.query, {
         categories: input.categories,
-        limit: Math.min(input.limit ?? 8, 20),
+        limit,
       })
       return {
         hits: hits.map((hit) => ({ kind: hit.kind, id: hit.id, snippet: hit.snippet.slice(0, 300), score: Number(hit.score.toFixed(4)) })),
@@ -103,29 +118,115 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
     },
   })
 
+  // ── find_in_conversation（RET-04） ────────────────────────────────────────
+  register({
+    name: 'find_in_conversation',
+    description:
+      '在指定会话内继续查找关键词（指定会话内的二次搜索，RET-04）。' +
+      '返回可定位片段（位置 + 前后相邻消息）；适合在已定位到某次对话后深挖细节。',
+    parameters: paramsSchema(
+      {
+        session_id: { type: 'string', description: '会话 id（来自检索命中或 read_conversation_range）' },
+        query: { type: 'string', description: '查找关键词' },
+        limit: { type: 'number', description: '返回条数，默认 8，最大 20' },
+      },
+      ['session_id', 'query'],
+    ),
+    output: {
+      schema: { type: 'object', properties: { hits: { type: 'array', items: { type: 'object' } } } },
+      render: textRender,
+    },
+    execute: async (args, exec) => {
+      const input = args as { session_id: string; query: string; limit?: number }
+      const store = host.storeFor(workspaceOf(exec))
+      const limit = Math.min(input.limit ?? 8, 20)
+      const fragments = store.searchFragments(input.query, limit, { sessionId: input.session_id, mode: 'auto' })
+      return { hits: fragments.map(({ fragment, score }) => expandFragmentHit(store, fragment, score)) }
+    },
+  })
+
+  // ── read_conversation_range（RET-05） ─────────────────────────────────────
+  register({
+    name: 'read_conversation_range',
+    description:
+      '按位置向前/向后翻页读取会话原文（RET-05）。' +
+      'anchor 来自检索命中的 position（turn_id + seg_seq）：围绕锚点返回前后各若干条消息；' +
+      '不带 anchor 时返回该会话最近消息（offset 向前翻旧页）。位置字段与 ' +
+      'search_research_history / find_in_conversation 的命中一致。',
+    parameters: paramsSchema(
+      {
+        session_id: { type: 'string', description: '会话 id' },
+        anchor: {
+          type: 'object',
+          description: '锚点（可选）：检索命中的位置',
+          properties: { turn_id: { type: 'string' }, seg_seq: { type: 'number' } },
+        },
+        before: { type: 'number', description: '锚点模式：锚前条数（默认 2）' },
+        after: { type: 'number', description: '锚点模式：锚后条数（默认 2）' },
+        limit: { type: 'number', description: '无锚点模式：返回最近 N 条（默认 20）' },
+        offset: { type: 'number', description: '无锚点模式：偏移（向前翻旧页）' },
+      },
+      ['session_id'],
+    ),
+    output: {
+      schema: {
+        type: 'object',
+        properties: {
+          items: { type: 'array', items: { type: 'object' } },
+          anchor_index: { type: 'number' },
+          has_more_before: { type: 'boolean' },
+          has_more_after: { type: 'boolean' },
+          total: { type: 'number' },
+        },
+      },
+      render: textRender,
+    },
+    execute: async (args, exec) => {
+      const input = args as {
+        session_id: string
+        anchor?: { turn_id: string; seg_seq: number }
+        before?: number
+        after?: number
+        limit?: number
+        offset?: number
+      }
+      const store = host.storeFor(workspaceOf(exec))
+      const result = readConversationRange(store, input.session_id, {
+        anchor: input.anchor ? { turnId: input.anchor.turn_id, segSeq: input.anchor.seg_seq } : undefined,
+        before: input.before,
+        after: input.after,
+        limit: input.limit,
+        offset: input.offset,
+      })
+      return {
+        items: result.items.map((item) => ({
+          turn_id: item.turnId,
+          seg_seq: item.segSeq,
+          kind: item.kind,
+          text: item.text,
+        })),
+        anchor_index: result.anchorIndex,
+        has_more_before: result.hasMoreBefore,
+        has_more_after: result.hasMoreAfter,
+        total: result.total,
+      }
+    },
+  })
+
   // ── read_research_turn ────────────────────────────────────────────────────
   register({
     name: 'read_research_turn',
-    description: '读取某一轮对话的完整原文（用户消息 + 模型回答 + 分类与主题），用于阅读压缩前的精确历史。',
+    description:
+      '读取某一轮对话的完整原文（RET-06：用户消息 + 模型最终回答 + 原始工具片段 ' +
+      '（含调用参数/结果与长结果文件位置）+ 中断说明；旧字段保持兼容）。',
     parameters: paramsSchema({ turn_id: { type: 'string', description: '轮次 id（来自 search_research_history 或记忆包的 read_more 提示）' } }, ['turn_id']),
-    output: { schema: { type: 'object', properties: { turn: { type: 'object' } } }, render: textRender },
+    output: { schema: { type: 'object', properties: { turn: { type: 'object' }, segments: { type: 'array' } } }, render: textRender },
     execute: async (args, exec) => {
       const input = args as { turn_id: string }
       const store = host.storeFor(workspaceOf(exec))
-      const turn = store.getTurn(input.turn_id)
-      if (!turn) return { error: `未找到轮次 ${input.turn_id}` }
-      return {
-        turn: {
-          turnId: turn.turnId,
-          userText: turn.userText,
-          assistantText: turn.assistantText,
-          categories: turn.categories,
-          topicKeys: turn.topicKeys,
-          status: turn.status,
-          createdAt: turn.createdAt,
-          workingSummary: turn.workingSummary,
-        },
-      }
+      const detail = turnDetail(store, input.turn_id)
+      if (!detail) return { error: `未找到轮次 ${input.turn_id}` }
+      return detail
     },
   })
 
@@ -157,31 +258,59 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
   // ── read_memory ───────────────────────────────────────────────────────────
   register({
     name: 'read_memory',
-    description: '读取项目记忆文件（profile、observations 等 Markdown 文件）的内容。路径必须位于项目 .evoresearch-data/memories 目录内。',
-    parameters: paramsSchema({ path: { type: 'string', description: '记忆文件相对路径，如 profile/SOUL.md 或 observations/global/O-xxx.md' } }, ['path']),
+    description:
+      '读取项目记忆文件（profile、observations 等 Markdown 文件）的内容。路径必须位于项目 ' +
+      '.evoresearch-data/memories 目录内。RET-07：支持 offset/limit 分页——长笔记用返回的 ' +
+      'has_more/offset 继续读取，不再固定截断。',
+    parameters: paramsSchema(
+      {
+        path: { type: 'string', description: '记忆文件相对路径，如 profile/SOUL.md 或 observations/global/O-xxx.md' },
+        offset: { type: 'number', description: '字符偏移（翻页游标，默认 0）' },
+        limit: { type: 'number', description: '本页字符数（默认 6000，最大 20000）' },
+      },
+      ['path'],
+    ),
     output: { schema: { type: 'object', properties: { content: { type: 'string' } } }, render: textRender },
     execute: async (args, exec) => {
-      const input = args as { path: string }
+      const input = args as { path: string; offset?: number; limit?: number }
       const workspace = workspaceOf(exec)
       const memoriesRoot = host.observationsDirFor(workspace).replace(/[\\/]observations$/, '')
-      const target = path.resolve(memoriesRoot, input.path)
-      if (!target.startsWith(memoriesRoot + path.sep) && target !== memoriesRoot) {
-        return { error: '路径越界：只允许读取 .evoresearch-data/memories 内的文件' }
-      }
-      if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) {
-        return { error: `文件不存在: ${input.path}` }
-      }
-      const content = fs.readFileSync(target, 'utf8')
-      // 二进制探测：null 字节视为不可读
-      if (content.includes('\u0000')) return { error: '二进制文件无法直接读取' }
-      return { content: content.slice(0, 6000) }
+      const result = readMemoryFilePaged(memoriesRoot, input.path, input.offset ?? 0, input.limit ?? 6000)
+      if ('error' in result) return result
+      return result
     },
   })
 
-  // ── create_observation / update_observation / supersede_observation ──────
+  // ── create_research_note / create_observation / update_observation / supersede_observation ──
+  register({
+    name: 'create_research_note',
+    description:
+      '创建自由格式研究笔记（Markdown）。正文可以是灵感、长讨论、论文精读、实验复盘或未验证猜想；' +
+      '不要求来源、分类、实体、置信度或固定字段。',
+    parameters: paramsSchema(
+      {
+        title: { type: 'string', description: '可选标题' },
+        content: { type: 'string', description: 'Markdown 正文' },
+      },
+      ['content'],
+    ),
+    output: { schema: { type: 'object', properties: { note_id: { type: 'string' }, file_name: { type: 'string' } } }, render: textRender },
+    execute: async (args, exec) => {
+      const input = args as { title?: string; content: string }
+      const workspace = workspaceOf(exec)
+      if (host.createResearchNote === undefined) {
+        return { error: '自由文本研究笔记服务未接入，请稍后重试' }
+      }
+      const created = host.createResearchNote(workspace, input.title, input.content) as { noteId?: string; fileName?: string }
+      return { note_id: created.noteId, file_name: created.fileName }
+    },
+  })
+
   register({
     name: 'create_observation',
-    description: '创建一条长期 Observation（Markdown 记忆文件）。用于沉淀跨会话有效的研究结论、决定、偏好。',
+    description:
+      '创建长期研究笔记。优先使用自由 Markdown，不要求来源、分类、实体或置信度；' +
+      '旧 Observation 字段仅为兼容旧调用保留。',
     parameters: paramsSchema(
       {
         title: { type: 'string', description: '观察标题（简短）' },
@@ -196,6 +325,11 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
     execute: async (args, exec) => {
       const input = args as { title: string; content: string; categories?: ResearchCategory[]; topic_keys?: string[]; entities?: string[] }
       const workspace = workspaceOf(exec)
+      // NOTE-02：新调用不再被固定元数据绑住；没有明确旧字段时写入零 frontmatter 笔记。
+      if (host.createResearchNote !== undefined && input.categories === undefined && input.topic_keys === undefined && input.entities === undefined) {
+        const created = host.createResearchNote(workspace, input.title, input.content) as { noteId?: string; fileName?: string }
+        return { note_id: created.noteId, file_name: created.fileName, format: 'markdown-note' }
+      }
       const store = host.storeFor(workspace)
       const observationId = `O-${randomUUID().replace(/-/g, '').slice(0, 16)}`
       const meta = store.writeObservation(host.observationsDirFor(workspace), {

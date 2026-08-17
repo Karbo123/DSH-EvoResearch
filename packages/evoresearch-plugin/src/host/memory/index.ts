@@ -19,7 +19,9 @@ import type { MemoryPacket } from '../../shared/types.js'
 import { registerMemoryTools } from './tools.js'
 import { reconcileStore } from './recovery.js'
 import { ensureGoalContract, looksLongHorizon, type GoalRuntime } from './goals.js'
+import { TurnTextAccumulator, turnInterruptFromEndReason, type SessionEventLike } from '../session-text.js'
 import type { ResearchCategory } from '../../shared/types.js'
+import type { NotesService } from '../notes.js'
 
 /** 记忆插件配置。 */
 export interface MemoryConfig {
@@ -33,11 +35,16 @@ export interface MemoryConfig {
   readonly enabled?: boolean
 }
 
-/** 当前轮状态（每会话一条）。 */
+/**
+ * 当前轮状态（每会话一条）：
+ * - accumulator：MEM-02/03 现场累积 assistant 正文（chunk 增量 / 最终消息）与
+ *   按原序的工具事件，turn/end 时汇总写回（MEM-04）并随档案归档（MEM-06）。
+ */
 interface ActiveTurn {
   readonly turnId: string
   readonly workspaceDir: string
   readonly userText: string
+  readonly accumulator: TurnTextAccumulator
   startedAt: number
 }
 
@@ -57,8 +64,10 @@ export class MemoryRuntime implements GoalRuntime {
   private readonly activeTurns = new Map<string, ActiveTurn>()
   private readonly reconciled = new Set<string>()
   private readonly backfilled = new Set<string>()
+  private readonly fragmentBackfilled = new Set<string>()
   private ctxRef: Context | undefined
-  private lastActiveSessionId: string | undefined
+  /** 自由文本研究笔记写入口；由 host/index.ts 在组装完 NotesService 后接入。 */
+  private notesService: NotesService | undefined
   /** 最近一次分类模型选择（缓存，避免每轮查询）。 */
   private cachedModel: { provider: string; model: string } | undefined
 
@@ -83,8 +92,8 @@ export class MemoryRuntime implements GoalRuntime {
         this.reconciled.add(key)
         try {
           const result = reconcileStore(store, { backupDir: path.join(this.memoryDirFor(workspaceDir), 'backups') })
-          if (!result.skipped && (result.markedInterrupted > 0 || result.archivedMissing > 0 || result.backedUp)) {
-            console.log(`[evoresearch:memory] 启动对账（${path.basename(key)}）: 悬挂标记 ${result.markedInterrupted}，补归档 ${result.archivedMissing}，备份 ${result.backedUp}`)
+          if (!result.skipped && (result.markedInterrupted > 0 || result.archivedMissing > 0 || result.backedUp || result.assistantRecovered > 0)) {
+            console.log(`[evoresearch:memory] 启动对账（${path.basename(key)}）: 悬挂标记 ${result.markedInterrupted}，补归档 ${result.archivedMissing}，assistant 补回 ${result.assistantRecovered}，备份 ${result.backedUp}`)
           }
         } catch (error) {
           console.error('[evoresearch:memory] 启动对账失败（不阻塞）:', error)
@@ -95,6 +104,13 @@ export class MemoryRuntime implements GoalRuntime {
         this.backfilled.add(key)
         void this.runBackfill(workspaceDir).catch((error) => {
           console.error('[evoresearch:memory] 历史回填失败（不阻塞）:', error)
+        })
+      }
+      // RET-02：片段索引回填（既有轮次消息/自然段级；每项目每进程一次）
+      if (!this.fragmentBackfilled.has(key)) {
+        this.fragmentBackfilled.add(key)
+        void this.runFragmentBackfill(workspaceDir).catch((error) => {
+          console.error('[evoresearch:memory] 片段索引回填失败（不阻塞）:', error)
         })
       }
     }
@@ -124,6 +140,29 @@ export class MemoryRuntime implements GoalRuntime {
     }
   }
 
+  /** RET-02：既有轮次的片段索引回填（消息/自然段级；无归档时从 DSH session log 还原）。 */
+  private async runFragmentBackfill(workspaceDir: string): Promise<void> {
+    const store = this.storeFor(workspaceDir)
+    const { backfillFragmentIndex } = await import('./backfill.js')
+    const { readSessionEvents } = await import('../rewind.js')
+    const eventsOf = (sessionId: string): SessionEventLike[] => {
+      try {
+        return readSessionEvents(sessionId) as unknown as SessionEventLike[]
+      } catch {
+        return []
+      }
+    }
+    const memoryDir = this.memoryDirFor(workspaceDir)
+    const result = await backfillFragmentIndex(store, {
+      memoryDir,
+      eventsOf,
+      sourceVersion: `fragments:${Date.now().toString(36)}`,
+    })
+    if (result.built > 0) {
+      console.log(`[evoresearch:memory] 片段索引回填（${path.basename(workspaceDir || this.config.dataRoot)}）: 新建 ${result.built} 轮，跳过 ${result.skipped}`)
+    }
+  }
+
   /** 观测目录。 */
   observationsDirFor(workspaceDir: string): string {
     return path.join(this.memoryDirFor(workspaceDir), 'observations')
@@ -134,19 +173,28 @@ export class MemoryRuntime implements GoalRuntime {
     return path.join(this.memoryDirFor(workspaceDir), 'profile')
   }
 
-  /** 当前记忆包（供 systemPrompt.context 注入）。 */
-  latestPacketText(): string {
-    if (!this.lastActiveSessionId) return ''
-    const packet = this.packets.get(this.lastActiveSessionId)
+  /** 按当前会话读取记忆包，避免并行会话共享 last-active 状态。 */
+  packetTextFor(sessionId: string): string {
+    const packet = this.packets.get(sessionId)
     return packet ? packet.text : ''
   }
 
+  /** 接入零 frontmatter 研究笔记；旧 Observation API 仍保留作为兼容回退。 */
+  setNotesService(notes: NotesService): void {
+    this.notesService = notes
+  }
+
+  /** 模型工具使用的自由文本笔记创建入口（NOTE-02）。 */
+  createResearchNote(workspaceDir: string, title: string | undefined, body: string): unknown {
+    if (this.notesService === undefined) throw new Error('研究笔记服务不可用')
+    return this.notesService.createNote({ workspaceDir, title, body })
+  }
+
   /** §12.3 Profile 注入：总量 ≤24000 字符时全文注入，超限只给文件清单 + 读取指令。 */
-  profileContextText(): string {
-    if (!this.lastActiveSessionId) return ''
+  profileContextText(sessionId: string): string {
     const sessions = this.ctxRef?.get('sessions')
     const getSession = sessions?.get as ((id: string) => unknown) | undefined
-    const session = getSession?.call(sessions, this.lastActiveSessionId) as { header?: { cwd?: string } } | undefined
+    const session = getSession?.call(sessions, sessionId) as { header?: { cwd?: string } } | undefined
     const cwd = session?.header?.cwd
     const base = cwd && cwd !== this.config.dataRoot ? cwd : this.config.dataRoot
     const profileDir = path.join(base, '.evoresearch-data', 'memories', 'profile')
@@ -219,7 +267,10 @@ export class MemoryRuntime implements GoalRuntime {
         systemPrompt.context({
           name: 'evoresearch:research-memory',
           order: 60,
-          text: () => this.latestPacketText(),
+          text: (context: { agent?: { session?: { id?: string } } }) => {
+            const sessionId = context?.agent?.session?.id
+            return typeof sessionId === 'string' ? this.packetTextFor(sessionId) : ''
+          },
         }),
       )
       // 2b) Identity Profile 注入（§12.3）
@@ -227,7 +278,10 @@ export class MemoryRuntime implements GoalRuntime {
         systemPrompt.context({
           name: 'evoresearch:identity-profile',
           order: 61,
-          text: () => this.profileContextText(),
+          text: (context: { agent?: { session?: { id?: string } } }) => {
+            const sessionId = context?.agent?.session?.id
+            return typeof sessionId === 'string' ? this.profileContextText(sessionId) : ''
+          },
         }),
       )
     }
@@ -253,8 +307,10 @@ export class MemoryRuntime implements GoalRuntime {
       if (!text) return
       const workspaceDir = (session.header as { cwd?: string }).cwd ?? this.config.dataRoot
       const turnId = randomUUID()
-      this.lastActiveSessionId = session.id
-      this.activeTurns.set(session.id, { turnId, workspaceDir, userText: text, startedAt: Date.now() })
+      this.activeTurns.set(session.id, { turnId, workspaceDir, userText: text, startedAt: Date.now(), accumulator: new TurnTextAccumulator() })
+      // MEM-06：把真实 user/message 也交给累积器，归档时才能和后续
+      // assistant/tool 事件共享同一条原事件序列；注入类消息已在上方过滤。
+      this.activeTurns.get(session.id)?.accumulator.feedEvent(event)
       // 先落 pending Turn（不等待分类）
       this.storeFor(workspaceDir).createPendingTurn({
         turnId,
@@ -274,37 +330,64 @@ export class MemoryRuntime implements GoalRuntime {
       const data = event.data as SessionEvent<'turn/end'>['data']
       const reason = data?.reason as { kind?: string } | undefined
       const store = this.storeFor(active.workspaceDir)
-      const interrupted = reason?.kind === 'rejected' || reason?.kind === 'cancelled' || reason?.kind === 'error'
-      if (interrupted) {
+      // MEM-04：归档前用 session-text.ts 汇总完整 assistantText 写回 research_turns
+      // （每 step 存在最终 assistant/message 时以它为准；否则保留 chunk 合并稿）
+      const assistantText = active.accumulator.text()
+      const interrupt = turnInterruptFromEndReason(reason)
+      if (interrupt.interrupted) {
+        // MEM-05：中断轮次保存已生成正文 + 自然语言中断说明，不把部分回答伪装成完整回答
+        const label = interrupt.interruptReason === 'api_failure' ? 'API 失败' : '用户停止'
+        const partialNote = assistantText.length > 0
+          ? `回答被中断（${label}）：已保留已生成的部分正文（${assistantText.length} 字符）。`
+          : `回答被中断（${label}）：尚未生成正文。`
         store.updateTurn(active.turnId, {
           status: 'interrupted',
-          interruptReason: reason?.kind === 'error' ? 'api_failure' : 'user_stop',
+          interruptReason: interrupt.interruptReason,
+          assistantText,
+          partialNote,
         })
       } else {
-        store.updateTurn(active.turnId, { status: 'completed' })
+        store.updateTurn(active.turnId, { status: 'completed', assistantText })
       }
-      // v3 Raw Turn Archive：轮次收尾后把原始内容分页归档（不可变档案，活跃投影保留）
+      // v3 Raw Turn Archive：轮次收尾后把原始内容分页归档（不可变档案，活跃投影保留；
+      // MEM-06 工具事件按原序随档案落盘，长结果由 store 落盘 archives/ 目录）
       const settled = store.getTurn(active.turnId)
-      if (settled) store.archiveTurn(settled)
+      if (settled) {
+        store.archiveTurn(settled, {
+          tools: active.accumulator.tools,
+          events: active.accumulator.archiveEvents(active.userText),
+        })
+        // RET-01/02：归档后同步建消息/自然段级片段索引（可定位原文搜索）
+        store.buildTurnFragments(active.turnId)
+      }
       this.activeTurns.delete(session.id)
       return
     }
-    // v3 工具收据：模型请求的工具调用生命周期（started → completed）
+    // MEM-02/MEM-03：assistant 正文现场累积（chunk 到达即按 step 累积 text-delta；
+    // 最终 assistant/message 到达时以它替换该 step 的 chunk 合并稿，避免重复正文）
+    if (event.type === 'assistant/chunk' || event.type === 'assistant/message') {
+      this.activeTurns.get(session.id)?.accumulator.feedEvent(event)
+      return
+    }
+    // v3 工具收据：模型请求的工具调用生命周期（started → completed）+ 原序工具事件收集
     const workspaceDir = (session.header as { cwd?: string }).cwd ?? this.config.dataRoot
     if (event.type === 'tool/call') {
       const data = event.data as SessionEvent<'tool/call'>['data'] & { name?: unknown; arguments?: unknown }
       const active = this.activeTurns.get(session.id)
+      active?.accumulator.feedEvent(event)
       this.storeFor(workspaceDir).recordToolStarted(String(data.callId), active?.turnId, typeof data.name === 'string' ? data.name : undefined, data.arguments)
       return
     }
     if (event.type === 'tool/result') {
       const data = event.data as SessionEvent<'tool/result'>['data']
+      this.activeTurns.get(session.id)?.accumulator.feedEvent(event)
       const message = data.message as { source?: { callId?: unknown } }
       const callId = message?.source?.callId
       if (callId !== undefined) {
         const block = Array.isArray(data.message?.content) ? data.message.content.find((b: any) => b?.type === 'tool-result') : undefined
         this.storeFor(workspaceDir).recordToolCompleted(String(callId), block?.content)
       }
+      return
     }
   }
 

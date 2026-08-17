@@ -1,7 +1,7 @@
 // 真实 exe 窗口验证：启动 → 等待窗口/后端就绪 → 截图窗口 → 输出状态。
 // 用法：node scripts/verify-exe-window.mjs <exe路径> <输出png>
 import { spawn, execSync } from 'node:child_process'
-import { writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -34,7 +34,7 @@ async function main() {
     if (handle === null) {
       try {
         const out = execSync(
-          `powershell -NoProfile -Command "$p = Get-Process evoresearch-desktop -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1; if ($p) { Write-Output ($p.MainWindowHandle.ToString() + '|' + $p.MainWindowTitle) }"`,
+          `powershell -NoProfile -Command "$p = Get-Process -Id ${child.pid} -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }; if ($p) { Write-Output ($p.MainWindowHandle.ToString() + '|' + $p.MainWindowTitle) }"`,
           { encoding: 'utf8', timeout: 8000 },
         ).trim()
         if (out) {
@@ -63,7 +63,7 @@ async function main() {
   console.log('[exe-check] window handle =', handle, 'title =', title)
   console.log('[exe-check] shell log tail:\n' + logTail)
 
-  if (handle !== null && port !== null) {
+  if (handle !== null && handle !== 'EMPTY' && !handle.startsWith('QUERY-ERR:') && port !== null) {
     // 截取窗口区域
     const script = `
 Add-Type -AssemblyName System.Drawing
@@ -88,14 +88,18 @@ $g.Dispose(); $bmp.Dispose()
 Write-Output "saved $w x $ht"
 `
     try {
+      const encoded = Buffer.from(script, 'utf16le').toString('base64')
       const out = execSync(
-        `powershell -NoProfile -Command "${script.replace(/"/g, '\\"')}"`,
+        `powershell -NoProfile -EncodedCommand ${encoded}`,
         { encoding: 'utf8', timeout: 20000 },
       ).trim()
       console.log('[exe-check] screenshot:', out)
+      if (!existsSync(outPng)) throw new Error(`截图文件未生成: ${outPng}`)
     } catch (e) {
-      console.error('[exe-check] screenshot 失败:', String(e.message ?? e).slice(0, 300))
+      throw new Error(`[exe-check] screenshot 失败: ${String(e.message ?? e).slice(0, 300)}`)
     }
+  } else {
+    throw new Error(`[exe-check] 未同时获得可用窗口句柄和 sidecar 端口: handle=${handle}, port=${port}`)
   }
 
   child.kill()

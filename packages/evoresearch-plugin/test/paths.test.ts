@@ -1,7 +1,7 @@
 /**
  * core/paths 单元测试：项目名、路径安全、工作区校验（Windows 语义）。
  */
-import { describe, it } from 'node:test'
+import { after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
@@ -17,6 +17,10 @@ import {
 } from '../src/host/core/paths.js'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-paths-'))
+// 测试卫生（BASE-02）：模块级临时目录在文件级测试全部结束后清理，避免每次 npm test 泄漏
+after(() => {
+  fs.rmSync(TMP, { recursive: true, force: true })
+})
 
 describe('项目名', () => {
   it('合法名', () => {

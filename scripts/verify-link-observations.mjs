@@ -58,5 +58,21 @@ console.log('A file sample:', aFile.split('\n').filter((l) => l.includes('relate
 const r2 = store.linkObservations(OBS_DIR, 'obs-link-a', ['obs-link-b'])
 console.log('relink count:', r2.related.length, '(expect 1)')
 
-console.log(okA && okB ? 'ALL OK' : 'FAILED')
+// 自动计数断言（BASE-02/t22 约定：pass/total 跟随实际 check() 调用数）
+let pass = 0
+let total = 0
+const check = (name, cond, detail = '') => {
+  total += 1
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}`)
+  if (cond) pass += 1
+}
+check('创建两个 Observation', o1.observationId === 'obs-link-a' && o2.observationId === 'obs-link-b')
+check('链接返回 related=[obs-link-b]', r.ok === true && r.related.length === 1 && r.related[0] === 'obs-link-b')
+check('A.related 含 B', okA)
+check('B.related 含 A（双向）', okB)
+check('A 文件 frontmatter 含 related_observation_ids', aFile.includes('related_observation_ids'))
+check('B 文件 frontmatter 含 related_observation_ids', bFile.includes('related_observation_ids'))
+check('重复链接合并去重（仍 1 条）', r2.related.length === 1)
+console.log(`\n${pass}/${total} passed`)
 store.close()
+process.exit(pass === total ? 0 : 1)

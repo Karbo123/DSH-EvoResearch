@@ -1,8 +1,10 @@
-// 单测：graphMemoryText / graphContextText / sessionHistoryText（用临时 DSH_HOME）
+// 单测：graphMemoryText / sessionHistoryText（用临时 DSH_HOME）
+// 注：旧 graphContextText（context 边运行时递归注入）已随「context 连线 = 创建时一次性
+// fork」语义删除（见 src/host/chat-graph.ts 头注释），相应断言一并移除。
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { graphMemoryText, graphContextText, sessionHistoryText } from '../packages/evoresearch-plugin/lib/host/chat-graph.js'
+import { graphMemoryText, sessionHistoryText } from '../packages/evoresearch-plugin/lib/host/chat-graph.js'
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'graph-test-'))
 // 会话目录：<DSH_HOME>/sessions/<编码cwd>/<sessionId>/
@@ -42,7 +44,9 @@ const graph = {
 
 process.env.DSH_HOME = tmp
 let pass = 0
+let total = 0
 const check = (name, cond, detail = '') => {
+  total += 1
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}`)
   if (cond) pass += 1
 }
@@ -53,21 +57,15 @@ check('memory: 含两个节点内容', mem.includes('橙天假说') && mem.inclu
 check('memory: 分隔符', mem.includes('---'))
 check('memory: 无边的会话为空', graphMemoryText(graph, sessA) === '')
 
-// 2) context 提取
-const ctx = graphContextText(graph, sessB)
-check('context: 有来源', ctx !== null && ctx.fromTitle === '研究起点')
-check('context: 含 A 的历史（跳过系统伪消息）', ctx !== null && ctx.text.includes('橙色天空') && !ctx.text.includes('code_mode'))
-check('context: 含最近消息', ctx !== null && ctx.text.includes('仿真数据先验证'))
-check('context: A 无边为 null', graphContextText(graph, sessA) === null)
-
-// 3) sessionHistoryText 直接提取
+// 2) sessionHistoryText 直接提取
 const hist = sessionHistoryText(sessA)
 check('history: 提取 4 条消息', hist.includes('你好') && hist.includes('仿真数据先验证') && !hist.includes('code_mode'))
 
-// 4) 截断
+// 3) 截断
 const short = sessionHistoryText(sessA, 20)
 check('history: 截断生效', short.length <= 60 && short.includes('仿真数据'))
 
-console.log(`\n${pass}/7 passed`)
+// 断言计数自动跟随实际 check() 调用数，避免「全过仍 exit 1」的计数过期（BASE-02 约定）
+console.log(`\n${pass}/${total} passed`)
 fs.rmSync(tmp, { recursive: true, force: true })
-process.exit(pass === 7 ? 0 : 1)
+process.exit(pass === total ? 0 : 1)

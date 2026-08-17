@@ -29,6 +29,11 @@ awesome-dsh-plugin/
 
 # 运行时科研记忆数据（不入库）
 .evoresearch-data/
+# 本地验收与协作运行数据
+.agent-teams/
+.tmp-web-dsh/
+sessions/
+storages/
 
 # 构建期生成的客户端样式（katex 字体内联，勿入库）
 packages/evoresearch-app/src/client/katex-css.ts

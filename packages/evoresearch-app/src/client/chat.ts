@@ -11,7 +11,8 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
-  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History,
+  ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History, GitBranch,
+  ThumbsUp, ThumbsDown, MessageSquareText,
 } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
@@ -51,6 +52,7 @@ export interface ChatNode {
     status?: 'running' | 'settled'
     kind?: string
     text?: string
+    seq?: number
     time?: number
     turn?: number
     step?: number
@@ -79,6 +81,8 @@ export interface ChatAreaProps {
   jobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
   /** 打开另一个会话（Search 全历史结果跳转）。 */
   onOpenThread: (id: string) => void
+  /** 从一条用户消息创建只继承到该消息的新方向。 */
+  onBranchFromMessage?: (seq: number) => void
   onSend: (text: string, images?: Array<{ data: string; mediaType: string; name?: string }>) => void
 }
 
@@ -224,7 +228,7 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
 }
 
 /** 用户消息气泡：气泡内仅文本；下方（气泡外）小字操作行：时间 / 编辑 / 复制 / 回溯。 */
-function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, rewindConfirming }: {
+function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onBranch, rewindConfirming }: {
   text: string
   time?: number
   nodeKey?: string
@@ -232,6 +236,7 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, rew
   seq?: number
   onEdit?: (seq: number, text: string) => void
   onRewind?: (seq: number) => void
+  onBranch?: (seq: number) => void
   rewindConfirming?: boolean
 }) {
   const [editing, setEditing] = useState(false)
@@ -314,6 +319,14 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, rew
                 onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onRewind(seq) },
                 children: jsx(History, {}),
               }),
+              onBranch !== undefined && seq !== undefined && jsx('button', {
+                type: 'button',
+                className: 'evo-msg-copy',
+                title: t('graphBranchFromHere'),
+                'aria-label': t('graphBranchFromHere'),
+                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onBranch(seq) },
+                children: jsx(GitBranch, {}),
+              }),
               jsx(CopyButton, { text }),
             ],
           }),
@@ -324,17 +337,38 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, rew
 }
 
 /** 助手消息（头像 + 内容 + Thinking 折叠 + 工具卡片分组）。 */
-function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: ChatNode; nodeKey?: string; highlight?: boolean; toolResults: Record<string, { text: string; isError: boolean }> }) {
+function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId }: { node: ChatNode; nodeKey?: string; highlight?: boolean; toolResults: Record<string, { text: string; isError: boolean }>; sessionId: string | null }) {
   const text = assistantText(node)
   const reasoning = assistantReasoning(node)
   const tools = assistantTools(node, toolResults)
   const running = node.data.status === 'running'
   const settled = node.data.status === 'settled'
+  const [feedback, setFeedback] = useState<'helpful' | 'unhelpful' | 'neutral' | null>(null)
+  const [feedbackBusy, setFeedbackBusy] = useState(false)
   // 推理默认折叠（§31.6：小号 Thinking 行，展开后左侧 2px 边线 + 次级文字）
   const [thinkingOpen, setThinkingOpen] = useState(false)
   // 工具组：默认折叠已完成的组（§21.1），运行中自动展开
   const [toolsOpen, setToolsOpen] = useState(!settled)
   const anyRunning = tools.some((t) => t.result === undefined)
+  const sendFeedback = (rating: 'helpful' | 'unhelpful' | 'neutral', comment?: string) => {
+    if (sessionId === null || feedbackBusy || node.data.seq === undefined) return
+    setFeedbackBusy(true)
+    void fetch('/evoresearch/fs/feedback', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId, messageSeq: node.data.seq, rating, ...(comment === undefined ? {} : { comment }) }),
+    }).then(async (response) => {
+      const json = await response.json() as { ok?: boolean; error?: { message?: string } }
+      if (json.ok !== true) throw new Error(json.error?.message ?? '反馈提交失败')
+      setFeedback(rating)
+      toast(rating === 'helpful' ? '已记录：有帮助' : rating === 'unhelpful' ? '已记录：需要改进' : '已记录反馈', 'info')
+    }).catch((error: unknown) => toast(String((error as Error)?.message ?? error), 'error')).finally(() => setFeedbackBusy(false))
+  }
+  const writeFeedback = () => {
+    const comment = window.prompt('补充这条回答的反馈（可留空）', '')
+    if (comment === null) return
+    sendFeedback('neutral', comment.trim() === '' ? undefined : comment.trim())
+  }
   return jsxs('div', {
     className: `evo-msg-row${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
@@ -374,7 +408,27 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults }: { node: Chat
               // 气泡外下方操作行：复制
               !running && jsxs('div', {
                 className: 'evo-msg-meta',
-                children: [jsx(CopyButton, { text })],
+                children: [
+                  jsx('button', {
+                    type: 'button', className: `evo-msg-feedback${feedback === 'helpful' ? ' selected' : ''}`,
+                    title: '有帮助', 'aria-label': '有帮助', 'aria-pressed': feedback === 'helpful', disabled: feedbackBusy,
+                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); sendFeedback('helpful') },
+                    children: jsx(ThumbsUp, {}),
+                  }),
+                  jsx('button', {
+                    type: 'button', className: `evo-msg-feedback${feedback === 'unhelpful' ? ' selected negative' : ''}`,
+                    title: '需要改进', 'aria-label': '需要改进', 'aria-pressed': feedback === 'unhelpful', disabled: feedbackBusy,
+                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); sendFeedback('unhelpful') },
+                    children: jsx(ThumbsDown, {}),
+                  }),
+                  jsx('button', {
+                    type: 'button', className: `evo-msg-feedback${feedback === 'neutral' ? ' selected' : ''}`,
+                    title: '补充反馈', 'aria-label': '补充反馈', 'aria-pressed': feedback === 'neutral', disabled: feedbackBusy,
+                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); writeFeedback() },
+                    children: jsx(MessageSquareText, {}),
+                  }),
+                  jsx(CopyButton, { text }),
+                ],
               }),
             ],
           }),
@@ -451,7 +505,7 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
   })
 }
 
-export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onSend }: ChatAreaProps) {
+export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onBranchFromMessage, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   const [preview, setPreview] = useState(false)
     // §21.4 Auto-approve：按 Thread 持久化（localStorage evoresearch-auto-approve:<sessionId>）；
@@ -899,6 +953,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     const images = pendingImages
       .filter((img) => img.dataUrl !== '')
       .map((img) => ({ data: img.dataUrl.slice(img.dataUrl.indexOf(',') + 1), mediaType: img.mediaType, name: img.name }))
+    // Context Trace is a per-turn projection.  Publish the resolved question
+    // before handing the message to the host so the Graph can clear the
+    // previous turn's temporary highlight even when the model starts quickly.
+    if (sessionId !== null) {
+      window.dispatchEvent(new CustomEvent('evo-context-question', {
+        detail: { sessionId, question: resolved },
+      }))
+    }
     onSend(resolved, images.length > 0 ? images : undefined)
     pushHistory(cwd, text)
     setHistory(readHistory(cwd))
@@ -1073,13 +1135,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       time: node.data.time,
                       nodeKey: node.key,
                       highlight: node.key === jumpKey,
-                      seq: typeof node.data.seq === 'number' ? node.data.seq : undefined,
+                      seq: typeof node.data.seq === 'number' ? node.data.seq : node.anchorSeq,
                       onEdit: editAndResend,
                       onRewind: rewindAt,
+                      onBranch: onBranchFromMessage,
                       rewindConfirming: rewindConfirm === node.data.seq,
                     }, node.key)
-                  : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults }, node.key)),
-                partial !== null && !userOnly && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults }, partial.key),
+                  : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults, sessionId }, node.key)),
+                partial !== null && !userOnly && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults, sessionId }, partial.key),
                 showJump && jsx('button', {
                   type: 'button',
                   className: 'evo-jump-latest',

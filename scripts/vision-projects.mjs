@@ -1,6 +1,7 @@
 // 视觉评审：左侧项目列表 + 子聊天列表
 import fs from 'node:fs'
-const apiKey = process.env.NEW_API_API_KEY ?? 'sk-ehuqNkIOuBzeR9GsWDHRqchtHYqFB7hBrsTK5joJJ3X3kQcx'
+const apiKey = process.env.NEW_API_API_KEY
+if (!apiKey) throw new Error('NEW_API_API_KEY is required for visual review')
 const shots = ['visual-projects.png', 'visual-subchats.png']
 const res = await fetch('http://127.0.0.1:3000/v1/chat/completions', {
   method: 'POST',

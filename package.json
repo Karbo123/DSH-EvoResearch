@@ -11,7 +11,9 @@
     "build": "npm run build -w @evoresearch/dsh-plugin && npm run build -w @evoresearch/dsh-app",
     "typecheck": "npm run typecheck -w @evoresearch/dsh-plugin",
     "test": "npm run test -w @evoresearch/dsh-plugin",
-    "verify": "npm run build && npm test && node scripts/verify-bundle.mjs && node scripts/check-docs.mjs",
+    "verify:domain": "node --import tsx scripts/verify-domain-e2e.mjs",
+    "verify:acceptance": "node --import tsx scripts/verify-acceptance.mjs --run-all",
+    "verify": "npm run build && npm test && npm run test -w @evoresearch/dsh-app && npm run verify:domain && npm run verify:acceptance && node scripts/verify-chatgraph-xyflow.mjs && node scripts/verify-bundle.mjs && node scripts/check-docs.mjs",
     "docs": "node scripts/check-docs.mjs"
   },
   "engines": {

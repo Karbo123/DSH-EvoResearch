@@ -1,6 +1,7 @@
 // 视觉充分检查：全测试流程截图逐张评审
 import fs from 'node:fs'
-const apiKey = process.env.NEW_API_API_KEY ?? 'sk-ehuqNkIOuBzeR9GsWDHRqchtHYqFB7hBrsTK5joJJ3X3kQcx'
+const apiKey = process.env.NEW_API_API_KEY
+if (!apiKey) throw new Error('NEW_API_API_KEY is required for visual review')
 const shots = ['full-open.png', 'full-menu.png', 'full-edges.png', 'full-editor.png', 'full-editor-saved.png', 'full-final.png', 'accept-projects.png', 'accept-subchats.png', 'accept-chat-opened.png']
 const res = await fetch('http://127.0.0.1:3000/v1/chat/completions', {
   method: 'POST',

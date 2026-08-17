@@ -854,6 +854,23 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── Assistant 消息反馈（PLAT-20）：追加式信号，不改写会话原文 ──
+        if (method === 'feedback') {
+          if (evoresearch?.feedbackRecord === undefined) throw httpError(400, 'method-error', '反馈服务不可用')
+          const sessionId = requireString(payload, 'sessionId')
+          const rating = payload.rating
+          if (rating !== 'helpful' && rating !== 'unhelpful' && rating !== 'neutral') {
+            throw httpError(400, 'bad-request', '反馈 rating 无效')
+          }
+          const args: Record<string, unknown> = { sessionId, rating }
+          if (typeof payload.messageSeq === 'number' && Number.isFinite(payload.messageSeq)) args.messageSeq = Math.floor(payload.messageSeq)
+          if (typeof payload.turnId === 'string' && payload.turnId !== '') args.turnId = payload.turnId
+          if (typeof payload.comment === 'string' && payload.comment.trim() !== '') args.comment = payload.comment.trim().slice(0, 2000)
+          const result = await (evoresearch.feedbackRecord as (a: Record<string, unknown>) => Promise<unknown> | unknown)(args)
+          writeOk(res, result)
+          return
+        }
+
         // ── 实验管理（§5.1 Git 式分支/回退/checkpoint）──
         if (method === 'experiments-list' || method === 'experiments-get' || method === 'experiments-create' || method === 'experiments-update'
           || method === 'experiments-phase' || method === 'experiments-checkpoint' || method === 'experiments-rollback'
@@ -942,23 +959,120 @@ export function registerWorkspaceApi(ctx: any): void {
         }
 
         // ── Chat Graph（节点/连线图，按项目存储）──
-        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-inherit') {
+        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-update-node' || method === 'graph-remove-node' || method === 'graph-update-edge' || method === 'graph-remove-edge' || method === 'graph-move-nodes' || method === 'graph-add-group' || method === 'graph-update-group' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write') {
           const serviceMethod = method === 'graph-get' ? 'graphGet'
             : method === 'graph-save' ? 'graphSave'
               : method === 'graph-add-node' ? 'graphAddNode'
                 : method === 'graph-add-edge' ? 'graphAddEdge'
-                  : 'graphInherit'
+                  : method === 'graph-update-node' ? 'graphUpdateNode'
+                    : method === 'graph-remove-node' ? 'graphRemoveNode'
+                      : method === 'graph-update-edge' ? 'graphUpdateEdge'
+                        : method === 'graph-remove-edge' ? 'graphRemoveEdge'
+                          : method === 'graph-move-nodes' ? 'graphMoveNodes'
+                            : method === 'graph-add-group' ? 'graphAddGroup'
+                              : method === 'graph-update-group' ? 'graphUpdateGroup'
+                                : method === 'graph-remove-group' ? 'graphRemoveGroup'
+                  : method === 'graph-inherit' ? 'graphInherit'
+                    : method === 'graph-fork-from-message' ? 'graphForkFromMessage'
+                    : method === 'graph-preview' ? 'graphPreview'
+                      : method === 'graph-memory-create' ? 'graphMemoryCreate'
+                        : method === 'graph-memory-copy' ? 'graphMemoryCopy'
+                          : method === 'graph-memory-collection' ? 'graphMemoryCollection'
+                            : method === 'graph-memory-write' ? 'graphMemoryWrite'
+                              : 'graphConvertNote'
           const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
           if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const args: Record<string, unknown> = {}
           if (typeof payload.workspaceDir === 'string') args.workspaceDir = payload.workspaceDir
           if (payload.graph !== undefined) args.graph = payload.graph
           if (payload.node !== undefined) args.node = payload.node
+          if (payload.patch !== undefined) args.patch = payload.patch
           if (payload.edge !== undefined) args.edge = payload.edge
+          if (payload.positions !== undefined) args.positions = payload.positions
+          if (payload.group !== undefined) args.group = payload.group
           if (typeof payload.fromNodeId === 'string') args.fromNodeId = payload.fromNodeId
           if (typeof payload.toNodeId === 'string') args.toNodeId = payload.toNodeId
+          if (typeof payload.nodeId === 'string') args.nodeId = payload.nodeId
+          if (typeof payload.sourceSessionId === 'string') args.sourceSessionId = payload.sourceSessionId
+          if (typeof payload.sourceEventSeq === 'number') args.sourceEventSeq = payload.sourceEventSeq
+          if (typeof payload.edgeId === 'string') args.edgeId = payload.edgeId
+          if (typeof payload.groupId === 'string') args.groupId = payload.groupId
+          if (typeof payload.operationId === 'string') args.operationId = payload.operationId
+          if (typeof payload.title === 'string') args.title = payload.title
+          if (payload.scope === 'project' || payload.scope === 'global') args.scope = payload.scope
+          if (typeof payload.x === 'number') args.x = payload.x
+          if (typeof payload.y === 'number') args.y = payload.y
+          if (typeof payload.content === 'string') args.content = payload.content
           // 乐观并发修订号（graph-save 携带，服务端比对防陈旧窗口覆盖）
           if (typeof payload.rev === 'number') args.rev = payload.rev
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
+        // ── 科学角色与 Chat Graph 边界（RA/EA/EMA）──
+        if (method === 'science-ra-candidate-add' || method === 'science-candidate-accept' || method === 'science-ea-attempt-add' || method === 'science-ema-candidate-record') {
+          const serviceMethod = method.split('-').map((part, i) => i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)).join('')
+          const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', '科学角色桥接服务不可用')
+          try { writeOk(res, await fn.call(evoresearch, { ...payload })) }
+          catch (error) { writeError(res, error) }
+          return
+        }
+
+        // ── ContextAssembler（本轮参考与 Context Trace）──
+        if (method === 'context-preview' || method === 'context-assemble' || method === 'context-assemble-deep' || method === 'context-effects') {
+          const serviceMethod = method === 'context-preview' ? 'contextPreview'
+            : method === 'context-assemble' ? 'contextAssemble'
+              : method === 'context-assemble-deep' ? 'contextAssembleDeep'
+                : 'contextEffects'
+          const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = {}
+          for (const key of ['sessionId', 'userQuestion', 'projectName', 'workspaceDir', 'questionId', 'since', 'limit']) {
+            if (payload[key] !== undefined) args[key] = payload[key]
+          }
+          if (payload.options !== undefined) args.options = payload.options
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
+        // ── 自由文本研究笔记（NOTE-01..09；§整合 notes-* 16 路由，P0）──
+        if (method === 'notes-list' || method === 'notes-read' || method === 'notes-create' || method === 'notes-write' || method === 'notes-delete'
+          || method === 'notes-search' || method === 'notes-rebuild-index' || method === 'notes-clear-index'
+          || method === 'notes-background-read' || method === 'notes-background-read-all' || method === 'notes-background-write'
+          || method === 'notes-draft-update' || method === 'notes-draft-list' || method === 'notes-draft-read'
+          || method === 'notes-draft-apply' || method === 'notes-draft-discard') {
+          const serviceMethod = method.split('-').map((part, i) => i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)).join('') as string
+          const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = { ...payload }
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
+        // ── P1 模块路由（§整合 §4：实验工作区/进程、文献、稿件、自进化）──
+        if (method.startsWith('experiment-workspace-') || method.startsWith('experiment-run-') || method.startsWith('experiment-log-')
+          || method === 'experiment-recover' || method === 'experiment-retrospective-draft' || method === 'experiment-workspace-append-note'
+          || method === 'experiment-workspace-artifacts' || method === 'experiment-graph-ref-resolve'
+          || method.startsWith('library-') || method.startsWith('manuscript-') || method.startsWith('evolution-')
+          || method === 'autoskills-generate-from-traces' || method === 'autoskills-update-proposal-content' || method === 'autoskills-run-skill'
+          || method.startsWith('context-')) {
+          const serviceMethod = method.split('-').map((part, i) => i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)).join('') as string
+          const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = { ...payload }
           try {
             writeOk(res, await fn.call(evoresearch, args))
           } catch (error) {
