@@ -207,14 +207,27 @@ body { margin: 0; }
 .evo-tl-item:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-tl-item[data-active] { background: var(--hover-bg); color: var(--color-text-primary); font-weight: 500; }
 .evo-tl-item svg { width: 17px; height: 17px; flex-shrink: 0; }
-.evo-tl-search { margin: 6px 12px 2px; padding: 6px 10px; display: flex; align-items: center; gap: 8px;
+.evo-tl-item > span { min-width: 4em; }
+.evo-tl-newchat-item { color: var(--color-text-primary); font-weight: 600; }
+.evo-tl-tools { display: flex; align-items: center; gap: 6px; padding: 6px 12px 2px; }
+.evo-tl-search { flex: 1; min-width: 0; padding: 6px 10px; display: flex; align-items: center; gap: 8px;
   border: 1px solid var(--color-border); border-radius: 6px; background: var(--input-bg); }
 .evo-tl-search svg { width: 15px; height: 15px; color: var(--color-text-tertiary); flex-shrink: 0; }
 .evo-tl-search input { flex: 1; border: none; outline: none; background: none; color: var(--color-text-primary); font-size: 13px; }
 .evo-tl-search input::placeholder { color: var(--color-text-tertiary); }
+.evo-tl-searching { color: var(--color-text-tertiary); font-size: 10px; white-space: nowrap; }
+.evo-tl-sort { display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 5px 6px; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text-tertiary); background: var(--input-bg); }
+.evo-tl-sort svg { width: 14px; height: 14px; flex-shrink: 0; }
+.evo-tl-sort select { max-width: 86px; border: none; outline: none; color: var(--color-text-secondary); background: transparent; font-size: 11px; cursor: pointer; }
 .evo-tl-body { flex: 1; overflow-y: auto; padding: 6px 8px 16px; min-height: 0; }
 .evo-tl-section { padding: 10px 10px 4px; display: flex; align-items: center; justify-content: space-between; }
 .evo-tl-section-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
+.evo-tl-subchat-section { display: block; padding-top: 8px; }
+.evo-tl-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.evo-tl-section-action { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; border-radius: 6px; color: var(--color-text-tertiary); background: transparent; cursor: pointer; }
+.evo-tl-section-action:hover { color: var(--color-text-primary); background: var(--hover-bg); }
+.evo-tl-section-action svg { width: 14px; height: 14px; }
+.evo-tl-project-context { display: block; margin-top: 3px; color: var(--color-text-tertiary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .evo-tl-archived-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); background: transparent; border: none; border-radius: 8px; cursor: pointer; font: inherit; }
 .evo-tl-archived-toggle:hover { background: var(--hover-bg); }
 .evo-tl-archived-toggle svg { width: 13px; height: 13px; }
@@ -272,7 +285,8 @@ body { margin: 0; }
 .evo-composer { width: 100%; max-width: var(--chat-max-width); border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 2px 12px rgba(0,0,0,.05); }
 .evo-composer-status { display: flex; align-items: center; gap: 7px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); }
 .evo-composer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
-.evo-composer-textarea { width: 100%; padding: 10px 14px 4px; border: none; outline: none; resize: none; background: none; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--color-text-primary); font-size: 14.5px; font-family: inherit; line-height: 1.55; min-height: 44px; max-height: 220px; position: relative; }
+.evo-composer-textarea { width: 100%; padding: 10px 14px 4px; border: none; outline: none; resize: none; background: none; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--color-text-primary); font-size: 14.5px; font-family: inherit; line-height: 1.55; min-height: 44px; max-height: 220px; position: relative; z-index: 1; }
+.evo-composer-input:focus-within .evo-composer-textarea { color: var(--color-text-primary); -webkit-text-fill-color: var(--color-text-primary); }
 .evo-composer-textarea::placeholder { color: var(--color-text-tertiary); -webkit-text-fill-color: var(--color-text-tertiary); }
 .evo-composer-textarea::selection { background: color-mix(in srgb, var(--brand) 30%, transparent); }
 /* ── 双层 Markdown 实时编辑器（§composer）：装饰层渲染样式，textarea 透明编辑 ── */
@@ -281,7 +295,7 @@ body { margin: 0; }
 .evo-composer-deco[data-empty] { display: none; }
 .evod-m { visibility: hidden; }
 /* 聚焦输入时：隐藏的语法标记显示极浅背景，辅助定位（失焦自动隐藏，保持干净） */
-.evo-composer-input:focus-within .evod-m { visibility: visible; background: color-mix(in srgb, var(--color-text-tertiary) 13%, transparent); border-radius: 2px; }
+.evo-composer-input:focus-within .evo-composer-deco { display: none; }
 .evod-code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; background: var(--hover-bg); border-radius: 4px; padding: 1px 3px; }
 .evod-link { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
 .evod-h { font-weight: 700; }
@@ -1003,6 +1017,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 @keyframes evo-jump-flash { 0% { background: color-mix(in srgb, var(--brand) 26%, transparent); } 100% { background: transparent; } }
 /* ── Recents 操作（§26.3）与 Side Chat（§22.3-22.4）── */
 .evo-tl-row { display: flex; align-items: center; gap: 4px; }
+.evo-tl-row[draggable="true"] { cursor: grab; }
+.evo-tl-row[draggable="true"]:active { cursor: grabbing; opacity: .72; }
+.evo-tl-drag-grip { width: 13px; height: 13px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-tl-project-row .evo-tl-drag-grip { width: 13px; height: 13px; }
 .evo-tl-row-main { flex: 1; min-width: 0; text-align: left; border: none; background: none; padding: 0; cursor: pointer; }
 .evo-tl-row-acts { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; align-items: center; }
 .evo-tl-row:hover .evo-tl-row-acts, .evo-tl-row:focus-within .evo-tl-row-acts { opacity: 1; }

@@ -1182,7 +1182,12 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     children: SUGGESTED_PROMPTS.map((p) => jsx('button', {
                       type: 'button',
                       className: 'evo-suggest-card',
-                      onClick: () => onSend(p),
+                      title: t('suggestionHint'),
+                      'aria-label': `${p}（${t('suggestionHint')}）`,
+                      onClick: () => {
+                        setInput(p)
+                        requestAnimationFrame(() => taRef.current?.focus())
+                      },
                       children: p,
                     }, p)),
                   }),
@@ -1420,7 +1425,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 className: 'evo-composer-status',
                 children: [
                   jsx('span', { className: 'evo-composer-dot', 'data-busy': running || undefined }),
-                  jsx('span', { children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
+                  jsx('span', { title: currentTitle === null ? t('noActiveConversationHint') : undefined, children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
                   jsx(SessionStatusLine, { session }),
                   // 当前工作路径（§25.4）：与模型行同行右对齐、单行省略、tooltip 完整路径
                   cwd !== null && jsx('span', { className: 'evo-cwd', title: cwd, children: cwd }),

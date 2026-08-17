@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
@@ -85,6 +85,57 @@ export interface ThreadListProps {
 /** 标签调色板（§26.3）。 */
 const TAG_PALETTE = ['#e05d5d', '#e08a3c', '#d9b13b', '#5dbe85', '#3b9cb0', '#7a6fe0', '#b05dc4', '#908d83']
 
+type SortMode = 'recent' | 'title' | 'updated' | 'manual'
+type ManualOrder = { projects: string[]; chats: Record<string, string[]> }
+const SORT_KEY = 'evoresearch-thread-sort'
+const ORDER_KEY = 'evoresearch-thread-order'
+
+function readSortMode(): SortMode {
+  try {
+    const value = localStorage.getItem(SORT_KEY)
+    return value === 'title' || value === 'updated' || value === 'manual' ? value : 'recent'
+  } catch { return 'recent' }
+}
+
+function readManualOrder(): ManualOrder {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ORDER_KEY) ?? '{}') as Partial<ManualOrder>
+    const chats: Record<string, string[]> = {}
+    if (raw.chats !== null && typeof raw.chats === 'object') {
+      for (const [key, value] of Object.entries(raw.chats)) {
+        if (Array.isArray(value)) chats[key] = value.filter((v): v is string => typeof v === 'string')
+      }
+    }
+    return {
+      projects: Array.isArray(raw.projects) ? raw.projects.filter((v): v is string => typeof v === 'string') : [],
+      chats,
+    }
+  } catch { return { projects: [], chats: {} } }
+}
+
+function sessionSearchText(session: any): string {
+  const parts = [session.displayTitle, session.title]
+  const nodes = session.snapshotCache?.chat?.legacy?.nodes
+  if (Array.isArray(nodes)) for (const node of nodes) if (typeof node?.data?.text === 'string') parts.push(node.data.text)
+  if (Array.isArray(session.events)) for (const event of session.events) {
+    if (typeof event?.data?.text === 'string') parts.push(event.data.text)
+    if (Array.isArray(event?.data?.content)) for (const block of event.data.content) if (typeof block?.text === 'string') parts.push(block.text)
+  }
+  return parts.filter((v): v is string => typeof v === 'string').join('\n').toLocaleLowerCase()
+}
+
+function hitSessionId(hit: any): string | null {
+  for (const key of ['sessionId', 'threadId', 'id']) if (typeof hit?.[key] === 'string') return hit[key]
+  return null
+}
+
+function moveId(ids: string[], from: string, to: string): string[] {
+  const next = ids.filter((id) => id !== from)
+  const index = next.indexOf(to)
+  next.splice(index < 0 ? next.length : index, 0, from)
+  return next
+}
+
 export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, archivedIds, onToggleArchive, runningIds, promotedIds }: ThreadListProps) {
   const sessions = useSessions((s) => s)
   const currentId = sessions.current
@@ -103,14 +154,16 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   const rows = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
     .filter((s) => s !== undefined && s.blank !== true && (s.parentSessionId === undefined || isPromoted(s.id)) && !hideIds.has(s.id) && !deletedIds.has(s.id) && !archivedIds.has(s.id))
-    // 置顶会话排最前（§26.3 Pin）
-    .sort((a, b) => (pinnedIds.has(b.id) ? 1 : 0) - (pinnedIds.has(a.id) ? 1 : 0))
   // 已归档线程（§26.3 Archive：保留数据，可恢复）
   const archivedRows = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
     .filter((s) => s !== undefined && s.blank !== true && (s.parentSessionId === undefined || isPromoted(s.id)) && !hideIds.has(s.id) && !deletedIds.has(s.id) && archivedIds.has(s.id))
     .sort((a, b) => (archivedIds.has(b.id) ? 1 : 0) - (archivedIds.has(a.id) ? 1 : 0))
   const [query, setQuery] = useState('')
+  const [sortMode, setSortMode] = useState<SortMode>(readSortMode)
+  const [manualOrder, setManualOrder] = useState<ManualOrder>(readManualOrder)
+  const [contentHitIds, setContentHitIds] = useState<Set<string>>(new Set())
+  const [searching, setSearching] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [forkError, setForkError] = useState<string | null>(null)
@@ -149,14 +202,64 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
     })
   }
 
-  // 搜索过滤（本地状态；组件内 useState）
-  const results = query.trim()
-    ? rows.filter((s) => (s.displayTitle ?? '').toLowerCase().includes(query.trim().toLowerCase()))
-    : rows
-
   // ── 项目分组（§二级聊天）：由会话 cwd 派生项目列表 ──
   const cwdBase = (cwd: unknown): string | null =>
     typeof cwd === 'string' && cwd !== '' ? cwd.replace(/[\\/]+$/, '') : null
+
+  const persistOrder = (next: ManualOrder) => {
+    setManualOrder(next)
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)) } catch { /* 离线缓存失败不影响当前排序 */ }
+  }
+  const updateSortMode = (value: SortMode) => {
+    setSortMode(value)
+    try { localStorage.setItem(SORT_KEY, value) } catch { /* 离线缓存失败不影响当前排序 */ }
+  }
+  const orderWithManual = <T extends { id?: string; path?: string }>(items: T[], scope: 'projects' | 'chats', key: string): T[] => {
+    const stored = scope === 'projects' ? manualOrder.projects : (manualOrder.chats[key] ?? [])
+    const ids = items.map((item) => scope === 'projects' ? item.path ?? '' : item.id ?? '')
+    const orderedIds = [...stored.filter((id) => ids.includes(id)), ...ids.filter((id) => !stored.includes(id))]
+    return orderedIds.map((id) => items.find((item) => (scope === 'projects' ? item.path : item.id) === id)).filter((item): item is T => item !== undefined)
+  }
+  const sortSessions = (items: any[], scopeKey: string): any[] => {
+    if (sortMode === 'manual') return orderWithManual(items, 'chats', scopeKey)
+    return [...items].sort((a, b) => {
+      const pinDelta = (pinnedIds.has(b.id) ? 1 : 0) - (pinnedIds.has(a.id) ? 1 : 0)
+      if (pinDelta !== 0) return pinDelta
+      if (sortMode === 'title') return String(a.displayTitle ?? a.id).localeCompare(String(b.displayTitle ?? b.id), 'zh-Hans')
+      if (sortMode === 'updated') return (b.updatedAt ?? 0) - (a.updatedAt ?? 0)
+      return (b.titleTime ?? b.updatedAt ?? 0) - (a.titleTime ?? a.updatedAt ?? 0)
+    })
+  }
+  const searchNeedle = query.trim().toLocaleLowerCase()
+  const matchesSession = (s: any): boolean => searchNeedle === '' || sessionSearchText(s).includes(searchNeedle) || contentHitIds.has(s.id)
+  useEffect(() => {
+    const needle = query.trim()
+    if (needle === '') { setContentHitIds(new Set()); setSearching(false); return }
+    setContentHitIds(new Set())
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      setSearching(true)
+      void fetch('/evoresearch/fs/threads-search', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: needle, limit: 100 }),
+      }).then((response) => response.json()).then((payload) => {
+        if (cancelled) return
+        const ids = new Set<string>()
+        for (const hit of payload?.value?.hits ?? []) {
+          const id = hitSessionId(hit)
+          if (id !== null) ids.add(id)
+        }
+        setContentHitIds(ids)
+        setSearching(false)
+      }).catch(() => { if (!cancelled) { setContentHitIds(new Set()); setSearching(false) } })
+    }, 240)
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [query])
+
+  // 搜索同时覆盖标题、已加载正文，以及后端的全历史正文索引。
+  const visibleRows = sortSessions(rows.filter(matchesSession), projectMode?.path ?? '')
+
   const projectList = (() => {
     const map = new Map<string, { path: string; count: number; updatedAt: number }>()
     for (const s of rows) {
@@ -171,17 +274,46 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
         map.set(name, { path: base, count: 1, updatedAt: s.updatedAt ?? 0 })
       }
     }
-    return [...map.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.updatedAt - a.updatedAt)
+    const list = [...map.entries()].map(([name, v]) => ({ name, ...v }))
+    const filtered = searchNeedle === '' ? list : list.filter((p) => p.name.toLocaleLowerCase().includes(searchNeedle) || rows.some((s) => cwdBase(s.cwd) === p.path && matchesSession(s)))
+    if (sortMode === 'manual') return orderWithManual(filtered, 'projects', 'projects')
+    return filtered.sort((a, b) => {
+      if (sortMode === 'title') return a.name.localeCompare(b.name, 'zh-Hans')
+      return b.updatedAt - a.updatedAt
+    })
   })()
   // 当前项目视图下的会话（精确路径匹配）
   const scopedRows = projectMode === null
     ? []
-    : rows.filter((s) => cwdBase(s.cwd) === projectMode.path)
+    : visibleRows.filter((s) => cwdBase(s.cwd) === projectMode.path)
   const currentProject = (() => {
     const cur = currentId === undefined ? undefined : sessions.byId[currentId]
     const base = cwdBase(cur?.cwd)
     return base === null ? null : (base.split(/[\\/]/).pop() ?? base)
   })()
+  const reorderProjects = (from: string, to: string) => {
+    const ids = projectList.map((p) => p.path)
+    persistOrder({ ...manualOrder, projects: moveId(ids, from, to) })
+  }
+  const reorderChats = (from: string, to: string) => {
+    const scope = projectMode?.path ?? ''
+    const ids = sortSessions(rows.filter((s) => cwdBase(s.cwd) === scope), scope).map((s) => s.id)
+    persistOrder({ ...manualOrder, chats: { ...manualOrder.chats, [scope]: moveId(ids, from, to) } })
+  }
+  const dragStart = (id: string) => (e: { dataTransfer?: { setData(type: string, value: string): void } }) => {
+    e.dataTransfer?.setData('text/plain', id)
+  }
+  const dragOver = (e: { preventDefault(): void }) => e.preventDefault()
+  const dropProject = (to: string) => (e: { preventDefault(): void; dataTransfer?: { getData(type: string): string } }) => {
+    e.preventDefault()
+    const from = e.dataTransfer?.getData('text/plain') ?? ''
+    if (from !== '' && from !== to) reorderProjects(from, to)
+  }
+  const dropChat = (to: string) => (e: { preventDefault(): void; dataTransfer?: { getData(type: string): string } }) => {
+    e.preventDefault()
+    const from = e.dataTransfer?.getData('text/plain') ?? ''
+    if (from !== '' && from !== to) reorderChats(from, to)
+  }
 
   const isActive = (key: string) =>
     (key === 'skills' && view === 'skills') ||
@@ -200,57 +332,67 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
       jsxs('div', {
         className: 'evo-tl-head',
         children: [
-          projectMode !== null && jsx('button', {
-            type: 'button',
-            className: 'evo-tl-back',
-            title: t('projectBack'),
-            'aria-label': t('projectBack'),
-            onClick: () => { setProjectMode(null); setMenuFor(null) },
-            children: jsxs(Fragment, {
-              children: [jsx(ArrowLeft, {}), jsx('span', { children: t('projectBackShort') })],
-            }),
-          }),
-          projectMode !== null
-            ? jsx('span', { className: 'evo-tl-head-title', children: projectMode.name })
-            : jsx('span', { className: 'evo-tl-head-title', children: t('projects') }),
-          jsx('span', { style: { flex: 1 } }),
-          jsx('button', {
-            type: 'button',
-            className: 'evo-tl-newchat',
-            onClick: () => onNewChat(projectMode?.path),
-            children: jsxs(Fragment, {
-              children: [jsx(SquarePen, {}), jsx('span', { children: t('newChat') })],
-            }),
-          }),
+          jsx('span', { className: 'evo-tl-head-title', children: t('projects') }),
         ],
       }),
       jsx('nav', {
         className: 'evo-tl-menu',
-        children: MENU.map((item) => {
-          const Icon = item.icon
-          return jsx('button', {
+        children: [
+          jsx('button', {
             type: 'button',
-            className: 'evo-tl-item',
-            'data-active': isActive(item.key) || undefined,
-            onClick: () => onView(item.key === 'import' ? 'workspace' : (item.key as SideView)),
-            children: jsxs(Fragment, { children: [jsx(Icon, {}), jsx('span', { children: item.label })] }),
-          }, item.key)
-        }),
+            className: 'evo-tl-item evo-tl-newchat-item',
+            onClick: () => onNewChat(projectMode?.path),
+            children: jsxs(Fragment, { children: [jsx(SquarePen, {}), jsx('span', { children: t('newChat') })] }),
+          }),
+          ...MENU.map((item) => {
+            const Icon = item.icon
+            return jsx('button', {
+              type: 'button',
+              className: 'evo-tl-item',
+              'data-active': isActive(item.key) || undefined,
+              onClick: () => onView(item.key === 'import' ? 'workspace' : (item.key as SideView)),
+              children: jsxs(Fragment, { children: [jsx(Icon, {}), jsx('span', { children: item.label })] }),
+            }, item.key)
+          }),
+        ],
       }),
-      projectMode === null
-        ? null
-        : jsxs('div', {
+      jsxs('div', {
+        className: 'evo-tl-tools',
+        children: [
+          jsxs('label', {
             className: 'evo-tl-search',
             children: [
               jsx(Search, {}),
               jsx('input', {
-                type: 'text',
+                type: 'search',
                 placeholder: t('searchResearch'),
                 value: query,
+                'aria-label': t('searchResearch'),
                 onInput: (e) => setQuery(e.currentTarget.value),
+              }),
+              searching && jsx('span', { className: 'evo-tl-searching', 'aria-live': 'polite', children: t('searchRunning') }),
+            ],
+          }),
+          jsxs('label', {
+            className: 'evo-tl-sort',
+            title: t('searchSort'),
+            children: [
+              jsx(ListFilter, {}),
+              jsx('select', {
+                value: sortMode,
+                'aria-label': t('searchSort'),
+                onChange: (e) => updateSortMode(e.currentTarget.value as SortMode),
+                children: [
+                  jsx('option', { value: 'recent', children: t('sortRecent') }),
+                  jsx('option', { value: 'title', children: t('sortTitle') }),
+                  jsx('option', { value: 'updated', children: t('sortUpdated') }),
+                  jsx('option', { value: 'manual', children: t('sortManual') }),
+                ],
               }),
             ],
           }),
+        ],
+      }),
       jsxs('div', {
         className: 'evo-tl-body',
         children: [
@@ -267,8 +409,13 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                 : projectList.map((p) => jsxs('div', {
                     className: 'evo-tl-row evo-tl-project-row',
                     'data-active': currentProject === p.name || undefined,
+                    draggable: sortMode === 'manual' || undefined,
+                    onDragStart: sortMode === 'manual' ? dragStart(p.path) : undefined,
+                    onDragOver: sortMode === 'manual' ? dragOver : undefined,
+                    onDrop: sortMode === 'manual' ? dropProject(p.path) : undefined,
                     onClick: () => { setProjectMode({ name: p.name, path: p.path }); setMenuFor(null) },
                     children: [
+                      sortMode === 'manual' && jsx(GripVertical, { className: 'evo-tl-drag-grip', title: t('dragToReorder') }),
                       jsx(FolderGit2, {}),
                       jsxs('div', {
                         className: 'evo-tl-project-main',
@@ -284,14 +431,28 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
               jsxs(Fragment, {
                 children: [
                   jsxs('div', {
-                    className: 'evo-tl-section',
+                    className: 'evo-tl-section evo-tl-subchat-section',
                     children: [
-                      jsx('span', { className: 'evo-tl-section-title', children: t('subchats') }),
+                      jsxs('div', {
+                        className: 'evo-tl-section-head',
+                        children: [
+                          jsx('span', { className: 'evo-tl-section-title', children: t('subchats') }),
+                          jsx('button', {
+                            type: 'button',
+                            className: 'evo-tl-section-action',
+                            title: t('projectBack'),
+                            'aria-label': t('projectBack'),
+                            onClick: () => { setProjectMode(null); setQuery(''); setMenuFor(null) },
+                            children: jsx(ArrowLeft, {}),
+                          }),
+                        ],
+                      }),
+                      jsx('span', { className: 'evo-tl-project-context', children: projectMode.name }),
                       forkError !== null && jsx('span', { className: 'evo-tl-fork-error', children: forkError }),
                       deleteError !== null && jsx('span', { className: 'evo-tl-fork-error', children: deleteError }),
                     ],
                   }),
-          results.length === 0 && scopedRows.length === 0
+          scopedRows.length === 0
             ? jsxs('div', {
                 className: 'evo-tl-empty',
                 children: [
@@ -332,7 +493,12 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                 return jsxs('div', {
                   className: 'evo-tl-row',
                   'data-active': s.id === currentId || undefined,
+                  draggable: sortMode === 'manual' || undefined,
+                  onDragStart: sortMode === 'manual' ? dragStart(s.id) : undefined,
+                  onDragOver: sortMode === 'manual' ? dragOver : undefined,
+                  onDrop: sortMode === 'manual' ? dropChat(s.id) : undefined,
                   children: [
+                    sortMode === 'manual' && jsx(GripVertical, { className: 'evo-tl-drag-grip', title: t('dragToReorder') }),
                     jsx('button', {
                       type: 'button',
                       className: 'evo-tl-row-main',
