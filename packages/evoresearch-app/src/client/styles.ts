@@ -151,7 +151,7 @@ body { margin: 0; }
   width: 264px; flex-shrink: 0; min-width: 0; display: flex; flex-direction: column;
   border-right: 1px solid var(--color-border); background: var(--color-background); overflow: hidden;
 }
-.evo-center { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
+.evo-center { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .evo-right {
   width: 320px; flex-shrink: 0; min-width: 0; display: flex; flex-direction: column;
   border-left: 1px solid var(--color-border); background: var(--color-background); overflow: hidden;
@@ -172,6 +172,12 @@ body { margin: 0; }
   .evo-graph-search input { width: 100%; }
   .evo-graph-canvas { overflow: auto; }
   .evo-graph-minimap, .evo-graph-inspector { display: none; }
+  .evo-composer-wrap { padding-inline: 8px; }
+  .evo-composer { max-width: none; }
+  .evo-composer-tools { gap: 2px; padding: 4px 6px 6px; }
+  .evo-composer-tool { width: 26px; height: 28px; padding: 4px 5px; gap: 0; justify-content: center; }
+  .evo-composer-tool svg { width: 15px; height: 15px; }
+  .evo-send { width: 30px; height: 28px; }
 }
 /* ── 左侧栏 ── */
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -236,8 +242,8 @@ body { margin: 0; }
 .evo-tl-empty { padding: 28px 16px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-tl-empty svg { width: 40px; height: 40px; color: var(--color-border); margin-bottom: 8px; }
 /* ── 中间聊天区 ── */
-.evo-chat { flex: none; height: auto; display: flex; flex-direction: column; min-height: 0; overflow: visible; }
-.evo-welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; min-height: 42vh; }
+.evo-chat { flex: 1 1 auto; height: auto; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.evo-welcome { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 24px 32px; min-height: 0; }
 .evo-welcome h1 { font-size: 22px; font-weight: 600; margin: 0 0 10px; color: var(--color-text-primary); letter-spacing: -.01em; }
 .evo-welcome p { margin: 0 0 28px; color: var(--color-text-secondary); font-size: 14px; max-width: 512px; line-height: 1.6; }
 .evo-suggest { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
@@ -254,7 +260,7 @@ body { margin: 0; }
 .evo-dashboard-value { font-size: 22px; font-weight: 600; color: var(--brand); line-height: 1.1; }
 .evo-dashboard-label { font-size: 11.5px; color: var(--color-text-tertiary); }
 /* ── 输入面板：sticky 常驻中间栏底部（消息区内容自适应、页面整体滚动）── */
-.evo-composer-wrap { flex-shrink: 0; padding: 8px 24px 16px; display: flex; flex-wrap: wrap; justify-content: center; position: sticky; bottom: 0; z-index: 30; background: var(--color-background); }
+.evo-composer-wrap { flex-shrink: 0; padding: 4px 24px 8px; display: flex; flex-wrap: wrap; justify-content: center; position: sticky; bottom: 0; z-index: 30; background: var(--color-background); }
 /* ── 输入候选弹层（§23.2–23.5：斜杠命令 / @文件 / 输入历史）── */
 .evo-cand { position: absolute; bottom: calc(100% - 8px); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 96px)); max-height: 280px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18); z-index: 40; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .evo-cand-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
@@ -307,12 +313,12 @@ body { margin: 0; }
 }
 .evo-composer-spacer { flex: 1; }
 .evo-send {
-  display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; border: none; border-radius: 9px;
-  background: var(--brand-solid); color: var(--brand-foreground); font-size: 13px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 30px; padding: 0;
+  border: none; border-radius: 9px; background: var(--brand-solid); color: var(--brand-foreground); cursor: pointer;
 }
 .evo-send:hover { background: var(--brand-hover); }
 .evo-send:disabled { opacity: .5; cursor: default; }
-.evo-send svg { width: 15px; height: 15px; }
+.evo-send svg { width: 16px; height: 16px; }
 /* ── 右侧 inspector ── */
 .evo-insp { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-insp-tabs { display: flex; align-items: center; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--color-border); }
@@ -567,9 +573,9 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── 会话状态条 / 统计条 ── */
 .evo-composer { position: relative; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; container-type: inline-size; }
 /* 输入区顶部拖拽热区：细线手柄（居中 2px 圆角线，hover/拖动变品牌色，不占突兀色块） */
-.evo-composer-resize { height: 10px; cursor: ns-resize; border-radius: 12px 12px 0 0; flex-shrink: 0; touch-action: none; display: flex; align-items: center; justify-content: center; position: relative; }
-.evo-composer-resize::before { content: ''; width: 44px; height: 2px; border-radius: 999px; background: var(--color-border); transition: background 0.15s ease, width 0.15s ease; }
-.evo-composer-resize:hover::before, .evo-composer-resize[data-dragging]::before { background: var(--brand); width: 60px; }
+.evo-composer-resize { height: 6px; cursor: ns-resize; border-radius: 12px 12px 0 0; flex-shrink: 0; touch-action: none; display: flex; align-items: center; justify-content: center; position: relative; }
+.evo-composer-resize::before { content: ''; width: 28px; height: 2px; border-radius: 999px; background: var(--color-border); transition: background 0.15s ease, width 0.15s ease; }
+.evo-composer-resize:hover::before, .evo-composer-resize[data-dragging]::before { background: var(--brand); width: 44px; }
 .evo-composer-status { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); flex-wrap: wrap; }
 /* 当前工作路径（§25.4）：单行省略 + tooltip 完整路径 */
 .evo-cwd { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-tertiary); cursor: default; }
@@ -1121,12 +1127,12 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-cmd-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
 .evo-cmd-dismiss:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-cmd-dismiss svg { width: 13px; height: 13px; }
-/* ── 标签栏（§5.2 浏览器式标签；视觉评审后重设计：圆角胶囊 + 品牌选中态）── */
+/* ── 标签栏（§5.2：轻量分段导航，接近原生桌面工具栏）── */
 .evo-tabwrap { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1; }
-.evo-tabbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--color-background); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
-.evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; transition: background 0.12s ease, color 0.12s ease; }
+.evo-tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 14px; background: color-mix(in srgb, var(--color-background) 94%, var(--color-surface)); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
+.evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease; }
 .evo-tab:hover { background: var(--hover-bg); color: var(--color-text-primary); }
-.evo-tab[data-active] { background: var(--brand-solid); border-color: var(--brand-solid); color: var(--brand-foreground); font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
+.evo-tab[data-active] { background: var(--color-surface); border-color: var(--color-border); color: var(--color-text-primary); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 .evo-tab-title { overflow: hidden; text-overflow: ellipsis; }
 .evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: 5px; cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0.65; }
 .evo-tab-close:hover { background: rgba(255, 255, 255, 0.22); opacity: 1; }

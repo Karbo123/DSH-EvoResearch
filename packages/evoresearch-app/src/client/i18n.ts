@@ -36,7 +36,7 @@ const DICT: Record<string, [string, string]> = {
   // 欢迎页 / 输入面板
   welcome: ['Where research evolves', '科研在此进化'],
   tagline: ['Your self-evolving lab partner — reads the literature, runs experiments, and remembers what matters.', '你的自进化科研伙伴——阅读文献、运行实验、记住真正重要的东西。'],
-  askAnything: ['Ask EvoResearch anything...', '向 EvoResearch 提问...'],
+  askAnything: ['Ask EvoResearch anything... (Ctrl+Enter to send)', '向 EvoResearch 提问...（Ctrl+Enter 发送）'],
   noActiveConversation: ['No active conversation', '暂无活跃对话'],
   running: ['Running…', '运行中…'],
   stopTurn: ['Stop', '停止'],

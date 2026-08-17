@@ -270,8 +270,7 @@ export function SearchDialog({
 /** Shortcuts 弹窗（§23.2 键盘规则）。 */
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const rows: Array<[string, string]> = [
-    ['Enter', '发送'],
-    ['Shift+Enter', '换行'],
+    ['Enter', '换行'],
     ['Ctrl/Cmd+Enter', '发送'],
     ['Tab', '应用命令、文件或历史候选'],
     ['↑ / ↓', '移动候选；空输入时浏览输入历史'],

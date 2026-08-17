@@ -9,7 +9,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import {
-  Paperclip, ShieldCheck, ArrowUp, Wrench, User, Copy, Check, PenLine, Eye,
+  Paperclip, ShieldCheck, Send, Wrench, User, Copy, Check, PenLine, Eye,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
   ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History, GitBranch,
   ThumbsUp, ThumbsDown, MessageSquareText,
@@ -1551,10 +1551,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     stopTurn()
                     return
                   }
-                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    void submit()
-                  }
+                  // Enter 保留为普通换行；仅 Ctrl/Cmd+Enter 发送。
                 },
               }),
                     ],
@@ -1684,10 +1681,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     type: 'button',
                     className: 'evo-send',
                     disabled: !input.trim() || pendingApprovals.length > 0,
+                    title: `${t('send')}（Ctrl+Enter）`,
+                    'aria-label': `${t('send')}（Ctrl+Enter）`,
                     onClick: submit,
-                    children: jsxs(Fragment, {
-                      children: [jsx('span', { children: t('send') }), jsx(ArrowUp, {})],
-                    }),
+                    children: jsx(Send, {}),
                   }),
                 ],
               }),
