@@ -1031,15 +1031,26 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   const [dragOver, setDragOver] = useState(false)
 
-  // ── 输入框高度拖动（§23.1）：顶边缘 8px 热区，垂直 resize，范围视口 1/4 ~ 2/3 ──
+  // ── 输入框高度拖动（§23.1）：顶边缘热区，只有实际移动才改变高度 ──
   const [composerHeight, setComposerHeight] = useState<number | null>(null)
-  const composerResizeRef = useRef<{ startY: number; startH: number } | null>(null)
-  const composerMinHeight = () => Math.max(80, Math.round((typeof window !== 'undefined' ? window.innerHeight : 900) / 4))
-  // 输入框合理上限：最多 ~35% 视口；同时保证消息区保底 ~40% 视口
-  // （vh - 消息区 40% - 顶栏/输入框壳等固定占用 ~230px）——拖不出一条缝
+  const composerResizeRef = useRef<{ startY: number; startH: number; moved: boolean } | null>(null)
+  const composerMinHeight = () => {
+    const el = taRef.current
+    if (el === null) return 44
+    // 受控高度下 scrollHeight 可能等于当前高度，测量前先恢复自然高度。
+    const previousHeight = el.style.height
+    const previousMaxHeight = el.style.maxHeight
+    el.style.height = 'auto'
+    el.style.maxHeight = '220px'
+    const naturalHeight = el.scrollHeight
+    el.style.height = previousHeight
+    el.style.maxHeight = previousMaxHeight
+    return Math.max(44, Math.min(220, naturalHeight))
+  }
+  // 高度上限按视口计算，但不改变单击时的自然高度。
   const composerMaxHeight = () => {
     const vh = typeof window !== 'undefined' ? window.innerHeight : 900
-    return Math.max(composerMinHeight(), Math.min(Math.round(vh * 0.35), vh - Math.round(vh * 0.40) - 230))
+    return Math.max(composerMinHeight(), Math.min(Math.round(vh * 0.55), 520))
   }
   const onComposerResizeStart = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void }) => {
     e.preventDefault()
@@ -1052,11 +1063,11 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const onComposerResizeMove = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number }) => {
     const ref = composerResizeRef.current
     if (ref === null || !e.currentTarget.hasPointerCapture(e.pointerId)) return
-    // 阈值 3px：仅"点击"（含捕获建立时的零位移 move / 手抖）不改变高度
+    // 阈值 4px：点击、轻微手抖和 pointer capture 建立时的零位移不改变高度。
     const dy = e.clientY - ref.startY
-    if (Math.abs(dy) < 3) return
+    if (Math.abs(dy) < 4) return
     ref.moved = true
-    // 上拖 = 增高（用户直觉：向上拖拽扩大输入区）；上限 = 合理最大高度
+    // 上拖 = 增高；下拖 = 减小。直到真正移动后才进入受控高度模式。
     const next = ref.startH - dy
     setComposerHeight(Math.min(composerMaxHeight(), Math.max(composerMinHeight(), next)))
   }
@@ -1412,7 +1423,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           jsxs('div', {
             className: 'evo-composer',
             children: [
-              // 输入区顶部 8px 拖动热区（§23.1：hover 垂直 resize 光标，拖动改变 textarea 高度）
+              // 输入区顶部覆盖式拖动热区（§23.1：不增加布局高度）
               jsx('div', {
                 className: 'evo-composer-resize',
                 title: t('dragToResize'),
