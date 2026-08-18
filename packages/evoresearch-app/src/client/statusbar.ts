@@ -128,7 +128,7 @@ export function StatusBar({ session }: { session: any }) {
   })
 }
 
-/** 输入框外右下方的模型徽章：当前模型 + 推理强度，点击打开模型选择器。 */
+/** 输入框内右下侧的模型徽章：当前模型 + 推理强度，点击打开模型选择器。 */
 export function ComposerModelInfo() {
   const [info, setInfo] = useState<{
     provider?: string | null

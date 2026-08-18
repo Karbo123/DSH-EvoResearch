@@ -93,6 +93,38 @@ function requireString(payload: Record<string, unknown>, key: string): string {
   return value
 }
 
+/** 通过 DSH 凭据服务 / 环境变量解析 provider 的 API key（用于直接探测模型端点）。 */
+async function resolveProviderApiKey(ctx: any, ref: string | undefined): Promise<string | undefined> {
+  if (ref === undefined) return undefined
+  try {
+    const credentials = ctx.get('credentials')
+    const hit = credentials?.resolve !== undefined ? await credentials.resolve(ref) : undefined
+    if (hit?.value !== undefined && hit.value !== '') return hit.value
+  } catch { /* 凭据服务不可用则回退环境变量 */ }
+  const fromEnv = process.env[ref]
+  return fromEnv !== undefined && fromEnv !== '' ? fromEnv : undefined
+}
+
+/** 探测 OpenAI 兼容模型端点：GET <baseURL>/models → 模型列表（失败抛错由调用方回退）。 */
+async function fetchEndpointModels(
+  baseURL: string,
+  apiKey: string | undefined,
+): Promise<Array<{ id: string; name?: string; contextWindow?: number }>> {
+  const url = `${baseURL.replace(/\/+$/, '')}/models`
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/json',
+      ...(apiKey !== undefined ? { authorization: `Bearer ${apiKey}` } : {}),
+    },
+    signal: AbortSignal.timeout(8000),
+  })
+  if (!response.ok) throw new Error(`${url} answered ${response.status}`)
+  const body = await response.json() as { data?: Array<{ id?: string; name?: string; context_window?: number; contextWindow?: number }> }
+  return (body.data ?? [])
+    .filter((m) => m.id !== undefined && m.id !== '')
+    .map((m) => ({ id: m.id as string, name: m.name, contextWindow: m.context_window ?? m.contextWindow ?? null }))
+}
+
 /** 信任栅栏：回环 Host 或 webRuntime.trustedHosts 允许的权威。 */
 function trusted(req: IncomingMessage, trustedHosts: string[]): boolean {
   const host = req.headers.host ?? ''
@@ -321,30 +353,80 @@ export function registerWorkspaceApi(ctx: any): void {
         if (method === 'models/select') {
           const agentDefaultModel = ctx.get('agentDefaultModel')
           if (agentDefaultModel?.saveSelection === undefined) throw httpError(400, 'method-error', 'agentDefaultModel 不可用')
+          const provider = requireString(payload, 'provider')
+          const model = requireString(payload, 'model')
+          // 若选中的模型尚未出现在 llm-pi-ai 的 provider.models 配置里，自动补写，
+          // 否则 pi-ai 请求时无法解析该模型（settings.yaml 是唯一的路由来源）。
+          // 配置写入失败不阻塞默认模型的保存。
+          try {
+            const settings = ctx.get('settings')
+            const section = settings?.get?.('llm-pi-ai') as { providers?: Record<string, { models?: Array<{ id?: string }> }> } | undefined
+            const profile = section?.providers?.[provider]
+            if (settings?.update !== undefined && profile !== undefined) {
+              const configured = profile.models ?? []
+              if (!configured.some((m) => m.id === model)) {
+                await settings.update('llm-pi-ai', {
+                  providers: { [provider]: { models: [...configured, { id: model }] } },
+                })
+              }
+            }
+          } catch { /* 模型目录写入失败不影响默认模型保存 */ }
           await agentDefaultModel.saveSelection({
-            provider: requireString(payload, 'provider'),
-            model: requireString(payload, 'model'),
+            provider,
+            model,
           })
           writeOk(res, { saved: true })
           return
         }
 
-        // POST /evoresearch/models-catalog → 模型目录（§25.2 模型选择器：
-        // llm.listProviders() + 各 adapter listModels()）
+        // POST /evoresearch/models-catalog → 模型目录（§25.2 模型选择器）：
+        // 实时探测各 provider 的 <baseURL>/models 端点（优先 llm.discoverModels，
+        // 自动带 DSH 凭据；失败则直接 fetch）；端点不可达时回退到配置内模型。
+        // 端点结果与配置模型取并集，既反映网关真实目录，也不丢失手工配置条目。
         if (method === 'models-catalog') {
           const llm = ctx.get('llm')
           if (llm?.listProviders === undefined) throw httpError(400, 'method-error', 'llm 服务不可用')
+          const settings = ctx.get('settings')
+          let profiles: Record<string, { baseURL?: string; apiKeyEnv?: string }> = {}
+          try {
+            const section = settings?.get?.('llm-pi-ai') as { providers?: Record<string, { baseURL?: string; apiKeyEnv?: string }> } | undefined
+            profiles = section?.providers ?? {}
+          } catch { /* 设置服务不可用 → 仅配置目录 */ }
           const providers = llm.listProviders()
           const groups: unknown[] = []
           for (const provider of providers) {
-            let models: unknown[] = []
+            const profile = profiles[provider.id]
+            let models: Array<{ id: string; name: string; contextWindow: number | null }> = []
             try {
-              const listed = await llm.listModels(provider.id)
-              models = (listed ?? []).map((m: { id?: string; name?: string; contextWindow?: number }) => ({
+              let listed: Array<{ id?: string; name?: string; contextWindow?: number }> | null = null
+              // 1) DSH 模型发现：经 llm.discoverModels 读取端点（自动带凭据）
+              if (llm.discoverModels !== undefined && profile?.baseURL !== undefined) {
+                try {
+                  const discovered = await llm.discoverModels('llm-pi-ai', { provider: provider.id, baseURL: profile.baseURL })
+                  listed = discovered ?? null
+                } catch { /* 端点拒绝 → 直接探测回退 */ }
+              }
+              // 2) 直接 fetch 回退（不依赖 discovery 注册）
+              if (listed === null && profile?.baseURL !== undefined) {
+                try {
+                  const apiKey = await resolveProviderApiKey(ctx, profile.apiKeyEnv)
+                  listed = await fetchEndpointModels(profile.baseURL, apiKey)
+                } catch { /* 端点无目录 */ }
+              }
+              // 3) 配置内模型（并集：端点未覆盖的配置模型仍保留）
+              const configured = await llm.listModels(provider.id)
+              const configuredModels = (configured ?? []).map((m: { id?: string; name?: string; contextWindow?: number }) => ({
                 id: m.id ?? '',
                 name: m.name ?? m.id ?? '',
                 contextWindow: m.contextWindow ?? null,
               }))
+              const seen = new Set<string>()
+              models = [...(listed ?? []), ...configuredModels]
+                .filter((m) => m.id !== '' && !seen.has(m.id))
+                .map((m) => {
+                  seen.add(m.id)
+                  return { id: m.id, name: m.name ?? m.id, contextWindow: m.contextWindow ?? null }
+                })
             } catch { /* 该 provider 无目录 */ }
             if (models.length > 0) {
               groups.push({ provider: { id: provider.id, name: provider.name ?? provider.id }, models })

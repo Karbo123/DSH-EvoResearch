@@ -1723,6 +1723,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     children: jsx(Keyboard, {}),
                   }),
                   jsx('span', { className: 'evo-composer-spacer' }),
+                  // 模型徽章（§25.2）：输入框内右下侧、紧邻发送按钮，点击打开模型选择器
+                  jsx(ComposerModelInfo, {}),
                   jsx('button', {
                     type: 'button',
                     className: 'evo-send',
@@ -1736,13 +1738,11 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               }),
             ],
           }),
-          // 会话统计行：位于输入框圆角框下方外部、水平居中、紧贴（不在输入框内部）；
-          // 右侧固定展示当前模型 + 推理强度徽章
+          // 会话统计行：位于输入框圆角框下方外部、水平居中、紧贴（不在输入框内部）
           !userOnly && jsxs('div', {
             className: 'evo-composer-stats',
             children: [
               jsx(StatusBar, { session }),
-              jsx(ComposerModelInfo, {}),
             ],
           }),
         ],

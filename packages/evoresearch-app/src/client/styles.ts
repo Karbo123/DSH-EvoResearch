@@ -618,11 +618,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-status-ro { color: var(--color-warning); }
 .evo-status-full { color: var(--color-error); }
 .evo-stats-line { display: flex; align-items: center; gap: 8px; padding: 6px 14px 9px; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* 会话统计行：与输入框同宽，位于圆角框外部正下方；统计居左、模型徽章居右。 */
+/* 会话统计行：与输入框同宽，位于圆角框外部正下方、水平居中、紧贴。 */
 .evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: var(--chat-max-width); margin: 0 auto; display: flex; align-items: center; gap: 10px; }
 .evo-composer-stats .evo-statusbar { flex: 1 1 auto; min-width: 0; width: auto; height: auto; min-height: 16px; padding: 0; border-top: 0; background: transparent; flex-wrap: wrap; row-gap: 0; overflow: visible; white-space: normal; line-height: 16px; justify-content: center; }
 .evo-composer-stats .evo-statusbar-empty { line-height: 16px; }
-/* 模型徽章：品牌色强调、右侧固定，点击切换模型 */
+/* 模型徽章：品牌色强调、输入框内右下侧（工具栏 spacer 之后、发送按钮之前），点击切换模型 */
 .evo-composer-model { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--color-surface)); color: var(--brand); font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; line-height: 1.5; white-space: nowrap; transition: box-shadow 0.15s ease, border-color 0.15s ease; }
 .evo-composer-model:hover { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); }
 .evo-composer-model svg { width: 11px; height: 11px; flex-shrink: 0; }
