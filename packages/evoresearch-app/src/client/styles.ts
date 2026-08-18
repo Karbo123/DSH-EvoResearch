@@ -1449,7 +1449,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-ews-badge.ref { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
 .evo-ews-badge.copy { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
 /* ── Toast UI WYSIWYG composer ── */
-.evo-composer-editor { flex: 0 0 auto; min-height: 112px; height: 112px; overflow: hidden; }
+.evo-composer-editor { position: relative; flex: 0 0 auto; min-height: 112px; height: 112px; overflow: hidden; }
+.evo-composer-editor-host { height: 100%; min-height: 0; overflow: hidden; }
+.evo-composer-placeholder { position: absolute; top: 10px; left: 14px; right: 14px; color: var(--color-text-placeholder); font: inherit; font-size: 14.5px; line-height: 1.55; pointer-events: none; user-select: none; white-space: pre-wrap; }
+.evo-composer-editor[data-markdown-toolbar-open] .evo-composer-placeholder { top: 46px; }
 .evo-composer-editor .toastui-editor-defaultUI { height: 100% !important; min-height: 0 !important; border: 0; border-radius: 0; background: transparent; color: var(--color-text-primary); font-family: inherit; }
 .evo-composer-editor .toastui-editor-toolbar { display: flex; height: 0; min-height: 0; padding: 0; border: 0; background: transparent; overflow: hidden; visibility: hidden; }
 .evo-composer-editor[data-markdown-toolbar-open] .toastui-editor-toolbar { height: 36px; min-height: 36px; visibility: visible; }
@@ -1467,7 +1470,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100% !important; min-height: 0; }
 .evo-composer-editor .toastui-editor-ww-container .toastui-editor-contents { height: 100%; overflow-y: auto; padding: 10px 14px 12px; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; }
 .evo-composer-editor .ProseMirror { color: var(--color-text-primary); }
-.evo-composer-editor .ProseMirror .placeholder { visibility: visible !important; color: var(--color-text-placeholder) !important; -webkit-text-fill-color: var(--color-text-placeholder) !important; opacity: 1; pointer-events: none; user-select: none; }
 .evo-composer-editor .toastui-editor-contents p { margin: 0 0 7px; }
 .evo-composer-editor .toastui-editor-contents p:last-child { margin-bottom: 0; }
 .evo-composer-editor .toastui-editor-contents h1, .evo-composer-editor .toastui-editor-contents h2, .evo-composer-editor .toastui-editor-contents h3 { color: var(--color-text-primary); border-bottom-color: var(--color-border-light); }
