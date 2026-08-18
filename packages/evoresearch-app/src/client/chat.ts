@@ -1084,6 +1084,16 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       return Math.max(COMPOSER_BASE_MIN_HEIGHT + (next ? MARKDOWN_TOOLBAR_HEIGHT : 0), adjusted)
     })
   }
+  const onComposerMouseDown = (e: { target: EventTarget | null; preventDefault(): void }) => {
+    const target = e.target as HTMLElement | null
+    if (target?.closest('.toastui-editor-ww-container') === null) return
+    const editor = composerEditorRef.current
+    if (editor === null || editor.getMarkdown().trim() !== '') return
+    // The browser can briefly place the caret inside the non-editable placeholder widget.
+    e.preventDefault()
+    editor.focus()
+    editor.moveCursorToStart(true)
+  }
   const onComposerResizeStart = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void }) => {
     e.preventDefault()
     const el = composerEditorHostRef.current
@@ -1542,6 +1552,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 'aria-autocomplete': 'list',
                 style: { height: `${composerHeight ?? (COMPOSER_BASE_MIN_HEIGHT + (markdownToolbarOpen ? MARKDOWN_TOOLBAR_HEIGHT : 0))}px` },
                 onPaste: onPasteImages,
+                onMouseDown: onComposerMouseDown,
                 onKeyDown: (e: { key: string }) => {
                   // Toast UI 捕获主要键盘事件；这里保留空输入历史的 React 侧入口。
                   if (e.key === 'ArrowUp' && input === '') browseHistory(-1)
