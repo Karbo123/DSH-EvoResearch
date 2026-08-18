@@ -169,7 +169,7 @@ class ErrorBoundary extends (Component as any) {
 /** 工作台根组件（root slot）。 */
 function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = useSessions((s) => s)
   const workspaces = useWorkspaces((w) => w)
-  const [sidebar, setSidebar] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('sidebar') === '1' : false)
+  const [sidebar, setSidebar] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('sidebar') !== '0' : true)
   const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('inspector') === '1' : false)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() => {
     if (typeof window === 'undefined') return 'workspace'
