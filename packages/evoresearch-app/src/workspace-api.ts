@@ -291,10 +291,31 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
-        // POST /evoresearch/models → 当前默认模型；/models/select → 保存默认模型
+        // POST /evoresearch/models → 当前默认模型（含匹配到的代码档与推理强度）；
+        // /models/select → 保存默认模型
         if (method === 'models') {
           const agentDefaultModel = ctx.get('agentDefaultModel')
-          writeOk(res, agentDefaultModel?.currentSelection?.() ?? { provider: null, model: null })
+          const selection = agentDefaultModel?.currentSelection?.() ?? { provider: null, model: null }
+          // 推理强度：当前选择命中 model-settings 的代码档时带回 tier / reasoningEffort，
+          // 便于输入框下方展示“模型 · 推理等级”；未命中（自定义模型）时置空。
+          let tier: string | null = null
+          let reasoningEffort: string | null = null
+          try {
+            const evoresearch = ctx.get('evoresearch') as { modelSettingsGet?: () => Promise<unknown> } | undefined
+            if (evoresearch?.modelSettingsGet !== undefined) {
+              const settings = await evoresearch.modelSettingsGet() as { code?: Record<string, { provider?: string; model?: string; reasoningEffort?: string }> } | undefined
+              const code = settings?.code ?? {}
+              for (const t of ['simple', 'medium', 'complex'] as const) {
+                const cfg = code[t]
+                if (cfg !== undefined && cfg.provider === selection.provider && cfg.model === selection.model) {
+                  tier = t
+                  reasoningEffort = cfg.reasoningEffort ?? null
+                  break
+                }
+              }
+            }
+          } catch { /* 模型设置读取失败不影响当前模型展示 */ }
+          writeOk(res, { ...selection, tier, reasoningEffort })
           return
         }
         if (method === 'models/select') {

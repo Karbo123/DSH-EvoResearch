@@ -18,7 +18,7 @@ import {
 import { t } from './i18n'
 import { toast } from './toast'
 import { SessionStatusLine } from './session-dock'
-import { StatusBar } from './statusbar'
+import { ComposerModelInfo, StatusBar } from './statusbar'
 import { renderMarkdown, renderMermaidBlocks } from './markdown'
 import {
   CandidatePopup, buildCandidates, detectTrigger, pushHistory, readHistory,
@@ -1773,10 +1773,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               }),
             ],
           }),
-          // 会话统计行：位于输入框圆角框下方外部、水平居中、紧贴（不在输入框内部）
-          !userOnly && jsx('div', {
+          // 会话统计行：位于输入框圆角框下方外部、水平居中、紧贴（不在输入框内部）；
+          // 右侧固定展示当前模型 + 推理强度徽章
+          !userOnly && jsxs('div', {
             className: 'evo-composer-stats',
-            children: jsx(StatusBar, { session }),
+            children: [
+              jsx(StatusBar, { session }),
+              jsx(ComposerModelInfo, {}),
+            ],
           }),
         ],
       }, 'composer'),

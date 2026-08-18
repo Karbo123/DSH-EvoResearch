@@ -7,7 +7,8 @@
  * 149 tok/s | 缓存命中 100% | 输入 2411M token`
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { Cpu } from 'lucide-react'
 import { t } from './i18n'
 
 interface TrajStats {
@@ -123,6 +124,51 @@ export function StatusBar({ session }: { session: any }) {
       jsxs('span', { className: 'evo-statusbar-item', children: [jsx('span', { children: `${t('statFirstToken')} ${(stats.firstTokenAvgMs / 1000).toFixed(1)}s` }), jsx('span', { className: 'evo-statusbar-sep', children: '·' }), jsx('span', { children: `${tokPerSec} tok/s` })] }),
       jsxs('span', { className: 'evo-statusbar-item', children: [jsx('span', { children: `${t('statCacheHit')} ${cacheHit}%` })] }),
       jsxs('span', { className: 'evo-statusbar-item', children: [jsx('span', { children: `${t('statInput')} ${fmtTokens(stats.inTokens)} ${t('statTokenUnit')}` })] }),
+    ],
+  })
+}
+
+/** 输入框外右下方的模型徽章：当前模型 + 推理强度，点击打开模型选择器。 */
+export function ComposerModelInfo() {
+  const [info, setInfo] = useState<{
+    provider?: string | null
+    model?: string | null
+    tier?: string | null
+    reasoningEffort?: string | null
+  } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = () => fetch('/evoresearch/fs/models', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    }).then((res) => res.json()).then((json) => {
+      if (!cancelled && json.ok) setInfo(json.value)
+    }).catch(() => {})
+    void load()
+    const onChange = () => { void load() }
+    window.addEventListener('evo-model-changed', onChange)
+    return () => {
+      cancelled = true
+      window.removeEventListener('evo-model-changed', onChange)
+    }
+  }, [])
+
+  if (info?.model == null) return null
+  const effortLabel = info.reasoningEffort === 'low' ? t('effortLow') : info.reasoningEffort === 'medium' ? t('effortMedium') : info.reasoningEffort === 'high' ? t('effortHigh') : null
+  const tierLabel = info.tier === 'simple' ? t('tierSimple') : info.tier === 'medium' ? t('tierMedium') : info.tier === 'complex' ? t('tierComplex') : null
+  const detail = [`${info.model}（${info.provider ?? '?'}）`, tierLabel !== null ? `档位：${tierLabel}` : null, effortLabel !== null ? `推理强度：${effortLabel}` : null].filter(Boolean).join(' · ')
+  return jsxs('button', {
+    type: 'button',
+    className: 'evo-composer-model',
+    title: `${detail}（点击切换）`,
+    'aria-label': t('model'),
+    onClick: () => window.dispatchEvent(new CustomEvent('evo-open-model-selector')),
+    children: [
+      jsx(Cpu, {}),
+      jsx('span', { className: 'evo-composer-model-name', children: String(info.model) }),
+      effortLabel !== null && jsx('span', { className: 'evo-composer-model-effort', children: `${t('reasoningEffort')} ${effortLabel}` }),
     ],
   })
 }
