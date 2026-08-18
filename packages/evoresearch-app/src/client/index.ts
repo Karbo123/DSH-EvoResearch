@@ -421,9 +421,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const cwd = projectCwd !== undefined && projectCwd !== '' ? projectCwd : undefined
     // 延迟到用户真正发送时再创建：这样项目列表创建项目、项目内列表创建子聊天，
     // 且“新建对话”不会先制造一个没有标题/首条消息的空会话。
-    if (cwd !== undefined && projectScope === null) {
-      const name = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? cwd
-      setProjectScope({ name, path: cwd })
+    if (cwd !== undefined) {
+      if (projectScope === null) {
+        const name = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? cwd
+        setProjectScope({ name, path: cwd })
+      }
+    } else {
+      // 从项目列表发起的新对话必须创建新项目，不能沿用上一次项目视图的残留状态。
+      setProjectScope(null)
     }
   }
 
@@ -1078,8 +1083,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         if (created !== undefined) {
           if (initialTitle.title === null) {
             try { await created.rename(kind === 'subchat' ? '新子对话' : '新项目') } catch { /* 占位标题失败不影响消息 */ }
-            if (workspaceId !== undefined) {
-              try { await workspacesService?.rename(workspaceId, kind === 'subchat' ? '新子对话' : '新项目') } catch { /* 占位标题失败不影响消息 */ }
+            if (workspaceId !== undefined && kind === 'project') {
+              try { await workspacesService?.rename(workspaceId, '新项目') } catch { /* 占位标题失败不影响消息 */ }
             }
           }
           await created.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
