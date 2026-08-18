@@ -313,6 +313,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     if (previous.finalized || previous.inputs.length === 0) return
     const next = { ...previous, kind, ...(workspaceId === undefined ? {} : { workspaceId }) }
     const result = await judgeAutoTitle(kind, next.inputs, next.attempt)
+    // 模型请求期间用户可能已经手动重命名；手动标题拥有最高优先级。
+    const latest = readAutoTitleStates()[sessionId]
+    if (latest?.finalized === true) return
     if (result.title !== null && result.title.trim() !== '') {
       const title = result.title.trim()
       const session = sessionsService?.binding(sessionId)?.session
@@ -553,7 +556,19 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const session = sessionsService?.binding(id)?.session
     if (session?.rename === undefined) return false
     const result = await session.rename(title)
-    if (result?.ok === true) toast('Session renamed', 'success')
+    if (result?.ok === true) {
+      const states = readAutoTitleStates()
+      const state = states[id]
+      if (state !== undefined) {
+        states[id] = { ...state, finalized: true }
+        writeAutoTitleStates(states)
+        // 项目初始会话的手动标题同时作为项目显示标题；子聊天不改项目名。
+        if (state.kind === 'project' && state.workspaceId !== undefined) {
+          try { await workspacesService?.rename(state.workspaceId, title) } catch { /* 会话标题已保存 */ }
+        }
+      }
+      toast('Session renamed', 'success')
+    }
     return result?.ok === true
   }
   const forkSideChat = async (id: string): Promise<{ ok: boolean; id?: string; error?: string }> => {
