@@ -122,6 +122,7 @@ const DICT: Record<string, [string, string]> = {
   showArchived: ['Show archived', '显示已归档'],
   // 聊天区
   editMsg: ['Edit message', '编辑消息'],
+  yourMessage: ['Your message', '你的消息'],
   editResend: ['Save & resend', '保存并重发'],
   editHint: ['Ctrl+Enter to send', 'Ctrl+Enter 发送'],
   rewindToHere: ['Rewind to here (chat + workspace)', '回溯到此（对话+文件）'],
@@ -301,6 +302,8 @@ const DICT: Record<string, [string, string]> = {
   expandResult: ['Expand result', '展开结果'],
   commands: ['Commands', '命令'],
   fileMentions: ['File mentions', '文件提及'],
+  historyInput: ['Input history', '历史输入'],
+  candidateKeyboardHint: ['↑↓ choose · Tab complete · Esc close', '↑↓ 选择 · Tab 补全 · Esc 关闭'],
   backgroundJobs: ['Background jobs', '后台任务'],
   notificationsOn: ['Notifications on', '通知已开启'],
   userOnly: ['My messages only（hide AI replies）', '仅我的消息（隐藏 AI 回复）'],

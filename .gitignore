@@ -35,6 +35,10 @@ awesome-dsh-plugin/
 sessions/
 storages/
 
+# 本机 DSH 配置（包含本地 provider 凭据引用）
+/settings.yaml
+/.credentials.yaml
+
 # 构建期生成的客户端样式（katex 字体内联，勿入库）
 packages/evoresearch-app/src/client/katex-css.ts
 packages/evoresearch-app/src/client/toastui-css.ts

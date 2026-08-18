@@ -22,8 +22,8 @@ import { StatusBar } from './statusbar'
 import { renderMarkdown, renderMermaidBlocks } from './markdown'
 import {
   CandidatePopup, buildCandidates, detectTrigger, pushHistory, readHistory,
-  resolveMentions, useCommandCatalog, useFileTree,
-  type Trigger, type Candidate,
+  resolveMentions, trimPromptEdges, useCommandCatalog, useFileTree,
+  type Trigger, type TriggerKind, type Candidate,
 } from './composer-assist'
 import { CurrentDialog, SearchDialog, ShortcutsDialog, ConfirmDialog, ModelSelectorDialog } from './session-actions'
 import { ShieldCheck as ShieldCheckIcon, ShieldX } from 'lucide-react'
@@ -241,6 +241,7 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
   onBranch?: (seq: number) => void
   rewindConfirming?: boolean
 }) {
+  const displayText = trimPromptEdges(text)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(text)
   if (editing) {
@@ -296,9 +297,12 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
       jsxs('div', {
         className: 'evo-msg-stack',
         children: [
+          jsx('span', { className: 'evo-msg-author evo-msg-author-user', children: t('yourMessage') }),
           jsx('div', {
             className: 'evo-msg-bubble evo-msg-bubble-user',
-            children: jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
+            title: t('yourMessage'),
+            'aria-label': `${t('yourMessage')}: ${text}`,
+            children: jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(displayText) } }),
           }),
           // 气泡外下方操作行（§用户反馈：复制/编辑/回溯 不进入气泡内部）
           jsxs('div', {
@@ -531,6 +535,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const submitRef = useRef<() => void>(() => {})
   const candidatesRef = useRef<Candidate[]>([])
   const activeIndexRef = useRef(0)
+  const triggerKindRef = useRef<TriggerKind>(null)
+  const historyIndexRef = useRef(-1)
+  const historyDraftRef = useRef<string | null>(null)
+  const historyRef = useRef<string[]>([])
+  const inputRef = useRef('')
+  const historyNavigationRef = useRef(false)
+  const suppressCandidateTriggerRef = useRef(false)
   const runningRef = useRef(running)
   runningRef.current = running
   const setComposerMarkdown = (value: string, cursorToEnd = false) => {
@@ -718,6 +729,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
 
   // 用户消息编辑（§31.6 编辑图标）：回填输入框并聚焦（host 无已发消息修改 API）
   const editUserMessage = (text: string) => {
+    historyNavigationRef.current = false
+    suppressCandidateTriggerRef.current = false
+    historyIndexRef.current = -1
+    historyDraftRef.current = null
     setComposerMarkdown(text, true)
     setTrigger(null)
     const editor = composerEditorRef.current
@@ -770,11 +785,23 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const applyCandidateRef = useRef<(candidate: Candidate) => void>(() => {})
 
   // workspace 切换时重载历史（§23.5：不读取/覆盖其他 workspace 的键）
-  useEffect(() => { setHistory(readHistory(cwd)); setHistoryIndex(-1) }, [cwd])
+  useEffect(() => {
+    const nextHistory = readHistory(cwd)
+    setHistory(nextHistory)
+    historyRef.current = nextHistory
+    historyIndexRef.current = -1
+    historyDraftRef.current = null
+    historyNavigationRef.current = false
+    suppressCandidateTriggerRef.current = false
+    setHistoryIndex(-1)
+  }, [cwd])
 
   const candidates = trigger === null ? [] : buildCandidates(trigger, commandCatalog, fileTree, history)
   candidatesRef.current = candidates
   activeIndexRef.current = activeIndex
+  triggerKindRef.current = trigger?.kind ?? null
+  historyRef.current = history
+  inputRef.current = input
 
   const refreshTrigger = (value: string, pos: number) => {
     const next = detectTrigger(value, pos)
@@ -793,6 +820,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     } else {
       next = c.insert
     }
+    historyNavigationRef.current = false
+    suppressCandidateTriggerRef.current = true
+    historyIndexRef.current = -1
+    historyDraftRef.current = null
     setComposerMarkdown(next, true)
     setTrigger(null)
     setHistoryIndex(-1)
@@ -801,13 +832,34 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   applyCandidateRef.current = applyCandidate
 
   const browseHistory = (delta: -1 | 1) => {
-    if (history.length === 0) return
-    const current = historyIndex
+    const entries = historyRef.current
+    if (entries.length === 0) return
+    const current = historyIndexRef.current
+    if (delta === 1 && current === -1) return
+    if (delta === -1 && current === -1) historyDraftRef.current = composerEditorRef.current?.getMarkdown() ?? inputRef.current
     let next: number
-    if (current === -1) next = delta === -1 ? 0 : history.length - 1
-    else next = Math.min(Math.max(current + delta, 0), history.length - 1)
-    setHistoryIndex(next)
-    setComposerMarkdown(history[next] ?? '', true)
+    if (delta === -1) {
+      next = current === -1 ? 0 : Math.min(current + 1, entries.length - 1)
+    } else if (current > 0) {
+      next = current - 1
+    } else {
+      const draft = historyDraftRef.current ?? ''
+      historyNavigationRef.current = true
+      historyIndexRef.current = -1
+      historyDraftRef.current = null
+      setHistoryIndex(-1)
+      setComposerMarkdown(draft, true)
+      const editor = composerEditorRef.current
+      requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
+      return
+    }
+    {
+      const selected = entries[next] ?? ''
+      historyNavigationRef.current = true
+      historyIndexRef.current = next
+      setHistoryIndex(next)
+      setComposerMarkdown(selected, true)
+    }
     const editor = composerEditorRef.current
     requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
   }
@@ -902,7 +954,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
 
   const submit = async () => {
     const rawInput = composerEditorRef.current?.getMarkdown() ?? input
-    const text = rawInput.trim()
+    const text = trimPromptEdges(rawInput)
     // Pending 审批时禁用发送（§21.2：避免新消息污染待审批工具调用）
     if (!text || pendingApprovals.length > 0) return
     // 附件未就绪（仍在读取）时禁用发送
@@ -913,6 +965,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       if (matched) {
         pushHistory(cwd, text)
         setHistory(readHistory(cwd))
+        historyNavigationRef.current = false
+        historyIndexRef.current = -1
+        historyDraftRef.current = null
         setComposerMarkdown('')
         setTrigger(null)
         setHistoryIndex(-1)
@@ -920,7 +975,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       }
     }
     // @引用解析（§23.4）：小型文本文件注入内容，其余保留路径
-    const resolved = await resolveMentions(text, cwd)
+    const resolved = trimPromptEdges(await resolveMentions(text, cwd))
     // 忙时也允许发送：消息进入 append-only 队列（§23.6），由 host 顺序消费
     const images = pendingImages
       .filter((img) => img.dataUrl !== '')
@@ -936,6 +991,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     onSend(resolved, images.length > 0 ? images : undefined)
     pushHistory(cwd, text)
     setHistory(readHistory(cwd))
+    historyNavigationRef.current = false
+    suppressCandidateTriggerRef.current = false
+    historyIndexRef.current = -1
+    historyDraftRef.current = null
     setComposerMarkdown('')
     setTrigger(null)
     setHistoryIndex(-1)
@@ -966,11 +1025,40 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         change: () => {
           const next = editor.getMarkdown()
           setInput(next)
-          setHistoryIndex(-1)
-          setTrigger(detectTrigger(next, next.length))
+          inputRef.current = next
+          if (!historyNavigationRef.current) {
+            historyIndexRef.current = -1
+            historyDraftRef.current = null
+            setHistoryIndex(-1)
+          }
+          if (!suppressCandidateTriggerRef.current) setTrigger(detectTrigger(next, next.length))
         },
         keydown: (_editorType, event) => {
+          const keepsCandidateHistory = event.key === 'ArrowUp'
+            || event.key === 'ArrowDown'
+            || event.key === 'Tab'
+          if (suppressCandidateTriggerRef.current && !keepsCandidateHistory) suppressCandidateTriggerRef.current = false
           const currentCandidates = candidatesRef.current
+          const keepsHistoryNavigation = event.key === 'ArrowUp'
+            || event.key === 'ArrowDown'
+            || event.key === 'Tab'
+            || event.key === 'Escape'
+            || (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter')
+          if (historyIndexRef.current !== -1 && !keepsHistoryNavigation) {
+            historyNavigationRef.current = false
+            historyIndexRef.current = -1
+            historyDraftRef.current = null
+            setHistoryIndex(-1)
+          }
+          const historyNavigation = triggerKindRef.current === 'history'
+            || currentCandidates.some((candidate) => candidate.kind === 'history')
+            || suppressCandidateTriggerRef.current
+            || inputRef.current === ''
+          if (historyNavigation && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+            event.preventDefault()
+            browseHistory(event.key === 'ArrowUp' ? -1 : 1)
+            return
+          }
           if (currentCandidates.length > 0) {
             if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((index) => (index + 1) % currentCandidates.length); return }
             if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((index) => (index - 1 + currentCandidates.length) % currentCandidates.length); return }
@@ -1270,7 +1358,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx(ResearchDashboard, { cwd }),
                 ],
               }),
-      }),
+      }, 'chat-area'),
       // ── 命令执行结果条（§23.3：结果以文本/表格显示在输入框上方）──
       (cmdResult !== null || cmdRunning) && jsx('div', {
         className: 'evo-cmd-strip',
@@ -1540,11 +1628,6 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 'aria-autocomplete': 'list',
                 style: { height: `${composerHeight ?? (COMPOSER_BASE_MIN_HEIGHT + (markdownToolbarOpen ? MARKDOWN_TOOLBAR_HEIGHT : 0))}px` },
                 onPaste: onPasteImages,
-                onKeyDown: (e: { key: string }) => {
-                  // Toast UI 捕获主要键盘事件；这里保留空输入历史的 React 侧入口。
-                  if (e.key === 'ArrowUp' && input === '') browseHistory(-1)
-                  if (e.key === 'ArrowDown' && input === '' && historyIndex !== -1) browseHistory(1)
-                },
                 children: [
                   jsx('div', { ref: composerEditorHostRef, className: 'evo-composer-editor-host' }),
                   input === '' && jsx('div', {
@@ -1560,7 +1643,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 onActive: setActiveIndex,
                 onApply: applyCandidate,
                 onClose: () => setTrigger(null),
-                label: trigger?.kind === 'command' ? t('commands') : trigger?.kind === 'mention' ? t('fileMentions') : t('history'),
+                label: trigger?.kind === 'command' ? t('commands') : trigger?.kind === 'mention' ? t('fileMentions') : t('historyInput'),
+                hint: t('candidateKeyboardHint'),
               }),
               jsxs('div', {
                 className: 'evo-composer-tools',
@@ -1695,7 +1779,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
             children: jsx(StatusBar, { session }),
           }),
         ],
-      }),
+      }, 'composer'),
       // ── 会话动作弹窗（§25.6 / §26.8）──
       actionDialog === 'current' && sessionId !== null && jsx(CurrentDialog, {
         sessionId,

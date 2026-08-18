@@ -74,6 +74,7 @@ import type { McpServerConfig, McpServerStatus } from './mcp/supervisor.js'
 import type { LayeredSkillRegistry, SkillLayer, SkillEntry } from './skills/registry.js'
 import type { ScienceLoopService, ScienceLoop, ScienceLoopAction } from './science/loops.js'
 import type { ScienceChatGraphBridge } from './science/chat-graph-bridge.js'
+import { callJson } from './core/llm.js'
 
 /** 各服务集合（host 入口注入）。 */
 export interface HostServices {
@@ -1727,6 +1728,59 @@ export class EvoResearchApiService extends TypertRemoteService {
   @Remote('autoskillsRunSkill')
   async autoskillsRunSkill(args: { proposalId: string }): Promise<SkillRunResult> {
     return this.services.autoskills.runSkill(String(args?.proposalId ?? ''))
+  }
+
+  /**
+   * 为新项目/子聊天判断一个短标题。
+   *
+   * 低信息输入（问候、确认、单字短句）不强行命名；调用方会继续收集后续
+   * 输入，最多第 10 次调用时由这里给出确定性兜底标题。
+   */
+  @Remote('projectTitleSuggest')
+  async projectTitleSuggest(args: { inputs?: string[]; kind?: 'project' | 'subchat'; attempt?: number }): Promise<{ title: string | null; final: boolean }> {
+    const kind = args.kind === 'subchat' ? 'subchat' : 'project'
+    const inputs = (Array.isArray(args.inputs) ? args.inputs : [])
+      .filter((text): text is string => typeof text === 'string')
+      .map((text) => text.trim())
+      .filter((text) => text !== '')
+      .slice(0, 10)
+    const attempt = Math.min(10, Math.max(1, Math.floor(args.attempt ?? inputs.length ?? 1)))
+    const lowInformation = /^(你好|您好|嗨|哈喽|hello|hi|hey|谢谢|感谢|好的|好|嗯|嗯嗯|ok|okay|继续|收到|明白)[!！。,.，、 ]*$/i
+    const meaningful = inputs.filter((text) => !lowInformation.test(text))
+    const fallback = kind === 'subchat' ? '未命名研究子对话' : '未命名科研项目'
+    if (meaningful.length === 0 && attempt < 10) return { title: null, final: false }
+
+    try {
+      const selection = (this.hostCtx.get('agentDefaultModel') as { currentSelection?(): { provider?: string; model?: string } } | undefined)?.currentSelection?.()
+      const configured = this.services.memory.config.auxiliaryModel
+      const model = selection?.provider && selection?.model
+        ? { provider: selection.provider, model: selection.model }
+        : configured?.provider && configured?.model
+          ? { provider: configured.provider, model: configured.model }
+          : { provider: 'new-api', model: 'deepseek-v4-flash' }
+      const value = await callJson(this.hostCtx, {
+        provider: model.provider,
+        model: model.model,
+        messages: [
+          `请根据下面按时间顺序的用户输入，为一个科研${kind === 'subchat' ? '子对话' : '项目'}生成标题。\n${inputs.map((text, index) => `${index + 1}. ${text.slice(0, 500)}`).join('\n')}`,
+        ],
+        maxTokens: 60,
+        jsonInstruction: `输出 JSON：{"title":"短标题"}。标题使用用户主要语言，简洁、具体、能概括主题，不要带引号、序号、Markdown 或解释；如果信息仍不足，输出 {"title":null}。`,
+      })
+      const candidate = typeof value === 'object' && value !== null ? (value as Record<string, unknown>).title : undefined
+      if (typeof candidate === 'string') {
+        const title = candidate.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/^['"“”]+|['"“”]+$/g, '').slice(0, 80)
+        if (title !== '' && !lowInformation.test(title)) return { title, final: true }
+      }
+    } catch {
+      // 辅助标题失败不影响实际对话；第 10 次由下方兜底保证有标题。
+    }
+    if (attempt >= 10) {
+      const seed = meaningful[0] ?? inputs[0] ?? ''
+      const compact = seed.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28)
+      return { title: compact !== '' ? compact : fallback, final: true }
+    }
+    return { title: null, final: false }
   }
 
   /** 从当前聊天的具体消息创建分支（CG-UX-01/02）：目标节点与 fork 一起建立。 */

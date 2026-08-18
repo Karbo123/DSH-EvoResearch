@@ -607,6 +607,15 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
+        // 新建项目/子聊天标题判断：低信息输入返回 null，最多第 10 次返回标题。
+        if (method === 'project-title-suggest') {
+          if (evoresearch?.projectTitleSuggest === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const inputs = Array.isArray(payload.inputs) ? payload.inputs.filter((value): value is string => typeof value === 'string') : []
+          const kind = payload.kind === 'subchat' ? 'subchat' : 'project'
+          const attempt = typeof payload.attempt === 'number' ? payload.attempt : inputs.length
+          writeOk(res, await (evoresearch.projectTitleSuggest as (a: { inputs: string[]; kind: 'project' | 'subchat'; attempt: number }) => Promise<unknown>).call(evoresearch, { inputs, kind, attempt }))
+          return
+        }
         if (method === 'projects-import') {
           if (evoresearch?.projectImport === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const sourcePath = requireString(payload, 'sourcePath')

@@ -44,12 +44,16 @@ function formatWhen(iso: string | undefined): string {
 export interface ThreadListProps {
   /** framework kit 注入 */
   useSessions: (selector: (s: any) => any) => any
+  /** 工作区注册表，用于显示 AI 标题而不改变实际项目路径。 */
+  useWorkspaces: (selector: (s: any) => any) => any
   view: SideView
   onView: (v: SideView) => void
   /** 打开（选中）一个会话 */
   onOpen: (id: string) => void
   /** 新建聊天；传入项目工作区路径 = 在该项目下新建子聊天 */
   onNewChat: (cwd?: string) => void
+  /** 把左侧当前项目/子聊天作用域同步给页面级发送入口。 */
+  onProjectModeChange: (project: { name: string; path: string } | null) => void
   /** 是否有活跃（非 blank）会话 */
   hasActive: boolean
   /** 重命名会话（官方 session.rename；返回是否成功）。 */
@@ -149,8 +153,49 @@ type DragState = {
   active: boolean
 }
 
-export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasActive, onRename, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, archivedIds, onToggleArchive, runningIds, promotedIds }: ThreadListProps) {
-  const sessions = useSessions((s) => s)
+/**
+ * dsh-client-runtime 的会话列表快照以 `items + sessionId` 表示；旧版界面
+ * 使用 `ids + byId + id`。在 UI 边界统一成后者，避免列表和当前会话分别
+ * 读取两种快照形态，尤其是新建会话后出现“服务里有、侧栏没行”的情况。
+ */
+export function normalizeSessionsSnapshot(input: any): any {
+  if (input === null || typeof input !== 'object') return { ids: [], byId: {}, current: undefined, jobsBySession: {} }
+  const sourceItems = Array.isArray(input.items)
+    ? input.items
+    : Array.isArray(input.list?.items)
+      ? input.list.items
+      : []
+  const ids: string[] = Array.isArray(input.ids)
+    ? input.ids.filter((id: unknown): id is string => typeof id === 'string')
+    : []
+  const byId: Record<string, any> = input.byId !== null && typeof input.byId === 'object' ? { ...input.byId } : {}
+  for (const raw of sourceItems) {
+    const id = typeof raw?.id === 'string' ? raw.id : raw?.sessionId
+    if (typeof id !== 'string' || id === '') continue
+    const projections = raw?.projections?.projectionValues ?? raw?.projections?.values ?? {}
+    const title = raw.displayTitle ?? raw.title ?? raw?.projections?.title ?? projections.title ?? null
+    byId[id] = {
+      ...raw,
+      id,
+      displayTitle: typeof title === 'string' && title.trim() !== '' ? title : undefined,
+      title: typeof title === 'string' && title.trim() !== '' ? title : undefined,
+      titleTime: raw.titleTime ?? raw.updatedAt,
+      parentSessionId: raw.parentSessionId ?? (raw.depth > 0 ? raw.parentId : undefined),
+      running: raw.running === true,
+      blank: raw.blank === true,
+    }
+    if (!ids.includes(id)) ids.push(id)
+  }
+  for (const id of Object.keys(byId)) if (!ids.includes(id)) ids.push(id)
+  const current = typeof input.current === 'string'
+    ? input.current
+    : typeof input.currentAddress?.sessionId === 'string' ? input.currentAddress.sessionId : undefined
+  return { ...input, ids, byId, current, jobsBySession: input.jobsBySession ?? {} }
+}
+
+export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, onNewChat, onProjectModeChange, hasActive, onRename, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, archivedIds, onToggleArchive, runningIds, promotedIds }: ThreadListProps) {
+  const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
+  const workspaces = useWorkspaces((s) => s)
   const currentId = sessions.current
   const [colorFor, setColorFor] = useState<string | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -175,11 +220,12 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   const isPromoted = (id: string): boolean => promotedIds.has(id)
   // Recents 只列主 Agent 线程（§22.1：fork 子线程与内部线程不得混入普通列表；
   // §5.3 提升后的复制会话除外——它已是独立主聊天）
-  const rows = (sessions.ids ?? [])
+  const sessionIds: string[] = Array.isArray(sessions.ids) ? sessions.ids : Object.keys(sessions.byId ?? {})
+  const rows = sessionIds
     .map((id) => sessions.byId[id])
     .filter((s) => s !== undefined && s.blank !== true && (s.parentSessionId === undefined || isPromoted(s.id)) && !hideIds.has(s.id) && !deletedIds.has(s.id) && !archivedIds.has(s.id))
   // 已归档线程（§26.3 Archive：保留数据，可恢复）
-  const archivedRows = (sessions.ids ?? [])
+  const archivedRows = sessionIds
     .map((id) => sessions.byId[id])
     .filter((s) => s !== undefined && s.blank !== true && (s.parentSessionId === undefined || isPromoted(s.id)) && !hideIds.has(s.id) && !deletedIds.has(s.id) && archivedIds.has(s.id))
     .sort((a, b) => (archivedIds.has(b.id) ? 1 : 0) - (archivedIds.has(a.id) ? 1 : 0))
@@ -197,6 +243,10 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
   const dragCleanupRef = useRef<(() => void) | null>(null)
   // §ChatGraph/§二级聊天：左侧按项目分类——null = 项目列表视图；非 null = 该项目子聊天列表
   const [projectMode, setProjectMode] = useState<{ name: string; path: string } | null>(null)
+  const setProjectScope = (next: { name: string; path: string } | null) => {
+    setProjectMode(next)
+    onProjectModeChange(next)
+  }
   // 菜单内两段式删除确认：第一次点击进入确认态，5 秒无操作还原
   const [delArm, setDelArm] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -310,7 +360,10 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
         map.set(name, { path: base, count: 1, updatedAt: s.updatedAt ?? 0 })
       }
     }
-    const list = [...map.entries()].map(([name, v]) => ({ name, ...v }))
+    const list = [...map.entries()].map(([name, v]) => {
+      const workspace = (workspaces.items ?? []).find((item: any) => typeof item?.path === 'string' && cwdBase(item.path) === v.path)
+      return { name: typeof workspace?.title === 'string' && workspace.title.trim() !== '' ? workspace.title : name, path: v.path, count: v.count, updatedAt: v.updatedAt }
+    })
     const filtered = searchNeedle === '' ? list : list.filter((p) => p.name.toLocaleLowerCase().includes(searchNeedle) || rows.some((s) => cwdBase(s.cwd) === p.path && matchesSession(s)))
     if (sortMode === 'manual') return orderWithManual(filtered, 'projects', 'projects')
     return filtered.sort((a, b) => {
@@ -452,8 +505,8 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
             type: 'button',
             className: 'evo-tl-item evo-tl-newchat-item',
             onClick: () => onNewChat(projectMode?.path),
-            children: jsxs(Fragment, { children: [jsx(SquarePen, {}), jsx('span', { children: t('newChat') })] }),
-          }),
+            children: jsxs(Fragment, { children: [jsx(SquarePen, {}, 'icon'), jsx('span', { children: t('newChat') }, 'label')] }),
+          }, 'new-chat'),
           ...MENU.map((item) => {
             const Icon = item.icon
             return jsx('button', {
@@ -461,7 +514,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
               className: 'evo-tl-item',
               'data-active': isActive(item.key) || undefined,
               onClick: () => onView(item.key === 'import' ? 'workspace' : (item.key as SideView)),
-              children: jsxs(Fragment, { children: [jsx(Icon, {}), jsx('span', { children: item.label })] }),
+              children: jsxs(Fragment, { children: [jsx(Icon, {}, 'icon'), jsx('span', { children: item.label }, 'label')] }),
             }, item.key)
           }),
         ],
@@ -545,7 +598,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                       'data-active': currentProject === p.name || undefined,
                       'data-evo-dnd-id': p.path,
                       'data-evo-dnd-scope': 'projects',
-                      onClick: () => { setProjectMode({ name: p.name, path: p.path }); setMenuFor(null) },
+                      onClick: () => { setProjectScope({ name: p.name, path: p.path }); setMenuFor(null) },
                       children: [
                         canReorder && dragGrip('projects', p.path, p.name, t('subchatCount').replace('{n}', String(p.count))),
                         jsx(FolderGit2, {}),
@@ -559,7 +612,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                         jsx(ChevronRight, {}),
                       ],
                     }, p.path)
-                  })
+                  })()
                 )
             : // ── 项目内子聊天列表（对应图谱 Chat Node）──
               jsxs(Fragment, {
@@ -576,7 +629,7 @@ export function ThreadList({ useSessions, view, onView, onOpen, onNewChat, hasAc
                             className: 'evo-tl-section-action',
                             title: t('projectBack'),
                             'aria-label': t('projectBack'),
-                            onClick: () => { setProjectMode(null); setQuery(''); setMenuFor(null) },
+                            onClick: () => { setProjectScope(null); setQuery(''); setMenuFor(null) },
                             children: jsx(ArrowLeft, {}),
                           }),
                         ],

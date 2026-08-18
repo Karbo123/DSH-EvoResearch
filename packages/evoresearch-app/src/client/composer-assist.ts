@@ -2,7 +2,7 @@
  * 输入辅助（移植规范 §23.2–23.5）：
  * - 斜杠命令候选（/）：目录从后端 dsh-commands 注册表动态读取；
  * - @文件 补全：按当前 workspace 递归文件树模糊搜索（§27.1 上限）；
- * - 输入历史：按 workspace 保存最近 200 条，空输入上下键浏览、有输入时前缀建议；
+ * - 输入历史：按 workspace 保存最近 200 条，输入时按内容匹配候选，空输入或普通输入均可用上下键浏览；
  * - 候选弹层：listbox/option 语义 + aria-activedescendant，Tab 应用、Esc 关闭。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
@@ -28,6 +28,11 @@ export interface Trigger {
   start: number
 }
 
+/** 发送给模型或渲染为用户消息前，去除输入两端的 Unicode 空白。 */
+export function trimPromptEdges(value: string): string {
+  return value.trim()
+}
+
 /** 分析输入与光标位置，得出当前激活的候选触发（无触发返回 null）。 */
 export function detectTrigger(input: string, cursor: number): Trigger {
   const before = input.slice(0, cursor)
@@ -43,7 +48,7 @@ export function detectTrigger(input: string, cursor: number): Trigger {
     const word = before.slice(at + 1)
     if (!/[\s@]/.test(word)) return { kind: 'mention', query: word.toLowerCase(), start: at }
   }
-  // 输入历史建议（§23.5）：有输入且无其他触发
+  // 普通文本：按已输入内容匹配历史记录。候选弹层会明确说明其来源与 Tab 操作。
   if (input.trim() !== '') return { kind: 'history', query: before.toLowerCase(), start: 0 }
   return null
 }
@@ -152,6 +157,7 @@ export function CandidatePopup({
   onApply,
   onClose,
   label,
+  hint,
 }: {
   candidates: Candidate[]
   active: number
@@ -159,6 +165,7 @@ export function CandidatePopup({
   onApply: (candidate: Candidate) => void
   onClose: () => void
   label: string
+  hint: string
 }) {
   const listRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -175,6 +182,13 @@ export function CandidatePopup({
     'aria-label': label,
     ref: listRef,
     children: [
+      jsxs('div', {
+        className: 'evo-cand-head',
+        children: [
+          jsx('span', { className: 'evo-cand-label', children: label }),
+          jsx('span', { className: 'evo-cand-hint', children: hint }),
+        ],
+      }),
       candidates.map((c, index) => {
         const Icon = c.kind === 'command' ? Command : c.kind === 'file' ? (c.subtitle === 'folder' ? Folder : FileText) : FileText
         return jsxs('div', {
@@ -235,7 +249,7 @@ export function buildCandidates(trigger: Trigger, catalog: CommandEntry[], tree:
       .sort((a, b) => a.score - b.score || a.item.title.localeCompare(b.item.title))
     return scored.slice(0, 8).map((x) => x.item)
   }
-  // history：前缀建议（无查询时不弹）
+  // 保留历史候选的组装能力，实际触发由显式历史入口决定。
   if (trigger.query === '') return []
   return matchQuery(
     history.map((text) => ({ key: `hist:${text}`, title: text, kind: 'history' as const, insert: text })),

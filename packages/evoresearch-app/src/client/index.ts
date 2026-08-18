@@ -21,7 +21,7 @@ import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
 import { TOASTUI_CSS } from './toastui-css'
 import { applyTheme, resolvedTheme, toggleTheme } from './theme'
-import { ThreadList, type SideView } from './threadlist'
+import { ThreadList, normalizeSessionsSnapshot, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
 import { registerConversation } from './conversation'
@@ -37,7 +37,7 @@ import { TrajectoryPanel } from './trajectory'
 import { ChatGraphPanel } from './chatgraph'
 import { WorkspaceTabPicker } from './tab-files'
 
-const inject = ['slots', 'sessions', 'conversationEvents', 'conversationViews', 'connection']
+const inject = ['slots', 'sessions', 'workspaces', 'conversationEvents', 'conversationViews', 'connection']
 
 /** 桌面模式（无边框窗口 + 自绘标题栏）：由 Tauri 壳以 ?desktop=1 加载。 */
 function isDesktop(): boolean {
@@ -55,6 +55,55 @@ let sessionsService: {
   /** 官方 session.fork 在服务内部 manager 上（复制源会话历史创建子会话）。 */
   manager?: { fork?(opts: { sessionId: string; atSeq?: number }): Promise<{ ok: boolean; value?: { sessionId: string } }> }
 } | null = null
+
+let workspacesService: {
+  create(input: { path: string }): Promise<any>
+  rename(workspaceId: string, title: string): Promise<any>
+} | null = null
+
+type AutoTitleKind = 'project' | 'subchat'
+type AutoTitleState = {
+  kind: AutoTitleKind
+  inputs: string[]
+  attempt: number
+  finalized: boolean
+  workspaceId?: string
+}
+const AUTO_TITLE_KEY = 'evoresearch-auto-title-state'
+
+function readAutoTitleStates(): Record<string, AutoTitleState> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(AUTO_TITLE_KEY) ?? '{}') as Record<string, unknown>
+    const states: Record<string, AutoTitleState> = {}
+    for (const [id, value] of Object.entries(raw)) {
+      const item = value as Partial<AutoTitleState>
+      if ((item.kind === 'project' || item.kind === 'subchat') && Array.isArray(item.inputs)) {
+        states[id] = {
+          kind: item.kind,
+          inputs: item.inputs.filter((text): text is string => typeof text === 'string').slice(0, 10),
+          attempt: Math.min(10, Math.max(0, Number(item.attempt) || 0)),
+          finalized: item.finalized === true,
+          ...(typeof item.workspaceId === 'string' ? { workspaceId: item.workspaceId } : {}),
+        }
+      }
+    }
+    return states
+  } catch { return {} }
+}
+
+function writeAutoTitleStates(states: Record<string, AutoTitleState>): void {
+  try { localStorage.setItem(AUTO_TITLE_KEY, JSON.stringify(states)) } catch { /* 本地缓存不可用不影响聊天 */ }
+}
+
+function lowInformationTitleInput(text: string): boolean {
+  return /^(你好|您好|嗨|哈喽|hello|hi|hey|谢谢|感谢|好的|好|嗯|嗯嗯|ok|okay|继续|收到|明白)[!！。,.，、 ]*$/i.test(text.trim())
+}
+
+function localTitleFallback(kind: AutoTitleKind, inputs: string[]): string {
+  const meaningful = inputs.find((text) => !lowInformationTitleInput(text))
+  const seed = (meaningful ?? inputs[0] ?? '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28)
+  return seed !== '' ? seed : kind === 'subchat' ? '未命名研究子对话' : '未命名科研项目'
+}
 
 /** 空白 Side Chat 追踪键（每 workspace；fork 型由 parentSessionId 识别，无需记录）。 */
 function sideChatKey(cwd: string | null): string {
@@ -167,8 +216,9 @@ class ErrorBoundary extends (Component as any) {
 }
 
 /** 工作台根组件（root slot）。 */
-function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = useSessions((s) => s)
+function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
   const workspaces = useWorkspaces((w) => w)
+  const [projectScope, setProjectScope] = useState<{ name: string; path: string } | null>(null)
   const [sidebar, setSidebar] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('sidebar') !== '0' : true)
   const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('inspector') === '1' : false)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() => {
@@ -191,6 +241,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const params = new URLSearchParams(location.search)
     return params.get('threadId') === null && params.get('view') === null
   })
+  // 首次发送创建会话后，视图快照可能晚一拍；用短生命周期引用承接紧接着的第二条输入。
+  const justCreatedSessionRef = useRef<string | null>(null)
 
   // 响应式（§26.1）：<768px 左右栏改为抽屉 + 黑色 40% 遮罩
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
@@ -229,6 +281,67 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 当前会话的后台任务（§21.6：jobsBySession 快照）
   const currentJobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
     = current === undefined ? [] : ((sessions.jobsBySession ?? {})[current] ?? [])
+
+  const ensureWorkspace = async (path: string): Promise<any | null> => {
+    const existing = (workspaces.items ?? []).find((item: any) => typeof item?.path === 'string' && item.path.replace(/[\\/]+$/, '') === path.replace(/[\\/]+$/, ''))
+    if (existing !== undefined) return existing
+    try {
+      return await workspacesService?.create({ path }) ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const judgeAutoTitle = async (kind: AutoTitleKind, inputs: string[], attempt: number): Promise<{ title: string | null; final: boolean }> => {
+    try {
+      const response = await fetch('/evoresearch/fs/project-title-suggest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind, inputs: inputs.slice(0, 10), attempt }),
+      })
+      const json = await response.json()
+      if (json.ok === true && (json.value?.title === null || typeof json.value?.title === 'string')) {
+        return { title: json.value.title, final: json.value.final === true }
+      }
+    } catch { /* 标题辅助失败时走本地第 10 次兜底 */ }
+    return { title: attempt >= 10 ? localTitleFallback(kind, inputs) : null, final: attempt >= 10 }
+  }
+
+  const applyAutoTitle = async (sessionId: string, kind: AutoTitleKind, workspaceId?: string): Promise<void> => {
+    const states = readAutoTitleStates()
+    const previous = states[sessionId] ?? { kind, inputs: [], attempt: 0, finalized: false }
+    if (previous.finalized || previous.inputs.length === 0) return
+    const next = { ...previous, kind, ...(workspaceId === undefined ? {} : { workspaceId }) }
+    const result = await judgeAutoTitle(kind, next.inputs, next.attempt)
+    if (result.title !== null && result.title.trim() !== '') {
+      const title = result.title.trim()
+      const session = sessionsService?.binding(sessionId)?.session
+      if (session?.rename !== undefined) {
+        try { await session.rename(title) } catch { /* 标题失败不影响消息 */ }
+      }
+      if (next.workspaceId !== undefined) {
+        try { await workspacesService?.rename(next.workspaceId, title) } catch { /* 工作区标题失败保留会话标题 */ }
+      }
+      states[sessionId] = { ...next, finalized: true }
+    } else {
+      states[sessionId] = next
+    }
+    writeAutoTitleStates(states)
+  }
+
+  const rememberAutoTitleInput = (sessionId: string, kind: AutoTitleKind, text: string, workspaceId?: string): void => {
+    const states = readAutoTitleStates()
+    const previous = states[sessionId] ?? { kind, inputs: [], attempt: 0, finalized: false }
+    if (previous.finalized || previous.inputs.length >= 10) return
+    states[sessionId] = {
+      ...previous,
+      kind,
+      inputs: [...previous.inputs, text.trim()].slice(0, 10),
+      attempt: Math.min(10, previous.attempt + 1),
+      ...(workspaceId === undefined ? {} : { workspaceId }),
+    }
+    writeAutoTitleStates(states)
+  }
   // Recents 运行状态（§26.3：agent 运行中或后台 job 进行中的会话行显示状态点）
   const runningIds = new Set<string>()
   for (const sid of sessions.ids ?? []) {
@@ -287,6 +400,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }, [current])
 
   const openSession = (id: string) => {
+    justCreatedSessionRef.current = null
     setHomeMode(false)
     sessionsService?.open(id)
     // Bug：仅 patchUrl 清 view 会造成 state/URL 失步（面板残留主区域）——state 一并清
@@ -294,25 +408,20 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     patchUrl({ threadId: id, view: null })
   }
   const startNewChat = (projectCwd?: string) => {
+    justCreatedSessionRef.current = null
     setView(null)
     // 创建过程完成前仍保持首页/空白状态，避免旧会话在中间短暂闪回。
     setHomeMode(true)
     // Home 操作清除 thread/project/定位状态（§43.5），关闭不合适的面板
     patchUrl({ threadId: null, view: null })
     // 新对话：优先指定项目工作区（左侧项目内新建）；否则继承当前会话所在项目；无则空白
-    const cwd = projectCwd !== undefined && projectCwd !== ''
-      ? projectCwd
-      : restoredCurrent === undefined ? undefined : (sessions.byId[restoredCurrent]?.cwd ?? undefined)
-    void sessionsService?.create(cwd === undefined ? {} : { cwd })
-      .then(async (id) => {
-        // 刷新会话目录快照（新建的会话需进入左侧列表）
-        const manager = sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined
-        try { await manager?.refreshList?.() } catch { /* 忽略 */ }
-        if (typeof id === 'string' && id !== '') {
-          setHomeMode(false)
-          sessionsService?.open(id)
-        }
-      })
+    const cwd = projectCwd !== undefined && projectCwd !== '' ? projectCwd : undefined
+    // 延迟到用户真正发送时再创建：这样项目列表创建项目、项目内列表创建子聊天，
+    // 且“新建对话”不会先制造一个没有标题/首条消息的空会话。
+    if (cwd !== undefined && projectScope === null) {
+      const name = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? cwd
+      setProjectScope({ name, path: cwd })
+    }
   }
 
   // §43.5/§33.4：URL threadId 恢复（刷新或分享链接打开对应会话）；?resend= 编辑重发
@@ -893,36 +1002,75 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     location.reload()
   }
   const sendMessage = (text: string, images?: Array<{ data: string; mediaType: string; name?: string }>) => {
-    if (text.trim() === '') return
-    setHomeMode(false)
+    const normalized = text.trim()
+    if (normalized === '') return
     // content 是内容块数组（§23.7 附件：文本 + 图片块），mode 必填（queue = 追加到当前轮次之后）
-    const content: Array<{ type: string; text?: string; data?: string; mediaType?: string; name?: string }> = [{ type: 'text', text }]
+    const content: Array<{ type: string; text?: string; data?: string; mediaType?: string; name?: string }> = [{ type: 'text', text: normalized }]
     for (const image of images ?? []) content.push({ type: 'image', data: image.data, mediaType: image.mediaType, ...(image.name !== undefined ? { name: image.name } : {}) })
-    const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
-    if (s !== undefined) {
+    const effectiveCurrent = current ?? justCreatedSessionRef.current ?? undefined
+    const s = effectiveCurrent === undefined ? undefined : sessionsService?.binding(effectiveCurrent)?.session
+    if (s !== undefined && effectiveCurrent !== undefined) {
       void s.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+      const autoState = readAutoTitleStates()[effectiveCurrent]
+      if (autoState !== undefined && !autoState.finalized) {
+        rememberAutoTitleInput(effectiveCurrent, autoState.kind, normalized, autoState.workspaceId)
+        void applyAutoTitle(effectiveCurrent, autoState.kind, autoState.workspaceId)
+      }
       return
     }
-    // 欢迎页无活跃会话：自动创建项目工作区 + 会话后发送（否则首条消息会被静默丢弃；
-    // 项目让记忆/实验/文件都落在 <dataRoot>/projects/<slug>/ 下）
+
+    // 欢迎页无活跃会话：左侧项目列表创建新项目；项目内子聊天列表创建该项目的新子聊天。
+    // 先判断首条输入是否足以命名，低信息输入仍会进入会话并等待后续输入。
     void (async () => {
-      let cwd: string | undefined
-      try {
-        const res = await fetch('/evoresearch/fs/projects-auto', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ description: text }),
-        })
-        const json = await res.json()
-        if (json.ok && typeof json.value?.path === 'string') cwd = json.value.path
-      } catch { /* 自动建项目失败时退回空白会话 */ }
-      const id = await sessionsService?.create(cwd === undefined ? {} : { cwd })
-      if (id === undefined) return
+      const kind: AutoTitleKind = projectScope === null ? 'project' : 'subchat'
+      const initialTitle = await judgeAutoTitle(kind, [normalized], 1)
+      let cwd: string | undefined = projectScope?.path
+      let workspaceId: string | undefined
+
+      if (kind === 'project') {
+        try {
+          const res = await fetch('/evoresearch/fs/projects-auto', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ description: initialTitle.title ?? '' }),
+          })
+          const json = await res.json()
+          if (json.ok === true && typeof json.value?.path === 'string') cwd = json.value.path
+        } catch { /* 自动建项目失败时继续尝试空白会话 */ }
+      }
+
+      const workspace = cwd === undefined ? null : await ensureWorkspace(cwd)
+      if (typeof workspace?.workspaceId === 'string') workspaceId = workspace.workspaceId
+      const createOptions = workspaceId !== undefined
+        ? { workspaceId }
+        : cwd === undefined ? {} : { cwd }
+      const id = await sessionsService?.create(createOptions)
+      if (id === undefined || id === '') return
+      justCreatedSessionRef.current = id
+      const states = readAutoTitleStates()
+      states[id] = {
+        kind,
+        inputs: [normalized],
+        attempt: 1,
+        finalized: false,
+        ...(workspaceId === undefined ? {} : { workspaceId }),
+      }
+      writeAutoTitleStates(states)
+      setHomeMode(false)
       sessionsService?.open(id)
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 30; i++) {
         const created = sessionsService?.binding(id)?.session
         if (created !== undefined) {
+          if (initialTitle.title === null) {
+            try { await created.rename(kind === 'subchat' ? '新子对话' : '新项目') } catch { /* 占位标题失败不影响消息 */ }
+            if (workspaceId !== undefined) {
+              try { await workspacesService?.rename(workspaceId, kind === 'subchat' ? '新子对话' : '新项目') } catch { /* 占位标题失败不影响消息 */ }
+            }
+          }
           await created.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+          const manager = sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined
+          try { await manager?.refreshList?.() } catch { /* 列表刷新失败不影响当前会话 */ }
+          if (initialTitle.title !== null && initialTitle.title !== '') await applyAutoTitle(id, kind, workspaceId)
           return
         }
         await new Promise((r) => setTimeout(r, 150))
@@ -1091,10 +1239,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 style: narrow ? undefined : { width: panels.left },
                 children: jsx(ThreadList, {
                   useSessions,
+                  useWorkspaces,
                   view,
                   onView: setViewAndUrl,
                   onOpen: openSession,
                   onNewChat: startNewChat,
+                  onProjectModeChange: setProjectScope,
                   hasActive: (sessions.ids ?? []).some((id: string) => sessions.byId[id]?.blank !== true),
                   onRename: renameSession,
                   onForkSideChat: forkSideChat,
@@ -1376,6 +1526,7 @@ function apply(ctx: any) {
   registerConversation(ctx)
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
+    workspacesService = ctx.workspaces ?? null
     // 调试钩子：浏览器控制台可访问会话服务（开发诊断用）
     ;(window as any).__evoresearch = { sessions: sessionsService }
     // 连接状态源：快照存在 = 已握手；断连/重连经 subscribe 通知 UI。
@@ -1391,6 +1542,7 @@ function apply(ctx: any) {
       disposeService()
       connectionSource = null
       sessionsService = null
+      workspacesService = null
     }
   }, 'evoresearch-ui: layout 服务 + root 注册')
 }
