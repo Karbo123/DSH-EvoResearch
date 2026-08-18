@@ -57,6 +57,7 @@ import type { ContextRuntime, ProjectionQueryOptions, ProjectionQueryResult, Lin
 import type { ContextAssembler, AssembleInput, EffectQuery, AssemblyResult, ReferencePreview, EffectSignalRecord } from './context/assembler.js'
 import type { CompactionQuery, GraphConnectionInfo, PressureReport, CompactionRecord, ContextSourceReport, SurfaceEventInfo } from './context/types.js'
 import { readSessionEvents } from './rewind.js'
+import { isLowInformationInput } from './core/title.js'
 import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 import type { ApprovalPolicy, ApprovalDecision } from './platform/approval-policy.js'
@@ -1745,8 +1746,7 @@ export class EvoResearchApiService extends TypertRemoteService {
       .filter((text) => text !== '')
       .slice(0, 10)
     const attempt = Math.min(10, Math.max(1, Math.floor(args.attempt ?? inputs.length ?? 1)))
-    const lowInformation = /^(你好|您好|嗨|哈喽|hello|hi|hey|谢谢|感谢|好的|好|嗯|嗯嗯|ok|okay|继续|收到|明白)[!！。,.，、 ]*$/i
-    const meaningful = inputs.filter((text) => !lowInformation.test(text))
+    const meaningful = inputs.filter((text) => !isLowInformationInput(text))
     const fallback = kind === 'subchat' ? '未命名研究子对话' : '未命名科研项目'
     if (meaningful.length === 0 && attempt < 10) return { title: null, final: false }
 
@@ -1764,19 +1764,21 @@ export class EvoResearchApiService extends TypertRemoteService {
         messages: [
           `请根据下面按时间顺序的用户输入，为一个科研${kind === 'subchat' ? '子对话' : '项目'}生成标题。\n${inputs.map((text, index) => `${index + 1}. ${text.slice(0, 500)}`).join('\n')}`,
         ],
-        maxTokens: 60,
-        jsonInstruction: `输出 JSON：{"title":"短标题"}。标题使用用户主要语言，简洁、具体、能概括主题，不要带引号、序号、Markdown 或解释；如果信息仍不足，输出 {"title":null}。`,
+        // 推理型模型需要给足预算：思考过程会先消耗 token，太小会导致正文为空。
+        maxTokens: 400,
+        jsonInstruction: `输出 JSON：{"title":"短标题"}。只有当输入包含明确的研究主题、具体任务或研究目标时才生成标题；如果输入只是问候、询问助手能做什么、功能介绍、闲聊、感谢确认或信息不足，输出 {"title":null}。标题使用用户主要语言，简洁、具体、能概括研究主题，不要带引号、序号、Markdown 或解释。`,
       })
       const candidate = typeof value === 'object' && value !== null ? (value as Record<string, unknown>).title : undefined
       if (typeof candidate === 'string') {
         const title = candidate.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/^['"“”]+|['"“”]+$/g, '').slice(0, 80)
-        if (title !== '' && !lowInformation.test(title)) return { title, final: true }
+        if (title !== '' && !isLowInformationInput(title)) return { title, final: true }
       }
     } catch {
       // 辅助标题失败不影响实际对话；第 10 次由下方兜底保证有标题。
     }
     if (attempt >= 10) {
-      const seed = meaningful[0] ?? inputs[0] ?? ''
+      // 只允许「有意义输入」作为兜底标题；全是问候/能力询问时给通用占位名。
+      const seed = meaningful[0] ?? ''
       const compact = seed.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28)
       return { title: compact !== '' ? compact : fallback, final: true }
     }

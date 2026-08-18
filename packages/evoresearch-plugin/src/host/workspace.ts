@@ -24,6 +24,7 @@ import {
 } from './core/paths.js'
 import type { ProjectInfo } from '../shared/types.js'
 import { callJson } from './core/llm.js'
+import { isLowInformationInput } from './core/title.js'
 
 /** 导入/复制时跳过的可重建目录。 */
 const SKIP_DIRS = new Set(['.venv', 'node_modules', '.next', 'dist', '__pycache__', '.pytest_cache', '.ruff_cache', '.git'])
@@ -156,23 +157,29 @@ export class WorkspaceService {
    * @param description 用户首条消息（用于生成项目名）。
    */
   async autoCreateProject(ctx: Context, model: { provider: string; model: string }, description: string): Promise<ProjectInfo> {
+    const seed = description.trim()
     let slug = ''
-    try {
-      const value = await callJson(ctx, {
-        provider: model.provider,
-        model: model.model,
-        messages: [`根据以下研究描述生成一个简短英文项目名（小写字母/数字/连字符，≤20 字符）:\n${description.slice(0, 2000)}`],
-        maxTokens: 40,
-        jsonInstruction: '输出 JSON：{"slug": "project-name"}',
-      })
-      if (typeof value === 'object' && value !== null) {
-        const candidate = (value as Record<string, unknown>)['slug']
-        if (typeof candidate === 'string') slug = slugifyProjectName(candidate)
+    // 空描述或低信息输入（问候/询问助手能力）不调用模型，避免模型凭空编造
+    // 与对话内容无关的目录名；确定性回退到 slugify（纯中文/空 → project）。
+    if (seed !== '' && !isLowInformationInput(seed)) {
+      try {
+        const value = await callJson(ctx, {
+          provider: model.provider,
+          model: model.model,
+          messages: [`根据以下研究描述生成一个简短英文项目名（小写字母/数字/连字符，≤20 字符）:\n${seed.slice(0, 2000)}`],
+          // 推理型模型需要给足预算：思考过程会先消耗 token，太小会导致正文为空。
+          maxTokens: 200,
+          jsonInstruction: '输出 JSON：{"slug": "project-name"}',
+        })
+        if (typeof value === 'object' && value !== null) {
+          const candidate = (value as Record<string, unknown>)['slug']
+          if (typeof candidate === 'string') slug = slugifyProjectName(candidate)
+        }
+      } catch {
+        // LLM 失败：确定性回退
       }
-    } catch {
-      // LLM 失败：确定性回退
     }
-    if (!slug) slug = slugifyProjectName(description)
+    if (!slug) slug = slugifyProjectName(seed)
     if (!slug) slug = 'project'
     let name = slug
     if (this.hasProject(name)) {

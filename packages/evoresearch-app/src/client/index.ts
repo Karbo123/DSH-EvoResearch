@@ -95,13 +95,14 @@ function writeAutoTitleStates(states: Record<string, AutoTitleState>): void {
   try { localStorage.setItem(AUTO_TITLE_KEY, JSON.stringify(states)) } catch { /* 本地缓存不可用不影响聊天 */ }
 }
 
+// 与插件端 core/title.ts 的 isLowInformationInput 保持同一套规则。
 function lowInformationTitleInput(text: string): boolean {
-  return /^(你好|您好|嗨|哈喽|hello|hi|hey|谢谢|感谢|好的|好|嗯|嗯嗯|ok|okay|继续|收到|明白)[!！。,.，、 ]*$/i.test(text.trim())
+  return /^(你好|您好|嗨|哈喽|hello|hi|hey|谢谢|感谢|好的|好|嗯|嗯嗯|ok|okay|继续|收到|明白|在吗|(你|您)(可以|能|会)?(做|干|有|提供|帮忙)?(什么|啥|哪些|嘛)(事情|工作|功能)?|(你|您)(是|叫)什么|(你|您)是谁|介绍(一下)?(你|这个)?(自己)?|这(是|有)什么(用|意思|功能)?|(你|这)能帮我吗|what can you do|who are you|can you help me|how do you work)[!！?？。,.，、\s]*$/i.test(text.trim())
 }
 
 function localTitleFallback(kind: AutoTitleKind, inputs: string[]): string {
   const meaningful = inputs.find((text) => !lowInformationTitleInput(text))
-  const seed = (meaningful ?? inputs[0] ?? '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28)
+  const seed = (meaningful ?? '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28)
   return seed !== '' ? seed : kind === 'subchat' ? '未命名研究子对话' : '未命名科研项目'
 }
 
@@ -1052,7 +1053,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           const res = await fetch('/evoresearch/fs/projects-auto', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ description: initialTitle.title ?? '' }),
+            body: JSON.stringify({ description: initialTitle.title ?? normalized }),
           })
           const json = await res.json()
           if (json.ok === true && typeof json.value?.path === 'string') cwd = json.value.path
