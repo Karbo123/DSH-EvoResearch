@@ -386,8 +386,8 @@ body { margin: 0; }
 .evo-msg-body { min-width: 0; max-width: 78%; display: flex; flex-direction: column; gap: 4px; }
 .evo-msg-user-body { min-width: 0; max-width: 78%; }
 .evo-msg-bubble { padding: 8px 14px; border-radius: 13px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-.evo-msg-bubble-user { padding-block: 2px; line-height: 1.3; background: var(--color-user-message-bg); color: var(--color-user-message); border-top-right-radius: 4px; }
-.evo-msg-bubble-user .evo-md { line-height: 1.25; }
+.evo-msg-bubble-user { padding-block: 8px; line-height: 1.5; background: var(--color-user-message-bg); color: var(--color-user-message); border-top-right-radius: 4px; }
+.evo-msg-bubble-user .evo-md { line-height: 1.5; }
 .evo-msg-bubble-user .evo-md > p:only-child { margin-block: 0; }
 .evo-msg-bubble-assistant { background: var(--color-surface); border: 1px solid var(--color-border-light); border-top-left-radius: 4px; color: var(--color-text-primary); }
 .evo-msg-text { white-space: pre-wrap; word-break: break-word; }
