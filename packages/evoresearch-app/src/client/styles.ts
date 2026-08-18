@@ -25,6 +25,7 @@ export const CSS = `
   --color-text-primary: #33302a;
   --color-text-secondary: #6b6557;
   --color-text-tertiary: #736e60;
+  --color-text-placeholder: #b6b0a4;
   --brand: #066679;
   --brand-hover: #054e5b;
   --brand-solid: #066679;
@@ -78,6 +79,7 @@ html.dark {
   --color-text-primary: #ece7dc;
   --color-text-secondary: #ada694;
   --color-text-tertiary: #908d83;
+  --color-text-placeholder: #5d5951;
   --brand: #3b9cb0;
   --brand-hover: #46a9bd;
   --brand-solid: #087d91;
@@ -1459,7 +1461,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100%; }
 .evo-composer-editor .toastui-editor-ww-container .toastui-editor-contents { height: 100%; overflow-y: auto; padding: 10px 14px 12px; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; }
 .evo-composer-editor .ProseMirror { color: var(--color-text-primary); }
-.evo-composer-editor .ProseMirror .placeholder { color: var(--color-text-tertiary) !important; -webkit-text-fill-color: var(--color-text-tertiary) !important; opacity: 1; }
+.evo-composer-editor .ProseMirror .placeholder { color: var(--color-text-placeholder) !important; -webkit-text-fill-color: var(--color-text-placeholder) !important; opacity: 1; }
 .evo-composer-editor .toastui-editor-contents p { margin: 0 0 7px; }
 .evo-composer-editor .toastui-editor-contents p:last-child { margin-bottom: 0; }
 .evo-composer-editor .toastui-editor-contents h1, .evo-composer-editor .toastui-editor-contents h2, .evo-composer-editor .toastui-editor-contents h3 { color: var(--color-text-primary); border-bottom-color: var(--color-border-light); }
