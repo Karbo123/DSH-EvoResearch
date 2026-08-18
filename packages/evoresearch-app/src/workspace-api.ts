@@ -162,6 +162,26 @@ function sanitizeModelEntry(m: unknown): { id: string; name?: string; contextWin
   return out
 }
 
+/**
+ * 瞬态 Windows 文件锁（Defender / 文件监视器在 rename 提交瞬间短暂占用目标文件）
+ * 下重试原子写入；EPERM / EBUSY / EACCES / ENOENT 视为可重试码。
+ * 不修改第三方依赖，保证其他用户构建后同样生效。
+ */
+async function withWriteRetry<T>(fn: () => Promise<T>, attempts = 8): Promise<T> {
+  let lastError: unknown
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn()
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES' && code !== 'ENOENT') throw error
+      lastError = error
+      await new Promise((r) => setTimeout(r, 100 + i * 120))
+    }
+  }
+  throw lastError
+}
+
 /** 信任栅栏：回环 Host 或 webRuntime.trustedHosts 允许的权威。 */
 function trusted(req: IncomingMessage, trustedHosts: string[]): boolean {
   const host = req.headers.host ?? ''
@@ -402,9 +422,9 @@ export function registerWorkspaceApi(ctx: any): void {
             if (settings?.update !== undefined && profile !== undefined) {
               const configured = profile.models ?? []
               if (!configured.some((m) => m.id === model)) {
-                await settings.update('llm-pi-ai', {
+                await withWriteRetry(() => settings.update('llm-pi-ai', {
                   providers: { [provider]: { models: [...configured, { id: model }] } },
-                })
+                }))
               }
             }
           } catch { /* 模型目录写入失败不影响默认模型保存 */ }
@@ -531,7 +551,7 @@ export function registerWorkspaceApi(ctx: any): void {
             if (models.length > 0) profile.models = models
             else delete profile.models
           }
-          await settings.replace('llm-pi-ai', { providers: section.providers })
+          await withWriteRetry(() => settings.replace('llm-pi-ai', { providers: section.providers }))
           // API Key：明文写回凭据文件；空串表示清除该凭据。
           if (patch.apiKey !== undefined) {
             const ref = profile.apiKeyEnv
@@ -540,10 +560,10 @@ export function registerWorkspaceApi(ctx: any): void {
             const key = typeof patch.apiKey === 'string' ? patch.apiKey.trim() : ''
             if (key === '') {
               if (credentials?.unset === undefined) throw httpError(400, 'method-error', 'credentials 服务不可用')
-              await credentials.unset(ref)
+              await withWriteRetry(() => credentials.unset(ref))
             } else {
               if (credentials?.set === undefined) throw httpError(400, 'method-error', 'credentials 服务不可用')
-              await credentials.set(ref, key)
+              await withWriteRetry(() => credentials.set(ref, key))
             }
           }
           writeOk(res, { saved: true })
