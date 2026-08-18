@@ -1,16 +1,10 @@
 /**
- * 会话诊断导出与可选消息反馈（PLAT-20）。
+ * 会话诊断导出（PLAT-20）。
  *
- * - exportSessionDiagnostics：从会话事件派生完整诊断（消息/工具调用/工具结果/
- *   中断/压缩事件），只读不修改原会话；压缩事件来自 t5 compaction-log 记录
- *   （CompactionRecord 形状，见 context/types.ts）。
- * - MessageFeedbackStore：可选消息反馈入口（helpful/unhelpful/neutral + 自然
- *   语言评论），追加式 JSONL（<dataRoot>/.evoresearch-data/feedback.jsonl），
- *   供自进化（EVO-01 信号）消费。
+ * exportSessionDiagnostics：从会话事件派生完整诊断（消息/工具调用/工具结果/
+ * 中断/压缩事件），只读不修改原会话；压缩事件来自 t5 compaction-log 记录
+ * （CompactionRecord 形状，见 context/types.ts）。
  */
-
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 
 /** 诊断消息条目（角色 + 文本；来自 user/message 与 assistant/message 事件）。 */
 export interface DiagnosticMessage {
@@ -147,81 +141,3 @@ export function exportSessionDiagnostics(
 
 /* ------------------------------------------------------------------ */
 /* PLAT-20：可选消息反馈                                                */
-/* ------------------------------------------------------------------ */
-
-export type MessageFeedbackRating = 'helpful' | 'unhelpful' | 'neutral'
-
-export interface MessageFeedback {
-  readonly feedbackId: string
-  readonly sessionId: string
-  readonly messageSeq?: number
-  readonly turnId?: string
-  readonly rating: MessageFeedbackRating
-  /** 自然语言评论（可选）。 */
-  readonly comment?: string
-  readonly at: number
-}
-
-export interface MessageFeedbackInput {
-  readonly sessionId: string
-  readonly messageSeq?: number
-  readonly turnId?: string
-  readonly rating: MessageFeedbackRating
-  readonly comment?: string
-}
-
-/** 消息反馈存储（追加式 JSONL；PLAT-20 可选入口）。 */
-export class MessageFeedbackStore {
-  private readonly file: string
-
-  constructor(readonly dataRoot: string) {
-    this.file = path.join(dataRoot, '.evoresearch-data', 'feedback.jsonl')
-  }
-
-  fileOf(): string {
-    return this.file
-  }
-
-  /** 记录一条反馈。 */
-  record(input: MessageFeedbackInput, feedbackId?: string, at = Date.now()): MessageFeedback {
-    const feedback: MessageFeedback = {
-      feedbackId: feedbackId ?? `fb-${Math.random().toString(36).slice(2, 10)}`,
-      sessionId: input.sessionId,
-      messageSeq: input.messageSeq,
-      turnId: input.turnId,
-      rating: input.rating,
-      comment: input.comment,
-      at,
-    }
-    try {
-      fs.mkdirSync(path.dirname(this.file), { recursive: true })
-      fs.appendFileSync(this.file, `${JSON.stringify(feedback)}\n`, 'utf8')
-    } catch (error) {
-      console.warn(`[evoresearch:feedback] 反馈落盘失败（内存丢弃）: ${String(error)}`)
-    }
-    return feedback
-  }
-
-  /** 读取全部反馈（最新在前）。 */
-  list(sessionId?: string): MessageFeedback[] {
-    let lines: string[] = []
-    try {
-      lines = fs.readFileSync(this.file, 'utf8').split('\n').filter((line) => line.trim() !== '')
-    } catch {
-      return []
-    }
-    const feedback: MessageFeedback[] = []
-    for (const line of lines) {
-      try {
-        const item = JSON.parse(line) as MessageFeedback
-        if (typeof item?.feedbackId === 'string' && typeof item?.sessionId === 'string') {
-          if (sessionId === undefined || item.sessionId === sessionId) feedback.push(item)
-        }
-      } catch {
-        // 坏行跳过
-      }
-    }
-    feedback.sort((a, b) => b.at - a.at)
-    return feedback
-  }
-}

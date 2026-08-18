@@ -3,7 +3,7 @@
  *
  * 覆盖：多模型 Fallback selector、per-turn 工具选择（基础白名单）、统一审批
  * 策略、子代理谱系记录与 provider 抽象、自然语言 cron 与调度增强、会话诊断
- * 导出与消息反馈。纯函数级 + 假服务注入 + 临时目录（BASE-02 清理）。
+ * 导出。纯函数级 + 假服务注入 + 临时目录（BASE-02 清理）。
  */
 import { describe, it, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -21,7 +21,7 @@ import { selectToolsForTurn, BASE_TOOL_WHITELIST } from '../src/host/platform/to
 import { decideApproval, defaultApprovalPolicy, validateApprovalPolicy } from '../src/host/platform/approval-policy.js'
 import { SubagentRegistry, SubagentProviderRegistry, SubagentFacade } from '../src/host/platform/subagents.js'
 import type { SubagentProvider } from '../src/host/platform/subagents.js'
-import { exportSessionDiagnostics, MessageFeedbackStore } from '../src/host/platform/diagnostics.js'
+import { exportSessionDiagnostics } from '../src/host/platform/diagnostics.js'
 import { parseNaturalCron, SchedulerService } from '../src/host/scheduler.js'
 import { parseCron } from '../src/host/core/cron.js'
 
@@ -314,10 +314,10 @@ describe('PLAT-17 自然语言 cron 与调度增强', () => {
 })
 
 /* ------------------------------------------------------------------ */
-/* PLAT-20：会话诊断导出与消息反馈                                       */
+/* PLAT-20：会话诊断导出                                               */
 /* ------------------------------------------------------------------ */
 
-describe('PLAT-20 诊断导出与消息反馈', () => {
+describe('PLAT-20 会话诊断导出', () => {
   it('exportSessionDiagnostics：消息/工具/结果/中断/压缩齐全，不改原会话', () => {
     const events = [
       { seq: 0, type: 'turn/start', time: 1 },
@@ -345,18 +345,4 @@ describe('PLAT-20 诊断导出与消息反馈', () => {
     assert.equal(JSON.stringify(events), before)
   })
 
-  it('MessageFeedbackStore：record/list + JSONL 落盘', () => {
-    const root = tmpRoot('feedback')
-    const store = new MessageFeedbackStore(root)
-    store.record({ sessionId: 's1', messageSeq: 4, rating: 'helpful', comment: '回答准确' })
-    store.record({ sessionId: 's1', messageSeq: 9, rating: 'unhelpful' })
-    store.record({ sessionId: 's2', rating: 'neutral' })
-    const all = store.list()
-    assert.equal(all.length, 3)
-    const s1 = store.list('s1')
-    assert.equal(s1.length, 2)
-    assert.equal(s1[0]?.rating, 'unhelpful') // 最新在前
-    const lines = fs.readFileSync(store.fileOf(), 'utf8').split('\n').filter((l) => l.trim() !== '')
-    assert.equal(lines.length, 3)
-  })
 })

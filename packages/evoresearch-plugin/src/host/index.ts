@@ -66,7 +66,6 @@ import {
   SubagentProviderRegistry,
   SubagentFacade,
 } from './platform/subagents.js'
-import { MessageFeedbackStore } from './platform/diagnostics.js'
 import { McpSupervisor } from './mcp/supervisor.js'
 import { LayeredSkillRegistry } from './skills/registry.js'
 import { ScienceLoopService, experimentAppender } from './science/loops.js'
@@ -389,7 +388,6 @@ function apply(ctx: Context): void {
   } catch (error) {
     console.warn(`[evoresearch] 注册 DSH 子代理 provider 失败: ${String(error)}`)
   }
-  const feedbackStore = new MessageFeedbackStore(dataRoot)
   const mcpSupervisor = new McpSupervisor({ dataRoot })
   // PLAT-08..10：分层 Skill 注册表同时作为 DSH provider 与 EvoResearch
   // Remote API 的统一入口；workspace/project 层由 skillRegistryFor 按当前
@@ -417,7 +415,6 @@ function apply(ctx: Context): void {
     approvalPolicy,
     decideApproval: (toolName) => decisionFromPolicy(approvalPolicy, toolName),
     subagents: { registry: subagentRegistry, providers: subagentProviders, facade: subagentFacade },
-    feedback: { record: (input) => feedbackStore.record(input), list: (sessionId) => feedbackStore.list(sessionId) },
     mcp: mcpSupervisor,
     skillRegistry: layeredSkills,
     skillRegistryFor: (workspaceDir) => workspaceDir === undefined || workspaceDir === ''

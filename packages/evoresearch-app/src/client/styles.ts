@@ -683,12 +683,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-msg-copy:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-msg-copy.confirming { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
 .evo-msg-copy svg { width: 13px; height: 13px; }
-.evo-msg-feedback { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; border: 1px solid transparent; background: transparent; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; padding: 0; }
-.evo-msg-feedback:hover:not(:disabled) { background: var(--hover-bg); color: var(--color-text-primary); }
-.evo-msg-feedback.selected { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 14%, transparent); border-color: color-mix(in srgb, var(--color-success) 35%, transparent); }
-.evo-msg-feedback.selected.negative { color: var(--color-error); background: color-mix(in srgb, var(--color-error) 12%, transparent); border-color: color-mix(in srgb, var(--color-error) 32%, transparent); }
-.evo-msg-feedback:disabled { opacity: 0.45; cursor: wait; }
-.evo-msg-feedback svg { width: 14px; height: 14px; }
 /* 用户消息内联编辑（§回溯：编辑并重发覆盖） */
 .evo-msg-edit { display: flex; flex-direction: column; gap: 7px; min-width: 320px; max-width: 620px; }
 .evo-msg-edit-textarea { width: 100%; min-height: 76px; max-height: 220px; padding: 10px 12px; border: 1px solid var(--brand); border-radius: 12px; background: var(--color-surface); color: var(--color-text-primary); font-size: 14px; font-family: inherit; line-height: 1.5; outline: none; resize: vertical; }

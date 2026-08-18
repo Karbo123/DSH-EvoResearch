@@ -899,22 +899,6 @@ export function registerWorkspaceApi(ctx: any): void {
         }
 
         // ── Assistant 消息反馈（PLAT-20）：追加式信号，不改写会话原文 ──
-        if (method === 'feedback') {
-          if (evoresearch?.feedbackRecord === undefined) throw httpError(400, 'method-error', '反馈服务不可用')
-          const sessionId = requireString(payload, 'sessionId')
-          const rating = payload.rating
-          if (rating !== 'helpful' && rating !== 'unhelpful' && rating !== 'neutral') {
-            throw httpError(400, 'bad-request', '反馈 rating 无效')
-          }
-          const args: Record<string, unknown> = { sessionId, rating }
-          if (typeof payload.messageSeq === 'number' && Number.isFinite(payload.messageSeq)) args.messageSeq = Math.floor(payload.messageSeq)
-          if (typeof payload.turnId === 'string' && payload.turnId !== '') args.turnId = payload.turnId
-          if (typeof payload.comment === 'string' && payload.comment.trim() !== '') args.comment = payload.comment.trim().slice(0, 2000)
-          const result = await (evoresearch.feedbackRecord as (a: Record<string, unknown>) => Promise<unknown> | unknown)(args)
-          writeOk(res, result)
-          return
-        }
-
         // ── 实验管理（§5.1 Git 式分支/回退/checkpoint）──
         if (method === 'experiments-list' || method === 'experiments-get' || method === 'experiments-create' || method === 'experiments-update'
           || method === 'experiments-phase' || method === 'experiments-checkpoint' || method === 'experiments-rollback'

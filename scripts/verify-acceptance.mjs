@@ -39,7 +39,7 @@ import { ContextRuntime } from '../packages/evoresearch-plugin/src/host/platform
 import { selectModel, emptyFallbackState, recordFailure } from '../packages/evoresearch-plugin/src/host/platform/models-selector.ts'
 import { selectToolsForTurn, BASE_TOOL_WHITELIST } from '../packages/evoresearch-plugin/src/host/platform/tools-selector.ts'
 import { SubagentFacade, SubagentProviderRegistry, SubagentRegistry } from '../packages/evoresearch-plugin/src/host/platform/subagents.ts'
-import { MessageFeedbackStore, exportSessionDiagnostics } from '../packages/evoresearch-plugin/src/host/platform/diagnostics.ts'
+import { exportSessionDiagnostics } from '../packages/evoresearch-plugin/src/host/platform/diagnostics.ts'
 import { McpSupervisor } from '../packages/evoresearch-plugin/src/host/mcp/supervisor.ts'
 import { LayeredSkillRegistry } from '../packages/evoresearch-plugin/src/host/skills/registry.ts'
 import { SchedulerService } from '../packages/evoresearch-plugin/src/host/scheduler.ts'
@@ -326,10 +326,7 @@ async function accept19(dir) {
     { seq: 4, type: 'turn/end', data: { interrupted: true, reason: 'user_stop' } },
   ]
   const exported = exportSessionDiagnostics('s', events, [{ compactionId: 'c', trigger: 'manual', status: 'completed', startedAt: 1 }])
-  const feedback = new MessageFeedbackStore(path.join(dir, 'feedback'))
-  feedback.record({ sessionId: 's', rating: 'helpful', comment: '可继续' })
   check(exported.messages.length === 1 && exported.toolCalls.length === 2 && exported.interruptions.length === 1 && exported.compactions.length === 1, '诊断导出包含消息、工具、结果、中断和压缩事件')
-  check(feedback.list('s').length >= 1, '诊断反馈可用且追加式保存')
 }
 
 const ITEMS = [

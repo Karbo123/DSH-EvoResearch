@@ -13,7 +13,6 @@ import {
   Paperclip, ShieldCheck, Send, Wrench, User, Copy, Check, PenLine,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
   ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History, GitBranch,
-  ThumbsUp, ThumbsDown, MessageSquareText,
 } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
@@ -349,32 +348,11 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId }: {
   const tools = assistantTools(node, toolResults)
   const running = node.data.status === 'running'
   const settled = node.data.status === 'settled'
-  const [feedback, setFeedback] = useState<'helpful' | 'unhelpful' | 'neutral' | null>(null)
-  const [feedbackBusy, setFeedbackBusy] = useState(false)
   // 推理默认折叠（§31.6：小号 Thinking 行，展开后左侧 2px 边线 + 次级文字）
   const [thinkingOpen, setThinkingOpen] = useState(false)
   // 工具组：默认折叠已完成的组（§21.1），运行中自动展开
   const [toolsOpen, setToolsOpen] = useState(!settled)
   const anyRunning = tools.some((t) => t.result === undefined)
-  const sendFeedback = (rating: 'helpful' | 'unhelpful' | 'neutral', comment?: string) => {
-    if (sessionId === null || feedbackBusy || node.data.seq === undefined) return
-    setFeedbackBusy(true)
-    void fetch('/evoresearch/fs/feedback', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionId, messageSeq: node.data.seq, rating, ...(comment === undefined ? {} : { comment }) }),
-    }).then(async (response) => {
-      const json = await response.json() as { ok?: boolean; error?: { message?: string } }
-      if (json.ok !== true) throw new Error(json.error?.message ?? '反馈提交失败')
-      setFeedback(rating)
-      toast(rating === 'helpful' ? '已记录：有帮助' : rating === 'unhelpful' ? '已记录：需要改进' : '已记录反馈', 'info')
-    }).catch((error: unknown) => toast(String((error as Error)?.message ?? error), 'error')).finally(() => setFeedbackBusy(false))
-  }
-  const writeFeedback = () => {
-    const comment = window.prompt('补充这条回答的反馈（可留空）', '')
-    if (comment === null) return
-    sendFeedback('neutral', comment.trim() === '' ? undefined : comment.trim())
-  }
   return jsxs('div', {
     className: `evo-msg-row${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
@@ -415,24 +393,6 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId }: {
               !running && jsxs('div', {
                 className: 'evo-msg-meta',
                 children: [
-                  jsx('button', {
-                    type: 'button', className: `evo-msg-feedback${feedback === 'helpful' ? ' selected' : ''}`,
-                    title: '有帮助', 'aria-label': '有帮助', 'aria-pressed': feedback === 'helpful', disabled: feedbackBusy,
-                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); sendFeedback('helpful') },
-                    children: jsx(ThumbsUp, {}),
-                  }),
-                  jsx('button', {
-                    type: 'button', className: `evo-msg-feedback${feedback === 'unhelpful' ? ' selected negative' : ''}`,
-                    title: '需要改进', 'aria-label': '需要改进', 'aria-pressed': feedback === 'unhelpful', disabled: feedbackBusy,
-                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); sendFeedback('unhelpful') },
-                    children: jsx(ThumbsDown, {}),
-                  }),
-                  jsx('button', {
-                    type: 'button', className: `evo-msg-feedback${feedback === 'neutral' ? ' selected' : ''}`,
-                    title: '补充反馈', 'aria-label': '补充反馈', 'aria-pressed': feedback === 'neutral', disabled: feedbackBusy,
-                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); writeFeedback() },
-                    children: jsx(MessageSquareText, {}),
-                  }),
                   jsx(CopyButton, { text }),
                 ],
               }),

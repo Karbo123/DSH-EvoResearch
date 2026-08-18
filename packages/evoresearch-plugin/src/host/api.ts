@@ -68,7 +68,6 @@ import type { ToolDef } from './platform/tools-selector.js'
 import { selectToolsForTurn, BASE_TOOL_WHITELIST } from './platform/tools-selector.js'
 import type { SubagentRecord, SubagentCreateRequest, SubagentMode, SubagentOpResult } from './platform/subagents.js'
 import type { SubagentRegistry, SubagentProviderRegistry, SubagentFacade } from './platform/subagents.js'
-import type { MessageFeedback, MessageFeedbackInput, MessageFeedbackRating } from './platform/diagnostics.js'
 import { exportSessionDiagnostics, type SessionDiagnostics, type DiagnosticEventLike, type DiagnosticCompaction } from './platform/diagnostics.js'
 import type { McpSupervisor } from './mcp/supervisor.js'
 import type { McpServerConfig, McpServerStatus } from './mcp/supervisor.js'
@@ -143,11 +142,6 @@ export interface PlatformServices {
     readonly registry: SubagentRegistry
     readonly providers: SubagentProviderRegistry
     readonly facade: SubagentFacade
-  }
-  /** 消息反馈存储（PLAT-20）。 */
-  readonly feedback?: {
-    readonly record: (input: MessageFeedbackInput) => MessageFeedback
-    readonly list: (sessionId?: string) => MessageFeedback[]
   }
   /** MCP supervisor（PLAT-11/12）。 */
   readonly mcp?: McpSupervisor
@@ -687,28 +681,6 @@ export class EvoResearchApiService extends TypertRemoteService {
       if (changed) this.writeSessionMeta(meta)
     } catch {
       // 元数据清理失败不影响主流程
-    }
-    // feedback.jsonl
-    const feedbackFile = path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'feedback.jsonl')
-    try {
-      if (existsSync(feedbackFile)) {
-        const lines = readFileSync(feedbackFile, 'utf8').split('\n').filter((line) => line.trim() !== '')
-        const kept = lines.filter((line) => {
-          try {
-            const item = JSON.parse(line) as { sessionId?: unknown }
-            return typeof item.sessionId !== 'string' || !sessionIds.has(item.sessionId)
-          } catch {
-            return true
-          }
-        })
-        if (kept.length !== lines.length) {
-          const tmp = `${feedbackFile}.tmp-${process.pid}`
-          writeFileSync(tmp, kept.length > 0 ? `${kept.join('\n')}\n` : '', 'utf8')
-          renameSync(tmp, feedbackFile)
-        }
-      }
-    } catch {
-      // 反馈记录清理失败不影响主流程
     }
   }
 
@@ -2886,22 +2858,6 @@ export class EvoResearchApiService extends TypertRemoteService {
     const facade = this.services.platform?.subagents?.facade
     if (!facade) return { error: 'platform.subagents 未接线' }
     return facade.cancel(args.subagentId)
-  }
-
-  // ── PLAT-20：消息反馈 ──────────────────────────────────────────────────────
-
-  @Remote('feedbackRecord')
-  feedbackRecord(args: MessageFeedbackInput): MessageFeedback | { error: string } {
-    const feedback = this.services.platform?.feedback
-    if (!feedback) return { error: 'platform.feedback 未接线' }
-    return feedback.record(args)
-  }
-
-  @Remote('feedbackList')
-  feedbackList(args: { sessionId?: string }): MessageFeedback[] | { error: string } {
-    const feedback = this.services.platform?.feedback
-    if (!feedback) return { error: 'platform.feedback 未接线' }
-    return feedback.list(args.sessionId)
   }
 
   // ── PLAT-20：会话诊断导出 ──────────────────────────────────────────────────
