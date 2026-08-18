@@ -184,6 +184,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const frameRef = useRef<HTMLDivElement | null>(null)
   const desktop = isDesktop()
 
+  // 没有明确 threadId 的首页不跟随 sessions 服务异步恢复上一次会话。
+  // 否则首帧会短暂显示欢迎区，服务恢复 current 后又立刻切成旧对话，形成闪烁。
+  const [homeMode, setHomeMode] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const params = new URLSearchParams(location.search)
+    return params.get('threadId') === null && params.get('view') === null
+  })
+
   // 响应式（§26.1）：<768px 左右栏改为抽屉 + 黑色 40% 遮罩
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
   useEffect(() => {
@@ -214,8 +222,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
-  const current = sessions.current
-  const currentTitle = currentTitleOf(sessions)
+  const restoredCurrent = sessions.current
+  const current = homeMode ? undefined : restoredCurrent
+  const currentTitle = current === undefined ? null : currentTitleOf(sessions)
   const running = current !== undefined && sessions.byId[current]?.running === true
   // 当前会话的后台任务（§21.6：jobsBySession 快照）
   const currentJobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
@@ -278,6 +287,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }, [current])
 
   const openSession = (id: string) => {
+    setHomeMode(false)
     sessionsService?.open(id)
     // Bug：仅 patchUrl 清 view 会造成 state/URL 失步（面板残留主区域）——state 一并清
     setView(null)
@@ -285,18 +295,23 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const startNewChat = (projectCwd?: string) => {
     setView(null)
+    // 创建过程完成前仍保持首页/空白状态，避免旧会话在中间短暂闪回。
+    setHomeMode(true)
     // Home 操作清除 thread/project/定位状态（§43.5），关闭不合适的面板
     patchUrl({ threadId: null, view: null })
     // 新对话：优先指定项目工作区（左侧项目内新建）；否则继承当前会话所在项目；无则空白
     const cwd = projectCwd !== undefined && projectCwd !== ''
       ? projectCwd
-      : current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
+      : restoredCurrent === undefined ? undefined : (sessions.byId[restoredCurrent]?.cwd ?? undefined)
     void sessionsService?.create(cwd === undefined ? {} : { cwd })
       .then(async (id) => {
         // 刷新会话目录快照（新建的会话需进入左侧列表）
         const manager = sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined
         try { await manager?.refreshList?.() } catch { /* 忽略 */ }
-        if (typeof id === 'string' && id !== '') sessionsService?.open(id)
+        if (typeof id === 'string' && id !== '') {
+          setHomeMode(false)
+          sessionsService?.open(id)
+        }
       })
   }
 
@@ -306,6 +321,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const threadId = params.get('threadId')
     const resend = params.get('resend')
     if (threadId === null || threadId === '') return
+    setHomeMode(false)
     if (resend !== null) {
       // 编辑重发：清除参数，打开会话后自动发送修正文本（走官方 prompt 流程）
       history.replaceState(null, '', `${location.pathname}${location.search.replace(/([?&])resend=[^&]*/, '$1').replace(/[?&]$/, '')}${location.hash}`)
@@ -878,6 +894,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const sendMessage = (text: string, images?: Array<{ data: string; mediaType: string; name?: string }>) => {
     if (text.trim() === '') return
+    setHomeMode(false)
     // content 是内容块数组（§23.7 附件：文本 + 图片块），mode 必填（queue = 追加到当前轮次之后）
     const content: Array<{ type: string; text?: string; data?: string; mediaType?: string; name?: string }> = [{ type: 'text', text }]
     for (const image of images ?? []) content.push({ type: 'image', data: image.data, mediaType: image.mediaType, ...(image.name !== undefined ? { name: image.name } : {}) })
