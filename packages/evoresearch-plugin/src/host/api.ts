@@ -175,6 +175,49 @@ function packetToJson(packet: MemoryPacket): unknown {
   }
 }
 
+/** 路径规范化（大小写不敏感比较，统一斜杠）。 */
+function normPathKey(p: string): string {
+  return path.normalize(p).replace(/\\/g, '/').toLowerCase()
+}
+
+/** target 是否等于 base 或位于 base 之下。 */
+function isSameOrInside(target: string, base: string): boolean {
+  const t = normPathKey(target)
+  const b = normPathKey(base)
+  return t === b || t.startsWith(`${b}/`)
+}
+
+/** 会话存储根（与客户端 session-delete 同源）。 */
+function sessionStoreRoot(): string {
+  return path.join(process.env.DSH_HOME ?? process.cwd(), 'sessions')
+}
+
+/**
+ * DSH 会话目录键：与 @deepseek-ai/dsh-session-persistence-jsonl 的 projectKey
+ * 完全一致 —— 连续分隔符（/ \\ :）折叠为单个 `-`，不安全码元转义为 ~XXXX，
+ * 去掉前导 `-` 并截断到 251 字符，最后以 `--` 包裹。
+ */
+function sessionKeyOf(cwd: string): string {
+  if (cwd.length === 0) throw new Error('cannot encode an empty project path')
+  let readable = ''
+  let separatorRun = false
+  for (let i = 0; i < cwd.length; i += 1) {
+    const code = cwd.charCodeAt(i)
+    const ch = String.fromCharCode(code)
+    if (ch === '/' || ch === '\\' || ch === ':') {
+      if (!separatorRun) readable += '-'
+      separatorRun = true
+    } else if (ch !== '~' && /^[A-Za-z0-9._-]$/.test(ch)) {
+      readable += ch
+      separatorRun = false
+    } else {
+      readable += `~${code.toString(16).toUpperCase().padStart(4, '0')}`
+      separatorRun = false
+    }
+  }
+  return `--${(readable.replace(/^-+/, '') || 'root').slice(0, 251)}--`
+}
+
 /** EvoResearch Remote API。 */
 export class EvoResearchApiService extends TypertRemoteService {
   private readonly services: HostServices
@@ -461,6 +504,212 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
     agentDefaultModel.saveSelection({ provider: setting.provider, model: setting.model })
     return { ok: true, provider: setting.provider, model: setting.model }
+  }
+
+  /** 清除数据（设置面板）：scopes ∈ projects / models（prefs 为客户端本地偏好）。 */
+  @Remote('dataClear')
+  async dataClear(args: { scopes?: string[] }): Promise<{ ok: boolean; counts?: Record<string, number>; error?: string }> {
+    try {
+      const scopes = new Set((Array.isArray(args?.scopes) ? args.scopes : []).filter((s) => s === 'projects' || s === 'models'))
+      if (scopes.size === 0) return { ok: false, error: '未选择任何清除项' }
+      const counts: { projects: number; sessions: number; chatGraphs: number; tasks: number; models: number } = { projects: 0, sessions: 0, chatGraphs: 0, tasks: 0, models: 0 }
+
+      if (scopes.has('projects')) {
+        const projects = this.services.workspace.listProjects()
+        const projectPaths = projects.map((p) => p.path)
+        if (projectPaths.length > 0) {
+          // 运行中的项目会话不可删除（与 session-delete 同策略）
+          const agents = this.hostCtx.get('agents') as { get?(id: string): { status?: string } } | undefined
+          const live = this.hostCtx.get('sessions') as { list?(): Array<{ id?: string; header?: { cwd?: string } }> } | undefined
+          const busy = (live?.list?.() ?? []).some((s) => {
+            const cwd = s.header?.cwd ?? ''
+            if (!projectPaths.some((p) => isSameOrInside(cwd, p))) return false
+            return agents?.get?.(s.id ?? '')?.status === 'running'
+          })
+          if (busy) return { ok: false, error: '有项目会话正在运行，请先停止任务再清除' }
+
+          // 收集这些项目的全部会话 id（持久化 + live），供引用清理使用
+          const sessionIds = new Set<string>()
+          const persistence = this.hostCtx.get('sessionPersistence') as { listSnapshots?(): Promise<Array<{ header?: { id?: string; cwd?: string } }>> } | undefined
+          if (persistence?.listSnapshots !== undefined) {
+            try {
+              for (const snap of await persistence.listSnapshots()) {
+                const cwd = snap.header?.cwd ?? ''
+                if (projectPaths.some((p) => isSameOrInside(cwd, p))) {
+                  const id = snap.header?.id
+                  if (id !== undefined && id !== '') sessionIds.add(id)
+                }
+              }
+            } catch {
+              // 快照不可用则退回目录级清理
+            }
+          }
+          for (const s of live?.list?.() ?? []) {
+            const cwd = s.header?.cwd ?? ''
+            if (projectPaths.some((p) => isSameOrInside(cwd, p)) && s.id !== undefined) sessionIds.add(s.id)
+          }
+          console.log(`[evoresearch:data-clear] projects=${projects.length} sessionIds=${sessionIds.size} snapshots=${persistence?.listSnapshots !== undefined ? 'available' : 'missing'} root=${sessionStoreRoot()}`)
+
+          // 先释放项目记忆库连接，再删目录（Windows 文件占用防护）
+          for (const p of projects) {
+            try {
+              this.services.memory.closeStore(p.path)
+            } catch {
+              // 关闭失败不阻塞
+            }
+          }
+          const sessionsRoot = sessionStoreRoot()
+          for (const p of projects) {
+            // 项目目录（含 .venv / 记忆 / 笔记 / 实验 / 图数据等）
+            try {
+              rmSync(p.path, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 })
+              counts.projects += 1
+            } catch (error) {
+              console.error(`[evoresearch:data-clear] 项目目录删除失败: ${p.path}`, error)
+              // 单个目录失败不中断
+            }
+            // 会话目录（按 workspace 键）
+            try {
+              rmSync(path.join(sessionsRoot, sessionKeyOf(p.path)), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+              counts.sessions += 1
+            } catch (error) {
+              console.error(`[evoresearch:data-clear] 会话键目录删除失败: ${path.join(sessionsRoot, sessionKeyOf(p.path))}`, error)
+              // 不存在或失败
+            }
+          }
+          // 兜底：遍历会话存储，按 sessionId 精确删除（兼容键变体）
+          if (sessionIds.size > 0) {
+            const walk = (dir: string, depth: number): void => {
+              if (depth > 4) return
+              let entries: string[] = []
+              try {
+                entries = readdirSync(dir)
+              } catch {
+                return
+              }
+              for (const name of entries) {
+                const full = path.join(dir, name)
+                let isDir = false
+                try {
+                  isDir = statSync(full).isDirectory()
+                } catch {
+                  continue
+                }
+                if (!isDir) continue
+                if (sessionIds.has(name)) {
+                  try {
+                    rmSync(full, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+                    counts.sessions += 1
+                  } catch {
+                    // 跳过失败目录
+                  }
+                } else {
+                  walk(full, depth + 1)
+                }
+              }
+            }
+            walk(sessionsRoot, 0)
+          }
+
+          // 全局 Chat Graph 文件（<dataRoot>/.evoresearch-data/chat-graphs/<name>.json）
+          const graphsDir = path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'chat-graphs')
+          let graphFiles: string[] = []
+          try {
+            graphFiles = readdirSync(graphsDir)
+          } catch {
+            // 目录不存在
+          }
+          for (const p of projects) {
+            const prefix = `${p.name}.json`
+            for (const file of graphFiles) {
+              if (file === prefix || file.startsWith(`${prefix}.bak-`)) {
+                try {
+                  rmSync(path.join(graphsDir, file), { force: true })
+                  counts.chatGraphs += 1
+                } catch {
+                  // 跳过失败文件
+                }
+              }
+            }
+          }
+
+          // 项目定时任务：清空全部项目时一并移除（任务均挂靠项目工作区）
+          for (const task of this.services.scheduler.list()) {
+            if (this.services.scheduler.remove(task.taskId)) counts.tasks += 1
+          }
+
+          // 会话元数据 / 反馈记录中的项目会话引用
+          this.dropSessionRefs(sessionIds)
+        }
+      }
+
+      if (scopes.has('models')) {
+        this.resetModelSettingsFile()
+        const settings = this.hostCtx.get('settings') as { replace?(ns: unknown, section: object): Promise<unknown> } | undefined
+        if (settings?.replace !== undefined) {
+          try {
+            // 重置默认模型选择：用户层清空 → 回退组合基线（出厂默认）
+            await settings.replace('agent-default-model', {})
+          } catch {
+            // 无 settings provider 时忽略
+          }
+        }
+        counts.models = 1
+      }
+      return { ok: true, counts }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 重置模型档位文件为出厂默认。 */
+  private resetModelSettingsFile(): void {
+    const file = this.modelSettingsFile()
+    mkdirSync(path.dirname(file), { recursive: true })
+    const tmp = `${file}.tmp-${process.pid}`
+    writeFileSync(tmp, JSON.stringify(DEFAULT_MODEL_SETTINGS, null, 2), 'utf8')
+    renameSync(tmp, file)
+  }
+
+  /** 清理会话元数据与反馈记录中已删除会话的引用。 */
+  private dropSessionRefs(sessionIds: Set<string>): void {
+    if (sessionIds.size === 0) return
+    // session-meta.json
+    try {
+      const meta = this.readSessionMeta()
+      let changed = false
+      for (const id of sessionIds) {
+        if (meta[id] !== undefined) {
+          delete meta[id]
+          changed = true
+        }
+      }
+      if (changed) this.writeSessionMeta(meta)
+    } catch {
+      // 元数据清理失败不影响主流程
+    }
+    // feedback.jsonl
+    const feedbackFile = path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'feedback.jsonl')
+    try {
+      if (existsSync(feedbackFile)) {
+        const lines = readFileSync(feedbackFile, 'utf8').split('\n').filter((line) => line.trim() !== '')
+        const kept = lines.filter((line) => {
+          try {
+            const item = JSON.parse(line) as { sessionId?: unknown }
+            return typeof item.sessionId !== 'string' || !sessionIds.has(item.sessionId)
+          } catch {
+            return true
+          }
+        })
+        if (kept.length !== lines.length) {
+          const tmp = `${feedbackFile}.tmp-${process.pid}`
+          writeFileSync(tmp, kept.length > 0 ? `${kept.join('\n')}\n` : '', 'utf8')
+          renameSync(tmp, feedbackFile)
+        }
+      }
+    } catch {
+      // 反馈记录清理失败不影响主流程
+    }
   }
 
   /** §29：会话元数据（置顶/标签色/归档）后端存储——pin/tag/archive 随项目数据迁移。 */  private metaFile(): string {

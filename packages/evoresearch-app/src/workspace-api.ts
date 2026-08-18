@@ -461,6 +461,20 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
+        // 清除数据（设置面板）：scopes ∈ projects / models（prefs 为客户端本地偏好）
+        if (method === 'data-clear') {
+          if (evoresearch?.dataClear === undefined) throw httpError(400, 'method-error', '清除数据服务不可用')
+          const scopes = Array.isArray(payload.scopes)
+            ? (payload.scopes as unknown[]).filter((s): s is string => typeof s === 'string' && (s === 'projects' || s === 'models'))
+            : []
+          try {
+            const result = await (evoresearch.dataClear as (a: { scopes: string[] }) => Promise<unknown>).call(evoresearch, { scopes })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         // §12.4 Profile 文件编辑：写（新建/保存）/ 删除 / 重命名（名字严格校验）
         if (method === 'memory-profile-write' || method === 'memory-profile-delete' || method === 'memory-profile-rename') {
           const serviceName = method === 'memory-profile-write' ? 'memoryProfileWrite' : method === 'memory-profile-delete' ? 'memoryProfileDelete' : 'memoryProfileRename'

@@ -117,6 +117,20 @@ export class MemoryRuntime implements GoalRuntime {
     return store
   }
 
+  /** 关闭并释放某工作区的记忆库连接（清除项目数据前调用，避免 Windows 文件占用）。 */
+  closeStore(workspaceDir: string): void {
+    const key = workspaceDir || this.config.dataRoot
+    const store = this.stores.get(key)
+    if (store !== undefined) {
+      try {
+        store.close()
+      } catch {
+        // 关闭失败不阻塞清除流程
+      }
+      this.stores.delete(key)
+    }
+  }
+
   /** 项目记忆目录（.evoresearch-data/memories）。 */
   private memoryDirFor(workspaceDir: string): string {
     const base = workspaceDir && workspaceDir !== this.config.dataRoot

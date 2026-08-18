@@ -6,8 +6,9 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic } from 'lucide-react'
+import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic, Trash2 } from 'lucide-react'
 import { t } from './i18n'
+import { toast } from './toast'
 
 export interface SettingsDialogProps {
   onClose: () => void
@@ -335,7 +336,106 @@ function SingleModelSection({ kind }: { kind: 'vision' | 'image' | 'voice' }) {
   })
 }
 
-type SettingsTab = 'general' | 'code' | 'vision' | 'image' | 'voice'
+/** 清除数据（设置面板）：三类数据可多选，二次确认后执行；成功后刷新页面。 */
+function DataClearSection() {
+  const [checked, setChecked] = useState({ projects: false, models: false, prefs: false })
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const anyChecked = checked.projects || checked.models || checked.prefs
+
+  const rows: Array<{ key: 'projects' | 'models' | 'prefs'; title: string; desc: string }> = [
+    { key: 'projects', title: t('clearProjects'), desc: t('clearProjectsDesc') },
+    { key: 'models', title: t('clearModels'), desc: t('clearModelsDesc') },
+    { key: 'prefs', title: t('clearPrefs'), desc: t('clearPrefsDesc') },
+  ]
+
+  const execute = () => {
+    if (!anyChecked || busy) return
+    if (!confirming) {
+      setConfirming(true)
+      setError(null)
+      setTimeout(() => setConfirming(false), 5000)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const scopes: string[] = []
+    if (checked.projects) scopes.push('projects')
+    if (checked.models) scopes.push('models')
+    if (checked.prefs) {
+      // 本地偏好（主题/语言/布局/输入历史等）只存在浏览器 localStorage
+      const keys: string[] = []
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i)
+        if (key !== null && key.startsWith('evoresearch-')) keys.push(key)
+      }
+      for (const key of keys) localStorage.removeItem(key)
+    }
+    const finish = (ok: boolean, message?: string) => {
+      setBusy(false)
+      if (!ok) {
+        setError(message ?? t('dataClearError'))
+        setConfirming(false)
+        return
+      }
+      toast(t('dataCleared'), 'success')
+      setTimeout(() => { window.location.reload() }, 600)
+    }
+    if (scopes.length === 0) {
+      finish(true)
+      return
+    }
+    void fetch('/evoresearch/fs/data-clear', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scopes }),
+    }).then((res) => res.json()).then((json) => {
+      if (json.ok !== true) throw new Error(json.error?.message ?? t('dataClearError'))
+      finish(true)
+    }).catch((e: unknown) => finish(false, (e as Error)?.message ?? t('dataClearError')))
+  }
+
+  return jsxs('div', {
+    className: 'evo-setting',
+    children: [
+      jsxs('div', {
+        className: 'evo-setting-label',
+        children: [jsx(Trash2, {}), jsx('span', { children: t('settingsData') })],
+      }),
+      jsx('div', { className: 'evo-setting-hint', children: t('clearDataHint') }),
+      jsx('div', { className: 'evo-clear-rows', children: rows.map((row) => jsxs('label', {
+        className: `evo-clear-row${checked[row.key] ? ' checked' : ''}`,
+        children: [
+          jsx('input', {
+            type: 'checkbox',
+            checked: checked[row.key],
+            onChange: (e: { currentTarget: HTMLInputElement }) => {
+              const next = e.currentTarget.checked
+              setChecked((prev) => ({ ...prev, [row.key]: next }))
+              setConfirming(false)
+            },
+          }),
+          jsxs('span', { className: 'evo-clear-row-text', children: [
+            jsx('span', { className: 'evo-clear-row-title', children: row.title }),
+            jsx('span', { className: 'evo-clear-row-desc', children: row.desc }),
+          ] }),
+        ],
+      }, row.key)) }),
+      confirming && jsx('div', { className: 'evo-panel-error', children: t('clearDataWarning') }),
+      error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+      jsx('button', {
+        type: 'button',
+        className: `evo-btn evo-btn-danger${confirming ? ' confirming' : ''}`,
+        disabled: !anyChecked || busy,
+        onClick: execute,
+        children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: busy ? t('clearDataBusy') : confirming ? t('clearDataConfirm') : t('clearDataBtn') })] }),
+      }),
+    ],
+  })
+}
+
+type SettingsTab = 'general' | 'code' | 'vision' | 'image' | 'voice' | 'data'
 
 const TABS: Array<{ id: SettingsTab; label: string; icon: any }> = [
   { id: 'general', label: t('settingsGeneral'), icon: Cpu },
@@ -343,6 +443,7 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: any }> = [
   { id: 'vision', label: t('settingsVision'), icon: Eye },
   { id: 'image', label: t('settingsImage'), icon: ImageIcon },
   { id: 'voice', label: t('settingsVoice'), icon: Mic },
+  { id: 'data', label: t('settingsData'), icon: Trash2 },
 ]
 
 export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
@@ -414,7 +515,9 @@ export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
                     ] })
                   : tab === 'code'
                     ? jsx(CodeModelSection, {})
-                    : jsx(SingleModelSection, { kind: tab }),
+                    : tab === 'data'
+                      ? jsx(DataClearSection, {})
+                      : jsx(SingleModelSection, { kind: tab }),
               }),
             ],
           }),

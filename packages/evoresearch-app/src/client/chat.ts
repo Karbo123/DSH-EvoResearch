@@ -1515,7 +1515,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                         className: 'evo-question-custom',
                         placeholder: t('customAnswer'),
                         value: custom,
-                        onInput: (e: { currentTarget: HTMLInputElement }) => setQuestionCustom((prev) => ({ ...prev, [key]: e.currentTarget.value })),
+                        onInput: (e: { currentTarget: HTMLInputElement }) => {
+                          const next = e.currentTarget.value
+                          setQuestionCustom((prev) => ({ ...prev, [key]: next }))
+                        },
                         onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') submitQuestions(wait, questions) },
                       }),
                     ],

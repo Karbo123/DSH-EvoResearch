@@ -644,6 +644,17 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-settings-tab[data-active]::before { content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px; border-radius: 3px; background: var(--brand); }
 .evo-settings-tab svg { width: 16px; height: 16px; flex-shrink: 0; }
 .evo-settings-content { flex: 1; min-width: 0; overflow-y: auto; padding: 14px 16px; }
+/* ── 清除数据（设置面板）：多选行 + 二次确认 ── */
+.evo-clear-rows { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.evo-clear-row { display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.evo-clear-row:hover { border-color: color-mix(in srgb, var(--brand) 35%, var(--color-border-light)); }
+.evo-clear-row.checked { border-color: color-mix(in srgb, var(--color-error) 45%, var(--color-border-light)); background: color-mix(in srgb, var(--color-error) 5%, var(--color-surface)); }
+.evo-clear-row input[type='checkbox'] { width: 15px; height: 15px; margin: 2px 0 0; accent-color: var(--color-error); flex-shrink: 0; cursor: pointer; }
+.evo-clear-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.evo-clear-row-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+.evo-clear-row-desc { font-size: 12px; line-height: 1.5; color: var(--color-text-tertiary); }
+.evo-btn-danger.confirming { background: var(--color-error); color: #fff; }
+.evo-btn-danger.confirming:hover { background: color-mix(in srgb, var(--color-error) 86%, #000); }
 .evo-tier-grid { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
 .evo-tier-card { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
 .evo-tier-head { display: flex; align-items: baseline; gap: 10px; }
