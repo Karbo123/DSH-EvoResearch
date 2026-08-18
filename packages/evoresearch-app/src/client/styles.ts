@@ -276,6 +276,8 @@ body { margin: 0; }
   cursor: pointer; transition: border-color .15s, box-shadow .15s; box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
 .evo-suggest-card:hover { border-color: var(--brand); color: var(--color-text-primary); box-shadow: 0 2px 6px rgb(0 0 0 / 10%); }
+.evo-welcome-prompt { display: inline-flex; align-items: center; justify-content: center; margin-top: 22px; max-width: min(100%, 560px); padding: 10px 16px; border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--color-surface) 42%, transparent); color: var(--color-text-placeholder); font: inherit; font-size: 13px; cursor: text; box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%); }
+.evo-welcome-prompt:hover, .evo-welcome-prompt:focus-visible { border-color: color-mix(in srgb, var(--brand) 45%, var(--color-border)); color: var(--color-text-secondary); background: color-mix(in srgb, var(--color-surface) 58%, transparent); }
 /* ── 欢迎页 Research Dashboard（§31.7）── */
 .evo-dashboard { display: flex; gap: 10px; margin-top: 26px; }
 .evo-dashboard-card { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; padding: 12px 18px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); }
@@ -1461,7 +1463,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100%; }
 .evo-composer-editor .toastui-editor-ww-container .toastui-editor-contents { height: 100%; overflow-y: auto; padding: 10px 14px 12px; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; }
 .evo-composer-editor .ProseMirror { color: var(--color-text-primary); }
-.evo-composer-editor .ProseMirror .placeholder { color: var(--color-text-placeholder) !important; -webkit-text-fill-color: var(--color-text-placeholder) !important; opacity: 1; }
+.evo-composer-editor .ProseMirror .placeholder { visibility: hidden; color: var(--color-text-placeholder) !important; -webkit-text-fill-color: var(--color-text-placeholder) !important; opacity: 1; }
 .evo-composer-editor .toastui-editor-contents p { margin: 0 0 7px; }
 .evo-composer-editor .toastui-editor-contents p:last-child { margin-bottom: 0; }
 .evo-composer-editor .toastui-editor-contents h1, .evo-composer-editor .toastui-editor-contents h2, .evo-composer-editor .toastui-editor-contents h3 { color: var(--color-text-primary); border-bottom-color: var(--color-border-light); }
