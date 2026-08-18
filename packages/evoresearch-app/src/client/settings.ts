@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic, Trash2 } from 'lucide-react'
+import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic, Trash2, Server } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
 
@@ -435,10 +435,258 @@ function DataClearSection() {
   })
 }
 
-type SettingsTab = 'general' | 'code' | 'vision' | 'image' | 'voice' | 'data'
+/** 模型服务（§25.2 扩展）：编辑 provider 的 API URL / Key / 推理强度并持久化。 */
+const REASONING_LEVELS: Array<[string, string]> = [
+  ['', t('reasoningInherit')],
+  ['off', t('effortOff')],
+  ['minimal', t('effortMinimal')],
+  ['low', t('effortLow')],
+  ['medium', t('effortMedium')],
+  ['high', t('effortHigh')],
+  ['xhigh', t('effortXhigh')],
+  ['max', t('effortMax')],
+]
+
+interface LlmModelRow {
+  id: string
+  name: string
+  contextWindow: number | null
+  reasoningEfforts: Record<string, string | null> | false | null
+}
+
+interface LlmProviderEditor {
+  id: string
+  displayName: string
+  baseURL: string
+  apiKeyEnv: string
+  apiKey: string
+  api: string
+  reasoning: string
+  models: LlmModelRow[]
+}
+
+/** 从 reasoningEfforts 还原已选择的单一强度（false=关闭；多档自定义时返回空串）。 */
+function modelReasoningLevel(efforts: Record<string, string | null> | false | null): string {
+  if (efforts === false) return 'off'
+  if (efforts === null || typeof efforts !== 'object') return ''
+  const levels = Object.entries(efforts).filter(([level, wire]) => level !== 'off' && wire !== null && wire !== undefined)
+  return levels.length === 1 ? levels[0][0] : ''
+}
+
+/** 设置模型推理强度 → reasoningEfforts（off=不支持推理；单档=off+该档；空=继承/清除）。 */
+function applyModelReasoning(level: string): Record<string, string | null> | false | null {
+  if (level === '') return null
+  if (level === 'off') return false
+  return { off: null, [level]: level }
+}
+
+/** 模型服务配置（§25.2 扩展）：API URL / 明文 Key / 模型列表 / 推理强度。 */
+function LlmProviderSection() {
+  const [providers, setProviders] = useState<LlmProviderEditor[] | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [savedId, setSavedId] = useState<string | null>(null)
+
+  const load = () => {
+    setError(null)
+    void fetch('/evoresearch/fs/llm-providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.ok) {
+          setProviders((json.value?.providers ?? []).map((p: Record<string, unknown>) => ({
+            id: String(p.id ?? ''),
+            displayName: String(p.displayName ?? ''),
+            baseURL: String(p.baseURL ?? ''),
+            apiKeyEnv: String(p.apiKeyEnv ?? ''),
+            apiKey: String(p.apiKey ?? ''),
+            api: String(p.api ?? 'openai-completions'),
+            reasoning: String(p.reasoning ?? ''),
+            models: (Array.isArray(p.models) ? p.models : []).map((m: Record<string, unknown>) => ({
+              id: String(m.id ?? ''),
+              name: String(m.name ?? ''),
+              contextWindow: m.contextWindow == null ? null : Number(m.contextWindow),
+              reasoningEfforts: (m.reasoningEfforts === undefined ? null : m.reasoningEfforts) as LlmModelRow['reasoningEfforts'],
+            })),
+          })))
+        } else setError(json.error?.message ?? '加载失败')
+      })
+      .catch((e: unknown) => setError((e as Error)?.message ?? '加载失败'))
+  }
+  useEffect(load, [])
+
+  const updateProvider = (id: string, patch: Partial<LlmProviderEditor>) => {
+    setProviders((prev) => (prev ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)))
+  }
+
+  const setModelReasoning = (providerId: string, modelId: string, level: string) => {
+    setProviders((prev) => (prev ?? []).map((p) => {
+      if (p.id !== providerId) return p
+      return { ...p, models: p.models.map((m) => (m.id === modelId ? { ...m, reasoningEfforts: applyModelReasoning(level) } : m)) }
+    }))
+  }
+
+  const fetchModels = (id: string) => {
+    if (busyId !== null) return
+    setBusyId(id)
+    setError(null)
+    void fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.ok !== true) throw new Error(json.error?.message ?? t('llmFetchFailed'))
+        const group = (json.value?.groups ?? []).find((g: { provider?: { id?: string } }) => g.provider?.id === id)
+        const live: Array<{ id?: string; name?: string; contextWindow?: number | null }> = group?.models ?? []
+        setProviders((prev) => (prev ?? []).map((p) => {
+          if (p.id !== id) return p
+          const existing = new Map(p.models.map((m) => [m.id, m]))
+          for (const m of live) {
+            if (m.id !== undefined && m.id !== '' && !existing.has(m.id)) {
+              existing.set(m.id, { id: m.id, name: m.name ?? m.id, contextWindow: m.contextWindow ?? null, reasoningEfforts: null })
+            }
+          }
+          return { ...p, models: [...existing.values()] }
+        }))
+        toast(t('llmFetchDone').replace('{n}', String(live.length)), 'success')
+      })
+      .catch((e: unknown) => setError((e as Error)?.message ?? t('llmFetchFailed')))
+      .finally(() => setBusyId(null))
+  }
+
+  const save = (id: string) => {
+    const provider = providers?.find((p) => p.id === id)
+    if (provider === undefined || busyId !== null) return
+    setBusyId(id)
+    setError(null)
+    const patch = {
+      displayName: provider.displayName,
+      baseURL: provider.baseURL,
+      apiKey: provider.apiKey,
+      reasoning: provider.reasoning,
+      models: provider.models.map((m) => {
+        const entry: Record<string, unknown> = { id: m.id }
+        if (m.name !== '' && m.name !== m.id) entry.name = m.name
+        if (m.reasoningEfforts !== null && m.reasoningEfforts !== undefined) entry.reasoningEfforts = m.reasoningEfforts
+        return entry
+      }),
+    }
+    void fetch('/evoresearch/fs/llm-provider-save', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: id, patch }),
+    }).then((r) => r.json()).then((json) => {
+      setBusyId(null)
+      if (json.ok) {
+        setSavedId(id)
+        toast(t('llmSaved'), 'success')
+      } else setError(json.error?.message ?? t('llmSaveFailed'))
+    }).catch((e: unknown) => {
+      setBusyId(null)
+      setError((e as Error)?.message ?? t('llmSaveFailed'))
+    })
+  }
+
+  return jsxs('div', {
+    className: 'evo-setting',
+    children: [
+      jsxs('div', {
+        className: 'evo-setting-label',
+        children: [jsx(Server, {}), jsx('span', { children: t('settingsLlm') })],
+      }),
+      jsx('div', { className: 'evo-setting-hint', children: t('llmServiceHint') }),
+      providers === null
+        ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+        : providers.length === 0
+          ? jsx('div', { className: 'evo-setting-hint', children: t('noLlmProviders') })
+          : jsx('div', { className: 'evo-llm-providers', children: providers.map((provider) => {
+              const busy = busyId === provider.id
+              return jsxs('div', {
+                className: 'evo-llm-provider',
+                children: [
+                  jsxs('div', { className: 'evo-tier-head', children: [
+                    jsx('span', { className: 'evo-tier-name', children: `${t('llmProviderId')}: ${provider.id}` }),
+                    jsx('span', { className: 'evo-tier-desc', children: provider.api }),
+                  ] }),
+                  jsx(ModelField, { label: t('llmProviderName'), value: provider.displayName, onChange: (v) => updateProvider(provider.id, { displayName: v }) }),
+                  jsx(ModelField, { label: t('apiUrlLabel'), value: provider.baseURL, onChange: (v) => updateProvider(provider.id, { baseURL: v }) }),
+                  jsxs('label', {
+                    className: 'evo-setting-field',
+                    children: [
+                      jsxs('span', { className: 'evo-setting-field-label', children: [
+                        t('apiKeyLabel'),
+                        provider.apiKeyEnv !== '' && jsx('span', { className: 'evo-setting-field-env', children: `(${provider.apiKeyEnv})` }),
+                      ] }),
+                      jsx('input', {
+                        type: 'text',
+                        className: 'evo-panel-input evo-llm-key-input',
+                        value: provider.apiKey,
+                        spellCheck: false,
+                        autoComplete: 'off',
+                        placeholder: t('apiKeyLabel'),
+                        onInput: (e: { currentTarget: HTMLInputElement }) => updateProvider(provider.id, { apiKey: e.currentTarget.value }),
+                      }),
+                    ],
+                  }),
+                  jsx('div', { className: 'evo-setting-hint', children: t('llmKeyHint') }),
+                  jsxs('label', {
+                    className: 'evo-setting-field',
+                    children: [
+                      jsx('span', { className: 'evo-setting-field-label', children: t('providerDefaultReasoning') }),
+                      jsx('select', {
+                        className: 'evo-panel-input evo-sched-select',
+                        value: provider.reasoning,
+                        onChange: (e: { currentTarget: HTMLSelectElement }) => updateProvider(provider.id, { reasoning: e.currentTarget.value }),
+                        children: REASONING_LEVELS.map(([level, label]) => jsx('option', { value: level, children: label }, level)),
+                      }),
+                    ],
+                  }),
+                  jsxs('div', { className: 'evo-llm-actions', children: [
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-run',
+                      disabled: busy,
+                      onClick: () => fetchModels(provider.id),
+                      children: jsxs(Fragment, { children: [jsx(Server, {}), jsx('span', { children: busy && busyId === provider.id ? t('fetchModelsBusy') : t('fetchModels') })] }),
+                    }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-ok',
+                      disabled: busy,
+                      onClick: () => save(provider.id),
+                      children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: busy ? t('saving') : t('save') })] }),
+                    }),
+                  ] }),
+                  savedId === provider.id && jsx('div', { className: 'evo-setting-hint', children: t('llmSaved') }),
+                  provider.models.length > 0 && jsxs('div', {
+                    className: 'evo-llm-models',
+                    children: [
+                      jsx('div', { className: 'evo-setting-field-label', children: t('modelReasoningLabel') }),
+                      provider.models.map((m) => jsxs('div', {
+                        className: 'evo-llm-model-row',
+                        children: [
+                          jsx('span', { className: 'evo-llm-model-id', title: m.id, children: m.id }),
+                          jsx('span', { className: 'evo-llm-model-ctx', children: m.contextWindow != null ? `${m.contextWindow}` : '' }),
+                          jsx('select', {
+                            className: 'evo-panel-input evo-sched-select',
+                            value: modelReasoningLevel(m.reasoningEfforts),
+                            onChange: (e: { currentTarget: HTMLSelectElement }) => setModelReasoning(provider.id, m.id, e.currentTarget.value),
+                            children: REASONING_LEVELS.map(([level, label]) => jsx('option', { value: level, children: label }, level)),
+                          }),
+                        ],
+                      }, m.id)),
+                    ],
+                  }),
+                ],
+              }, provider.id)
+            }) }),
+      error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+    ],
+  })
+}
+
+type SettingsTab = 'general' | 'llm' | 'code' | 'vision' | 'image' | 'voice' | 'data'
 
 const TABS: Array<{ id: SettingsTab; label: string; icon: any }> = [
   { id: 'general', label: t('settingsGeneral'), icon: Cpu },
+  { id: 'llm', label: t('settingsLlm'), icon: Server },
   { id: 'code', label: t('settingsCodeModel'), icon: Code2 },
   { id: 'vision', label: t('settingsVision'), icon: Eye },
   { id: 'image', label: t('settingsImage'), icon: ImageIcon },
@@ -513,7 +761,9 @@ export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
                       jsx(PluginListSection, {}),
                       jsx(AboutSection, {}),
                     ] })
-                  : tab === 'code'
+                  : tab === 'llm'
+                    ? jsx(LlmProviderSection, {})
+                    : tab === 'code'
                     ? jsx(CodeModelSection, {})
                     : tab === 'data'
                       ? jsx(DataClearSection, {})

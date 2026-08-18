@@ -657,6 +657,16 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-btn-danger.confirming:hover { background: color-mix(in srgb, var(--color-error) 86%, #000); }
 .evo-tier-grid { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
 .evo-tier-card { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
+/* ── 模型服务配置（§25.2 扩展）：API URL / Key / 模型推理强度 ── */
+.evo-llm-providers { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
+.evo-llm-provider { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
+.evo-llm-actions { display: flex; align-items: center; gap: 8px; }
+.evo-llm-key-input { font-family: ui-monospace, Consolas, monospace; }
+.evo-setting-field-env { opacity: .75; margin-left: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+.evo-llm-models { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border-light); max-height: 260px; overflow-y: auto; }
+.evo-llm-model-row { display: flex; align-items: center; gap: 8px; padding: 3px 2px; }
+.evo-llm-model-id { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-llm-model-ctx { flex: 0 0 auto; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
 .evo-tier-head { display: flex; align-items: baseline; gap: 10px; }
 .evo-tier-name { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); }
 .evo-tier-desc { font-size: 12px; color: var(--color-text-tertiary); }

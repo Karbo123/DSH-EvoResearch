@@ -125,6 +125,43 @@ async function fetchEndpointModels(
     .map((m) => ({ id: m.id as string, name: m.name, contextWindow: m.context_window ?? m.contextWindow ?? null }))
 }
 
+/** 读取 llm-pi-ai 命名空间的当前配置（优先原始用户层，避免把解析默认值写回文件）。 */
+function llmPiAiSection(settings: any): { providers: Record<string, any> } {
+  try {
+    const raw = settings?.document?.['llm-pi-ai']
+    if (raw !== undefined && raw !== null && typeof raw === 'object') {
+      return { providers: (raw as { providers?: Record<string, any> }).providers ?? {} }
+    }
+  } catch { /* 原始层不可读 → 回退解析层 */ }
+  try {
+    const resolved = settings?.get?.('llm-pi-ai') as { providers?: Record<string, any> } | undefined
+    return { providers: resolved?.providers ?? {} }
+  } catch {
+    return { providers: {} }
+  }
+}
+
+/** 规范化模型条目：只保留 id / name / contextWindow / maxTokens / reasoningEfforts，丢弃空字段。 */
+function sanitizeModelEntry(m: unknown): { id: string; name?: string; contextWindow?: number; maxTokens?: number; reasoningEfforts?: Record<string, string | null> | false } | null {
+  const entry = m as { id?: unknown; name?: unknown; contextWindow?: unknown; maxTokens?: unknown; reasoningEfforts?: unknown } | null
+  if (entry === null || typeof entry !== 'object' || typeof entry.id !== 'string' || entry.id === '') return null
+  const out: { id: string; name?: string; contextWindow?: number; maxTokens?: number; reasoningEfforts?: Record<string, string | null> | false } = { id: entry.id }
+  if (typeof entry.name === 'string' && entry.name !== '') out.name = entry.name
+  if (typeof entry.contextWindow === 'number' && Number.isFinite(entry.contextWindow) && entry.contextWindow > 0) out.contextWindow = entry.contextWindow
+  if (typeof entry.maxTokens === 'number' && Number.isFinite(entry.maxTokens) && entry.maxTokens > 0) out.maxTokens = entry.maxTokens
+  if (entry.reasoningEfforts === false) {
+    out.reasoningEfforts = false
+  } else if (entry.reasoningEfforts !== undefined && entry.reasoningEfforts !== null && typeof entry.reasoningEfforts === 'object') {
+    const efforts: Record<string, string | null> = {}
+    for (const [level, wire] of Object.entries(entry.reasoningEfforts)) {
+      if (wire === null || wire === undefined) efforts[level] = null
+      else if (typeof wire === 'string' && wire !== '') efforts[level] = wire
+    }
+    if (Object.keys(efforts).length > 0) out.reasoningEfforts = efforts
+  }
+  return out
+}
+
 /** 信任栅栏：回环 Host 或 webRuntime.trustedHosts 允许的权威。 */
 function trusted(req: IncomingMessage, trustedHosts: string[]): boolean {
   const host = req.headers.host ?? ''
@@ -433,6 +470,83 @@ export function registerWorkspaceApi(ctx: any): void {
             }
           }
           writeOk(res, { groups })
+          return
+        }
+
+        // POST /evoresearch/fs/llm-providers → 模型服务配置（设置面板）：
+        // 返回 llm-pi-ai 各 provider 的 baseURL / 明文 API Key / 默认推理强度 /
+        // 已配置模型（含每模型 reasoningEfforts），供前端展示与编辑。
+        if (method === 'llm-providers') {
+          const settings = ctx.get('settings')
+          const { providers } = llmPiAiSection(settings)
+          const out: unknown[] = []
+          for (const [id, profile] of Object.entries(providers)) {
+            const p = profile as Record<string, unknown> | null
+            if (p === null || typeof p !== 'object') continue
+            const apiKeyEnv = typeof p.apiKeyEnv === 'string' && p.apiKeyEnv !== '' ? p.apiKeyEnv : null
+            const apiKey = apiKeyEnv !== null ? await resolveProviderApiKey(ctx, apiKeyEnv) : null
+            out.push({
+              id,
+              displayName: typeof p.displayName === 'string' && p.displayName !== '' ? p.displayName : id,
+              baseURL: typeof p.baseURL === 'string' ? p.baseURL : null,
+              apiKeyEnv,
+              apiKey: apiKey ?? null,
+              api: typeof p.api === 'string' ? p.api : null,
+              reasoning: typeof p.reasoning === 'string' ? p.reasoning : null,
+              models: (Array.isArray(p.models) ? p.models : []).map((m: { id?: string; name?: string; contextWindow?: number; reasoningEfforts?: unknown }) => ({
+                id: m.id ?? '',
+                name: m.name ?? m.id ?? '',
+                contextWindow: m.contextWindow ?? null,
+                reasoningEfforts: m.reasoningEfforts ?? null,
+              })).filter((m: { id: string }) => m.id !== ''),
+            })
+          }
+          writeOk(res, { providers: out })
+          return
+        }
+
+        // POST /evoresearch/fs/llm-provider-save → 保存模型服务配置：
+        // baseURL / displayName / api / reasoning / models 写回 settings.yaml
+        // （settings.replace），API Key 明文写回 .credentials.yaml（credentials.set）。
+        if (method === 'llm-provider-save') {
+          const settings = ctx.get('settings')
+          if (settings?.replace === undefined) throw httpError(400, 'method-error', 'settings 服务不可用')
+          const provider = requireString(payload, 'provider')
+          const patch = (payload.patch ?? {}) as Record<string, unknown>
+          const section = llmPiAiSection(settings)
+          const profile = section.providers[provider] as Record<string, unknown> | undefined
+          if (profile === undefined) throw httpError(400, 'bad-request', `Provider 不存在: ${provider}`)
+          if (patch.displayName !== undefined) profile.displayName = typeof patch.displayName === 'string' && patch.displayName !== '' ? patch.displayName : provider
+          if (patch.baseURL !== undefined) profile.baseURL = typeof patch.baseURL === 'string' ? patch.baseURL.trim() : ''
+          if (patch.api !== undefined) profile.api = typeof patch.api === 'string' ? patch.api.trim() : 'openai-completions'
+          if (patch.apiKeyEnv !== undefined) profile.apiKeyEnv = typeof patch.apiKeyEnv === 'string' && patch.apiKeyEnv !== '' ? patch.apiKeyEnv.trim() : undefined
+          if (patch.reasoning !== undefined) {
+            if (typeof patch.reasoning === 'string' && patch.reasoning !== '') profile.reasoning = patch.reasoning
+            else delete profile.reasoning
+          }
+          if (patch.models !== undefined) {
+            const models = Array.isArray(patch.models)
+              ? patch.models.map(sanitizeModelEntry).filter((m: { id: string } | null): m is { id: string } => m !== null)
+              : []
+            if (models.length > 0) profile.models = models
+            else delete profile.models
+          }
+          await settings.replace('llm-pi-ai', { providers: section.providers })
+          // API Key：明文写回凭据文件；空串表示清除该凭据。
+          if (patch.apiKey !== undefined) {
+            const ref = profile.apiKeyEnv
+            if (typeof ref !== 'string' || ref === '') throw httpError(400, 'bad-request', '该 Provider 未配置 apiKeyEnv，无法保存 API Key')
+            const credentials = ctx.get('credentials')
+            const key = typeof patch.apiKey === 'string' ? patch.apiKey.trim() : ''
+            if (key === '') {
+              if (credentials?.unset === undefined) throw httpError(400, 'method-error', 'credentials 服务不可用')
+              await credentials.unset(ref)
+            } else {
+              if (credentials?.set === undefined) throw httpError(400, 'method-error', 'credentials 服务不可用')
+              await credentials.set(ref, key)
+            }
+          }
+          writeOk(res, { saved: true })
           return
         }
 
