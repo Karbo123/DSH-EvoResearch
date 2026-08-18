@@ -502,138 +502,108 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   /** 清除数据（设置面板）：scopes ∈ projects / models（prefs 为客户端本地偏好）。 */
   @Remote('dataClear')
-  async dataClear(args: { scopes?: string[] }): Promise<{ ok: boolean; counts?: Record<string, number>; error?: string }> {
+  async dataClear(args: { scopes?: string[] }): Promise<{ ok: boolean; counts?: Record<string, number>; warnings?: string[]; error?: string }> {
     try {
       const scopes = new Set((Array.isArray(args?.scopes) ? args.scopes : []).filter((s) => s === 'projects' || s === 'models'))
       if (scopes.size === 0) return { ok: false, error: '未选择任何清除项' }
       const counts: { projects: number; sessions: number; chatGraphs: number; tasks: number; models: number } = { projects: 0, sessions: 0, chatGraphs: 0, tasks: 0, models: 0 }
+      const failedProjects: string[] = []
 
       if (scopes.has('projects')) {
         const projects = this.services.workspace.listProjects()
-        const projectPaths = projects.map((p) => p.path)
-        if (projectPaths.length > 0) {
-          // 运行中的项目会话不可删除（与 session-delete 同策略）
-          const agents = this.hostCtx.get('agents') as { get?(id: string): { status?: string } } | undefined
-          const live = this.hostCtx.get('sessions') as { list?(): Array<{ id?: string; header?: { cwd?: string } }> } | undefined
-          const busy = (live?.list?.() ?? []).some((s) => {
-            const cwd = s.header?.cwd ?? ''
-            if (!projectPaths.some((p) => isSameOrInside(cwd, p))) return false
-            return agents?.get?.(s.id ?? '')?.status === 'running'
-          })
-          if (busy) return { ok: false, error: '有项目会话正在运行，请先停止任务再清除' }
+        // 运行中的会话不可删除（与 session-delete 同策略）
+        const agents = this.hostCtx.get('agents') as { get?(id: string): { status?: string } } | undefined
+        const live = this.hostCtx.get('sessions') as { list?(): Array<{ id?: string; header?: { cwd?: string } }> } | undefined
+        // 清空全部项目数据 = 清空全部会话：任何正在运行的会话都会占住
+        // 会话文件/项目目录，Windows 下无法删除，先拦截并提示。
+        const busy = (live?.list?.() ?? []).some((s) => agents?.get?.(s.id ?? '')?.status === 'running')
+        if (busy) return { ok: false, error: '有会话正在运行，请先停止任务再清除' }
 
-          // 收集这些项目的全部会话 id（持久化 + live），供引用清理使用
-          const sessionIds = new Set<string>()
-          const persistence = this.hostCtx.get('sessionPersistence') as { listSnapshots?(): Promise<Array<{ header?: { id?: string; cwd?: string } }>> } | undefined
-          if (persistence?.listSnapshots !== undefined) {
-            try {
-              for (const snap of await persistence.listSnapshots()) {
-                const cwd = snap.header?.cwd ?? ''
-                if (projectPaths.some((p) => isSameOrInside(cwd, p))) {
-                  const id = snap.header?.id
-                  if (id !== undefined && id !== '') sessionIds.add(id)
-                }
-              }
-            } catch {
-              // 快照不可用则退回目录级清理
-            }
-          }
-          for (const s of live?.list?.() ?? []) {
-            const cwd = s.header?.cwd ?? ''
-            if (projectPaths.some((p) => isSameOrInside(cwd, p)) && s.id !== undefined) sessionIds.add(s.id)
-          }
-          console.log(`[evoresearch:data-clear] projects=${projects.length} sessionIds=${sessionIds.size} snapshots=${persistence?.listSnapshots !== undefined ? 'available' : 'missing'} root=${sessionStoreRoot()}`)
+        console.log(`[evoresearch:data-clear] projects=${projects.length} live=${live?.list?.()?.length ?? 0} root=${sessionStoreRoot()}`)
 
-          // 先释放项目记忆库连接，再删目录（Windows 文件占用防护）
-          for (const p of projects) {
-            try {
-              this.services.memory.closeStore(p.path)
-            } catch {
-              // 关闭失败不阻塞
-            }
-          }
-          const sessionsRoot = sessionStoreRoot()
-          for (const p of projects) {
-            // 项目目录（含 .venv / 记忆 / 笔记 / 实验 / 图数据等）
-            try {
-              rmSync(p.path, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 })
-              counts.projects += 1
-            } catch (error) {
-              console.error(`[evoresearch:data-clear] 项目目录删除失败: ${p.path}`, error)
-              // 单个目录失败不中断
-            }
-            // 会话目录（按 workspace 键）
-            try {
-              rmSync(path.join(sessionsRoot, sessionKeyOf(p.path)), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-              counts.sessions += 1
-            } catch (error) {
-              console.error(`[evoresearch:data-clear] 会话键目录删除失败: ${path.join(sessionsRoot, sessionKeyOf(p.path))}`, error)
-              // 不存在或失败
-            }
-          }
-          // 兜底：遍历会话存储，按 sessionId 精确删除（兼容键变体）
-          if (sessionIds.size > 0) {
-            const walk = (dir: string, depth: number): void => {
-              if (depth > 4) return
-              let entries: string[] = []
-              try {
-                entries = readdirSync(dir)
-              } catch {
-                return
-              }
-              for (const name of entries) {
-                const full = path.join(dir, name)
-                let isDir = false
-                try {
-                  isDir = statSync(full).isDirectory()
-                } catch {
-                  continue
-                }
-                if (!isDir) continue
-                if (sessionIds.has(name)) {
-                  try {
-                    rmSync(full, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-                    counts.sessions += 1
-                  } catch {
-                    // 跳过失败目录
-                  }
-                } else {
-                  walk(full, depth + 1)
-                }
-              }
-            }
-            walk(sessionsRoot, 0)
-          }
-
-          // 全局 Chat Graph 文件（<dataRoot>/.evoresearch-data/chat-graphs/<name>.json）
-          const graphsDir = path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'chat-graphs')
-          let graphFiles: string[] = []
+        // 先标记「删除中」并释放项目记忆库连接：期间会话事件/后台回填不得
+        // 重开数据库，否则 Windows 上目录会因文件占用而删除失败（EPERM）。
+        for (const p of projects) {
           try {
-            graphFiles = readdirSync(graphsDir)
+            this.services.memory.beginDeletion(p.path)
           } catch {
-            // 目录不存在
+            // 关闭失败不阻塞
           }
-          for (const p of projects) {
-            const prefix = `${p.name}.json`
-            for (const file of graphFiles) {
-              if (file === prefix || file.startsWith(`${prefix}.bak-`)) {
-                try {
-                  rmSync(path.join(graphsDir, file), { force: true })
-                  counts.chatGraphs += 1
-                } catch {
-                  // 跳过失败文件
-                }
-              }
+        }
+        // 根工作区（dataRoot 自身）的记忆库同样标记删除中，随后会整目录清空
+        try {
+          this.services.memory.beginDeletion('')
+        } catch {
+          // 关闭失败不阻塞
+        }
+        for (const p of projects) {
+          // 项目目录（含 .venv / 记忆 / 笔记 / 实验 / 图数据等）
+          try {
+            rmSync(p.path, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 })
+            counts.projects += 1
+          } catch (error) {
+            console.error(`[evoresearch:data-clear] 项目目录删除失败: ${p.path}`, error)
+            failedProjects.push(p.name)
+          }
+        }
+
+        // 侧边栏「项目/子聊天」列表由 DSH 会话（按 workspace 键分组）派生：
+        // 清空整个会话存储，而不是只删当前 dataRoot 项目对应的键，避免残留
+        // 会话让列表看起来「没清干净」。
+        const sessionsRoot = sessionStoreRoot()
+        let sessionEntries: string[] = []
+        try {
+          sessionEntries = readdirSync(sessionsRoot)
+        } catch {
+          // 会话目录不存在
+        }
+        for (const name of sessionEntries) {
+          try {
+            rmSync(path.join(sessionsRoot, name), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+            counts.sessions += 1
+          } catch (error) {
+            console.error(`[evoresearch:data-clear] 会话目录删除失败: ${path.join(sessionsRoot, name)}`, error)
+          }
+        }
+
+        // 根工作区（dataRoot 自身）的记忆 / Chat Graph 一并清空；
+        // 模型配置（model-settings.json）属于另一个清除项，保留不动。
+        const rootEvoData = path.join(this.services.memory.config.dataRoot, '.evoresearch-data')
+        for (const sub of ['memories', 'chat-graphs']) {
+          try {
+            rmSync(path.join(rootEvoData, sub), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+            if (sub === 'chat-graphs') counts.chatGraphs += 1
+          } catch (error) {
+            console.error(`[evoresearch:data-clear] ${sub} 清除失败: ${path.join(rootEvoData, sub)}`, error)
+          }
+        }
+
+        // 项目定时任务：清空全部项目时一并移除（任务均挂靠项目工作区）
+        for (const task of this.services.scheduler.list()) {
+          if (this.services.scheduler.remove(task.taskId)) counts.tasks += 1
+        }
+
+        // 全部会话已清空：会话元数据（置顶/标签/归档）整体重置
+        try {
+          this.writeSessionMeta({})
+        } catch (error) {
+          console.error('[evoresearch:data-clear] 会话元数据重置失败:', error)
+        }
+
+        // 收尾：解除删除标记（保留失败目录的标记，供用户处理后重试）
+        for (const p of projects) {
+          if (!failedProjects.includes(p.name)) {
+            try {
+              this.services.memory.endDeletion(p.path)
+            } catch {
+              // 解除标记失败不阻塞
             }
           }
-
-          // 项目定时任务：清空全部项目时一并移除（任务均挂靠项目工作区）
-          for (const task of this.services.scheduler.list()) {
-            if (this.services.scheduler.remove(task.taskId)) counts.tasks += 1
-          }
-
-          // 会话元数据 / 反馈记录中的项目会话引用
-          this.dropSessionRefs(sessionIds)
+        }
+        try {
+          this.services.memory.endDeletion('')
+        } catch {
+          // 解除标记失败不阻塞
         }
       }
 
@@ -650,7 +620,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         }
         counts.models = 1
       }
-      return { ok: true, counts }
+      return { ok: true, counts, warnings: failedProjects.length > 0 ? failedProjects : undefined }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }

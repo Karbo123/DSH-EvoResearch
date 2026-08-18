@@ -278,6 +278,7 @@ const DICT: Record<string, [string, string]> = {
   clearDataWarning: ['This cannot be undone. Please confirm once more to proceed.', '此操作不可撤销。请再次点击确认后执行。'],
   dataCleared: ['Data cleared, reloading…', '数据已清除，正在刷新…'],
   dataClearError: ['Clear failed', '清除失败'],
+  dataClearPartial: ['Some items could not be removed (files in use):', '部分项目因文件占用未能删除：'],
   tierSimple: ['Lightweight', '轻量档'],
   tierMedium: ['Balanced', '均衡档'],
   tierComplex: ['Advanced', '深度档'],

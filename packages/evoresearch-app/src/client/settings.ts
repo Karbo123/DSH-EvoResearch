@@ -372,14 +372,15 @@ function DataClearSection() {
       }
       for (const key of keys) localStorage.removeItem(key)
     }
-    const finish = (ok: boolean, message?: string) => {
+    const finish = (ok: boolean, message?: string, notice?: string) => {
       setBusy(false)
       if (!ok) {
         setError(message ?? t('dataClearError'))
         setConfirming(false)
         return
       }
-      toast(t('dataCleared'), 'success')
+      if (notice !== undefined && notice !== '') toast(notice, 'error')
+      else toast(t('dataCleared'), 'success')
       setTimeout(() => { window.location.reload() }, 600)
     }
     if (scopes.length === 0) {
@@ -392,7 +393,8 @@ function DataClearSection() {
       body: JSON.stringify({ scopes }),
     }).then((res) => res.json()).then((json) => {
       if (json.ok !== true) throw new Error(json.error?.message ?? t('dataClearError'))
-      finish(true)
+      const warnings = Array.isArray(json.value?.warnings) ? json.value.warnings as string[] : []
+      finish(true, undefined, warnings.length > 0 ? `${t('dataClearPartial')} ${warnings.join('、')}` : undefined)
     }).catch((e: unknown) => finish(false, (e as Error)?.message ?? t('dataClearError')))
   }
 

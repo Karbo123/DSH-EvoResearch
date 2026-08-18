@@ -60,6 +60,8 @@ interface ResolvedMemoryConfig {
 export class MemoryRuntime implements GoalRuntime {
   readonly config: ResolvedMemoryConfig
   private readonly stores = new Map<string, ResearchMemoryStore>()
+  /** 正在被「清除数据」删除的工作区：期间禁止懒重开记忆库，避免 Windows 文件占用。 */
+  private readonly deleting = new Set<string>()
   private readonly packets = new Map<string, MemoryPacket>()
   private readonly activeTurns = new Map<string, ActiveTurn>()
   private readonly reconciled = new Set<string>()
@@ -83,6 +85,9 @@ export class MemoryRuntime implements GoalRuntime {
   /** 获取某工作区的记忆库（按项目懒打开并缓存；首次打开执行 v3 启动对账）。 */
   storeFor(workspaceDir: string): ResearchMemoryStore {
     const key = workspaceDir || this.config.dataRoot
+    if (this.deleting.has(key)) {
+      throw new Error(`[evoresearch:memory] 工作区正在被清除（${key}），记忆库已关闭且不允许重开`)
+    }
     let store = this.stores.get(key)
     if (!store) {
       store = Store.open(this.memoryDirFor(workspaceDir))
@@ -129,6 +134,18 @@ export class MemoryRuntime implements GoalRuntime {
       }
       this.stores.delete(key)
     }
+  }
+
+  /** 清除数据：标记工作区为删除中并关闭其记忆库，期间 storeFor 不再重开（防 Windows 锁）。 */
+  beginDeletion(workspaceDir: string): void {
+    const key = workspaceDir || this.config.dataRoot
+    this.deleting.add(key)
+    this.closeStore(workspaceDir)
+  }
+
+  /** 清除数据收尾：移除删除中标记。 */
+  endDeletion(workspaceDir: string): void {
+    this.deleting.delete(workspaceDir || this.config.dataRoot)
   }
 
   /** 项目记忆目录（.evoresearch-data/memories）。 */
