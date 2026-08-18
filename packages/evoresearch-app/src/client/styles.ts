@@ -1458,6 +1458,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-editor .toastui-editor-ww-container { height: 100%; background: transparent; }
 .evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100%; }
 .evo-composer-editor .toastui-editor-ww-container .toastui-editor-contents { height: 100%; overflow-y: auto; padding: 10px 14px 12px; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; }
+.evo-composer-editor .ProseMirror { color: var(--color-text-primary); }
+.evo-composer-editor .ProseMirror .placeholder { color: var(--color-text-tertiary) !important; -webkit-text-fill-color: var(--color-text-tertiary) !important; opacity: 1; }
 .evo-composer-editor .toastui-editor-contents p { margin: 0 0 7px; }
 .evo-composer-editor .toastui-editor-contents p:last-child { margin-bottom: 0; }
 .evo-composer-editor .toastui-editor-contents h1, .evo-composer-editor .toastui-editor-contents h2, .evo-composer-editor .toastui-editor-contents h3 { color: var(--color-text-primary); border-bottom-color: var(--color-border-light); }
