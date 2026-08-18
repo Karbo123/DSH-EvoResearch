@@ -950,7 +950,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (host === null) return
     const editor = new ToastEditor({
       el: host,
-      height: '100%',
+      height: '112px',
       minHeight: '72px',
       initialValue: input,
       initialEditType: 'wysiwyg',
@@ -1060,17 +1060,29 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const [dragOver, setDragOver] = useState(false)
 
   // ── 输入框高度拖动（§23.1）：顶边缘热区，只有实际移动才改变高度 ──
+  const MARKDOWN_TOOLBAR_HEIGHT = 36
+  const COMPOSER_BASE_MIN_HEIGHT = 112
+  const [markdownToolbarOpen, setMarkdownToolbarOpen] = useState(false)
   const [composerHeight, setComposerHeight] = useState<number | null>(null)
   const composerResizeRef = useRef<{ startY: number; startH: number; moved: boolean } | null>(null)
   const composerResizeCleanupRef = useRef<(() => void) | null>(null)
   const composerResizeHandleRef = useRef<HTMLElement | null>(null)
   const composerMinHeight = () => {
-    return 112
+    return COMPOSER_BASE_MIN_HEIGHT + (markdownToolbarOpen ? MARKDOWN_TOOLBAR_HEIGHT : 0)
   }
   // 高度上限按视口计算，但不改变单击时的自然高度。
   const composerMaxHeight = () => {
     const vh = typeof window !== 'undefined' ? window.innerHeight : 900
-    return Math.max(composerMinHeight(), Math.min(Math.round(vh * 0.55), 520))
+    return Math.max(composerMinHeight(), Math.min(Math.round(vh * 0.55) + (markdownToolbarOpen ? MARKDOWN_TOOLBAR_HEIGHT : 0), 520 + MARKDOWN_TOOLBAR_HEIGHT))
+  }
+  const toggleMarkdownToolbar = () => {
+    const next = !markdownToolbarOpen
+    setMarkdownToolbarOpen(next)
+    setComposerHeight((height) => {
+      if (height === null) return null
+      const adjusted = height + (next ? MARKDOWN_TOOLBAR_HEIGHT : -MARKDOWN_TOOLBAR_HEIGHT)
+      return Math.max(COMPOSER_BASE_MIN_HEIGHT + (next ? MARKDOWN_TOOLBAR_HEIGHT : 0), adjusted)
+    })
   }
   const onComposerResizeStart = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void }) => {
     e.preventDefault()
@@ -1487,6 +1499,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               }),
               jsxs('div', {
                 className: 'evo-composer-status',
+                'data-markdown-toolbar-open': markdownToolbarOpen || undefined,
                 children: [
                   jsx('span', { className: 'evo-composer-dot', 'data-busy': running || undefined }),
                   jsx('span', { title: currentTitle === null ? t('noActiveConversationHint') : undefined, children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
@@ -1507,16 +1520,27 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     className: 'evo-composer-markdown-state',
                     children: t('markdownWysiwyg'),
                   }),
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-composer-markdown-toggle',
+                    'data-on': markdownToolbarOpen || undefined,
+                    title: markdownToolbarOpen ? t('hideMarkdownToolbar') : t('showMarkdownToolbar'),
+                    'aria-label': markdownToolbarOpen ? t('hideMarkdownToolbar') : t('showMarkdownToolbar'),
+                    'aria-pressed': markdownToolbarOpen,
+                    onClick: toggleMarkdownToolbar,
+                    children: jsx(PenLine, {}),
+                  }),
                 ],
               }),
               jsx('div', {
                 ref: composerEditorHostRef,
                 className: 'evo-composer-editor',
+                'data-markdown-toolbar-open': markdownToolbarOpen || undefined,
                 role: 'textbox',
                 'aria-label': t('askAnything'),
                 'aria-expanded': candidates.length > 0 || undefined,
                 'aria-autocomplete': 'list',
-                style: composerHeight !== null ? { height: `${composerHeight}px` } : undefined,
+                style: { height: `${composerHeight ?? (COMPOSER_BASE_MIN_HEIGHT + (markdownToolbarOpen ? MARKDOWN_TOOLBAR_HEIGHT : 0))}px` },
                 onPaste: onPasteImages,
                 onKeyDown: (e: { key: string }) => {
                   // Toast UI 捕获主要键盘事件；这里保留空输入历史的 React 侧入口。

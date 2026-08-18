@@ -1451,16 +1451,20 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── Toast UI WYSIWYG composer ── */
 .evo-composer-editor { flex: 0 0 auto; min-height: 112px; height: 112px; overflow: hidden; }
 .evo-composer-editor .toastui-editor-defaultUI { height: 100% !important; min-height: 0 !important; border: 0; border-radius: 0; background: transparent; color: var(--color-text-primary); font-family: inherit; }
-.evo-composer-editor .toastui-editor-defaultUI-toolbar { height: 36px; min-height: 36px; padding: 4px 10px; border-top: 0; border-bottom: 1px solid var(--color-border-light); background: transparent; }
-.evo-composer-editor .toastui-editor-toolbar-group { margin: 0 3px 0 0; border-right-color: var(--color-border-light); }
-.evo-composer-editor .toastui-editor-defaultUI-toolbar button { width: 28px; height: 28px; border-radius: 7px; background-color: transparent; }
-.evo-composer-editor .toastui-editor-defaultUI-toolbar button:not(:disabled):hover { background-color: var(--hover-bg); }
+.evo-composer-editor .toastui-editor-toolbar { display: flex; height: 0; min-height: 0; padding: 0; border: 0; background: transparent; overflow: hidden; visibility: hidden; }
+.evo-composer-editor[data-markdown-toolbar-open] .toastui-editor-toolbar { height: 36px; min-height: 36px; visibility: visible; }
+.evo-composer-editor .toastui-editor-defaultUI-toolbar { display: flex; width: 100%; height: 36px; min-height: 36px; box-sizing: border-box; padding: 4px 10px; border: 0; background: transparent; }
+.evo-composer-editor .toastui-editor-toolbar-group { display: flex; flex: 0 0 auto; height: 28px; margin: 0 3px 0 0; border-right-color: var(--color-border-light); }
+.evo-composer-editor .toastui-editor-toolbar .more { display: none; }
+.evo-composer-editor .toastui-editor-toolbar button { width: 28px; height: 28px; border: 1px solid transparent; border-radius: 7px; background-color: transparent; color: var(--color-text-secondary); }
+.evo-composer-editor .toastui-editor-toolbar button:not(:disabled):hover { background-color: var(--hover-bg); }
 .evo-composer-editor .toastui-editor-toolbar-icons { opacity: .72; }
-.evo-composer-editor .toastui-editor-defaultUI-toolbar button.active { background-color: color-mix(in srgb, var(--brand) 14%, transparent); }
-.evo-composer-editor .toastui-editor-defaultUI-toolbar button.active .toastui-editor-toolbar-icons { opacity: 1; }
-.evo-composer-editor .toastui-editor-main { min-height: 0; height: calc(100% - 36px); background: transparent; }
-.evo-composer-editor .toastui-editor-ww-container { height: 100%; background: transparent; }
-.evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100%; }
+.evo-composer-editor .toastui-editor-toolbar button.active { background-color: color-mix(in srgb, var(--brand) 14%, transparent); }
+.evo-composer-editor .toastui-editor-toolbar button.active .toastui-editor-toolbar-icons { opacity: 1; }
+.evo-composer-editor .toastui-editor-main { min-height: 0; height: 100%; background: transparent; }
+.evo-composer-editor .toastui-editor-main-container { height: 100% !important; }
+.evo-composer-editor .toastui-editor-ww-container { height: 100% !important; background: transparent; }
+.evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100% !important; min-height: 0; }
 .evo-composer-editor .toastui-editor-ww-container .toastui-editor-contents { height: 100%; overflow-y: auto; padding: 10px 14px 12px; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; }
 .evo-composer-editor .ProseMirror { color: var(--color-text-primary); }
 .evo-composer-editor .ProseMirror .placeholder { visibility: hidden; color: var(--color-text-placeholder) !important; -webkit-text-fill-color: var(--color-text-placeholder) !important; opacity: 1; }
@@ -1473,13 +1477,19 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-editor .toastui-editor-contents a { color: var(--brand); }
 .evo-composer-markdown-state { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-tertiary); font-size: 11px; }
 .evo-composer-markdown-state::before { content: 'M'; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 5px; color: var(--brand); font-size: 10px; font-weight: 700; }
+.evo-composer-markdown-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 24px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--color-text-tertiary); cursor: pointer; transition: color .15s ease, background-color .15s ease, border-color .15s ease; }
+.evo-composer-markdown-toggle svg { width: 14px; height: 14px; }
+.evo-composer-markdown-toggle:hover, .evo-composer-markdown-toggle:focus-visible { color: var(--brand); background: var(--hover-bg); border-color: var(--color-border-light); outline: none; }
+.evo-composer-markdown-toggle[data-on] { color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent); border-color: color-mix(in srgb, var(--brand) 28%, var(--color-border-light)); }
 html.dark .evo-composer-editor .toastui-editor-toolbar-icons { filter: invert(1); }
 html.dark .evo-composer-editor .toastui-editor-contents pre { background: color-mix(in srgb, var(--color-background) 72%, white 4%); }
-@media (prefers-reduced-motion: reduce) { .evo-composer-editor .toastui-editor-defaultUI-toolbar button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .evo-composer-editor .toastui-editor-toolbar button { transition: none; } }
 @media (max-width: 620px) {
-  .evo-composer-editor .toastui-editor-defaultUI-toolbar { padding-inline: 5px; overflow-x: auto; }
+  .evo-composer-editor .toastui-editor-toolbar { padding-inline: 5px; overflow-x: auto; }
+  .evo-composer-editor .toastui-editor-defaultUI-toolbar { padding-inline: 5px; }
   .evo-composer-editor .toastui-editor-toolbar-group { margin-right: 1px; }
-  .evo-composer-editor .toastui-editor-defaultUI-toolbar button { width: 25px; }
+  .evo-composer-editor .toastui-editor-toolbar button { width: 25px; }
   .evo-composer-markdown-state { display: none; }
+  .evo-composer-markdown-toggle { width: 26px; height: 26px; }
 }
 `
