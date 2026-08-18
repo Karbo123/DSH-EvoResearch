@@ -510,6 +510,22 @@ function apply(ctx: Context): void {
       })
     : undefined
 
+  // 8.55) Windows 终端约定：默认使用 CMD（cmd.exe）语法，不使用 PowerShell。
+  const disposeShellConvention = systemPrompt
+    ? systemPrompt.context({
+        name: 'evoresearch:windows-shell-convention',
+        order: 60,
+        text: () =>
+          '<shell_convention>\n' +
+          '在 Windows 上执行终端命令时，默认使用 CMD（cmd.exe）语法，不使用 PowerShell 语法：\n' +
+          '- 常用命令：dir / type / copy / del / move / set / start / tasklist / taskkill / netstat / findstr；\n' +
+          '- 环境变量用 %VAR% 读取、set VAR=value 写入；\n' +
+          '- 示例：netstat -ano | findstr :3082；taskkill /PID <pid> /F；\n' +
+          '- 除非用户明确要求使用 PowerShell，否则不要写 Get-ChildItem、Get-Content、$env:VAR 等 PowerShell 命令。\n' +
+          '</shell_convention>',
+      })
+    : undefined
+
   // 8.6) 项目环境（§环境管理）：按会话动态注入 <project_env> 指引——
   // assemble context 携带 agent.session.header.cwd，据此解析当前项目的 .venv。
   const disposeEnvHint = systemPrompt
@@ -526,9 +542,9 @@ function apply(ctx: Context): void {
               '本项目拥有独立的 Python 虚拟环境（UV 管理，与其它项目隔离）：\n' +
               `- 环境目录: ${envDir}\n` +
               `- 解释器: ${python}\n` +
-              `- 环境变量: $env:DSH_VENV_PYTHON（pwsh）/ $DSH_VENV_PYTHON（bash）即该解释器路径\n` +
-              '运行本项目 Python 代码请使用该解释器（pwsh: & $env:DSH_VENV_PYTHON script.py；bash: "$DSH_VENV_PYTHON" script.py）；\n' +
-              `安装依赖请使用: uv pip install --python "${envDir}" <package>（uv 路径在 $env:DSH_UV）\n` +
+              `- 环境变量: %DSH_VENV_PYTHON%（cmd）/ $env:DSH_VENV_PYTHON（pwsh）即该解释器路径\n` +
+              '运行本项目 Python 代码请使用该解释器（cmd: "%DSH_VENV_PYTHON%" script.py；pwsh: & $env:DSH_VENV_PYTHON script.py）；\n' +
+              `安装依赖请使用: uv pip install --python "${envDir}" <package>（uv 路径在 %DSH_UV%）\n` +
               '禁止使用全局 python/pip（会污染其它项目）。\n' +
               '</project_env>'
           }
@@ -628,6 +644,7 @@ function apply(ctx: Context): void {
       disposeCommands()
       disposeVision?.()
       disposeCodeMode?.()
+      disposeShellConvention?.()
       disposeEnvHint?.()
       disposeShellEnv?.()
       disposeRewindHook()
