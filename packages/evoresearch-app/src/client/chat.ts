@@ -1564,6 +1564,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     className: 'evo-composer-tool',
                     'data-on': pendingImages.length > 0 || undefined,
                     title: t('attachFiles'),
+                    'aria-label': t('attachFiles'),
                     onClick: () => fileInputRef.current?.click(),
                     children: jsx(Paperclip, {}),
                   }),

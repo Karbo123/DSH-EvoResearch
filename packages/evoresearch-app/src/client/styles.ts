@@ -321,9 +321,9 @@ body { margin: 0; }
 .evod-fence-body { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
 .evod-fence-body:last-child { border-radius: 0 0 6px 6px; margin-bottom: 4px; }
 .evo-composer-textarea::selection { background: color-mix(in srgb, var(--brand) 30%, transparent); }
-.evo-composer-tools { display: flex; align-items: center; gap: 4px; padding: 6px 8px 8px; }
+.evo-composer-tools { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 6px 8px 8px; visibility: visible; opacity: 1; }
 .evo-composer-tool {
-  display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: none; background: none;
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 6px 9px; border: none; background: none;
   border-radius: 8px; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer;
 }
 .evo-composer-tool:hover { background: var(--hover-bg); color: var(--color-text-primary); }
@@ -1467,7 +1467,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100% !important; min-height: 0; }
 .evo-composer-editor .toastui-editor-ww-container .toastui-editor-contents { height: 100%; overflow-y: auto; padding: 10px 14px 12px; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; }
 .evo-composer-editor .ProseMirror { color: var(--color-text-primary); }
-.evo-composer-editor .ProseMirror .placeholder { visibility: hidden; color: var(--color-text-placeholder) !important; -webkit-text-fill-color: var(--color-text-placeholder) !important; opacity: 1; }
+.evo-composer-editor .ProseMirror .placeholder { visibility: visible !important; color: var(--color-text-placeholder) !important; -webkit-text-fill-color: var(--color-text-placeholder) !important; opacity: 1; pointer-events: none; }
 .evo-composer-editor .toastui-editor-contents p { margin: 0 0 7px; }
 .evo-composer-editor .toastui-editor-contents p:last-child { margin-bottom: 0; }
 .evo-composer-editor .toastui-editor-contents h1, .evo-composer-editor .toastui-editor-contents h2, .evo-composer-editor .toastui-editor-contents h3 { color: var(--color-text-primary); border-bottom-color: var(--color-border-light); }
