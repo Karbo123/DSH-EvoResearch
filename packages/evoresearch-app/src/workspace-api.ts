@@ -191,6 +191,46 @@ async function loadBuiltinReasoningReferences(): Promise<ReasoningReference[] | 
   return null
 }
 
+/**
+ * 读取 pi-ai 内置厂商档案，按模型名收集输入模态（不限是否有推理档位）。
+ * 用户要求模态按“模型名称”而不是 provider/URL 查找：官方档案里同名模型
+ * 声明的模态，就是该模型实际能力的权威参照。目录读不到时返回 null。
+ */
+async function loadBuiltinInputs(): Promise<Map<string, string[]> | null> {
+  const candidates: string[] = []
+  if (typeof process.env.DSH_HOME === 'string' && process.env.DSH_HOME !== '') {
+    candidates.push(join(process.env.DSH_HOME, 'profiles/node_modules/@earendil-works/pi-ai/dist/providers/data'))
+  }
+  candidates.push(join(process.cwd(), 'profiles/node_modules/@earendil-works/pi-ai/dist/providers/data'))
+  for (const dir of candidates) {
+    try {
+      const files = await readdir(dir)
+      const map = new Map<string, string[]>()
+      for (const file of files) {
+        if (!file.endsWith('.json') || file === '.manifest.json') continue
+        let text: string
+        try { text = await readFile(join(dir, file), 'utf8') } catch { continue }
+        let groups: unknown
+        try { groups = JSON.parse(text) } catch { continue }
+        if (groups === null || typeof groups !== 'object') continue
+        for (const models of Object.values(groups as Record<string, unknown>)) {
+          if (models === null || typeof models !== 'object') continue
+          for (const [id, entry] of Object.entries(models as Record<string, unknown>)) {
+            if (entry === null || typeof entry !== 'object') continue
+            const input = (entry as Record<string, unknown>).input
+            if (!Array.isArray(input)) continue
+            const modalities = input.filter((x): x is string => typeof x === 'string')
+            if (modalities.length === 0 || map.has(id)) continue
+            map.set(id, modalities)
+          }
+        }
+      }
+      if (map.size > 0) return map
+    } catch { /* 该候选目录不可读 → 尝试下一个 */ }
+  }
+  return null
+}
+
 /** 回退方案：从 llm 服务已注册 provider 的目录里收集带推理元数据的模型。 */
 async function llmServiceReasoningReferences(llm: any, providers: Array<{ id: string }>): Promise<ReasoningReference[]> {
   const refs: ReasoningReference[] = []
@@ -582,6 +622,8 @@ export function registerWorkspaceApi(ctx: any): void {
           for (const ref of references) {
             if (!referenceById.has(ref.id)) referenceById.set(ref.id, ref)
           }
+          // 输入模态按模型名从官方档案查找（用户要求不按 provider/URL 查）
+          const inputById = (await loadBuiltinInputs()) ?? new Map<string, string[]>()
           const groups: unknown[] = []
           for (const provider of providers) {
             const profile = profiles[provider.id]
@@ -644,9 +686,14 @@ export function registerWorkspaceApi(ctx: any): void {
                 const hit = referenceById.get(m.id)
                 if (hit !== undefined) supportedReasoning = hit.supportedReasoning
               }
-              if (input === null && m.input === null) {
-                const hit = referenceById.get(m.id)
-                if (hit !== undefined && hit.input.length > 0) input = hit.input
+              // pi-ai 对没有官方档案的 provider（如 new-api）无法询问网关模态，
+              // 会一律返回默认 ["text"]。此时按模型名在官方档案里查同名模型，
+              // 只要档案声明了模态就以其为准（例如 mimo-v2-omni → text+image）。
+              const nameHit = inputById.get(m.id)
+              if (nameHit !== undefined && nameHit.length > 0) {
+                if (input === null || input.length === 0 || (input.length === 1 && input[0] === 'text')) {
+                  input = nameHit
+                }
               }
               return { ...m, supportedReasoning, input }
             })
@@ -683,6 +730,63 @@ export function registerWorkspaceApi(ctx: any): void {
             throw httpError(400, 'probe-failed', `模型端点探测失败: ${(error as Error)?.message ?? String(error)}`)
           }
           writeOk(res, { listed: true, models })
+          return
+        }
+
+        // POST /evoresearch/fs/llm-model-test → 模型连通性测试：
+        // 用当前选中的 provider + model（可带推理强度）发一条极短请求，
+        // 拿到任意输出 token 即视为可用；失败返回错误原因与耗时。
+        if (method === 'llm-model-test') {
+          const provider = requireString(payload, 'provider')
+          const model = requireString(payload, 'model')
+          const reasoningEffort = typeof payload.reasoningEffort === 'string' && payload.reasoningEffort !== '' ? payload.reasoningEffort : undefined
+          const llm = ctx.get('llm')
+          if (llm?.stream === undefined) throw httpError(400, 'method-error', 'llm 服务不可用')
+          // 推理档位只有在该模型当前配置已声明时才随请求发送；未声明（保存后才会
+          // 写入）时只测连通性，避免把“档位还没保存”误报成“模型连不上”。
+          let testedEffort = reasoningEffort
+          if (testedEffort !== undefined && llm.resolveModelInfo !== undefined) {
+            try {
+              const info = await llm.resolveModelInfo(provider, model, AbortSignal.timeout(5000))
+              const efforts = info?.reasoning?.efforts
+              if (!Array.isArray(efforts) || !efforts.some((e: { id?: unknown }) => e?.id === testedEffort)) testedEffort = undefined
+            } catch { testedEffort = undefined }
+          }
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 20000)
+          const started = Date.now()
+          let text = ''
+          try {
+            const stream = llm.stream({
+              provider,
+              model,
+              messages: [{ role: 'user', content: [{ type: 'text', text: 'ping' }], source: { kind: 'user' } }],
+              maxTokens: 8,
+              signal: controller.signal,
+              ...(testedEffort !== undefined ? { reasoningEffort: testedEffort } : {}),
+            }) as AsyncIterable<unknown>
+            for await (const chunk of stream) {
+              const c = chunk as { type?: string; text?: string; error?: unknown; reason?: { kind?: string; failure?: { message?: string } } } | null
+              if (c !== null && typeof c === 'object') {
+                if (c.type === 'error') {
+                  throw c.error instanceof Error ? c.error : new Error(String(c.error ?? '模型调用失败'))
+                }
+                if (c.type === 'finish' && c.reason?.kind === 'error') {
+                  throw new Error(c.reason.failure?.message ?? '模型调用失败')
+                }
+                if (typeof c.text === 'string' && c.text !== '') {
+                  text += c.text
+                  break
+                }
+              }
+            }
+            writeOk(res, { ok: true, latencyMs: Date.now() - started, sample: text.slice(0, 120), reasoningTested: testedEffort !== undefined })
+          } catch (error) {
+            writeOk(res, { ok: false, latencyMs: Date.now() - started, error: (error as Error)?.message ?? String(error), reasoningTested: testedEffort !== undefined })
+          } finally {
+            clearTimeout(timer)
+            controller.abort()
+          }
           return
         }
 

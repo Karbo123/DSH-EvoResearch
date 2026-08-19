@@ -8,7 +8,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic, Trash2, Server, Plus, X } from 'lucide-react'
+import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic, Trash2, Server, Plus, X, Zap } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
 import { ConfirmDialog } from './session-actions'
@@ -147,6 +147,12 @@ interface AssignSetting {
   reasoningEffort?: string
 }
 
+interface TestState {
+  busy: boolean
+  ok: boolean
+  message: string
+}
+
 /** 模型分配下拉用的模型条目（含输入模态，用于视觉/语音过滤）。 */
 interface AssignModelOption {
   id: string
@@ -178,6 +184,7 @@ function ModelAssignSection() {
   const [providers, setProviders] = useState<LlmProviderEditor[]>([])
   const [catalog, setCatalog] = useState<Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null; input?: string[] | null }> }>>([])
   const [saving, setSaving] = useState<string | null>(null)
+  const [testState, setTestState] = useState<Record<string, TestState>>({})
   const [error, setError] = useState<string | null>(null)
   const [migrated, setMigrated] = useState<Record<string, string>>({})
 
@@ -438,6 +445,49 @@ function ModelAssignSection() {
     complex: { name: t('tierComplex'), desc: t('tierComplexDesc') },
   }
 
+  /** 连通性测试：对卡片内已选模型逐个发极短请求（相同 provider+model 只测一次）。 */
+  const testCard = (keys: string[]) => {
+    if (saving !== null || assign === null) return
+    const cardKey = keys.join('+')
+    const targets = keys
+      .map((k) => ({ key: k, v: assign[k] }))
+      .filter((x): x is { key: string; v: AssignSetting } => x.v !== undefined && x.v.provider !== '' && x.v.model !== '')
+    if (targets.length === 0) {
+      setTestState((s) => ({ ...s, [cardKey]: { busy: false, ok: false, message: t('testModelNone') } }))
+      return
+    }
+    const unique: Array<{ key: string; v: AssignSetting }> = []
+    const seen = new Set<string>()
+    for (const x of targets) {
+      const sig = `${x.v.provider}\u0000${x.v.model}`
+      if (!seen.has(sig)) { seen.add(sig); unique.push(x) }
+    }
+    setTestState((s) => ({ ...s, [cardKey]: { busy: true, ok: false, message: t('testModelBusy') } }))
+    void (async () => {
+      const parts: string[] = []
+      for (let i = 0; i < unique.length; i++) {
+        const { key, v } = unique[i]!
+        const label = unique.length > 1 ? `${tierMeta[key]?.name ?? key}·${v.model}` : v.model
+        setTestState((s) => ({ ...s, [cardKey]: { busy: true, ok: false, message: `${t('testModelBusy')}：${label}` } }))
+        let detail = ''
+        try {
+          const json = await fetch('/evoresearch/fs/llm-model-test', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ provider: v.provider, model: v.model, reasoningEffort: v.reasoningEffort ?? '' }),
+          }).then((r) => r.json())
+          const value = (json?.value ?? {}) as { ok?: boolean; latencyMs?: number; error?: string }
+          const ok = json?.ok === true && value.ok === true
+          detail = ok ? (value.latencyMs !== undefined ? `✓ ${value.latencyMs}ms` : '✓') : `✗ ${value.error ?? json?.error?.message ?? ''}`
+        } catch (e: unknown) {
+          detail = `✗ ${(e as Error)?.message ?? ''}`
+        }
+        parts.push(`${label} ${detail}`)
+      }
+      setTestState((s) => ({ ...s, [cardKey]: { busy: false, ok: parts.every((p) => p.includes('✓')), message: parts.join('；') } }))
+    })()
+  }
+
   return jsxs('div', {
     className: 'evo-setting',
     children: [
@@ -480,12 +530,21 @@ function ModelAssignSection() {
                 jsxs('div', { className: 'evo-assign-actions', children: [
                   jsx('button', {
                     type: 'button',
+                    className: 'evo-btn',
+                    disabled: saving !== null || testState['simple+medium+complex']?.busy === true,
+                    onClick: () => testCard(['simple', 'medium', 'complex']),
+                    children: jsxs(Fragment, { children: [jsx(Zap, {}), jsx('span', { children: testState['simple+medium+complex']?.busy === true ? t('testModelBusy') : t('testModel') })] }),
+                  }),
+                  jsx('button', {
+                    type: 'button',
                     className: 'evo-btn evo-btn-ok',
                     disabled: saving !== null,
                     onClick: () => saveCard(['simple', 'medium', 'complex']),
                     children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: saving !== null ? t('saving') : t('save') })] }),
                   }),
                 ] }),
+                testState['simple+medium+complex'] !== undefined && testState['simple+medium+complex']!.message !== ''
+                  && jsx('div', { className: `evo-assign-test ${testState['simple+medium+complex']!.ok ? 'ok' : 'fail'}`, children: testState['simple+medium+complex']!.message }),
               ] }),
               (['vision', 'image', 'voice'] as const).map((kind) => {
                 const meta = kind === 'vision'
@@ -514,12 +573,21 @@ function ModelAssignSection() {
                   jsxs('div', { className: 'evo-assign-actions', children: [
                     jsx('button', {
                       type: 'button',
+                      className: 'evo-btn',
+                      disabled: saving !== null || testState[kind]?.busy === true,
+                      onClick: () => testCard([kind]),
+                      children: jsxs(Fragment, { children: [jsx(Zap, {}), jsx('span', { children: testState[kind]?.busy === true ? t('testModelBusy') : t('testModel') })] }),
+                    }),
+                    jsx('button', {
+                      type: 'button',
                       className: 'evo-btn evo-btn-ok',
                       disabled: saving !== null,
                       onClick: () => saveCard([kind]),
                       children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: saving !== null ? t('saving') : t('save') })] }),
                     }),
                   ] }),
+                  testState[kind] !== undefined && testState[kind]!.message !== ''
+                    && jsx('div', { className: `evo-assign-test ${testState[kind]!.ok ? 'ok' : 'fail'}`, children: testState[kind]!.message }),
                 ] }, kind)
               }),
             ] }),
