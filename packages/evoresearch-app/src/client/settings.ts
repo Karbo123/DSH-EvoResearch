@@ -229,7 +229,7 @@ function CodeModelSection() {
                   children: [
                     jsx('span', { className: 'evo-setting-field-label', children: t('reasoningEffort') }),
                     jsx('select', {
-                      className: 'evo-panel-input evo-sched-select',
+                      className: 'evo-panel-input evo-select-compact',
                       value: v.reasoningEffort ?? 'medium',
                       onChange: (e: { currentTarget: HTMLSelectElement }) => setTierField(tier.id, 'reasoningEffort', e.currentTarget.value),
                       children: [
@@ -739,7 +739,7 @@ function LlmProviderSection() {
                 children: [
                   jsx('span', { className: 'evo-setting-field-label', children: t('llmApiProtocol') }),
                   jsx('select', {
-                    className: 'evo-panel-input evo-llm-select',
+                    className: 'evo-panel-input evo-select-compact',
                     value: draft.api,
                     onChange: (e: { currentTarget: HTMLSelectElement }) => setDraft((d) => ({ ...d, api: e.currentTarget.value })),
                     children: [
@@ -818,7 +818,7 @@ function LlmProviderSection() {
                     children: [
                       jsx('span', { className: 'evo-setting-field-label', children: t('providerDefaultReasoning') }),
                       jsx('select', {
-                        className: 'evo-panel-input evo-llm-select',
+                        className: 'evo-panel-input evo-select-compact',
                         value: provider.reasoning,
                         onChange: (e: { currentTarget: HTMLSelectElement }) => updateProvider(provider.id, { reasoning: e.currentTarget.value }),
                         children: REASONING_LEVELS.map(([level, label]) => jsx('option', { value: level, children: label }, level)),
@@ -835,12 +835,12 @@ function LlmProviderSection() {
                           jsx('span', { className: 'evo-llm-model-id', title: m.id, children: m.id }),
                           jsx('span', { className: 'evo-llm-model-ctx', children: m.contextWindow != null ? `${m.contextWindow}` : '' }),
                           jsx('select', {
-                            className: 'evo-panel-input evo-llm-select',
+                            className: 'evo-panel-input evo-select-compact',
                             value: modelReasoningLevel(m.reasoningEfforts),
                             onChange: (e: { currentTarget: HTMLSelectElement }) => setModelReasoning(provider.id, m.id, e.currentTarget.value),
                             children: REASONING_LEVELS.map(([level, label]) => {
                               const unsupported = m.supportedReasoning !== null && level !== '' && !m.supportedReasoning.includes(level)
-                              return jsx('option', { value: level, children: label, disabled: unsupported || undefined }, level)
+                              return unsupported ? null : jsx('option', { value: level, children: label }, level)
                             }),
                           }),
                         ],

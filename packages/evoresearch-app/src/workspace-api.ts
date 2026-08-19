@@ -523,6 +523,22 @@ export function registerWorkspaceApi(ctx: any): void {
                   supportedReasoning = efforts.map((e: { id?: unknown }) => (typeof e?.id === 'string' ? e.id : '')).filter((id: string) => id !== '')
                 }
               } catch { /* 无目录元数据或解析失败 → 不限制档位 */ }
+              if (supportedReasoning === null) {
+                // 网关/自定义路由拿不到自身目录元数据时，尝试用 pi-ai 目录里
+                // 同名模型的能力作为提示（例如 new-api 上的 deepseek-v4-flash
+                // 沿用 DeepSeek 官方目录 off/high/max），避免展示一堆它不支持的档位。
+                for (const other of providers) {
+                  if (other.id === provider.id) continue
+                  try {
+                    const otherInfo = await llm.resolveModelInfo(other.id, m.id, AbortSignal.timeout(5000))
+                    const otherEfforts = otherInfo?.reasoning?.efforts
+                    if (Array.isArray(otherEfforts) && otherEfforts.length > 0) {
+                      supportedReasoning = otherEfforts.map((e: { id?: unknown }) => (typeof e?.id === 'string' ? e.id : '')).filter((id: string) => id !== '')
+                      break
+                    }
+                  } catch { /* 该 provider 不描述此模型 → 继续找下一个 */ }
+                }
+              }
               return { ...m, supportedReasoning }
             })
             if (models.length > 0) {
