@@ -782,7 +782,10 @@ function LlmProviderSection() {
                     spellCheck: false,
                     autoComplete: 'off',
                     placeholder: t('apiKeyLabel'),
-                    onInput: (e: { currentTarget: HTMLInputElement }) => setDraft((d) => ({ ...d, apiKey: e.currentTarget.value })),
+                    onInput: (e: { currentTarget: HTMLInputElement }) => {
+                      const v = e.currentTarget.value
+                      setDraft((d) => ({ ...d, apiKey: v }))
+                    },
                   }),
                 ],
               }),
@@ -793,7 +796,10 @@ function LlmProviderSection() {
                   jsx('select', {
                     className: 'evo-panel-input evo-select-compact',
                     value: draft.api,
-                    onChange: (e: { currentTarget: HTMLSelectElement }) => setDraft((d) => ({ ...d, api: e.currentTarget.value })),
+                    onChange: (e: { currentTarget: HTMLSelectElement }) => {
+                      const v = e.currentTarget.value
+                      setDraft((d) => ({ ...d, api: v }))
+                    },
                     children: [
                       jsx('option', { value: 'openai-completions', children: 'openai-completions' }, 'openai-completions'),
                       jsx('option', { value: 'openai-responses', children: 'openai-responses' }, 'openai-responses'),
