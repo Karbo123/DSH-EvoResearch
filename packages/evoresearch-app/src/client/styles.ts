@@ -669,9 +669,13 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-model-row .evo-select-compact { min-width: 96px; }
 .evo-setting-field-env { opacity: .75; margin-left: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
 .evo-llm-models { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border-light); max-height: 260px; overflow-y: auto; }
+.evo-llm-model { display: flex; flex-direction: column; gap: 2px; }
 .evo-llm-model-row { display: flex; align-items: center; gap: 8px; padding: 3px 2px; }
 .evo-llm-model-id { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-llm-model-ctx { flex: 0 0 auto; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
+.evo-llm-ref-row { display: flex; align-items: center; gap: 6px; padding: 0 2px 3px; }
+.evo-llm-ref-label { flex-shrink: 0; font-size: 11px; color: var(--color-text-tertiary); }
+.evo-llm-ref-select { flex: 1; min-width: 180px; }
 .evo-tier-head { display: flex; align-items: baseline; gap: 10px; }
 .evo-tier-name { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); }
 .evo-tier-desc { font-size: 12px; color: var(--color-text-tertiary); }

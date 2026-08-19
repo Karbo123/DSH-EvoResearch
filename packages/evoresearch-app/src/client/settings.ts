@@ -455,6 +455,7 @@ interface LlmModelRow {
   contextWindow: number | null
   reasoningEfforts: Record<string, string | null> | false | null
   supportedReasoning: string[] | null
+  reasoningRef: string
 }
 
 interface LlmProviderEditor {
@@ -466,6 +467,44 @@ interface LlmProviderEditor {
   api: string
   reasoning: string
   models: LlmModelRow[]
+}
+
+interface ReasoningReference {
+  id: string
+  name: string
+  provider: string
+  supportedReasoning: string[]
+}
+
+/** 编辑距离（用于把名字最接近的参照模型排到前面）。 */
+function levenshtein(a: string, b: string): number {
+  const m = a.length
+  const n = b.length
+  const dp: number[] = Array.from({ length: n + 1 }, (_, j) => j)
+  for (let i = 1; i <= m; i += 1) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= n; j += 1) {
+      const tmp = dp[j]
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1))
+      prev = tmp
+    }
+  }
+  return dp[n]
+}
+
+/** 模型名与参照名的相似度：公共前缀优先，其次编辑距离，子串包含加分。 */
+function referenceScore(modelId: string, refId: string): number {
+  const x = modelId.toLowerCase()
+  const y = refId.toLowerCase()
+  if (x === y) return Number.MAX_SAFE_INTEGER
+  let prefix = 0
+  const max = Math.min(x.length, y.length)
+  while (prefix < max && x[prefix] === y[prefix]) prefix += 1
+  let score = prefix * 10
+  score += Math.max(0, 100 - levenshtein(x, y))
+  if (x.includes(y) || y.includes(x)) score += 30
+  return score
 }
 
 /** 从 reasoningEfforts 还原已选择的单一强度（false=关闭；多档自定义时返回空串）。 */
@@ -486,6 +525,7 @@ function applyModelReasoning(level: string): Record<string, string | null> | fal
 /** 模型服务配置（§25.2 扩展）：API URL / 明文 Key / 模型列表 / 推理强度。 */
 function LlmProviderSection() {
   const [providers, setProviders] = useState<LlmProviderEditor[] | null>(null)
+  const [references, setReferences] = useState<ReasoningReference[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savedId, setSavedId] = useState<string | null>(null)
@@ -539,10 +579,14 @@ function LlmProviderSection() {
               contextWindow: m.contextWindow == null ? null : Number(m.contextWindow),
               reasoningEfforts: (m.reasoningEfforts === undefined ? null : m.reasoningEfforts) as LlmModelRow['reasoningEfforts'],
               supportedReasoning: null,
+              reasoningRef: '',
             })),
           })))
         } else setError(providersJson.error?.message ?? '加载失败')
-        if (catalogJson.ok === true) applyCatalog(catalogJson.value?.groups ?? [])
+        if (catalogJson.ok === true) {
+          applyCatalog(catalogJson.value?.groups ?? [])
+          setReferences(Array.isArray(catalogJson.value?.references) ? catalogJson.value.references : [])
+        }
       })
       .catch((e: unknown) => setError((e as Error)?.message ?? '加载失败'))
   }
@@ -559,6 +603,13 @@ function LlmProviderSection() {
     }))
   }
 
+  const setModelReasoningRef = (providerId: string, modelId: string, refId: string) => {
+    setProviders((prev) => (prev ?? []).map((p) => {
+      if (p.id !== providerId) return p
+      return { ...p, models: p.models.map((m) => (m.id === modelId ? { ...m, reasoningRef: refId } : m)) }
+    }))
+  }
+
   const fetchModels = (id: string) => {
     if (busyId !== null) return
     setBusyId(id)
@@ -570,6 +621,7 @@ function LlmProviderSection() {
         const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string }> }> = json.value?.groups ?? []
         const live = groups.find((g) => g.provider?.id === id)?.models ?? []
         applyCatalog(groups, id)
+        if (Array.isArray(json.value?.references)) setReferences(json.value.references)
         toast(t('llmFetchDone').replace('{n}', String(live.length)), 'success')
       })
       .catch((e: unknown) => setError((e as Error)?.message ?? t('llmFetchFailed')))
@@ -829,22 +881,50 @@ function LlmProviderSection() {
                     className: 'evo-llm-models',
                     children: [
                       jsx('div', { className: 'evo-setting-field-label', children: t('modelReasoningLabel') }),
-                      provider.models.map((m) => jsxs('div', {
-                        className: 'evo-llm-model-row',
-                        children: [
-                          jsx('span', { className: 'evo-llm-model-id', title: m.id, children: m.id }),
-                          jsx('span', { className: 'evo-llm-model-ctx', children: m.contextWindow != null ? `${m.contextWindow}` : '' }),
-                          jsx('select', {
-                            className: 'evo-panel-input evo-select-compact',
-                            value: modelReasoningLevel(m.reasoningEfforts),
-                            onChange: (e: { currentTarget: HTMLSelectElement }) => setModelReasoning(provider.id, m.id, e.currentTarget.value),
-                            children: REASONING_LEVELS.map(([level, label]) => {
-                              const unsupported = m.supportedReasoning !== null && level !== '' && !m.supportedReasoning.includes(level)
-                              return unsupported ? null : jsx('option', { value: level, children: label }, level)
+                      provider.models.map((m) => {
+                        const registered = m.supportedReasoning !== null
+                        const ref = registered ? null : (references.find((r) => r.id === m.reasoningRef) ?? null)
+                        const offered = registered ? m.supportedReasoning : ref !== null ? ref.supportedReasoning : null
+                        return jsxs('div', {
+                          className: 'evo-llm-model',
+                          children: [
+                            jsxs('div', {
+                              className: 'evo-llm-model-row',
+                              children: [
+                                jsx('span', { className: 'evo-llm-model-id', title: m.id, children: m.id }),
+                                jsx('span', { className: 'evo-llm-model-ctx', children: m.contextWindow != null ? `${m.contextWindow}` : '' }),
+                                jsx('select', {
+                                  className: 'evo-panel-input evo-select-compact',
+                                  value: modelReasoningLevel(m.reasoningEfforts),
+                                  onChange: (e: { currentTarget: HTMLSelectElement }) => setModelReasoning(provider.id, m.id, e.currentTarget.value),
+                                  children: REASONING_LEVELS.map(([level, label]) => {
+                                    const unsupported = offered !== null && level !== '' && !offered.includes(level)
+                                    return unsupported ? null : jsx('option', { value: level, children: label }, level)
+                                  }),
+                                }),
+                              ],
                             }),
-                          }),
-                        ],
-                      }, m.id)),
+                            !registered && jsxs('div', {
+                              className: 'evo-llm-ref-row',
+                              children: [
+                                jsx('span', { className: 'evo-llm-ref-label', children: t('llmReasoningRef') }),
+                                jsx('select', {
+                                  className: 'evo-panel-input evo-select-compact evo-llm-ref-select',
+                                  title: t('llmReasoningRefHint'),
+                                  value: m.reasoningRef,
+                                  onChange: (e: { currentTarget: HTMLSelectElement }) => setModelReasoningRef(provider.id, m.id, e.currentTarget.value),
+                                  children: [
+                                    jsx('option', { value: '', children: t('llmReasoningRefNone') }, ''),
+                                    ...[...references]
+                                      .sort((a, b) => referenceScore(m.id, b.id) - referenceScore(m.id, a.id))
+                                      .map((r) => jsx('option', { value: r.id, children: `${r.id}（${r.provider}）` }, r.id)),
+                                  ],
+                                }),
+                              ],
+                            }),
+                          ],
+                        }, m.id)
+                      }),
                     ],
                   }),
                   jsxs('div', { className: 'evo-llm-actions', children: [

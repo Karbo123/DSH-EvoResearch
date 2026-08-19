@@ -6,7 +6,7 @@
  * 所有操作带信任栅栏（回环 + webRuntime.trustedHosts），写操作限制在
  * 请求声明的根目录内（isWithin 校验）。
  */
-import { opendir, readFile, rm, stat, writeFile, mkdir } from 'node:fs/promises'
+import { opendir, readFile, readdir, rm, stat, writeFile, mkdir } from 'node:fs/promises'
 import { zstdDecompressSync } from 'node:zlib'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -123,6 +123,96 @@ async function fetchEndpointModels(
   return (body.data ?? [])
     .filter((m) => m.id !== undefined && m.id !== '')
     .map((m) => ({ id: m.id as string, name: m.name, contextWindow: m.context_window ?? m.contextWindow ?? null }))
+}
+
+/** pi-ai 内置目录的完整推理档位顺序（与 getSupportedThinkingLevels 一致）。 */
+const PI_THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+
+/** 按 pi-ai 语义从目录条目推导支持的推理档位（与 getSupportedThinkingLevels 完全一致）。 */
+function piSupportedLevels(entry: Record<string, unknown>): string[] {
+  if (entry.reasoning !== true) return ['off']
+  const map = (entry.thinkingLevelMap ?? {}) as Record<string, unknown>
+  return PI_THINKING_LEVELS.filter((level) => {
+    const mapped = map[level]
+    if (mapped === null) return false
+    if (level === 'xhigh' || level === 'max') return mapped !== undefined
+    return true
+  })
+}
+
+/**
+ * 读取 pi-ai 内置官方厂商档案（dist/providers/data/*.json），
+ * 得到全部已登记模型 + 各自支持的推理档位，作为“参照官方档位”的候选名单。
+ * 目录读不到时返回 null，由调用方回退到 llm 服务注册目录。
+ */
+async function loadBuiltinReasoningReferences(): Promise<Array<{ id: string; name: string; provider: string; supportedReasoning: string[] }> | null> {
+  const candidates: string[] = []
+  if (typeof process.env.DSH_HOME === 'string' && process.env.DSH_HOME !== '') {
+    candidates.push(join(process.env.DSH_HOME, 'profiles/node_modules/@earendil-works/pi-ai/dist/providers/data'))
+  }
+  candidates.push(join(process.cwd(), 'profiles/node_modules/@earendil-works/pi-ai/dist/providers/data'))
+  for (const dir of candidates) {
+    try {
+      const files = await readdir(dir)
+      const refs: Array<{ id: string; name: string; provider: string; supportedReasoning: string[] }> = []
+      const seen = new Set<string>()
+      for (const file of files) {
+        if (!file.endsWith('.json') || file === '.manifest.json') continue
+        let text: string
+        try { text = await readFile(join(dir, file), 'utf8') } catch { continue }
+        let groups: unknown
+        try { groups = JSON.parse(text) } catch { continue }
+        if (groups === null || typeof groups !== 'object') continue
+        const provider = file.replace(/\.json$/, '')
+        for (const models of Object.values(groups as Record<string, unknown>)) {
+          if (models === null || typeof models !== 'object') continue
+          for (const [id, entry] of Object.entries(models as Record<string, unknown>)) {
+            if (entry === null || typeof entry !== 'object') continue
+            const levels = piSupportedLevels(entry as Record<string, unknown>)
+            if (levels.length === 0) continue
+            if (seen.has(id)) continue
+            seen.add(id)
+            refs.push({
+              id,
+              name: typeof (entry as Record<string, unknown>).name === 'string' ? (entry as Record<string, unknown>).name as string : id,
+              provider,
+              supportedReasoning: levels,
+            })
+          }
+        }
+      }
+      if (refs.length > 0) return refs
+    } catch { /* 该候选目录不可读 → 尝试下一个 */ }
+  }
+  return null
+}
+
+/** 回退方案：从 llm 服务已注册 provider 的目录里收集带推理元数据的模型。 */
+async function llmServiceReasoningReferences(llm: any, providers: Array<{ id: string }>): Promise<Array<{ id: string; name: string; provider: string; supportedReasoning: string[] }>> {
+  const refs: Array<{ id: string; name: string; provider: string; supportedReasoning: string[] }> = []
+  const seen = new Set<string>()
+  for (const provider of providers) {
+    let models: Array<{ id?: string; name?: string }> = []
+    try { models = (await llm.listModels(provider.id)) ?? [] } catch { continue }
+    for (const m of models) {
+      const id = typeof m.id === 'string' ? m.id : ''
+      if (id === '' || seen.has(id)) continue
+      try {
+        const info = await llm.resolveModelInfo(provider.id, id, AbortSignal.timeout(5000))
+        const efforts = info?.reasoning?.efforts
+        if (Array.isArray(efforts) && efforts.length > 0) {
+          seen.add(id)
+          refs.push({
+            id,
+            name: typeof m.name === 'string' && m.name !== '' ? m.name : id,
+            provider: provider.id,
+            supportedReasoning: efforts.map((e: { id?: unknown }) => (typeof e?.id === 'string' ? e.id : '')).filter((rid: string) => rid !== ''),
+          })
+        }
+      } catch { /* 该模型无目录元数据 → 跳过 */ }
+    }
+  }
+  return refs
 }
 
 /** 读取 llm-pi-ai 命名空间的当前配置（优先原始用户层，避免把解析默认值写回文件）。 */
@@ -480,6 +570,13 @@ export function registerWorkspaceApi(ctx: any): void {
           const providers = settingsRead
             ? allProviders.filter((p: { id: string }) => profiles[p.id] !== undefined)
             : allProviders
+          // 参照官方档位候选名单：优先 pi-ai 内置厂商档案，读不到时回退 llm 服务注册目录
+          const references = (await loadBuiltinReasoningReferences())
+            ?? (await llmServiceReasoningReferences(llm, allProviders))
+          const referenceById = new Map<string, { id: string; name: string; provider: string; supportedReasoning: string[] }>()
+          for (const ref of references) {
+            if (!referenceById.has(ref.id)) referenceById.set(ref.id, ref)
+          }
           const groups: unknown[] = []
           for (const provider of providers) {
             const profile = profiles[provider.id]
@@ -532,20 +629,11 @@ export function registerWorkspaceApi(ctx: any): void {
                 }
               } catch { /* 无目录元数据或解析失败 → 不限制档位 */ }
               if (supportedReasoning === null) {
-                // 网关/自定义路由拿不到自身目录元数据时，尝试用 pi-ai 目录里
-                // 同名模型的能力作为提示（例如 new-api 上的 deepseek-v4-flash
-                // 沿用 DeepSeek 官方目录 off/high/max），避免展示一堆它不支持的档位。
-                for (const other of allProviders) {
-                  if (other.id === provider.id) continue
-                  try {
-                    const otherInfo = await llm.resolveModelInfo(other.id, m.id, AbortSignal.timeout(5000))
-                    const otherEfforts = otherInfo?.reasoning?.efforts
-                    if (Array.isArray(otherEfforts) && otherEfforts.length > 0) {
-                      supportedReasoning = otherEfforts.map((e: { id?: unknown }) => (typeof e?.id === 'string' ? e.id : '')).filter((id: string) => id !== '')
-                      break
-                    }
-                  } catch { /* 该 provider 不描述此模型 → 继续找下一个 */ }
-                }
+                // 网关/自定义路由拿不到自身目录元数据时，严格按名字在 pi-ai 内置档案里
+                // 找同名模型（例如 new-api 上的 deepseek-v4-flash → off/high/max）。
+                // 只在名字真正被收录时才给出提示；未收录的模型交给前端“参照官方档位”选择。
+                const hit = referenceById.get(m.id)
+                if (hit !== undefined) supportedReasoning = hit.supportedReasoning
               }
               return { ...m, supportedReasoning }
             })
@@ -553,7 +641,7 @@ export function registerWorkspaceApi(ctx: any): void {
               groups.push({ provider: { id: provider.id, name: provider.name ?? provider.id }, models })
             }
           }
-          writeOk(res, { groups })
+          writeOk(res, { groups, references })
           return
         }
 
