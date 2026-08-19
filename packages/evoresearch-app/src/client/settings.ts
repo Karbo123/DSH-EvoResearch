@@ -183,6 +183,12 @@ function ModelAssignSection() {
     }
     return (providers.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning }))
   }
+  const defaultReasoning = (supported: string[] | null | undefined): string => {
+    if (!Array.isArray(supported) || supported.length === 0) return 'high'
+    if (supported.includes('high')) return 'high'
+    const nonOff = supported.find((l) => l !== 'off')
+    return nonOff ?? 'off'
+  }
 
   const load = () => {
     setError(null)
@@ -198,14 +204,12 @@ function ModelAssignSection() {
         apiKeyEnv: String(p.apiKeyEnv ?? ''),
         apiKey: String(p.apiKey ?? ''),
         api: String(p.api ?? 'openai-completions'),
-        reasoning: String(p.reasoning ?? ''),
         models: (Array.isArray(p.models) ? p.models : []).map((m: Record<string, unknown>) => ({
           id: String(m.id ?? ''),
           name: String(m.name ?? ''),
           contextWindow: m.contextWindow == null ? null : Number(m.contextWindow),
           reasoningEfforts: (m.reasoningEfforts === undefined ? null : m.reasoningEfforts) as LlmModelRow['reasoningEfforts'],
           supportedReasoning: null,
-          reasoningRef: '',
         })),
       })) : []
       const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null }> }> = cat.ok === true ? (cat.value?.groups ?? []) : []
@@ -248,10 +252,17 @@ function ModelAssignSection() {
         next[key] = {
           provider,
           model,
-          reasoningEffort: typeof cur.reasoningEffort === 'string' ? cur.reasoningEffort : '',
+          reasoningEffort: '',
           url: typeof cur.url === 'string' ? cur.url : '',
           keyEnv: typeof cur.keyEnv === 'string' ? cur.keyEnv : '',
           voiceProvider: typeof cur.voiceProvider === 'string' ? cur.voiceProvider : 'api',
+        }
+        if (model !== '') {
+          const sup = modelsOf(provider).find((m) => m.id === model)?.supportedReasoning ?? null
+          const stored = typeof cur.reasoningEffort === 'string' ? cur.reasoningEffort : ''
+          next[key].reasoningEffort = Array.isArray(sup) && sup.length > 0
+            ? (sup.includes(stored) ? stored : defaultReasoning(sup))
+            : (stored !== '' ? stored : defaultReasoning(null))
         }
       }
       setAssign(next)
@@ -265,17 +276,18 @@ function ModelAssignSection() {
   }
   const changeProvider = (key: string, providerId: string) => {
     const models = providerModels(providerId)
-    setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), provider: providerId, model: models[0]?.id ?? '', reasoningEffort: '' } }))
+    setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), provider: providerId, model: models[0]?.id ?? '', reasoningEffort: defaultReasoning(models[0]?.supportedReasoning) } }))
   }
   const changeModel = (key: string, modelId: string) => {
-    setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), model: modelId, reasoningEffort: '' } }))
+    const m = assign !== null ? providerModels(assign[key]?.provider ?? '').find((x) => x.id === modelId) : undefined
+    setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), model: modelId, reasoningEffort: defaultReasoning(m?.supportedReasoning) } }))
   }
   const offeredLevels = (key: string): Array<[string, string]> => {
     const v = assign?.[key]
     if (v === undefined) return REASONING_LEVELS
     const m = providerModels(v.provider).find((x) => x.id === v.model)
     const sup = m?.supportedReasoning
-    if (Array.isArray(sup) && sup.length > 0) return REASONING_LEVELS.filter(([level]) => level === '' || sup.includes(level))
+    if (Array.isArray(sup) && sup.length > 0) return REASONING_LEVELS.filter(([level]) => sup.includes(level))
     return REASONING_LEVELS
   }
   const applyTier = (tier: string) => {
@@ -616,9 +628,8 @@ function DataClearSection() {
   })
 }
 
-/** 模型服务（§25.2 扩展）：编辑 provider 的 API URL / Key / 推理强度并持久化。 */
+/** 模型服务（§25.2 扩展）：编辑 provider 的 API URL / Key / 模型列表；推理强度在模型分配里设置。 */
 const REASONING_LEVELS: Array<[string, string]> = [
-  ['', t('reasoningInherit')],
   ['off', t('effortOff')],
   ['minimal', t('effortMinimal')],
   ['low', t('effortLow')],
@@ -634,7 +645,6 @@ interface LlmModelRow {
   contextWindow: number | null
   reasoningEfforts: Record<string, string | null> | false | null
   supportedReasoning: string[] | null
-  reasoningRef: string
 }
 
 interface LlmProviderEditor {
@@ -644,15 +654,7 @@ interface LlmProviderEditor {
   apiKeyEnv: string
   apiKey: string
   api: string
-  reasoning: string
   models: LlmModelRow[]
-}
-
-interface ReasoningReference {
-  id: string
-  name: string
-  provider: string
-  supportedReasoning: string[]
 }
 
 /** 编辑距离（用于把名字最接近的参照模型排到前面）。 */
@@ -686,15 +688,7 @@ function referenceScore(modelId: string, refId: string): number {
   return score
 }
 
-/** 从 reasoningEfforts 还原已选择的单一强度（false=关闭；多档自定义时返回空串）。 */
-function modelReasoningLevel(efforts: Record<string, string | null> | false | null): string {
-  if (efforts === false) return 'off'
-  if (efforts === null || typeof efforts !== 'object') return ''
-  const levels = Object.entries(efforts).filter(([level, wire]) => level !== 'off' && wire !== null && wire !== undefined)
-  return levels.length === 1 ? levels[0][0] : ''
-}
-
-/** 设置模型推理强度 → reasoningEfforts（off=不支持推理；单档=off+该档；空=继承/清除）。 */
+/** 设置模型推理强度 → reasoningEfforts（off=不支持推理；单档=off+该档）。 */
 function applyModelReasoning(level: string): Record<string, string | null> | false | null {
   if (level === '') return null
   if (level === 'off') return false
@@ -704,7 +698,6 @@ function applyModelReasoning(level: string): Record<string, string | null> | fal
 /** 模型服务配置（§25.2 扩展）：API URL / 明文 Key / 模型列表 / 推理强度。 */
 function LlmProviderSection() {
   const [providers, setProviders] = useState<LlmProviderEditor[] | null>(null)
-  const [references, setReferences] = useState<ReasoningReference[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savedId, setSavedId] = useState<string | null>(null)
@@ -752,20 +745,17 @@ function LlmProviderSection() {
             apiKeyEnv: String(p.apiKeyEnv ?? ''),
             apiKey: String(p.apiKey ?? ''),
             api: String(p.api ?? 'openai-completions'),
-            reasoning: String(p.reasoning ?? ''),
             models: (Array.isArray(p.models) ? p.models : []).map((m: Record<string, unknown>) => ({
               id: String(m.id ?? ''),
               name: String(m.name ?? ''),
               contextWindow: m.contextWindow == null ? null : Number(m.contextWindow),
               reasoningEfforts: (m.reasoningEfforts === undefined ? null : m.reasoningEfforts) as LlmModelRow['reasoningEfforts'],
               supportedReasoning: null,
-              reasoningRef: '',
             })),
           })))
         } else setError(providersJson.error?.message ?? '加载失败')
         if (catalogJson.ok === true) {
           applyCatalog(catalogJson.value?.groups ?? [])
-          setReferences(Array.isArray(catalogJson.value?.references) ? catalogJson.value.references : [])
         }
       })
       .catch((e: unknown) => setError((e as Error)?.message ?? '加载失败'))
@@ -774,20 +764,6 @@ function LlmProviderSection() {
 
   const updateProvider = (id: string, patch: Partial<LlmProviderEditor>) => {
     setProviders((prev) => (prev ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)))
-  }
-
-  const setModelReasoning = (providerId: string, modelId: string, level: string) => {
-    setProviders((prev) => (prev ?? []).map((p) => {
-      if (p.id !== providerId) return p
-      return { ...p, models: p.models.map((m) => (m.id === modelId ? { ...m, reasoningEfforts: applyModelReasoning(level) } : m)) }
-    }))
-  }
-
-  const setModelReasoningRef = (providerId: string, modelId: string, refId: string) => {
-    setProviders((prev) => (prev ?? []).map((p) => {
-      if (p.id !== providerId) return p
-      return { ...p, models: p.models.map((m) => (m.id === modelId ? { ...m, reasoningRef: refId } : m)) }
-    }))
   }
 
   const fetchModels = (id: string) => {
@@ -801,7 +777,6 @@ function LlmProviderSection() {
         const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string }> }> = json.value?.groups ?? []
         const live = groups.find((g) => g.provider?.id === id)?.models ?? []
         applyCatalog(groups, id)
-        if (Array.isArray(json.value?.references)) setReferences(json.value.references)
         toast(t('llmFetchDone').replace('{n}', String(live.length)), 'success')
       })
       .catch((e: unknown) => setError((e as Error)?.message ?? t('llmFetchFailed')))
@@ -922,7 +897,6 @@ function LlmProviderSection() {
       displayName: provider.displayName,
       baseURL: provider.baseURL,
       apiKey: provider.apiKey,
-      reasoning: provider.reasoning,
       models: provider.models.map((m) => {
         const entry: Record<string, unknown> = { id: m.id }
         if (m.name !== '' && m.name !== m.id) entry.name = m.name
@@ -1072,66 +1046,17 @@ function LlmProviderSection() {
                     ],
                   }),
                   jsx('div', { className: 'evo-setting-hint', children: t('llmKeyHint') }),
-                  jsxs('label', {
-                    className: 'evo-setting-field',
-                    children: [
-                      jsx('span', { className: 'evo-setting-field-label', children: t('providerDefaultReasoning') }),
-                      jsx('select', {
-                        className: 'evo-panel-input evo-select-compact',
-                        value: provider.reasoning,
-                        onChange: (e: { currentTarget: HTMLSelectElement }) => updateProvider(provider.id, { reasoning: e.currentTarget.value }),
-                        children: REASONING_LEVELS.map(([level, label]) => jsx('option', { value: level, children: label }, level)),
-                      }),
-                    ],
-                  }),
                   provider.models.length > 0 && jsxs('div', {
                     className: 'evo-llm-models',
                     children: [
-                      jsx('div', { className: 'evo-setting-field-label', children: t('modelReasoningLabel') }),
-                      provider.models.map((m) => {
-                        const registered = m.supportedReasoning !== null
-                        const ref = registered ? null : (references.find((r) => r.id === m.reasoningRef) ?? null)
-                        const offered = registered ? m.supportedReasoning : ref !== null ? ref.supportedReasoning : null
-                        return jsxs('div', {
-                          className: 'evo-llm-model',
-                          children: [
-                            jsxs('div', {
-                              className: 'evo-llm-model-row',
-                              children: [
-                                jsx('span', { className: 'evo-llm-model-id', title: m.id, children: m.id }),
-                                jsx('span', { className: 'evo-llm-model-ctx', children: m.contextWindow != null ? `${m.contextWindow}` : '' }),
-                                jsx('select', {
-                                  className: 'evo-panel-input evo-select-compact',
-                                  value: modelReasoningLevel(m.reasoningEfforts),
-                                  onChange: (e: { currentTarget: HTMLSelectElement }) => setModelReasoning(provider.id, m.id, e.currentTarget.value),
-                                  children: REASONING_LEVELS.map(([level, label]) => {
-                                    const unsupported = offered !== null && level !== '' && !offered.includes(level)
-                                    return unsupported ? null : jsx('option', { value: level, children: label }, level)
-                                  }),
-                                }),
-                              ],
-                            }),
-                            !registered && jsxs('div', {
-                              className: 'evo-llm-ref-row',
-                              children: [
-                                jsx('span', { className: 'evo-llm-ref-label', children: t('llmReasoningRef') }),
-                                jsx('select', {
-                                  className: 'evo-panel-input evo-select-compact evo-llm-ref-select',
-                                  title: t('llmReasoningRefHint'),
-                                  value: m.reasoningRef,
-                                  onChange: (e: { currentTarget: HTMLSelectElement }) => setModelReasoningRef(provider.id, m.id, e.currentTarget.value),
-                                  children: [
-                                    jsx('option', { value: '', children: t('llmReasoningRefNone') }, ''),
-                                    ...[...references]
-                                      .sort((a, b) => referenceScore(m.id, b.id) - referenceScore(m.id, a.id))
-                                      .map((r) => jsx('option', { value: r.id, children: `${r.id}（${r.provider}）` }, r.id)),
-                                  ],
-                                }),
-                              ],
-                            }),
-                          ],
-                        }, m.id)
-                      }),
+                      jsx('div', { className: 'evo-setting-field-label', children: t('modelListLabel') }),
+                      provider.models.map((m) => jsxs('div', {
+                        className: 'evo-llm-model-row',
+                        children: [
+                          jsx('span', { className: 'evo-llm-model-id', title: m.id, children: m.id }),
+                          jsx('span', { className: 'evo-llm-model-ctx', children: m.contextWindow != null ? `${m.contextWindow}` : '' }),
+                        ],
+                      }, m.id)),
                     ],
                   }),
                   jsxs('div', { className: 'evo-llm-actions', children: [
