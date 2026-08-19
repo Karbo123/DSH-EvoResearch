@@ -147,6 +147,14 @@ interface AssignSetting {
   reasoningEffort?: string
 }
 
+/** 模型分配下拉用的模型条目（含输入模态，用于视觉/语音过滤）。 */
+interface AssignModelOption {
+  id: string
+  name: string
+  supportedReasoning: string[] | null
+  input: string[] | null
+}
+
 function ModelField({ label, value, onChange, placeholder, className }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) {
   return jsxs('label', {
     className: className !== undefined ? `evo-setting-field ${className}` : 'evo-setting-field',
@@ -168,18 +176,27 @@ function ModelField({ label, value, onChange, placeholder, className }: { label:
 function ModelAssignSection() {
   const [assign, setAssign] = useState<Record<string, AssignSetting> | null>(null)
   const [providers, setProviders] = useState<LlmProviderEditor[]>([])
-  const [catalog, setCatalog] = useState<Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null }> }>>([])
+  const [catalog, setCatalog] = useState<Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null; input?: string[] | null }> }>>([])
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [migrated, setMigrated] = useState<Record<string, string>>({})
 
-  const providerModels = (providerId: string): Array<{ id: string; name: string; supportedReasoning: string[] | null }> => {
+  const providerModels = (providerId: string): AssignModelOption[] => {
     const group = catalog.find((g) => g.provider?.id === providerId)
     const live = (group?.models ?? []).filter((m) => m.id !== undefined && m.id !== '')
     if (live.length > 0) {
-      return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null }))
+      return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null, input: Array.isArray(m.input) ? m.input as string[] : null }))
     }
-    return (providers.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning }))
+    return (providers.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning, input: null }))
+  }
+  /** 各分配类型要求的输入模态：vision=图片输入，voice=音频输入；其余不限。 */
+  const kindInputModality = (kind: string): string | null => (kind === 'vision' ? 'image' : kind === 'voice' ? 'audio' : null)
+  /** 按模态过滤模型：无模态信息（未知）时放行，避免网关拿不到目录时误伤。 */
+  const modelOptionsFor = (kind: string, providerId: string): AssignModelOption[] => {
+    const all = providerModels(providerId)
+    const modality = kindInputModality(kind)
+    if (modality === null) return all
+    return all.filter((m) => m.input === null || m.input.includes(modality))
   }
   const defaultReasoning = (supported: string[] | null | undefined): string => {
     if (!Array.isArray(supported) || supported.length === 0) return 'high'
@@ -210,17 +227,17 @@ function ModelAssignSection() {
           supportedReasoning: null,
         })),
       })) : []
-      const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null }> }> = cat.ok === true ? (cat.value?.groups ?? []) : []
+      const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null; input?: string[] | null }> }> = cat.ok === true ? (cat.value?.groups ?? []) : []
       setProviders(providerList)
       setCatalog(groups)
       const raw = (ms.ok === true ? ms.value : {}) as Record<string, unknown>
       const rawCode = (raw.code ?? {}) as Record<string, unknown>
       const ids = new Set(providerList.map((p) => p.id))
-      const modelsOf = (providerId: string): Array<{ id: string; name: string; supportedReasoning: string[] | null }> => {
+      const modelsOf = (providerId: string): AssignModelOption[] => {
         const group = groups.find((g) => g.provider?.id === providerId)
         const live = (group?.models ?? []).filter((m) => m.id !== undefined && m.id !== '')
-        if (live.length > 0) return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null }))
-        return (providerList.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning }))
+        if (live.length > 0) return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null, input: Array.isArray(m.input) ? m.input as string[] : null }))
+        return (providerList.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning, input: null }))
       }
       const entries: Array<[string, Record<string, unknown>]> = [
         ['simple', (rawCode.simple ?? {}) as Record<string, unknown>],
@@ -252,6 +269,19 @@ function ModelAssignSection() {
           model,
           reasoningEffort: '',
         }
+        // 尚未配置的分配（常见于图片识别/语音识别）：自动预选第一个 Provider，
+        // 并按该分配要求的输入模态挑一个合适的默认模型，避免"看着有选项其实没选中"。
+        if (next[key].provider === '' && providerList.length > 0) {
+          provider = providerList[0].id
+          next[key].provider = provider
+          const modality = kindInputModality(key)
+          const candidates = modality === null ? modelsOf(provider) : modelsOf(provider).filter((m) => m.input === null || m.input.includes(modality))
+          const hit = candidates.find((m) => m.id === model) ?? candidates[0]
+          if (hit !== undefined) {
+            model = hit.id
+            next[key].model = model
+          }
+        }
         if (model !== '') {
           const sup = modelsOf(provider).find((m) => m.id === model)?.supportedReasoning ?? null
           const stored = typeof cur.reasoningEffort === 'string' ? cur.reasoningEffort : ''
@@ -270,11 +300,11 @@ function ModelAssignSection() {
     setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), [field]: value } }))
   }
   const changeProvider = (key: string, providerId: string) => {
-    const models = providerModels(providerId)
+    const models = modelOptionsFor(key, providerId)
     setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), provider: providerId, model: models[0]?.id ?? '', reasoningEffort: defaultReasoning(models[0]?.supportedReasoning) } }))
   }
   const changeModel = (key: string, modelId: string) => {
-    const m = assign !== null ? providerModels(assign[key]?.provider ?? '').find((x) => x.id === modelId) : undefined
+    const m = assign !== null ? modelOptionsFor(key, assign[key]?.provider ?? '').find((x) => x.id === modelId) : undefined
     setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), model: modelId, reasoningEffort: defaultReasoning(m?.supportedReasoning) } }))
   }
   const offeredLevels = (key: string): Array<[string, string]> => {
@@ -369,7 +399,7 @@ function ModelAssignSection() {
     })()
   }
 
-  const renderSelect = (key: string, field: 'provider' | 'model' | 'reasoningEffort', options: Array<[string, string]>, onChange: (v: string) => void, hint?: string) => {
+  const renderSelect = (key: string, field: 'provider' | 'model' | 'reasoningEffort', options: Array<[string, string]>, onChange: (v: string) => void) => {
     const v = assign?.[key]
     if (v === undefined) return null
     const current = String(v[field] ?? '')
@@ -388,11 +418,11 @@ function ModelAssignSection() {
             onChange(val)
           },
           children: [
-            !exists && jsx('option', { value: current, children: `${current}（${missing}）` }, current),
+            current === '' && jsx('option', { value: '', disabled: true, children: t('assignmentNone') }, ''),
+            !exists && current !== '' && jsx('option', { value: current, children: `${current}（${missing}）` }, current),
             ...options.map(([value, optionLabel]) => jsx('option', { value, children: optionLabel }, value)),
           ],
         }),
-        hint !== undefined && jsx('span', { className: 'evo-setting-field-label', children: hint }),
       ],
     })
   }
@@ -464,7 +494,9 @@ function ModelAssignSection() {
                     ? { icon: ImageIcon, title: t('settingsImage'), hint: t('imageHint') }
                     : { icon: Mic, title: t('settingsVoice'), hint: t('voiceHint') }
                 const Icon = meta.icon
-                const modelHasProfile = providerModels(assign[kind].provider).find((m) => m.id === assign[kind].model)?.supportedReasoning != null
+                const modelOptions = modelOptionsFor(kind, assign[kind].provider)
+                const modelHasProfile = modelOptions.find((m) => m.id === assign[kind].model)?.supportedReasoning != null
+                const modalityEmpty = kindInputModality(kind) !== null && modelOptions.length === 0
                 return jsxs('div', { className: 'evo-tier-card evo-assign-card', children: [
                   jsxs('div', { className: 'evo-assign-head', children: [
                     jsx(Icon, {}),
@@ -473,9 +505,11 @@ function ModelAssignSection() {
                   ] }),
                   jsxs('div', { className: 'evo-assign-grid', children: [
                     renderSelect(kind, 'provider', providerOptions, (v) => changeProvider(kind, v)),
-                    renderSelect(kind, 'model', providerModels(assign[kind].provider).map((m) => [m.id, m.name] as [string, string]), (v) => changeModel(kind, v)),
-                    renderSelect(kind, 'reasoningEffort', offeredLevels(kind), (v) => setField(kind, 'reasoningEffort', v), modelHasProfile ? undefined : t('assignmentReasoningHint')),
+                    renderSelect(kind, 'model', modelOptions.map((m) => [m.id, m.name] as [string, string]), (v) => changeModel(kind, v)),
+                    renderSelect(kind, 'reasoningEffort', offeredLevels(kind), (v) => setField(kind, 'reasoningEffort', v)),
                   ] }),
+                  modalityEmpty && jsx('div', { className: 'evo-assign-hint', children: kind === 'vision' ? t('noVisionModels') : t('noVoiceModels') }),
+                  modelHasProfile === false && !modalityEmpty && jsx('div', { className: 'evo-assign-hint', children: t('assignmentReasoningHint') }),
                   migrated[kind] !== undefined && jsx('div', { className: 'evo-assign-migrate', children: t('migratedProviderHint').replace('{old}', migrated[kind]).replace('{new}', providerLabel(assign[kind].provider)) }),
                   jsxs('div', { className: 'evo-assign-actions', children: [
                     jsx('button', {

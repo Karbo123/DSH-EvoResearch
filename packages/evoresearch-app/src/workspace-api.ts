@@ -145,7 +145,9 @@ function piSupportedLevels(entry: Record<string, unknown>): string[] {
  * 得到全部已登记模型 + 各自支持的推理档位，作为“参照官方档位”的候选名单。
  * 目录读不到时返回 null，由调用方回退到 llm 服务注册目录。
  */
-async function loadBuiltinReasoningReferences(): Promise<Array<{ id: string; name: string; provider: string; supportedReasoning: string[] }> | null> {
+interface ReasoningReference { id: string; name: string; provider: string; supportedReasoning: string[]; input: string[] }
+
+async function loadBuiltinReasoningReferences(): Promise<ReasoningReference[] | null> {
   const candidates: string[] = []
   if (typeof process.env.DSH_HOME === 'string' && process.env.DSH_HOME !== '') {
     candidates.push(join(process.env.DSH_HOME, 'profiles/node_modules/@earendil-works/pi-ai/dist/providers/data'))
@@ -154,7 +156,7 @@ async function loadBuiltinReasoningReferences(): Promise<Array<{ id: string; nam
   for (const dir of candidates) {
     try {
       const files = await readdir(dir)
-      const refs: Array<{ id: string; name: string; provider: string; supportedReasoning: string[] }> = []
+      const refs: ReasoningReference[] = []
       const seen = new Set<string>()
       for (const file of files) {
         if (!file.endsWith('.json') || file === '.manifest.json') continue
@@ -172,11 +174,13 @@ async function loadBuiltinReasoningReferences(): Promise<Array<{ id: string; nam
             if (levels.length === 0) continue
             if (seen.has(id)) continue
             seen.add(id)
+            const entryObj = entry as Record<string, unknown>
             refs.push({
               id,
-              name: typeof (entry as Record<string, unknown>).name === 'string' ? (entry as Record<string, unknown>).name as string : id,
+              name: typeof entryObj.name === 'string' ? entryObj.name as string : id,
               provider,
               supportedReasoning: levels,
+              input: Array.isArray(entryObj.input) ? (entryObj.input as unknown[]).filter((x): x is string => typeof x === 'string') : [],
             })
           }
         }
@@ -188,8 +192,8 @@ async function loadBuiltinReasoningReferences(): Promise<Array<{ id: string; nam
 }
 
 /** 回退方案：从 llm 服务已注册 provider 的目录里收集带推理元数据的模型。 */
-async function llmServiceReasoningReferences(llm: any, providers: Array<{ id: string }>): Promise<Array<{ id: string; name: string; provider: string; supportedReasoning: string[] }>> {
-  const refs: Array<{ id: string; name: string; provider: string; supportedReasoning: string[] }> = []
+async function llmServiceReasoningReferences(llm: any, providers: Array<{ id: string }>): Promise<ReasoningReference[]> {
+  const refs: ReasoningReference[] = []
   const seen = new Set<string>()
   for (const provider of providers) {
     let models: Array<{ id?: string; name?: string }> = []
@@ -207,6 +211,7 @@ async function llmServiceReasoningReferences(llm: any, providers: Array<{ id: st
             name: typeof m.name === 'string' && m.name !== '' ? m.name : id,
             provider: provider.id,
             supportedReasoning: efforts.map((e: { id?: unknown }) => (typeof e?.id === 'string' ? e.id : '')).filter((rid: string) => rid !== ''),
+            input: Array.isArray(info?.inputModalities) ? (info.inputModalities as unknown[]).filter((x): x is string => typeof x === 'string') : [],
           })
         }
       } catch { /* 该模型无目录元数据 → 跳过 */ }
@@ -573,14 +578,14 @@ export function registerWorkspaceApi(ctx: any): void {
           // 参照官方档位候选名单：优先 pi-ai 内置厂商档案，读不到时回退 llm 服务注册目录
           const references = (await loadBuiltinReasoningReferences())
             ?? (await llmServiceReasoningReferences(llm, allProviders))
-          const referenceById = new Map<string, { id: string; name: string; provider: string; supportedReasoning: string[] }>()
+          const referenceById = new Map<string, ReasoningReference>()
           for (const ref of references) {
             if (!referenceById.has(ref.id)) referenceById.set(ref.id, ref)
           }
           const groups: unknown[] = []
           for (const provider of providers) {
             const profile = profiles[provider.id]
-            let raw: Array<{ id: string; name: string; contextWindow: number | null }> = []
+            let raw: Array<{ id: string; name: string; contextWindow: number | null; input: string[] | null }> = []
             try {
               let listed: Array<{ id?: string; name?: string; contextWindow?: number }> | null = null
               // 1) DSH 模型发现：经 llm.discoverModels 读取端点（自动带凭据）
@@ -604,16 +609,16 @@ export function registerWorkspaceApi(ctx: any): void {
                   const id = typeof m.id === 'string' ? m.id : ''
                   if (id === '' || seen.has(id)) continue
                   seen.add(id)
-                  raw.push({ id, name: typeof m.name === 'string' && m.name !== '' ? m.name : id, contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null })
+                  raw.push({ id, name: typeof m.name === 'string' && m.name !== '' ? m.name : id, contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null, input: null })
                 }
               } else {
                 // 4) 端点不可达 → 回退配置内目录（仅此情况使用本地配置）
                 const configured = await llm.listModels(provider.id)
-                for (const m of (configured ?? []) as Array<{ id?: string; name?: string; contextWindow?: number }>) {
+                for (const m of (configured ?? []) as Array<{ id?: string; name?: string; contextWindow?: number; inputModalities?: string[] }>) {
                   const id = typeof m.id === 'string' ? m.id : ''
                   if (id === '' || seen.has(id)) continue
                   seen.add(id)
-                  raw.push({ id, name: typeof m.name === 'string' && m.name !== '' ? m.name : id, contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null })
+                  raw.push({ id, name: typeof m.name === 'string' && m.name !== '' ? m.name : id, contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null, input: Array.isArray(m.inputModalities) ? m.inputModalities.filter((x): x is string => typeof x === 'string') : null })
                 }
               }
             } catch { /* 该 provider 无目录 */ }
@@ -621,11 +626,15 @@ export function registerWorkspaceApi(ctx: any): void {
             // 5) 逐模型解析支持的推理档位（有限并发 + 超时；目录元数据缺失时返回 null）
             const models = await mapWithConcurrency(raw, 6, async (m) => {
               let supportedReasoning: string[] | null = null
+              let input: string[] | null = null
               try {
                 const info = await llm.resolveModelInfo(provider.id, m.id, AbortSignal.timeout(5000))
                 const efforts = info?.reasoning?.efforts
                 if (Array.isArray(efforts) && efforts.length > 0) {
                   supportedReasoning = efforts.map((e: { id?: unknown }) => (typeof e?.id === 'string' ? e.id : '')).filter((id: string) => id !== '')
+                }
+                if (Array.isArray(info?.inputModalities) && info.inputModalities.length > 0) {
+                  input = (info.inputModalities as unknown[]).filter((x): x is string => typeof x === 'string')
                 }
               } catch { /* 无目录元数据或解析失败 → 不限制档位 */ }
               if (supportedReasoning === null) {
@@ -635,7 +644,11 @@ export function registerWorkspaceApi(ctx: any): void {
                 const hit = referenceById.get(m.id)
                 if (hit !== undefined) supportedReasoning = hit.supportedReasoning
               }
-              return { ...m, supportedReasoning }
+              if (input === null && m.input === null) {
+                const hit = referenceById.get(m.id)
+                if (hit !== undefined && hit.input.length > 0) input = hit.input
+              }
+              return { ...m, supportedReasoning, input }
             })
             if (models.length > 0) {
               groups.push({ provider: { id: provider.id, name: provider.name ?? provider.id }, models })
