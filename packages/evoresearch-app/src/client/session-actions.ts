@@ -292,14 +292,14 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   })
 }
 
-const TIER_KEYS = ['simple', 'medium', 'complex'] as const
-const tierMeta: Record<string, { name: string; desc: string }> = {
+export const TIER_KEYS = ['simple', 'medium', 'complex'] as const
+export const tierMeta: Record<string, { name: string; desc: string }> = {
   simple: { name: t('tierSimple'), desc: t('tierSimpleDesc') },
   medium: { name: t('tierMedium'), desc: t('tierMediumDesc') },
   complex: { name: t('tierComplex'), desc: t('tierComplexDesc') },
 }
 
-function effortLabel(level: string): string | null {
+export function effortLabel(level: string): string | null {
   switch (level) {
     case 'off': return t('effortOff')
     case 'minimal': return t('effortMinimal')
@@ -310,113 +310,6 @@ function effortLabel(level: string): string | null {
     case 'max': return t('effortMax')
     default: return level === '' ? null : level
   }
-}
-
-/** 模型选择器（§25.2）：只展示「模型设置 → 代码文本模型」配置的三档，点击即应用为默认模型。 */
-export function ModelSelectorDialog({ onClose }: { onClose: () => void }) {
-  const [tiers, setTiers] = useState<Array<{ key: typeof TIER_KEYS[number]; provider: string; model: string; reasoningEffort: string }> | null>(null)
-  const [names, setNames] = useState<{ providers: Map<string, string>; models: Map<string, string> }>({ providers: new Map(), models: new Map() })
-  const [current, setCurrent] = useState<{ provider: string | null; model: string | null; tier: string | null }>({ provider: null, model: null, tier: null })
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void Promise.all([
-      fetch('/evoresearch/fs/model-settings-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-        .then((r) => r.json()).catch(() => ({ ok: false })),
-      fetch('/evoresearch/fs/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-        .then((r) => r.json()).catch(() => ({ ok: false })),
-      fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-        .then((r) => r.json()).catch(() => ({ ok: false })),
-    ]).then(([settingsJson, currentJson, catalogJson]) => {
-      if (cancelled) return
-      if (settingsJson.ok === true) {
-        const code = settingsJson.value?.code ?? {}
-        setTiers(TIER_KEYS.map((key) => {
-          const cfg = code[key] ?? {}
-          return { key, provider: cfg.provider ?? '', model: cfg.model ?? '', reasoningEffort: cfg.reasoningEffort ?? '' }
-        }))
-      } else {
-        setTiers([])
-      }
-      if (currentJson.ok === true) {
-        setCurrent({ provider: currentJson.value?.provider ?? null, model: currentJson.value?.model ?? null, tier: currentJson.value?.tier ?? null })
-      }
-      if (catalogJson.ok === true) {
-        const providers = new Map<string, string>()
-        const models = new Map<string, string>()
-        for (const group of catalogJson.value?.groups ?? []) {
-          providers.set(group.provider?.id ?? '', group.provider?.name ?? group.provider?.id ?? '')
-          for (const m of group.models ?? []) models.set(m.id, m.name ?? m.id)
-        }
-        setNames({ providers, models })
-      }
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [])
-
-  const apply = (tier: typeof TIER_KEYS[number]) => {
-    if (saving !== null) return
-    setSaving(tier)
-    setError(null)
-    void fetch('/evoresearch/fs/model-settings-apply', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tier }),
-    }).then((r) => r.json()).then((j) => {
-      setSaving(null)
-      if (j.ok) {
-        const entry = tiers?.find((x) => x.key === tier)
-        const label = entry !== undefined && entry.model !== ''
-          ? `${names.models.get(entry.model) ?? entry.model}（${names.providers.get(entry.provider) ?? entry.provider}）`
-          : tier
-        window.dispatchEvent(new CustomEvent('evo-model-changed'))
-        toast(t('modelApplied').replace('{name}', label), 'success')
-        onClose()
-      } else setError(j.error?.message ?? t('assignSaveFailed'))
-    }).catch((e) => { setSaving(null); setError(String(e)) })
-  }
-
-  return jsx(ModalShell, {
-    title: t('selectModel'),
-    onClose,
-    className: 'evo-modal-tiers',
-    children: jsxs('div', {
-      className: 'evo-tier-picker',
-      children: [
-        jsx('div', { className: 'evo-setting-hint', children: t('modelTierHint') }),
-        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-        tiers === null
-          ? jsx('div', { className: 'evo-setting-hint', children: t('loading') })
-          : jsx('div', { className: 'evo-tier-list', children: tiers.map((entry) => {
-              const configured = entry.provider !== '' && entry.model !== ''
-              const active = current.tier === entry.key
-              const effort = effortLabel(entry.reasoningEffort)
-              return jsx('button', {
-                type: 'button',
-                className: 'evo-tier-option',
-                'data-active': active || undefined,
-                disabled: saving !== null || !configured,
-                onClick: () => apply(entry.key),
-                children: [
-                  jsxs('div', { className: 'evo-tier-option-head', children: [
-                    jsx('span', { className: 'evo-tier-option-name', children: tierMeta[entry.key].name }),
-                    jsx('span', { className: 'evo-tier-option-desc', children: tierMeta[entry.key].desc }),
-                    active && jsx('span', { className: 'evo-tier-option-current', children: t('currentModel') }),
-                  ] }),
-                  jsx('div', {
-                    className: 'evo-tier-option-detail',
-                    children: configured
-                      ? `${names.providers.get(entry.provider) ?? entry.provider} · ${names.models.get(entry.model) ?? entry.model}${effort !== null ? ` · ${t('reasoningEffort')} ${effort}` : ''}`
-                      : t('notConfigured'),
-                  }),
-                ],
-              }, entry.key)
-            }) }),
-      ],
-    }),
-  })
 }
 
 /** 二次确认弹窗（§33.1 需决策操作）。 */

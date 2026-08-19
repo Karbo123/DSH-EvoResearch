@@ -477,7 +477,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-modal-mask { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
 .evo-modal { width: 75vw; height: 75vh; max-width: 75vw; max-height: 75vh; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
 .evo-modal.evo-modal-sm { width: min(440px, 92vw); height: auto; max-width: 440px; }
-.evo-modal.evo-modal-tiers { width: min(680px, 94vw); max-width: min(680px, 94vw); }
 /* 设置面板占满整个窗口（用户要求）：fixed + inset 精确覆盖视口 */
 .evo-modal.evo-modal-full { position: fixed; inset: 0; width: auto; height: auto; max-width: none; max-height: none; border-radius: 0; border: none; }
 .evo-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--color-border-light); }
@@ -493,8 +492,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-setting-option[data-active] { background: var(--brand-solid); border-color: var(--brand-solid); color: var(--brand-foreground); }
 .evo-setting-hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 6px; line-height: 1.6; }
 .evo-setting-error { color: var(--color-error); }
-.evo-tier-picker { display: flex; flex-direction: column; gap: 12px; }
-.evo-tier-list { display: flex; flex-direction: column; gap: 10px; }
 .evo-tier-option { display: flex; flex-direction: column; gap: 7px; width: 100%; text-align: left; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-background); color: var(--color-text-primary); cursor: pointer; transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; }
 .evo-tier-option:hover:not(:disabled) { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 5%, var(--color-background)); }
 .evo-tier-option[data-active] { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); }
@@ -642,9 +639,15 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* 模型徽章：品牌色强调、输入框内右下侧（工具栏 spacer 之后、发送按钮之前），点击切换模型 */
 .evo-composer-model { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--color-surface)); color: var(--brand); font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; line-height: 1.5; white-space: nowrap; transition: box-shadow 0.15s ease, border-color 0.15s ease; }
 .evo-composer-model:hover { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); }
+.evo-composer-model.evo-composer-model-open { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); }
 .evo-composer-model svg { width: 11px; height: 11px; flex-shrink: 0; }
 .evo-composer-model-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .evo-composer-model-effort { font-weight: 400; opacity: 0.88; }
+.evo-composer-model-menu { position: fixed; z-index: 3000; width: min(400px, calc(100vw - 24px)); max-height: 340px; overflow-y: auto; padding: 6px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; gap: 4px; }
+.evo-composer-model-menu-hint { padding: 4px 8px 6px; font-size: 11px; color: var(--color-text-tertiary); line-height: 1.5; }
+.evo-composer-model-menu .evo-tier-option { padding: 9px 12px; gap: 5px; }
+.evo-composer-model-menu .evo-setting-hint { padding: 6px 8px; font-size: 12px; }
+.evo-composer-model-menu .evo-panel-error { padding: 6px 8px; font-size: 12px; }
 /* 会话权限档位（输入框工具行）：仿模型徽章的胶囊下拉 */
 .evo-dropdown.evo-composer-perm { display: inline-flex; width: auto; flex-shrink: 0; }
 .evo-composer-perm .evo-dropdown-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; width: auto; height: auto; padding: 2px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--color-surface)); color: var(--brand); font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; }
