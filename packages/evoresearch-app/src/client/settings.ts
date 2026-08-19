@@ -747,43 +747,55 @@ function LlmProviderSection() {
     reasoningEfforts: m.reasoningEfforts === null || m.reasoningEfforts === undefined ? undefined : m.reasoningEfforts,
   })
 
-  /** 获取可用模型：远端目录为准，更新前端列表并立即写回 Provider 配置。 */
-  const fetchModels = (id: string) => {
+  /** 获取全部 Provider 的可用模型：统一并集，立即写回各 Provider 配置。 */
+  const fetchAllModels = () => {
     if (busyId !== null) return
-    setBusyId(id)
+    setBusyId('__all__')
     setError(null)
     void (async () => {
       try {
         const json = await fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json())
         if (json.ok !== true) throw new Error(json.error?.message ?? t('llmFetchFailed'))
         const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; contextWindow?: number | null; supportedReasoning?: string[] | null }> }> = json.value?.groups ?? []
-        const live = groups.find((g) => g.provider?.id === id)?.models ?? []
-        const cur = providers?.find((p) => p.id === id)
-        const existing = new Map((cur?.models ?? []).map((m) => [m.id, m]))
-        const nextModels = live
-          .filter((m) => m.id !== undefined && m.id !== '')
-          .map((m) => {
-            const old = existing.get(m.id as string)
-            return {
-              id: m.id as string,
-              name: m.name ?? String(m.id),
-              contextWindow: m.contextWindow ?? null,
-              reasoningEfforts: old?.reasoningEfforts ?? null,
-              supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null,
-            }
-          })
-        if (nextModels.length === 0) {
+        const cur = providers ?? []
+        const nextByProvider = new Map<string, LlmModelRow[]>()
+        let total = 0
+        for (const p of cur) {
+          const live = groups.find((g) => g.provider?.id === p.id)?.models ?? []
+          const existing = new Map(p.models.map((m) => [m.id, m]))
+          const next = live
+            .filter((m) => m.id !== undefined && m.id !== '')
+            .map((m) => {
+              const old = existing.get(m.id as string)
+              return {
+                id: m.id as string,
+                name: m.name ?? String(m.id),
+                contextWindow: m.contextWindow ?? null,
+                reasoningEfforts: old?.reasoningEfforts ?? null,
+                supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null,
+              }
+            })
+          if (next.length > 0) {
+            nextByProvider.set(p.id, next)
+            total += next.length
+          }
+        }
+        if (total === 0) {
           toast(t('llmFetchDone').replace('{n}', '0'), 'success')
           return
         }
-        setProviders((prev) => (prev ?? []).map((p) => (p.id === id ? { ...p, models: nextModels } : p)))
-        const saved = await fetch('/evoresearch/fs/llm-provider-save', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ provider: id, patch: { models: nextModels.map(modelPatch) } }),
-        }).then((r) => r.json())
-        if (saved.ok !== true) throw new Error(saved.error?.message ?? t('llmSaveFailed'))
-        toast(t('llmFetchDone').replace('{n}', String(nextModels.length)), 'success')
+        const failures: string[] = []
+        for (const [pid, list] of nextByProvider) {
+          const saved = await fetch('/evoresearch/fs/llm-provider-save', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ provider: pid, patch: { models: list.map(modelPatch) } }),
+          }).then((r) => r.json())
+          if (saved.ok !== true) failures.push(pid)
+        }
+        if (failures.length > 0) throw new Error(`${t('llmFetchFailed')}: ${failures.join('、')}`)
+        setProviders((prev) => (prev ?? []).map((p) => (nextByProvider.has(p.id) ? { ...p, models: nextByProvider.get(p.id) as LlmModelRow[] } : p)))
+        toast(t('llmFetchDone').replace('{n}', String(total)), 'success')
       } catch (e: unknown) {
         setError((e as Error)?.message ?? t('llmFetchFailed'))
       } finally {
@@ -1084,7 +1096,7 @@ function LlmProviderSection() {
             : providers.length === 0
               ? jsx('div', { className: 'evo-setting-hint', children: t('noLlmProviders') })
               : providers.map((provider) => {
-              const busy = busyId === provider.id
+              const busy = busyId !== null
               return jsxs('div', {
                 className: 'evo-llm-provider',
                 children: [
@@ -1127,13 +1139,6 @@ function LlmProviderSection() {
                   jsxs('div', { className: 'evo-llm-actions', children: [
                     jsx('button', {
                       type: 'button',
-                      className: 'evo-btn evo-btn-run',
-                      disabled: busy,
-                      onClick: () => fetchModels(provider.id),
-                      children: jsxs(Fragment, { children: [jsx(Server, {}), jsx('span', { children: busy && busyId === provider.id ? t('fetchModelsBusy') : t('fetchModels') })] }),
-                    }),
-                    jsx('button', {
-                      type: 'button',
                       className: 'evo-btn evo-btn-ok',
                       disabled: busy,
                       onClick: () => save(provider.id),
@@ -1152,6 +1157,14 @@ function LlmProviderSection() {
           jsxs('div', { className: 'evo-llm-fetched-head', children: [
             jsx('span', { className: 'evo-llm-fetched-title', children: t('modelListLabel') }),
             jsx('span', { className: 'evo-llm-fetched-count', children: t('fetchedModelsCount').replace('{n}', String(modelPills.length)) }),
+            jsx('span', { style: { flex: 1 } }),
+            jsx('button', {
+              type: 'button',
+              className: 'evo-btn evo-btn-run',
+              disabled: busyId !== null,
+              onClick: fetchAllModels,
+              children: jsxs(Fragment, { children: [jsx(Server, {}), jsx('span', { children: busyId === '__all__' ? t('fetchModelsBusy') : t('fetchModels') })] }),
+            }),
           ] }),
           jsx('div', { className: 'evo-setting-hint', children: t('fetchedModelsDesc') }),
           modelPills.length === 0
