@@ -652,8 +652,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-perm .evo-dropdown-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
 .evo-composer-perm .evo-dropdown-value { flex: 0 1 auto; }
 .evo-stats-sep { color: var(--color-border); margin-right: 8px; }
-/* ── 插件清单：自适应多列（窄 1~2 列、宽屏最多 4 列），撑满可用宽度、可垂直滚动 ── */
-.evo-plugin-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 6px 10px; max-height: 180px; overflow-y: auto; width: 100%; align-items: stretch; }
+/* ── 插件清单：自适应多列（窄 1~2 列、宽屏最多 4 列），撑满可用宽度、可垂直滚动 ──
+   最大高度按“最多一次性展示 10 行”计算（行高约 31px + 6px 行距）；
+   内容不足 10 行时随内容收缩，不会留下大片空白，最少也展示一行。 */
+.evo-plugin-list { --evo-plugin-row: 31px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 6px 10px; max-height: calc(var(--evo-plugin-row) * 10 + 9 * 6px); overflow-y: auto; width: 100%; align-items: stretch; }
 .evo-settings-modal { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .evo-settings-head { padding: 10px 14px; border-bottom: 1px solid var(--color-border-light); }
 .evo-btn-back { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: transparent; color: var(--color-text-primary); font-size: 13px; cursor: pointer; font: inherit; }
