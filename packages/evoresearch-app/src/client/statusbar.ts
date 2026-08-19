@@ -157,8 +157,7 @@ export function ComposerModelInfo() {
 
   if (info?.model == null) return null
   const effortLabel = info.reasoningEffort === 'low' ? t('effortLow') : info.reasoningEffort === 'medium' ? t('effortMedium') : info.reasoningEffort === 'high' ? t('effortHigh') : null
-  const tierLabel = info.tier === 'simple' ? t('tierSimple') : info.tier === 'medium' ? t('tierMedium') : info.tier === 'complex' ? t('tierComplex') : null
-  const detail = [`${info.model}（${info.provider ?? '?'}）`, tierLabel !== null ? `档位：${tierLabel}` : null, effortLabel !== null ? `推理强度：${effortLabel}` : null].filter(Boolean).join(' · ')
+  const detail = [`${info.model}（${info.provider ?? '?'}）`, effortLabel !== null ? `推理强度：${effortLabel}` : null].filter(Boolean).join(' · ')
   return jsxs('button', {
     type: 'button',
     className: 'evo-composer-model',

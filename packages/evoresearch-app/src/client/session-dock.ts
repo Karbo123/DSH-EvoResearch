@@ -2,7 +2,7 @@
  * 会话状态条与统计条（借鉴官方 WebUI 的 composer dock 与 StatsLine）。
  *
  * - SessionStatusLine：排队消息数 / 进行中目标 / 模式徽章（read-only /
- *   workspace-write / full access）/ 当前模型 / 上下文用量百分比
+ *   workspace-write / full access）/ 上下文用量百分比
  * - SessionStatsLine：底部统计条（轮数·步数 | LLM 耗时 · 工具耗时 |
  *   首 token 平均 · tok/s | 缓存命中 | 输入·输出 tokens）
  *
@@ -11,7 +11,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
-import { ListTodo, Target, ShieldCheck, ShieldOff, Cpu, Gauge } from 'lucide-react'
+import { ListTodo, Target, ShieldCheck, ShieldOff, Gauge } from 'lucide-react'
 import { t } from './i18n'
 
 /** 时长格式化（官方 formatDuration 语义）。 */
@@ -44,29 +44,19 @@ export interface SessionDockData {
   session: any
 }
 
-/** 状态条内容：排队 / 目标 / 模式 / 模型 / 上下文。 */
+/** 状态条内容：排队 / 目标 / 模式 / 上下文。 */
 export function SessionStatusLine({ session }: SessionDockData) {
-  const [model, setModel] = useState<{ provider: string | null; model: string | null } | null>(null)
   const [mode, setMode] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    const fetchModel = () => fetch('/evoresearch/fs/models', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    }).then((res) => res.json()).then((json) => {
-      if (!cancelled && json.ok) setModel(json.value)
-    }).catch(() => {})
     const fetchMode = () => fetch('/evoresearch/fs/mode').then((res) => res.json()).then((json) => {
       if (!cancelled && json.ok) setMode(json.value.preset)
     }).catch(() => {})
-    void fetchModel()
     void fetchMode()
-    const onChange = () => { void fetchMode(); void fetchModel() }
+    const onChange = () => { void fetchMode() }
     window.addEventListener('evo-mode-changed', onChange)
-    window.addEventListener('evo-model-changed', onChange)
-    return () => { cancelled = true; window.removeEventListener('evo-mode-changed', onChange); window.removeEventListener('evo-model-changed', onChange) }
+    return () => { cancelled = true; window.removeEventListener('evo-mode-changed', onChange) }
   }, [session])
 
   if (session === null) return null
@@ -101,13 +91,6 @@ export function SessionStatusLine({ session }: SessionDockData) {
         className: `evo-status-chip${effectivePreset === 'read-only' ? ' evo-status-ro' : effectivePreset === 'danger-full-access' ? ' evo-status-full' : ''}`,
         title: `${t('permission')}: ${effectivePreset ?? ''}`,
         children: [effectivePreset === 'read-only' ? jsx(ShieldOff, {}) : jsx(ShieldCheck, {}), jsx('span', { children: modeLabelValue })],
-      }),
-      model?.model != null && jsxs('button', {
-        type: 'button',
-        className: 'evo-status-chip evo-status-model',
-        title: `${t('model')}: ${model.provider ?? ''} / ${model.model}（点击切换）`,
-        onClick: () => window.dispatchEvent(new CustomEvent('evo-open-model-selector')),
-        children: [jsx(Cpu, {}), jsx('span', { children: model.model })],
       }),
       occupancy !== null && jsxs('span', {
         className: 'evo-status-chip',

@@ -662,6 +662,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-provider { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
 .evo-llm-actions { display: flex; align-items: center; gap: 8px; }
 .evo-llm-key-input { font-family: ui-monospace, Consolas, monospace; }
+.evo-llm-add { align-self: flex-start; }
+.evo-llm-new { border-style: dashed; border-color: var(--color-border); }
+/* 模型服务面板的推理强度选择框：紧凑高度，避免撑开卡片留白 */
+.evo-llm-select { flex: 0 0 auto; width: auto; min-width: 112px; padding: 3px 8px; font-size: 12px; border-radius: 7px; height: 28px; line-height: 20px; }
+.evo-llm-model-row .evo-llm-select { min-width: 96px; }
 .evo-setting-field-env { opacity: .75; margin-left: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
 .evo-llm-models { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border-light); max-height: 260px; overflow-y: auto; }
 .evo-llm-model-row { display: flex; align-items: center; gap: 8px; padding: 3px 2px; }

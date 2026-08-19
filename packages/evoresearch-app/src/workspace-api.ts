@@ -162,6 +162,26 @@ function sanitizeModelEntry(m: unknown): { id: string; name?: string; contextWin
   return out
 }
 
+/** 有限并发地映射数组：保证并发数不超过 limit，任一失败直接抛出。 */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = cursor
+      cursor += 1
+      if (index >= items.length) return
+      out[index] = await fn(items[index], index)
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
+
 /**
  * 瞬态 Windows 文件锁（Defender / 文件监视器在 rename 提交瞬间短暂占用目标文件）
  * 下重试原子写入；EPERM / EBUSY / EACCES / ENOENT 视为可重试码。
@@ -438,8 +458,10 @@ export function registerWorkspaceApi(ctx: any): void {
 
         // POST /evoresearch/models-catalog → 模型目录（§25.2 模型选择器）：
         // 实时探测各 provider 的 <baseURL>/models 端点（优先 llm.discoverModels，
-        // 自动带 DSH 凭据；失败则直接 fetch）；端点不可达时回退到配置内模型。
-        // 端点结果与配置模型取并集，既反映网关真实目录，也不丢失手工配置条目。
+        // 自动带 DSH 凭据；失败则直接 fetch）。端点可用时以远端列表为唯一来源，
+        // 本地配置只作为端点不可达时的回退目录，避免把过时/错误的手写模型混进选择器。
+        // 顺带用 llm.resolveModelInfo 解析每个模型支持的推理档位（pi-ai 目录元数据），
+        // 失败不影响列表，前端据此禁用该模型不支持的档位。
         if (method === 'models-catalog') {
           const llm = ctx.get('llm')
           if (llm?.listProviders === undefined) throw httpError(400, 'method-error', 'llm 服务不可用')
@@ -453,7 +475,7 @@ export function registerWorkspaceApi(ctx: any): void {
           const groups: unknown[] = []
           for (const provider of providers) {
             const profile = profiles[provider.id]
-            let models: Array<{ id: string; name: string; contextWindow: number | null }> = []
+            let raw: Array<{ id: string; name: string; contextWindow: number | null }> = []
             try {
               let listed: Array<{ id?: string; name?: string; contextWindow?: number }> | null = null
               // 1) DSH 模型发现：经 llm.discoverModels 读取端点（自动带凭据）
@@ -470,26 +492,72 @@ export function registerWorkspaceApi(ctx: any): void {
                   listed = await fetchEndpointModels(profile.baseURL, apiKey)
                 } catch { /* 端点无目录 */ }
               }
-              // 3) 配置内模型（并集：端点未覆盖的配置模型仍保留）
-              const configured = await llm.listModels(provider.id)
-              const configuredModels = (configured ?? []).map((m: { id?: string; name?: string; contextWindow?: number }) => ({
-                id: m.id ?? '',
-                name: m.name ?? m.id ?? '',
-                contextWindow: m.contextWindow ?? null,
-              }))
               const seen = new Set<string>()
-              models = [...(listed ?? []), ...configuredModels]
-                .filter((m) => m.id !== '' && !seen.has(m.id))
-                .map((m) => {
-                  seen.add(m.id)
-                  return { id: m.id, name: m.name ?? m.id, contextWindow: m.contextWindow ?? null }
-                })
+              if (listed !== null && listed.length > 0) {
+                // 3) 远端为准：端点返回的模型就是唯一目录
+                for (const m of listed) {
+                  const id = typeof m.id === 'string' ? m.id : ''
+                  if (id === '' || seen.has(id)) continue
+                  seen.add(id)
+                  raw.push({ id, name: typeof m.name === 'string' && m.name !== '' ? m.name : id, contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null })
+                }
+              } else {
+                // 4) 端点不可达 → 回退配置内目录（仅此情况使用本地配置）
+                const configured = await llm.listModels(provider.id)
+                for (const m of (configured ?? []) as Array<{ id?: string; name?: string; contextWindow?: number }>) {
+                  const id = typeof m.id === 'string' ? m.id : ''
+                  if (id === '' || seen.has(id)) continue
+                  seen.add(id)
+                  raw.push({ id, name: typeof m.name === 'string' && m.name !== '' ? m.name : id, contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null })
+                }
+              }
             } catch { /* 该 provider 无目录 */ }
+            if (raw.length === 0) continue
+            // 5) 逐模型解析支持的推理档位（有限并发 + 超时；目录元数据缺失时返回 null）
+            const models = await mapWithConcurrency(raw, 6, async (m) => {
+              let supportedReasoning: string[] | null = null
+              try {
+                const info = await llm.resolveModelInfo(provider.id, m.id, AbortSignal.timeout(5000))
+                const efforts = info?.reasoning?.efforts
+                if (Array.isArray(efforts) && efforts.length > 0) {
+                  supportedReasoning = efforts.map((e: { id?: unknown }) => (typeof e?.id === 'string' ? e.id : '')).filter((id: string) => id !== '')
+                }
+              } catch { /* 无目录元数据或解析失败 → 不限制档位 */ }
+              return { ...m, supportedReasoning }
+            })
             if (models.length > 0) {
               groups.push({ provider: { id: provider.id, name: provider.name ?? provider.id }, models })
             }
           }
           writeOk(res, { groups })
+          return
+        }
+
+        // POST /evoresearch/fs/llm-provider-probe → 探测候选 provider 的模型端点：
+        // 供“添加模型服务”在创建前拉取一次可用模型（openai-completions /
+        // openai-responses 可探测；其余协议返回 listed=false，由用户手工填写模型）。
+        if (method === 'llm-provider-probe') {
+          const baseURL = requireString(payload, 'baseURL')
+          const api = typeof payload.api === 'string' && payload.api !== '' ? payload.api : 'openai-completions'
+          const apiKey = typeof payload.apiKey === 'string' && payload.apiKey !== '' ? payload.apiKey : undefined
+          if (api !== 'openai-completions' && api !== 'openai-responses') {
+            writeOk(res, { listed: false, models: [] })
+            return
+          }
+          let models: Array<{ id: string; name: string; contextWindow: number | null }> = []
+          try {
+            const fetched = await fetchEndpointModels(baseURL, apiKey)
+            const seen = new Set<string>()
+            for (const m of fetched) {
+              if (m.id !== '' && !seen.has(m.id)) {
+                seen.add(m.id)
+                models.push({ id: m.id, name: m.name ?? m.id, contextWindow: m.contextWindow ?? null })
+              }
+            }
+          } catch (error) {
+            throw httpError(400, 'probe-failed', `模型端点探测失败: ${(error as Error)?.message ?? String(error)}`)
+          }
+          writeOk(res, { listed: true, models })
           return
         }
 
@@ -528,18 +596,46 @@ export function registerWorkspaceApi(ctx: any): void {
         // POST /evoresearch/fs/llm-provider-save → 保存模型服务配置：
         // baseURL / displayName / api / reasoning / models 写回 settings.yaml
         // （settings.replace），API Key 明文写回 .credentials.yaml（credentials.set）。
+        // Provider 不存在时自动创建（patch.create=true，自动生成 apiKeyEnv 引用）；
+        // patch.remove=true 时删除该 provider 并清除其凭据。
         if (method === 'llm-provider-save') {
           const settings = ctx.get('settings')
           if (settings?.replace === undefined) throw httpError(400, 'method-error', 'settings 服务不可用')
           const provider = requireString(payload, 'provider')
           const patch = (payload.patch ?? {}) as Record<string, unknown>
           const section = llmPiAiSection(settings)
-          const profile = section.providers[provider] as Record<string, unknown> | undefined
-          if (profile === undefined) throw httpError(400, 'bad-request', `Provider 不存在: ${provider}`)
+          let profile = section.providers[provider] as Record<string, unknown> | undefined
+          if (patch.remove === true) {
+            const removed = profile
+            if (removed === undefined) throw httpError(400, 'bad-request', `Provider 不存在: ${provider}`)
+            delete section.providers[provider]
+            await withWriteRetry(() => settings.replace('llm-pi-ai', { providers: section.providers }))
+            const ref = typeof removed.apiKeyEnv === 'string' && removed.apiKeyEnv !== '' ? removed.apiKeyEnv : undefined
+            if (ref !== undefined) {
+              const credentials = ctx.get('credentials')
+              if (credentials?.unset !== undefined) {
+                await withWriteRetry(() => credentials.unset(ref)).catch(() => { /* 凭据不存在时忽略 */ })
+              }
+            }
+            writeOk(res, { removed: true })
+            return
+          }
+          if (profile === undefined) {
+            if (patch.create !== true) throw httpError(400, 'bad-request', `Provider 不存在: ${provider}（首次创建请带 create=true）`)
+            if (provider.trim() === '' || /[^A-Za-z0-9._-]/.test(provider)) {
+              throw httpError(400, 'bad-request', 'Provider ID 只能包含字母、数字、点、下划线与连字符')
+            }
+            const ref = `EVORESEARCH_LLM_${provider.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}`
+            profile = {
+              displayName: provider,
+              apiKeyEnv: ref,
+              api: 'openai-completions',
+            }
+            section.providers[provider] = profile
+          }
           if (patch.displayName !== undefined) profile.displayName = typeof patch.displayName === 'string' && patch.displayName !== '' ? patch.displayName : provider
           if (patch.baseURL !== undefined) profile.baseURL = typeof patch.baseURL === 'string' ? patch.baseURL.trim() : ''
           if (patch.api !== undefined) profile.api = typeof patch.api === 'string' ? patch.api.trim() : 'openai-completions'
-          if (patch.apiKeyEnv !== undefined) profile.apiKeyEnv = typeof patch.apiKeyEnv === 'string' && patch.apiKeyEnv !== '' ? patch.apiKeyEnv.trim() : undefined
           if (patch.reasoning !== undefined) {
             if (typeof patch.reasoning === 'string' && patch.reasoning !== '') profile.reasoning = patch.reasoning
             else delete profile.reasoning
