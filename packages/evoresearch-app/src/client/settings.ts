@@ -1,8 +1,9 @@
 /**
  * 设置面板：左侧 tab 导航 + 右侧配置 + 左上角「返回」（图标 + 文字）。
  * - 通用：权限模式 / 默认模型 / 插件清单 / 关于（主题与语言在顶栏，不重复）；
- * - 代码文本模型：三档（轻量/均衡/深度），可设为默认模型；
- * - 图片识别 / 图片生成 / 语音识别模型：模型与端点配置（参照 ResearchOS 设置面板）。
+ * - 模型设置：1）模型服务（Provider 与每模型推理强度）；2）模型分配（代码三档 /
+ *   图片识别 / 图片生成 / 语音识别，从 Provider 模型列表选择并设置推理强度）；
+ * - 清除数据。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
@@ -137,8 +138,15 @@ function AboutSection() {
   })
 }
 
-/** 模型档位/模型设置表单（代码三档复用；视觉/图片/语音用单档）。 */
-interface TierValue { model: string; provider: string; reasoningEffort?: string; url?: string; keyEnv?: string; voiceProvider?: string }
+/** 模型分配（代码三档 + 视觉/图片/语音）：provider / model / reasoningEffort 等。 */
+interface AssignSetting {
+  provider: string
+  model: string
+  reasoningEffort?: string
+  url?: string
+  keyEnv?: string
+  voiceProvider?: string
+}
 
 function ModelField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return jsxs('label', {
@@ -156,182 +164,353 @@ function ModelField({ label, value, onChange, placeholder }: { label: string; va
   })
 }
 
-/** 代码模型三档设置。 */
-function CodeModelSection() {
-  const [tiers, setTiers] = useState<Record<string, TierValue> | null>(null)
-  const [saving, setSaving] = useState(false)
+
+/** 模型分配（模型设置第 2 步）：从模型服务 Provider 的模型列表中选择各任务模型并设置推理强度。 */
+function ModelAssignSection() {
+  const [assign, setAssign] = useState<Record<string, AssignSetting> | null>(null)
+  const [providers, setProviders] = useState<LlmProviderEditor[]>([])
+  const [catalog, setCatalog] = useState<Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null }> }>>([])
+  const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [applied, setApplied] = useState<string | null>(null)
-  const TIERS = [
-    { id: 'simple', label: t('tierSimple'), desc: t('tierSimpleDesc') },
-    { id: 'medium', label: t('tierMedium'), desc: t('tierMediumDesc') },
-    { id: 'complex', label: t('tierComplex'), desc: t('tierComplexDesc') },
-  ]
+  const [migrated, setMigrated] = useState<Record<string, string>>({})
+  const [openAdvanced, setOpenAdvanced] = useState<Record<string, boolean>>({})
+
+  const providerModels = (providerId: string): Array<{ id: string; name: string; supportedReasoning: string[] | null }> => {
+    const group = catalog.find((g) => g.provider?.id === providerId)
+    const live = (group?.models ?? []).filter((m) => m.id !== undefined && m.id !== '')
+    if (live.length > 0) {
+      return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null }))
+    }
+    return (providers.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning }))
+  }
+
   const load = () => {
-    void fetch('/evoresearch/fs/model-settings-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-      .then((r) => r.json()).then((json) => {
-        if (json.ok) setTiers(json.value.code)
-      }).catch((e: any) => setError(String(e)))
+    setError(null)
+    void Promise.all([
+      fetch('/evoresearch/fs/model-settings-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json()),
+      fetch('/evoresearch/fs/llm-providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json()),
+      fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json()).catch(() => ({ ok: false })),
+    ]).then(([ms, lp, cat]) => {
+      const providerList: LlmProviderEditor[] = lp.ok === true ? (lp.value?.providers ?? []).map((p: Record<string, unknown>) => ({
+        id: String(p.id ?? ''),
+        displayName: String(p.displayName ?? ''),
+        baseURL: String(p.baseURL ?? ''),
+        apiKeyEnv: String(p.apiKeyEnv ?? ''),
+        apiKey: String(p.apiKey ?? ''),
+        api: String(p.api ?? 'openai-completions'),
+        reasoning: String(p.reasoning ?? ''),
+        models: (Array.isArray(p.models) ? p.models : []).map((m: Record<string, unknown>) => ({
+          id: String(m.id ?? ''),
+          name: String(m.name ?? ''),
+          contextWindow: m.contextWindow == null ? null : Number(m.contextWindow),
+          reasoningEfforts: (m.reasoningEfforts === undefined ? null : m.reasoningEfforts) as LlmModelRow['reasoningEfforts'],
+          supportedReasoning: null,
+          reasoningRef: '',
+        })),
+      })) : []
+      const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null }> }> = cat.ok === true ? (cat.value?.groups ?? []) : []
+      setProviders(providerList)
+      setCatalog(groups)
+      const raw = (ms.ok === true ? ms.value : {}) as Record<string, unknown>
+      const rawCode = (raw.code ?? {}) as Record<string, unknown>
+      const ids = new Set(providerList.map((p) => p.id))
+      const modelsOf = (providerId: string): Array<{ id: string; name: string; supportedReasoning: string[] | null }> => {
+        const group = groups.find((g) => g.provider?.id === providerId)
+        const live = (group?.models ?? []).filter((m) => m.id !== undefined && m.id !== '')
+        if (live.length > 0) return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null }))
+        return (providerList.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning }))
+      }
+      const entries: Array<[string, Record<string, unknown>]> = [
+        ['simple', (rawCode.simple ?? {}) as Record<string, unknown>],
+        ['medium', (rawCode.medium ?? {}) as Record<string, unknown>],
+        ['complex', (rawCode.complex ?? {}) as Record<string, unknown>],
+        ['vision', (raw.vision ?? {}) as Record<string, unknown>],
+        ['image', (raw.image ?? {}) as Record<string, unknown>],
+        ['voice', (raw.voice ?? {}) as Record<string, unknown>],
+      ]
+      const next: Record<string, AssignSetting> = {}
+      const migratedMap: Record<string, string> = {}
+      for (const [key, cur] of entries) {
+        let provider = String(cur.provider ?? '')
+        let model = String(cur.model ?? '')
+        if (provider !== '' && !ids.has(provider)) {
+          const first = providerList[0]
+          if (first !== undefined) {
+            migratedMap[key] = provider
+            provider = first.id
+            const models = modelsOf(first.id)
+            if (models.length > 0 && !models.some((m) => m.id === model)) {
+              const hit = [...models].sort((a, b) => referenceScore(model, b.id) - referenceScore(model, a.id))[0]
+              model = hit !== undefined ? hit.id : ''
+            }
+          }
+        }
+        next[key] = {
+          provider,
+          model,
+          reasoningEffort: typeof cur.reasoningEffort === 'string' ? cur.reasoningEffort : '',
+          url: typeof cur.url === 'string' ? cur.url : '',
+          keyEnv: typeof cur.keyEnv === 'string' ? cur.keyEnv : '',
+          voiceProvider: typeof cur.voiceProvider === 'string' ? cur.voiceProvider : 'api',
+        }
+      }
+      setAssign(next)
+      setMigrated(migratedMap)
+    }).catch((e: unknown) => setError((e as Error)?.message ?? '加载失败'))
   }
   useEffect(load, [])
-  const setTierField = (tierId: string, field: keyof TierValue, value: string) => {
-    setTiers((prev) => ({ ...(prev ?? {}), [tierId]: { ...(prev?.[tierId] ?? {}), [field]: value } }))
+
+  const setField = (key: string, field: keyof AssignSetting, value: string) => {
+    setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), [field]: value } }))
   }
-  const save = () => {
-    if (tiers === null || saving) return
-    setSaving(true)
-    setError(null)
-    void fetch('/evoresearch/fs/model-settings-set', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ patch: { code: tiers } }),
-    }).then((r) => r.json()).then((json) => {
-      setSaving(false)
-      if (json.ok) setApplied('saved')
-      else setError(json.error?.message ?? '保存失败')
-    }).catch((e: any) => { setSaving(false); setError(String(e)) })
+  const changeProvider = (key: string, providerId: string) => {
+    const models = providerModels(providerId)
+    setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), provider: providerId, model: models[0]?.id ?? '', reasoningEffort: '' } }))
   }
-  const applyTier = (tierId: string) => {
-    if (saving) return
+  const changeModel = (key: string, modelId: string) => {
+    setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), model: modelId, reasoningEffort: '' } }))
+  }
+  const offeredLevels = (key: string): Array<[string, string]> => {
+    const v = assign?.[key]
+    if (v === undefined) return REASONING_LEVELS
+    const m = providerModels(v.provider).find((x) => x.id === v.model)
+    const sup = m?.supportedReasoning
+    if (Array.isArray(sup) && sup.length > 0) return REASONING_LEVELS.filter(([level]) => level === '' || sup.includes(level))
+    return REASONING_LEVELS
+  }
+  const applyTier = (tier: string) => {
+    if (saving !== null || assign === null) return
+    const v = assign[tier]
+    if (v === undefined || v.provider === '' || v.model === '') { setError(t('assignSaveFailed')); return }
+    setSaving(`apply:${tier}`)
     setError(null)
     void fetch('/evoresearch/fs/model-settings-apply', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tier: tierId }),
+      body: JSON.stringify({ tier }),
     }).then((r) => r.json()).then((json) => {
-      if (json.ok) setApplied(`applied:${tierId}`)
-      else setError(json.value?.error ?? json.error?.message ?? '应用失败')
-    }).catch((e: any) => setError(String(e)))
+      if (json.ok) toast(t('modelSettingsSaved'), 'success')
+      else setError(json.error?.message ?? t('assignSaveFailed'))
+    }).catch((e: unknown) => setError((e as Error)?.message ?? t('assignSaveFailed')))
+      .finally(() => setSaving(null))
   }
-  return jsxs('div', {
-    className: 'evo-setting',
-    children: [
-      jsxs('div', {
-        className: 'evo-setting-label',
-        children: [jsx(Code2, {}), jsx('span', { children: t('settingsCodeModel') })],
-      }),
-      jsx('div', { className: 'evo-setting-hint', children: t('codeModelHint') }),
-      tiers === null
-        ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
-        : jsx('div', { className: 'evo-tier-grid', children: TIERS.map((tier) => {
-            const v = tiers[tier.id] ?? { model: '', provider: '', reasoningEffort: 'medium' }
-            return jsxs('div', {
-              className: 'evo-tier-card',
-              children: [
-                jsxs('div', { className: 'evo-tier-head', children: [
-                  jsx('span', { className: 'evo-tier-name', children: tier.label }),
-                  jsx('span', { className: 'evo-tier-desc', children: tier.desc }),
-                ] }),
-                jsx(ModelField, { label: t('modelLabel'), value: v.model ?? '', onChange: (x) => setTierField(tier.id, 'model', x) }),
-                jsx(ModelField, { label: t('providerLabel'), value: v.provider ?? '', onChange: (x) => setTierField(tier.id, 'provider', x) }),
-                jsxs('label', {
-                  className: 'evo-setting-field',
-                  children: [
-                    jsx('span', { className: 'evo-setting-field-label', children: t('reasoningEffort') }),
-                    jsx('select', {
-                      className: 'evo-panel-input evo-select-compact',
-                      value: v.reasoningEffort ?? 'medium',
-                      onChange: (e: { currentTarget: HTMLSelectElement }) => setTierField(tier.id, 'reasoningEffort', e.currentTarget.value),
-                      children: [
-                        jsx('option', { value: 'low', children: t('effortLow') }, 'low'),
-                        jsx('option', { value: 'medium', children: t('effortMedium') }, 'medium'),
-                        jsx('option', { value: 'high', children: t('effortHigh') }, 'high'),
-                      ],
-                    }),
-                  ],
-                }),
-                jsx('button', {
-                  type: 'button',
-                  className: 'evo-btn evo-btn-run',
-                  onClick: () => applyTier(tier.id),
-                  children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: t('applyAsDefault') })] }),
-                }),
-              ],
-            }, tier.id)
-          }) }),
-      error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-      applied !== null && jsx('div', { className: 'evo-setting-hint', children: t('modelSettingsSaved') }),
-      jsx('button', {
-        type: 'button',
-        className: 'evo-btn evo-btn-ok',
-        disabled: saving || tiers === null,
-        onClick: save,
-        children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: saving ? t('saving') : t('save') })] }),
-      }),
-    ],
-  })
-}
-
-/** 单模型设置（视觉/图片/语音共用表单）。 */
-function SingleModelSection({ kind }: { kind: 'vision' | 'image' | 'voice' }) {
-  const [value, setValue] = useState<TierValue | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-  const load = () => {
-    void fetch('/evoresearch/fs/model-settings-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-      .then((r) => r.json()).then((json) => { if (json.ok) setValue(json.value[kind]) })
-      .catch((e: any) => setError(String(e)))
-  }
-  useEffect(load, [kind])
-  const setField = (field: keyof TierValue, v: string) => setValue((prev) => ({ ...(prev ?? {}), [field]: v }))
-  const save = () => {
-    if (value === null || saving) return
-    setSaving(true)
+  const saveCard = (keys: string[]) => {
+    if (saving !== null || assign === null) return
+    const cardKey = keys.join('+')
+    setSaving(cardKey)
     setError(null)
-    void fetch('/evoresearch/fs/model-settings-set', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ patch: { [kind]: value } }),
-    }).then((r) => r.json()).then((json) => {
-      setSaving(false)
-      if (json.ok) setSaved(true)
-      else setError(json.error?.message ?? '保存失败')
-    }).catch((e: any) => { setSaving(false); setError(String(e)) })
+    const patch: Record<string, unknown> = keys[0] === 'simple'
+      ? { code: {
+          simple: { provider: assign.simple?.provider ?? '', model: assign.simple?.model ?? '', reasoningEffort: assign.simple?.reasoningEffort ?? '' },
+          medium: { provider: assign.medium?.provider ?? '', model: assign.medium?.model ?? '', reasoningEffort: assign.medium?.reasoningEffort ?? '' },
+          complex: { provider: assign.complex?.provider ?? '', model: assign.complex?.model ?? '', reasoningEffort: assign.complex?.reasoningEffort ?? '' },
+        } }
+      : { [keys[0]]: assign[keys[0]] }
+    void (async () => {
+      try {
+        const saved = await fetch('/evoresearch/fs/model-settings-set', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ patch }),
+        }).then((r) => r.json())
+        if (saved.ok !== true) throw new Error(saved.error?.message ?? t('assignSaveFailed'))
+        // 按 Provider 聚合推理强度写回：同一 Provider 的多档修改合并成一次保存，
+        // 避免后写的模型列表覆盖先写的条目。
+        const providerLists = new Map<string, Array<{ id: string; name: string; contextWindow: number | null; reasoningEfforts: LlmModelRow['reasoningEfforts'] }>>()
+        for (const key of keys) {
+          const v = assign[key]
+          if (v === undefined || v.provider === '' || v.model === '') continue
+          const provider = providers.find((p) => p.id === v.provider)
+          if (provider === undefined) continue
+          if (!providerLists.has(v.provider)) {
+            providerLists.set(v.provider, provider.models.map((m) => ({ id: m.id, name: m.name, contextWindow: m.contextWindow, reasoningEfforts: m.reasoningEfforts })))
+          }
+          const list = providerLists.get(v.provider) as Array<{ id: string; name: string; contextWindow: number | null; reasoningEfforts: LlmModelRow['reasoningEfforts'] }>
+          const level = typeof v.reasoningEffort === 'string' ? v.reasoningEffort : ''
+          if (level !== '') {
+            const idx = list.findIndex((m) => m.id === v.model)
+            const efforts = applyModelReasoning(level)
+            if (idx >= 0) list[idx] = { ...list[idx], reasoningEfforts: efforts }
+            else list.push({ id: v.model, name: v.model, contextWindow: null, reasoningEfforts: efforts })
+          }
+        }
+        const failures: string[] = []
+        for (const [pid, list] of providerLists) {
+          const wb = await fetch('/evoresearch/fs/llm-provider-save', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              provider: pid,
+              patch: { models: list.map((m) => ({
+                id: m.id,
+                name: m.name !== '' && m.name !== m.id ? m.name : undefined,
+                reasoningEfforts: m.reasoningEfforts === null || m.reasoningEfforts === undefined ? undefined : m.reasoningEfforts,
+              })) },
+            }),
+          }).then((r) => r.json())
+          if (wb.ok !== true) failures.push(pid)
+        }
+        if (failures.length > 0) setError(`分配已保存，但推理强度写回 Provider 失败：${failures.join('、')}`)
+        else toast(t('assignSaved'), 'success')
+        load()
+      } catch (e: unknown) {
+        setError((e as Error)?.message ?? t('assignSaveFailed'))
+      } finally {
+        setSaving(null)
+      }
+    })()
   }
-  const title = kind === 'vision' ? t('settingsVision') : kind === 'image' ? t('settingsImage') : t('settingsVoice')
-  const icon = kind === 'vision' ? Eye : kind === 'image' ? ImageIcon : Mic
-  const hint = kind === 'vision' ? t('visionHint') : kind === 'image' ? t('imageHint') : t('voiceHint')
+
+  const renderSelect = (key: string, field: 'provider' | 'model' | 'reasoningEffort', options: Array<[string, string]>, onChange: (v: string) => void, hint?: string) => {
+    const v = assign?.[key]
+    if (v === undefined) return null
+    const current = String(v[field] ?? '')
+    const exists = current === '' || options.some(([value]) => value === current)
+    const label = field === 'provider' ? t('providerLabel') : field === 'model' ? t('modelLabel') : t('reasoningEffort')
+    const missing = current !== '' ? t('assignmentMissing').replace('{value}', current) : ''
+    return jsxs('label', {
+      className: 'evo-setting-field',
+      children: [
+        jsx('span', { className: 'evo-setting-field-label', children: label }),
+        jsx('select', {
+          className: 'evo-panel-input evo-select-compact',
+          value: current,
+          onChange: (e: { currentTarget: HTMLSelectElement }) => {
+            const val = e.currentTarget.value
+            onChange(val)
+          },
+          children: [
+            !exists && jsx('option', { value: current, children: `${current}（${missing}）` }, current),
+            ...options.map(([value, optionLabel]) => jsx('option', { value, children: optionLabel }, value)),
+          ],
+        }),
+        hint !== undefined && jsx('span', { className: 'evo-setting-field-label', children: hint }),
+      ],
+    })
+  }
+
+  const providerOptions = providers.map((p) => [p.id, p.displayName !== '' ? p.displayName : p.id] as [string, string])
+  const providerLabel = (id: string): string => {
+    const p = providers.find((x) => x.id === id)
+    return p !== undefined && p.displayName !== '' ? p.displayName : id
+  }
+  const tierMeta: Record<string, { name: string; desc: string }> = {
+    simple: { name: t('tierSimple'), desc: t('tierSimpleDesc') },
+    medium: { name: t('tierMedium'), desc: t('tierMediumDesc') },
+    complex: { name: t('tierComplex'), desc: t('tierComplexDesc') },
+  }
+
   return jsxs('div', {
     className: 'evo-setting',
     children: [
       jsxs('div', {
         className: 'evo-setting-label',
-        children: [jsx(icon, {}), jsx('span', { children: title })],
+        children: [jsx(Server, {}), jsx('span', { children: t('modelStepAssignments') })],
       }),
-      jsx('div', { className: 'evo-setting-hint', children: hint }),
-      value === null
-        ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
-        : jsxs(Fragment, { children: [
-            kind === 'voice' && jsxs('label', {
-              className: 'evo-setting-field',
-              children: [
-                jsx('span', { className: 'evo-setting-field-label', children: t('providerLabel') }),
-                jsx('select', {
-                  className: 'evo-panel-input evo-sched-select',
-                  value: value.voiceProvider ?? 'api',
-                  onChange: (e: { currentTarget: HTMLSelectElement }) => setField('voiceProvider', e.currentTarget.value),
-                  children: [
-                    jsx('option', { value: 'api', children: t('voiceProviderApi') }, 'api'),
-                    jsx('option', { value: 'local', children: t('voiceProviderLocal') }, 'local'),
-                  ],
-                }),
-              ],
-            }),
-            jsx(ModelField, { label: t('modelLabel'), value: value.model ?? '', onChange: (x) => setField('model', x) }),
-            jsx(ModelField, { label: t('providerLabel'), value: value.provider ?? '', onChange: (x) => setField('provider', x) }),
-            (kind === 'vision' || kind === 'voice') && jsx(ModelField, { label: t('urlLabel'), value: value.url ?? '', onChange: (x) => setField('url', x) }),
-            (kind === 'vision' || kind === 'voice') && jsx(ModelField, { label: t('keyEnvLabel'), value: value.keyEnv ?? '', onChange: (x) => setField('keyEnv', x) }),
-          ] }),
+      jsx('div', { className: 'evo-setting-hint', children: t('modelAssignmentsHint') }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-      saved && jsx('div', { className: 'evo-setting-hint', children: t('modelSettingsSaved') }),
-      jsx('button', {
-        type: 'button',
-        className: 'evo-btn evo-btn-ok',
-        disabled: saving || value === null,
-        onClick: save,
-        children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: saving ? t('saving') : t('save') })] }),
-      }),
+      assign === null
+        ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+        : providers.length === 0
+          ? jsx('div', { className: 'evo-setting-hint', children: t('noLlmProviders') })
+          : jsxs(Fragment, { children: [
+              jsxs('div', { className: 'evo-tier-card evo-assign-card', children: [
+                jsxs('div', { className: 'evo-assign-head', children: [
+                  jsx(Code2, {}),
+                  jsx('span', { className: 'evo-assign-head-title', children: t('settingsCodeModel') }),
+                  jsx('span', { className: 'evo-assign-head-desc', children: t('codeModelHint') }),
+                ] }),
+                ['simple', 'medium', 'complex'].map((tier) => jsxs('div', { className: 'evo-assign-tier', children: [
+                  jsxs('div', { className: 'evo-assign-tier-head', children: [
+                    jsx('span', { className: 'evo-assign-tier-name', children: tierMeta[tier].name }),
+                    jsx('span', { className: 'evo-assign-tier-desc', children: tierMeta[tier].desc }),
+                  ] }),
+                  jsxs('div', { className: 'evo-assign-grid tier', children: [
+                    renderSelect(tier, 'provider', providerOptions, (v) => changeProvider(tier, v)),
+                    renderSelect(tier, 'model', providerModels(assign[tier].provider).map((m) => [m.id, m.name] as [string, string]), (v) => changeModel(tier, v)),
+                    renderSelect(tier, 'reasoningEffort', offeredLevels(tier), (v) => setField(tier, 'reasoningEffort', v)),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-run',
+                      disabled: saving !== null,
+                      onClick: () => applyTier(tier),
+                      children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: t('applyAsDefault') })] }),
+                    }),
+                  ] }),
+                  migrated[tier] !== undefined && jsx('div', { className: 'evo-assign-migrate', children: t('migratedProviderHint').replace('{old}', migrated[tier]).replace('{new}', providerLabel(assign[tier].provider)) }),
+                ] }, tier)),
+                jsxs('div', { className: 'evo-assign-actions', children: [
+                  jsx('button', {
+                    type: 'button',
+                    className: 'evo-btn evo-btn-ok',
+                    disabled: saving !== null,
+                    onClick: () => saveCard(['simple', 'medium', 'complex']),
+                    children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: saving !== null ? t('saving') : t('save') })] }),
+                  }),
+                ] }),
+              ] }),
+              (['vision', 'image', 'voice'] as const).map((kind) => {
+                const meta = kind === 'vision'
+                  ? { icon: Eye, title: t('settingsVision'), hint: t('visionHint') }
+                  : kind === 'image'
+                    ? { icon: ImageIcon, title: t('settingsImage'), hint: t('imageHint') }
+                    : { icon: Mic, title: t('settingsVoice'), hint: t('voiceHint') }
+                const Icon = meta.icon
+                const modelHasProfile = providerModels(assign[kind].provider).find((m) => m.id === assign[kind].model)?.supportedReasoning != null
+                return jsxs('div', { className: 'evo-tier-card evo-assign-card', children: [
+                  jsxs('div', { className: 'evo-assign-head', children: [
+                    jsx(Icon, {}),
+                    jsx('span', { className: 'evo-assign-head-title', children: meta.title }),
+                    jsx('span', { className: 'evo-assign-head-desc', children: meta.hint }),
+                  ] }),
+                  jsxs('div', { className: 'evo-assign-grid', children: [
+                    renderSelect(kind, 'provider', providerOptions, (v) => changeProvider(kind, v)),
+                    renderSelect(kind, 'model', providerModels(assign[kind].provider).map((m) => [m.id, m.name] as [string, string]), (v) => changeModel(kind, v)),
+                    renderSelect(kind, 'reasoningEffort', offeredLevels(kind), (v) => setField(kind, 'reasoningEffort', v), modelHasProfile ? undefined : t('assignmentReasoningHint')),
+                  ] }),
+                  (kind === 'vision' || kind === 'voice') && jsxs(Fragment, { children: [
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-assign-advanced-toggle',
+                      onClick: () => setOpenAdvanced((prev) => ({ ...prev, [kind]: !(prev[kind] ?? false) })),
+                      children: jsxs(Fragment, { children: [jsx('span', { className: `evo-assign-chevron${openAdvanced[kind] === true ? ' open' : ''}`, children: '›' }), jsx('span', { children: t('advancedOptions') })] }),
+                    }),
+                    openAdvanced[kind] === true && jsxs('div', { className: 'evo-assign-advanced', children: [
+                      kind === 'voice' && jsxs('label', {
+                        className: 'evo-setting-field',
+                        children: [
+                          jsx('span', { className: 'evo-setting-field-label', children: t('providerLabel') }),
+                          jsx('select', {
+                            className: 'evo-panel-input evo-select-compact',
+                            value: assign[kind].voiceProvider ?? 'api',
+                            onChange: (e: { currentTarget: HTMLSelectElement }) => {
+                              const val = e.currentTarget.value
+                              setField(kind, 'voiceProvider', val)
+                            },
+                            children: [
+                              jsx('option', { value: 'api', children: t('voiceProviderApi') }, 'api'),
+                              jsx('option', { value: 'local', children: t('voiceProviderLocal') }, 'local'),
+                            ],
+                          }),
+                        ],
+                      }),
+                      jsx(ModelField, { label: t('urlLabel'), value: assign[kind].url ?? '', onChange: (x) => setField(kind, 'url', x) }),
+                      jsx(ModelField, { label: t('keyEnvLabel'), value: assign[kind].keyEnv ?? '', onChange: (x) => setField(kind, 'keyEnv', x) }),
+                    ] }),
+                  ] }),
+                  migrated[kind] !== undefined && jsx('div', { className: 'evo-assign-migrate', children: t('migratedProviderHint').replace('{old}', migrated[kind]).replace('{new}', providerLabel(assign[kind].provider)) }),
+                  jsxs('div', { className: 'evo-assign-actions', children: [
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-btn evo-btn-ok',
+                      disabled: saving !== null,
+                      onClick: () => saveCard([kind]),
+                      children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: saving !== null ? t('saving') : t('save') })] }),
+                    }),
+                  ] }),
+                ] }, kind)
+              }),
+            ] }),
     ],
   })
 }
@@ -772,7 +951,7 @@ function LlmProviderSection() {
     children: [
       jsxs('div', {
         className: 'evo-setting-label',
-        children: [jsx(Server, {}), jsx('span', { children: t('settingsLlm') })],
+        children: [jsx(Server, {}), jsx('span', { children: t('modelStepProviders') })],
       }),
       jsx('div', { className: 'evo-setting-hint', children: t('llmServiceHint') }),
       jsx('div', {
@@ -982,15 +1161,11 @@ function LlmProviderSection() {
   })
 }
 
-type SettingsTab = 'general' | 'llm' | 'code' | 'vision' | 'image' | 'voice' | 'data'
+type SettingsTab = 'general' | 'models' | 'data'
 
 const TABS: Array<{ id: SettingsTab; label: string; icon: any }> = [
   { id: 'general', label: t('settingsGeneral'), icon: Cpu },
-  { id: 'llm', label: t('settingsLlm'), icon: Server },
-  { id: 'code', label: t('settingsCodeModel'), icon: Code2 },
-  { id: 'vision', label: t('settingsVision'), icon: Eye },
-  { id: 'image', label: t('settingsImage'), icon: ImageIcon },
-  { id: 'voice', label: t('settingsVoice'), icon: Mic },
+  { id: 'models', label: t('settingsModels'), icon: Server },
   { id: 'data', label: t('settingsData'), icon: Trash2 },
 ]
 
@@ -1061,13 +1236,12 @@ export function SettingsDialog({ onClose, sessionId }: SettingsDialogProps) {
                       jsx(PluginListSection, {}),
                       jsx(AboutSection, {}),
                     ] })
-                  : tab === 'llm'
-                    ? jsx(LlmProviderSection, {})
-                    : tab === 'code'
-                    ? jsx(CodeModelSection, {})
-                    : tab === 'data'
-                      ? jsx(DataClearSection, {})
-                      : jsx(SingleModelSection, { kind: tab }),
+                  : tab === 'models'
+                    ? jsxs(Fragment, { children: [
+                        jsx(LlmProviderSection, {}),
+                        jsx(ModelAssignSection, {}),
+                      ] })
+                    : jsx(DataClearSection, {}),
               }),
             ],
           }),

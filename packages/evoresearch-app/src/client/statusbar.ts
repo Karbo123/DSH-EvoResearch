@@ -156,7 +156,14 @@ export function ComposerModelInfo() {
   }, [])
 
   if (info?.model == null) return null
-  const effortLabel = info.reasoningEffort === 'low' ? t('effortLow') : info.reasoningEffort === 'medium' ? t('effortMedium') : info.reasoningEffort === 'high' ? t('effortHigh') : null
+  const effortLabel = info.reasoningEffort === 'off' ? t('effortOff')
+    : info.reasoningEffort === 'minimal' ? t('effortMinimal')
+      : info.reasoningEffort === 'low' ? t('effortLow')
+        : info.reasoningEffort === 'medium' ? t('effortMedium')
+          : info.reasoningEffort === 'high' ? t('effortHigh')
+            : info.reasoningEffort === 'xhigh' ? t('effortXhigh')
+              : info.reasoningEffort === 'max' ? t('effortMax')
+                : null
   const detail = [`${info.model}（${info.provider ?? '?'}）`, effortLabel !== null ? `推理强度：${effortLabel}` : null].filter(Boolean).join(' · ')
   return jsxs('button', {
     type: 'button',

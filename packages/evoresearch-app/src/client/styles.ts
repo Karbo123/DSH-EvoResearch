@@ -658,6 +658,25 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-btn-danger.confirming:hover { background: color-mix(in srgb, var(--color-error) 86%, #000); }
 .evo-tier-grid { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
 .evo-tier-card { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
+/* ── 模型分配（设置面板第 2 步）── */
+.evo-assign-card { gap: 12px; margin-top: 10px; }
+.evo-assign-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-assign-head svg { width: 15px; height: 15px; color: var(--brand); flex-shrink: 0; }
+.evo-assign-head-title { font-weight: 600; color: var(--color-text-primary); }
+.evo-assign-head-desc { color: var(--color-text-tertiary); font-size: 12px; }
+.evo-assign-tier { padding: 10px 12px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
+.evo-assign-tier-head { display: flex; align-items: baseline; gap: 8px; }
+.evo-assign-tier-name { font-weight: 600; font-size: 13px; color: var(--color-text-primary); }
+.evo-assign-tier-desc { font-size: 12px; color: var(--color-text-tertiary); }
+.evo-assign-grid { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 10px; align-items: end; }
+.evo-assign-grid.tier { grid-template-columns: 1fr 1.5fr 1fr auto; }
+.evo-assign-grid .evo-btn { height: 28px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
+.evo-assign-actions { display: flex; justify-content: flex-end; }
+.evo-assign-migrate { font-size: 12px; color: var(--color-warning); line-height: 1.5; }
+.evo-assign-advanced-toggle { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; background: none; border: none; padding: 2px 0; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
+.evo-assign-chevron { display: inline-block; transition: transform .15s ease; color: var(--color-text-tertiary); }
+.evo-assign-chevron.open { transform: rotate(90deg); }
+.evo-assign-advanced { border-top: 1px dashed var(--color-border-light); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 /* ── 模型服务配置（§25.2 扩展）：API URL / Key / 模型推理强度 ── */
 .evo-llm-providers { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
 .evo-llm-provider { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }

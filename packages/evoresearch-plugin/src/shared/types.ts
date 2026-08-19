@@ -232,9 +232,9 @@ export interface ModelSettings {
 /** 默认模型设置（与 ResearchOS 三档语义对齐）。 */
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   code: {
-    simple: { model: 'deepseek-v4-flash', provider: 'deepseek-official', reasoningEffort: 'low' },
-    medium: { model: 'deepseek-v4', provider: 'deepseek-official', reasoningEffort: 'medium' },
-    complex: { model: 'deepseek-v4', provider: 'deepseek-official', reasoningEffort: 'high' },
+    simple: { model: '', provider: '', reasoningEffort: '' },
+    medium: { model: '', provider: '', reasoningEffort: '' },
+    complex: { model: '', provider: '', reasoningEffort: '' },
   },
   vision: { model: '', provider: '', url: '', keyEnv: 'VISION_API_KEY' },
   image: { model: '', provider: '' },
