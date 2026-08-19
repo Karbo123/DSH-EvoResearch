@@ -26,6 +26,7 @@ import {
 } from './composer-assist'
 import { CurrentDialog, SearchDialog, ShortcutsDialog, ConfirmDialog, ModelSelectorDialog } from './session-actions'
 import { ShieldCheck as ShieldCheckIcon, ShieldX } from 'lucide-react'
+import { Dropdown } from './dropdown'
 
 const SUGGESTED_PROMPTS = [
   'Survey recent papers on a topic',
@@ -488,6 +489,26 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         else localStorage.removeItem(`evoresearch-auto-approve:${sessionId}`)
       } catch { /* 忽略 */ }
     }
+  }
+  // ── 会话权限（§25.x）：跟随当前会话，不是全局设置；在输入框工具行切换 ──
+  const [permPreset, setPermPreset] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/evoresearch/fs/mode').then((r) => r.json()).then((json) => {
+      if (!cancelled && json.ok) setPermPreset(String(json.value?.preset ?? ''))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  const switchPerm = (preset: string) => {
+    if (sessionId === null) { toast(t('noActiveConversation'), 'error'); return }
+    void fetch('/evoresearch/fs/mode', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId, preset }),
+    }).then((r) => r.json()).then((json) => {
+      if (json.ok) setPermPreset(preset)
+      else toast(json.error?.message ?? '切换失败', 'error')
+    }).catch(() => toast('切换失败', 'error'))
   }
   const listRef = useRef<HTMLDivElement | null>(null)
   const composerEditorHostRef = useRef<HTMLDivElement | null>(null)
@@ -1723,6 +1744,19 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     children: jsx(Keyboard, {}),
                   }),
                   jsx('span', { className: 'evo-composer-spacer' }),
+                  // 会话权限（跟随当前会话，非全局）：输入框内切换权限档位
+                  jsx(Dropdown, {
+                    value: permPreset ?? '',
+                    className: 'evo-composer-perm',
+                    icon: ShieldCheckIcon,
+                    placeholder: t('permission'),
+                    onChange: switchPerm,
+                    options: [
+                      { value: 'read-only', label: t('readOnly') },
+                      { value: 'workspace-write', label: t('permWrite') },
+                      { value: 'danger-full-access', label: t('fullEffect') },
+                    ],
+                  }),
                   // 模型徽章（§25.2）：输入框内右下侧、紧邻发送按钮，点击打开模型选择器
                   jsx(ComposerModelInfo, {}),
                   jsx('button', {

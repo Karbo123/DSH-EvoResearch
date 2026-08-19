@@ -629,6 +629,12 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-model svg { width: 11px; height: 11px; flex-shrink: 0; }
 .evo-composer-model-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .evo-composer-model-effort { font-weight: 400; opacity: 0.88; }
+/* 会话权限档位（输入框工具行）：仿模型徽章的胶囊下拉 */
+.evo-dropdown.evo-composer-perm { display: inline-flex; width: auto; flex-shrink: 0; }
+.evo-composer-perm .evo-dropdown-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; width: auto; height: auto; padding: 2px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--color-surface)); color: var(--brand); font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; }
+.evo-composer-perm .evo-dropdown-btn:hover, .evo-composer-perm .evo-dropdown-btn.evo-dropdown-open { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); color: var(--brand); }
+.evo-composer-perm .evo-dropdown-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
+.evo-composer-perm .evo-dropdown-value { flex: 0 1 auto; }
 .evo-stats-sep { color: var(--color-border); margin-right: 8px; }
 /* ── 插件清单 ── */
 .evo-plugin-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
@@ -723,10 +729,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tier-desc { font-size: 12px; color: var(--color-text-tertiary); }
 .evo-setting-field { display: flex; flex-direction: column; gap: 4px; }
 .evo-setting-field-label { font-size: 12px; color: var(--color-text-tertiary); }
-.evo-mode-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.evo-mode-chip { padding: 5px 14px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; font: inherit; }
-.evo-mode-chip:hover { border-color: var(--brand); }
-.evo-mode-chip[data-active] { border-color: var(--brand); color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); font-weight: 600; }
 .evo-plugin-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--color-text-secondary); }
 .evo-plugin-state { color: var(--color-text-tertiary); font-size: 11.5px; }
 .evo-plugin-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); }

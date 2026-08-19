@@ -1532,7 +1532,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
           settingsOpen && jsx(SettingsDialog, {
             onClose: () => setSettingsOpen(false),
-            sessionId: current ?? null,
           }),
         ],
       }),
