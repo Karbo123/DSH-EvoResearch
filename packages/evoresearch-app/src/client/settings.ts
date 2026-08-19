@@ -512,7 +512,7 @@ function ModelAssignSection() {
                 jsxs('div', { className: 'evo-assign-actions', children: [
                   jsx('button', {
                     type: 'button',
-                    className: 'evo-btn',
+                    className: 'evo-btn evo-btn-test',
                     disabled: saving !== null || testState['simple+medium+complex']?.busy === true,
                     onClick: () => testCard(['simple', 'medium', 'complex']),
                     children: jsxs(Fragment, { children: [jsx(Zap, {}), jsx('span', { children: testState['simple+medium+complex']?.busy === true ? t('testModelBusy') : t('testModel') })] }),
@@ -555,7 +555,7 @@ function ModelAssignSection() {
                   jsxs('div', { className: 'evo-assign-actions', children: [
                     jsx('button', {
                       type: 'button',
-                      className: 'evo-btn',
+                      className: 'evo-btn evo-btn-test',
                       disabled: saving !== null || testState[kind]?.busy === true,
                       onClick: () => testCard([kind]),
                       children: jsxs(Fragment, { children: [jsx(Zap, {}), jsx('span', { children: testState[kind]?.busy === true ? t('testModelBusy') : t('testModel') })] }),

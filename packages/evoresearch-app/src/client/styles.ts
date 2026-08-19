@@ -17,6 +17,7 @@ export const CSS = `
   --color-secondary: #6b6557;
   --color-success: #3f7a52;
   --color-warning: #946618;
+  --color-info: #2e6f95;
   --color-error: #c0392b;
   --color-background: #faf8f3;
   --color-surface: #ffffff;
@@ -71,6 +72,7 @@ html.dark {
   --color-secondary: #ada694;
   --color-success: #5dbe85;
   --color-warning: #e0a94a;
+  --color-info: #4a90d9;
   --color-error: #e0796b;
   --color-background: #23211d;
   --color-surface: #2c2a25;
@@ -783,6 +785,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-btn svg { width: 13px; height: 13px; }
 .evo-btn-ok { background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }
 .evo-btn-ok:hover { background: color-mix(in srgb, var(--color-success) 26%, transparent); }
+.evo-btn-test { background: color-mix(in srgb, var(--color-info) 14%, transparent); color: var(--color-info); }
+.evo-btn-test:hover { background: color-mix(in srgb, var(--color-info) 24%, transparent); }
 .evo-btn-danger { background: color-mix(in srgb, var(--color-error) 14%, transparent); color: var(--color-error); }
 .evo-btn-danger:hover { background: color-mix(in srgb, var(--color-error) 24%, transparent); }
 .evo-btn-run { background: var(--brand-solid); color: var(--brand-foreground); }
