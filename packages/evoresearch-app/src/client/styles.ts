@@ -680,7 +680,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-assign-grid { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 10px; align-items: end; }
 .evo-assign-grid.tier { grid-template-columns: 1fr 1.5fr 1fr auto; }
 .evo-assign-grid .evo-btn { height: 28px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
-.evo-assign-actions { display: flex; justify-content: flex-start; }
+.evo-assign-actions { display: flex; justify-content: flex-start; gap: 10px; }
 .evo-assign-migrate { font-size: 12px; color: var(--color-warning); line-height: 1.5; }
 .evo-assign-hint { font-size: 12px; color: var(--color-text-tertiary); line-height: 1.5; }
 .evo-assign-test { font-size: 12px; line-height: 1.5; }
