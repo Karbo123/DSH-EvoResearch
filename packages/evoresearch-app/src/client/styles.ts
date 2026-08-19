@@ -677,7 +677,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-assign-test { font-size: 12px; line-height: 1.5; }
 .evo-assign-test.ok { color: var(--color-success); }
 .evo-assign-test.fail { color: var(--color-error); }
-/* ── 模型服务配置（§25.2 扩展）：API URL / Key / 模型推理强度 ── */
+/* ── 模型提供商配置（§25.2 扩展）：API URL / Key / 模型推理强度 ── */
 .evo-llm-providers { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
 .evo-llm-provider { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
 .evo-llm-actions { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }

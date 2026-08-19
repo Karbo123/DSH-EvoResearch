@@ -1,7 +1,7 @@
 /**
  * 设置面板：左侧 tab 导航 + 右侧配置 + 左上角「返回」（图标 + 文字）。
  * - 通用：权限模式 / 默认模型 / 插件清单 / 关于（主题与语言在顶栏，不重复）；
- * - 模型设置：1）模型服务（Provider 接口配置 + 统一「已获取模型」列表）；
+ * - 模型设置：1）模型提供商（Provider 接口配置 + 统一「已获取模型」列表）；
  *   2）模型分配（代码三档 / 图片识别 / 图片生成 / 语音识别，从 Provider
  *   模型列表选择并设置推理强度）；
  * - 清除数据。
@@ -178,7 +178,7 @@ function ModelField({ label, value, onChange, placeholder, className }: { label:
 }
 
 
-/** 模型分配（模型设置第 2 步）：从模型服务 Provider 的模型列表中选择各任务模型并设置推理强度。 */
+/** 模型分配（模型设置第 2 步）：从模型提供商 Provider 的模型列表中选择各任务模型并设置推理强度。 */
 function ModelAssignSection() {
   const [assign, setAssign] = useState<Record<string, AssignSetting> | null>(null)
   const [providers, setProviders] = useState<LlmProviderEditor[]>([])
@@ -696,7 +696,7 @@ function DataClearSection() {
   })
 }
 
-/** 模型服务（§25.2 扩展）：编辑 provider 的 API URL / Key / 模型列表；推理强度在模型分配里设置。 */
+/** 模型提供商（§25.2 扩展）：编辑 provider 的 API URL / Key / 模型列表；推理强度在模型分配里设置。 */
 const REASONING_LEVELS: Array<[string, string]> = [
   ['off', t('effortOff')],
   ['minimal', t('effortMinimal')],
@@ -774,7 +774,7 @@ function applyModelReasoning(level: string, supported?: string[] | null): Record
   return { off: null, [level]: level }
 }
 
-/** 模型服务配置（§25.2 扩展）：API URL / 明文 Key / 模型列表 / 推理强度。 */
+/** 模型提供商配置（§25.2 扩展）：API URL / 明文 Key / 模型列表 / 推理强度。 */
 function LlmProviderSection() {
   const [providers, setProviders] = useState<LlmProviderEditor[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)

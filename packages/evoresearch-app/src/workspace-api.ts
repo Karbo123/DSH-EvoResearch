@@ -609,7 +609,7 @@ export function registerWorkspaceApi(ctx: any): void {
             settingsRead = true
           } catch { /* 设置服务不可用 → 回退全部注册 provider */ }
           const allProviders = llm.listProviders()
-          // 模型选择器只展示用户在「模型服务」里自己配置的 provider；
+          // 模型选择器只展示用户在「模型提供商」里自己配置的 provider；
           // DSH 内置的 deepseek-official（官方 api.deepseek.com）不在配置里，因此不展示。
           // 仅当设置服务不可读时才回退为全部注册 provider。
           const providers = settingsRead
@@ -706,7 +706,7 @@ export function registerWorkspaceApi(ctx: any): void {
         }
 
         // POST /evoresearch/fs/llm-provider-probe → 探测候选 provider 的模型端点：
-        // 供“添加模型服务”在创建前拉取一次可用模型（openai-completions /
+        // 供“添加模型提供商”在创建前拉取一次可用模型（openai-completions /
         // openai-responses 可探测；其余协议返回 listed=false，由用户手工填写模型）。
         if (method === 'llm-provider-probe') {
           const baseURL = requireString(payload, 'baseURL')
@@ -790,7 +790,7 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
-        // POST /evoresearch/fs/llm-providers → 模型服务配置（设置面板）：
+        // POST /evoresearch/fs/llm-providers → 模型提供商配置（设置面板）：
         // 返回 llm-pi-ai 各 provider 的 baseURL / 明文 API Key / 默认推理强度 /
         // 已配置模型（含每模型 reasoningEfforts），供前端展示与编辑。
         if (method === 'llm-providers') {
@@ -822,7 +822,7 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
-        // POST /evoresearch/fs/llm-provider-save → 保存模型服务配置：
+        // POST /evoresearch/fs/llm-provider-save → 保存模型提供商配置：
         // baseURL / displayName / api / reasoning / models 写回 settings.yaml
         // （settings.replace），API Key 明文写回 .credentials.yaml（credentials.set）。
         // Provider 不存在时自动创建（patch.create=true，自动生成 apiKeyEnv 引用）；
