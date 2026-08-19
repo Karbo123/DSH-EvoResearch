@@ -222,11 +222,11 @@ export interface ModelSettings {
     readonly complex: ModelTierSetting
   }
   /** 图片识别（视觉）模型。 */
-  readonly vision: ModelTierSetting & { readonly url?: string; readonly keyEnv?: string }
+  readonly vision: ModelTierSetting
   /** 图片生成模型。 */
   readonly image: ModelTierSetting
-  /** 语音识别：provider = api（OpenAI 兼容）/ local（预留本地引擎）。 */
-  readonly voice: ModelTierSetting & { readonly url?: string; readonly keyEnv?: string; readonly provider?: string }
+  /** 语音识别模型。 */
+  readonly voice: ModelTierSetting
 }
 
 /** 默认模型设置（与 ResearchOS 三档语义对齐）。 */
@@ -236,9 +236,9 @@ export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
     medium: { model: '', provider: '', reasoningEffort: '' },
     complex: { model: '', provider: '', reasoningEffort: '' },
   },
-  vision: { model: '', provider: '', url: '', keyEnv: 'VISION_API_KEY' },
+  vision: { model: '', provider: '' },
   image: { model: '', provider: '' },
-  voice: { model: '', provider: 'api', url: '', keyEnv: 'VOICE_API_KEY' },
+  voice: { model: '', provider: '' },
 }
 
 // ── 实验管理（§5.1 Git 式分支/回退/checkpoint）──────────────────────────────

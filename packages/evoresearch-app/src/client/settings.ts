@@ -145,9 +145,6 @@ interface AssignSetting {
   provider: string
   model: string
   reasoningEffort?: string
-  url?: string
-  keyEnv?: string
-  voiceProvider?: string
 }
 
 function ModelField({ label, value, onChange, placeholder, className }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) {
@@ -175,7 +172,6 @@ function ModelAssignSection() {
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [migrated, setMigrated] = useState<Record<string, string>>({})
-  const [openAdvanced, setOpenAdvanced] = useState<Record<string, boolean>>({})
 
   const providerModels = (providerId: string): Array<{ id: string; name: string; supportedReasoning: string[] | null }> => {
     const group = catalog.find((g) => g.provider?.id === providerId)
@@ -255,9 +251,6 @@ function ModelAssignSection() {
           provider,
           model,
           reasoningEffort: '',
-          url: typeof cur.url === 'string' ? cur.url : '',
-          keyEnv: typeof cur.keyEnv === 'string' ? cur.keyEnv : '',
-          voiceProvider: typeof cur.voiceProvider === 'string' ? cur.voiceProvider : 'api',
         }
         if (model !== '') {
           const sup = modelsOf(provider).find((m) => m.id === model)?.supportedReasoning ?? null
@@ -482,36 +475,6 @@ function ModelAssignSection() {
                     renderSelect(kind, 'provider', providerOptions, (v) => changeProvider(kind, v)),
                     renderSelect(kind, 'model', providerModels(assign[kind].provider).map((m) => [m.id, m.name] as [string, string]), (v) => changeModel(kind, v)),
                     renderSelect(kind, 'reasoningEffort', offeredLevels(kind), (v) => setField(kind, 'reasoningEffort', v), modelHasProfile ? undefined : t('assignmentReasoningHint')),
-                  ] }),
-                  (kind === 'vision' || kind === 'voice') && jsxs(Fragment, { children: [
-                    jsx('button', {
-                      type: 'button',
-                      className: 'evo-assign-advanced-toggle',
-                      onClick: () => setOpenAdvanced((prev) => ({ ...prev, [kind]: !(prev[kind] ?? false) })),
-                      children: jsxs(Fragment, { children: [jsx('span', { className: `evo-assign-chevron${openAdvanced[kind] === true ? ' open' : ''}`, children: '›' }), jsx('span', { children: t('advancedOptions') })] }),
-                    }),
-                    openAdvanced[kind] === true && jsxs('div', { className: 'evo-assign-advanced', children: [
-                      kind === 'voice' && jsxs('label', {
-                        className: 'evo-setting-field',
-                        children: [
-                          jsx('span', { className: 'evo-setting-field-label', children: t('providerLabel') }),
-                          jsx('select', {
-                            className: 'evo-panel-input evo-select-compact',
-                            value: assign[kind].voiceProvider ?? 'api',
-                            onChange: (e: { currentTarget: HTMLSelectElement }) => {
-                              const val = e.currentTarget.value
-                              setField(kind, 'voiceProvider', val)
-                            },
-                            children: [
-                              jsx('option', { value: 'api', children: t('voiceProviderApi') }, 'api'),
-                              jsx('option', { value: 'local', children: t('voiceProviderLocal') }, 'local'),
-                            ],
-                          }),
-                        ],
-                      }),
-                      jsx(ModelField, { label: t('urlLabel'), value: assign[kind].url ?? '', onChange: (x) => setField(kind, 'url', x) }),
-                      jsx(ModelField, { label: t('keyEnvLabel'), value: assign[kind].keyEnv ?? '', onChange: (x) => setField(kind, 'keyEnv', x) }),
-                    ] }),
                   ] }),
                   migrated[kind] !== undefined && jsx('div', { className: 'evo-assign-migrate', children: t('migratedProviderHint').replace('{old}', migrated[kind]).replace('{new}', providerLabel(assign[kind].provider)) }),
                   jsxs('div', { className: 'evo-assign-actions', children: [

@@ -673,10 +673,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-assign-grid .evo-btn { height: 28px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
 .evo-assign-actions { display: flex; justify-content: flex-end; }
 .evo-assign-migrate { font-size: 12px; color: var(--color-warning); line-height: 1.5; }
-.evo-assign-advanced-toggle { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; background: none; border: none; padding: 2px 0; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
-.evo-assign-chevron { display: inline-block; transition: transform .15s ease; color: var(--color-text-tertiary); }
-.evo-assign-chevron.open { transform: rotate(90deg); }
-.evo-assign-advanced { border-top: 1px dashed var(--color-border-light); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 /* ── 模型服务配置（§25.2 扩展）：API URL / Key / 模型推理强度 ── */
 .evo-llm-providers { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
 .evo-llm-provider { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
