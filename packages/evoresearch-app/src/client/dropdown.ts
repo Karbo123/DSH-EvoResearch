@@ -32,14 +32,33 @@ export function Dropdown({ value, options, onChange, placeholder, className, ico
       setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    // 菜单自身的滚动（长列表滚动）不应关闭下拉；仅页面/容器滚动才关闭。
+    const onScroll = (e: Event) => {
+      const target = e.target as Node | null
+      if (target instanceof Element && target.closest('.evo-dropdown-menu') !== null) return
+      close()
+    }
+    // 滚轮悬停在打开的菜单上：阻止滚动冒泡到页面（避免页面一滚菜单就关闭）；
+    // 菜单内容溢出时手动滚动菜单自身，未溢出时滚轮不产生任何副作用。
+    const onWheel = (e: WheelEvent) => {
+      const target = e.target as Element | null
+      if (target === null) return
+      const menu = target.closest('.evo-dropdown-menu')
+      if (menu === null) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (menu.scrollHeight > menu.clientHeight) menu.scrollTop += e.deltaY
+    }
     document.addEventListener('mousedown', onDocDown)
     document.addEventListener('keydown', onKey)
-    document.addEventListener('scroll', close, true)
+    document.addEventListener('scroll', onScroll, true)
+    document.addEventListener('wheel', onWheel, { passive: false, capture: true })
     window.addEventListener('resize', close)
     return () => {
       document.removeEventListener('mousedown', onDocDown)
       document.removeEventListener('keydown', onKey)
-      document.removeEventListener('scroll', close, true)
+      document.removeEventListener('scroll', onScroll, true)
+      document.removeEventListener('wheel', onWheel, { capture: true })
       window.removeEventListener('resize', close)
     }
   }, [open])
