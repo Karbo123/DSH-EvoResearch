@@ -467,11 +467,19 @@ export function registerWorkspaceApi(ctx: any): void {
           if (llm?.listProviders === undefined) throw httpError(400, 'method-error', 'llm 服务不可用')
           const settings = ctx.get('settings')
           let profiles: Record<string, { baseURL?: string; apiKeyEnv?: string }> = {}
+          let settingsRead = false
           try {
             const section = settings?.get?.('llm-pi-ai') as { providers?: Record<string, { baseURL?: string; apiKeyEnv?: string }> } | undefined
             profiles = section?.providers ?? {}
-          } catch { /* 设置服务不可用 → 仅配置目录 */ }
-          const providers = llm.listProviders()
+            settingsRead = true
+          } catch { /* 设置服务不可用 → 回退全部注册 provider */ }
+          const allProviders = llm.listProviders()
+          // 模型选择器只展示用户在「模型服务」里自己配置的 provider；
+          // DSH 内置的 deepseek-official（官方 api.deepseek.com）不在配置里，因此不展示。
+          // 仅当设置服务不可读时才回退为全部注册 provider。
+          const providers = settingsRead
+            ? allProviders.filter((p: { id: string }) => profiles[p.id] !== undefined)
+            : allProviders
           const groups: unknown[] = []
           for (const provider of providers) {
             const profile = profiles[provider.id]
@@ -527,7 +535,7 @@ export function registerWorkspaceApi(ctx: any): void {
                 // 网关/自定义路由拿不到自身目录元数据时，尝试用 pi-ai 目录里
                 // 同名模型的能力作为提示（例如 new-api 上的 deepseek-v4-flash
                 // 沿用 DeepSeek 官方目录 off/high/max），避免展示一堆它不支持的档位。
-                for (const other of providers) {
+                for (const other of allProviders) {
                   if (other.id === provider.id) continue
                   try {
                     const otherInfo = await llm.resolveModelInfo(other.id, m.id, AbortSignal.timeout(5000))
