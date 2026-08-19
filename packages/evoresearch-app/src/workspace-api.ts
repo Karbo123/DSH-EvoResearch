@@ -172,6 +172,27 @@ function imageOutputModalities(id: string, endpoints: string[] | undefined, outp
   return IMAGE_GEN_NAME_PATTERNS.some((re) => re.test(id)) ? ['image'] : null
 }
 
+/**
+ * 把目录里发现但尚未写入配置的模型注册进 llm-pi-ai provider。
+ * pi-ai 适配器要求模型必须出现在 provider 的 models 配置里才能调用，
+ * 而目录（网关 /models）与配置是两份数据——网关新增模型后不注册就会报
+ * “pi-ai provider ... has no configured model ...”。注册只追加 {id}（其余字段
+ * 由路由默认补齐，与既有模型一致），幂等，写入失败不阻塞调用方。
+ */
+async function ensureProviderModel(ctx: any, provider: string, modelId: string, displayName?: string): Promise<void> {
+  const settings = ctx.get('settings')
+  if (settings?.replace === undefined) return
+  const section = llmPiAiSection(settings)
+  const profile = section.providers[provider] as Record<string, unknown> | undefined
+  if (profile === undefined) return
+  const models = Array.isArray(profile.models) ? (profile.models as Array<Record<string, unknown>>) : []
+  if (models.some((m) => m?.id === modelId)) return
+  const next = [...models, { id: modelId, ...(displayName !== undefined && displayName !== '' ? { name: displayName } : {}) }]
+  await withWriteRetry(() => settings.replace('llm-pi-ai', {
+    providers: { ...section.providers, [provider]: { ...profile, models: next } },
+  })).catch(() => { /* 注册失败不阻塞测试/保存 */ })
+}
+
 /** pi-ai 内置目录的完整推理档位顺序（与 getSupportedThinkingLevels 一致）。 */
 const PI_THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 
@@ -814,6 +835,77 @@ export function registerWorkspaceApi(ctx: any): void {
           const reasoningEffort = typeof payload.reasoningEffort === 'string' && payload.reasoningEffort !== '' ? payload.reasoningEffort : undefined
           const llm = ctx.get('llm')
           if (llm?.stream === undefined) throw httpError(400, 'method-error', 'llm 服务不可用')
+          // 网关目录里发现但尚未写入配置的模型（例如新加的 gpt-image-2）：
+          // 先自动注册进 provider 配置，避免 pi-ai 报“no configured model”。
+          await ensureProviderModel(ctx, provider, model)
+          // 图片生成模型：chat 流式测试不适用，直接走 OpenAI Images API，
+          // 用最小尺寸 + 低质量 + n=1 的低成本请求验证可用性（避免生成大图烧钱）。
+          const imageGen = payload.kind === 'image' || IMAGE_GEN_NAME_PATTERNS.some((re) => re.test(model))
+          if (imageGen) {
+            const settings = ctx.get('settings')
+            const profile = llmPiAiSection(settings).providers[provider] as Record<string, unknown> | undefined
+            const baseURL = typeof profile?.baseURL === 'string' && profile.baseURL !== '' ? profile.baseURL : ''
+            const apiKey = await resolveProviderApiKey(ctx, typeof profile?.apiKeyEnv === 'string' ? profile.apiKeyEnv : undefined)
+            if (baseURL === '') {
+              writeOk(res, { ok: false, latencyMs: 0, imageGen: true, error: 'Provider 未配置接口地址' })
+              return
+            }
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), 15000)
+            const started = Date.now()
+            const post = (body: unknown) => fetch(`${baseURL.replace(/\/+$/, '')}/images/generations`, {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                ...(apiKey !== undefined && apiKey !== '' ? { authorization: `Bearer ${apiKey}` } : {}),
+              },
+              body: JSON.stringify(body),
+              signal: controller.signal,
+            })
+            try {
+              let resp = await post({ model, prompt: 'ping', n: 1, size: '1024x1024', quality: 'low', response_format: 'b64_json' })
+              if (!resp.ok && resp.status === 400) {
+                const errText = await resp.text().catch(() => '')
+                // 个别网关不接受 quality/size/response_format 参数：去掉重试，
+                // 避免把参数问题误报成“模型不可用”。
+                if (/quality|size|response_format/i.test(errText)) {
+                  resp = await post({ model, prompt: 'ping', n: 1 })
+                } else {
+                  resp = new Response(errText, { status: resp.status })
+                }
+              }
+              const text = await resp.text().catch(() => '')
+              let ok = resp.ok
+              if (ok) {
+                try {
+                  const parsed = JSON.parse(text)
+                  ok = Array.isArray(parsed?.data) && parsed.data.length > 0
+                } catch { ok = false }
+              }
+              // 提取网关错误里的可读 message（如 new-api 的权限/配置错误），避免把整段 JSON 抛给用户
+              let errorText = text.slice(0, 300)
+              if (!ok) {
+                try {
+                  const parsed = JSON.parse(text)
+                  const msg = parsed?.error?.message
+                  if (typeof msg === 'string' && msg !== '') errorText = msg
+                } catch { /* 非 JSON 错误体原样展示 */ }
+              }
+              writeOk(res, {
+                ok,
+                latencyMs: Date.now() - started,
+                imageGen: true,
+                sample: ok ? '已生成 1 张 1024×1024 低清测试图' : errorText,
+                ...(ok ? {} : { error: errorText }),
+              })
+            } catch (error) {
+              writeOk(res, { ok: false, latencyMs: Date.now() - started, imageGen: true, error: (error as Error)?.message ?? String(error) })
+            } finally {
+              clearTimeout(timer)
+              controller.abort()
+            }
+            return
+          }
           // 推理档位只有在该模型当前配置已声明时才随请求发送；未声明（保存后才会
           // 写入）时只测连通性，避免把“档位还没保存”误报成“模型连不上”。
           let testedEffort = reasoningEffort
@@ -1119,6 +1211,27 @@ export function registerWorkspaceApi(ctx: any): void {
         if (method === 'model-settings-set') {
           if (evoresearch?.modelSettingsSet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const patch = typeof payload.patch === 'object' && payload.patch !== null ? payload.patch : {}
+          // 保存分配时同步把涉及的 provider/model 注册进 llm-pi-ai 配置，
+          // 保证后续真实调用（尤其图片生成）不会报“no configured model”。
+          const entryModels: Array<{ provider: string; model: string }> = []
+          const collect = (entry: unknown) => {
+            if (entry === null || typeof entry !== 'object') return
+            const e = entry as Record<string, unknown>
+            if (typeof e.provider === 'string' && e.provider !== '' && typeof e.model === 'string' && e.model !== '') {
+              entryModels.push({ provider: e.provider, model: e.model })
+            }
+          }
+          for (const key of ['code', 'vision', 'image', 'voice']) {
+            const entry = (patch as Record<string, unknown>)[key]
+            if (key === 'code' && entry !== null && typeof entry === 'object') {
+              for (const tier of ['simple', 'medium', 'complex']) collect((entry as Record<string, unknown>)[tier])
+            } else {
+              collect(entry)
+            }
+          }
+          for (const em of entryModels) {
+            await ensureProviderModel(ctx, em.provider, em.model).catch(() => {})
+          }
           try {
             const result = await (evoresearch.modelSettingsSet as (a: { patch: Record<string, unknown> }) => Promise<{ ok: boolean }>).call(evoresearch, { patch })
             writeOk(res, result)

@@ -368,12 +368,15 @@ function ModelAssignSection() {
           }
           const list = providerLists.get(v.provider) as Array<{ id: string; name: string; contextWindow: number | null; reasoningEfforts: LlmModelRow['reasoningEfforts'] }>
           const level = typeof v.reasoningEffort === 'string' ? v.reasoningEffort : ''
-          if (level !== '') {
-            const idx = list.findIndex((m) => m.id === v.model)
-            const supported = providerModels(v.provider).find((m) => m.id === v.model)?.supportedReasoning ?? null
-            const efforts = applyModelReasoning(level, supported)
-            if (idx >= 0) list[idx] = { ...list[idx], reasoningEfforts: efforts }
-            else list.push({ id: v.model, name: v.model, contextWindow: null, reasoningEfforts: efforts })
+          // 无论是否设置推理强度，都要把所选模型写进 provider 配置，
+          // 否则图片生成这类没有推理档位的模型保存后依然未注册、无法调用。
+          const idx = list.findIndex((m) => m.id === v.model)
+          const supported = providerModels(v.provider).find((m) => m.id === v.model)?.supportedReasoning ?? null
+          const efforts = level !== '' ? applyModelReasoning(level, supported) : null
+          if (idx >= 0) {
+            if (level !== '') list[idx] = { ...list[idx], reasoningEfforts: efforts }
+          } else {
+            list.push({ id: v.model, name: v.model, contextWindow: null, reasoningEfforts: efforts })
           }
         }
         const failures: string[] = []
@@ -467,11 +470,21 @@ function ModelAssignSection() {
           const json = await fetch('/evoresearch/fs/llm-model-test', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ provider: v.provider, model: v.model, reasoningEffort: v.reasoningEffort ?? '' }),
+            body: JSON.stringify({
+              provider: v.provider,
+              model: v.model,
+              reasoningEffort: v.reasoningEffort ?? '',
+              // 单类型卡片带上类型（image=图片生成），后端据此走 Images API 低成本测试
+              ...(keys.length === 1 ? { kind: keys[0] } : {}),
+            }),
           }).then((r) => r.json())
-          const value = (json?.value ?? {}) as { ok?: boolean; latencyMs?: number; error?: string }
+          const value = (json?.value ?? {}) as { ok?: boolean; latencyMs?: number; error?: string; imageGen?: boolean }
           const ok = json?.ok === true && value.ok === true
-          detail = ok ? (value.latencyMs !== undefined ? `✓ ${value.latencyMs}ms` : '✓') : `✗ ${value.error ?? json?.error?.message ?? ''}`
+          detail = ok
+            ? value.imageGen === true
+              ? `✓ ${value.latencyMs ?? ''}ms（已生成 1 张 1024×1024 低清测试图）`
+              : (value.latencyMs !== undefined ? `✓ ${value.latencyMs}ms` : '✓')
+            : `✗ ${value.error ?? json?.error?.message ?? ''}`
         } catch (e: unknown) {
           detail = `✗ ${(e as Error)?.message ?? ''}`
         }
