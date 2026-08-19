@@ -1193,7 +1193,6 @@ function LlmProviderSection() {
           jsxs('div', { className: 'evo-llm-fetched-head', children: [
             jsx('span', { className: 'evo-llm-fetched-title', children: t('modelListLabel') }),
             jsx('span', { className: 'evo-llm-fetched-count', children: t('fetchedModelsCount').replace('{n}', String(modelPills.length)) }),
-            jsx('span', { style: { flex: 1 } }),
             jsx('button', {
               type: 'button',
               className: 'evo-btn evo-btn-run',

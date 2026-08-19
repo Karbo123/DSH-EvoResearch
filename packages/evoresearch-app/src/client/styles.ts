@@ -671,13 +671,13 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-assign-grid { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 10px; align-items: end; }
 .evo-assign-grid.tier { grid-template-columns: 1fr 1.5fr 1fr auto; }
 .evo-assign-grid .evo-btn { height: 28px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
-.evo-assign-actions { display: flex; justify-content: flex-end; }
+.evo-assign-actions { display: flex; justify-content: flex-start; }
 .evo-assign-migrate { font-size: 12px; color: var(--color-warning); line-height: 1.5; }
 .evo-assign-hint { font-size: 12px; color: var(--color-text-tertiary); line-height: 1.5; }
 /* ── 模型服务配置（§25.2 扩展）：API URL / Key / 模型推理强度 ── */
 .evo-llm-providers { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
 .evo-llm-provider { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
-.evo-llm-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.evo-llm-actions { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
 .evo-llm-key-input { font-family: ui-monospace, Consolas, monospace; }
 .evo-llm-add { align-self: flex-start; }
 .evo-llm-new { border-style: dashed; border-color: var(--color-border); }
@@ -691,7 +691,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-select-compact { flex: 0 0 auto; width: auto; min-width: 112px; padding: 3px 8px; font-size: 12px; border-radius: 7px; height: 28px; line-height: 20px; }
 /* 统一「已获取模型」：胶囊卡片按字母序排列 */
 .evo-llm-fetched { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
-.evo-llm-fetched-head { display: flex; align-items: baseline; gap: 8px; }
+.evo-llm-fetched-head { display: flex; align-items: center; gap: 8px; }
 .evo-llm-fetched-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
 .evo-llm-fetched-count { font-size: 11.5px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
 .evo-llm-model-pills { display: flex; flex-wrap: wrap; gap: 8px; }
