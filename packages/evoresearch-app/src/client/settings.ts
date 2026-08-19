@@ -343,7 +343,8 @@ function ModelAssignSection() {
           const level = typeof v.reasoningEffort === 'string' ? v.reasoningEffort : ''
           if (level !== '') {
             const idx = list.findIndex((m) => m.id === v.model)
-            const efforts = applyModelReasoning(level)
+            const supported = providerModels(v.provider).find((m) => m.id === v.model)?.supportedReasoning ?? null
+            const efforts = applyModelReasoning(level, supported)
             if (idx >= 0) list[idx] = { ...list[idx], reasoningEfforts: efforts }
             else list.push({ id: v.model, name: v.model, contextWindow: null, reasoningEfforts: efforts })
           }
@@ -651,6 +652,8 @@ interface LlmModelRow {
 
 interface LlmProviderEditor {
   id: string
+  /** Provider ID 编辑草稿：非空且与 id 不同时，保存会执行重命名。 */
+  newId?: string
   displayName: string
   baseURL: string
   apiKeyEnv: string
@@ -690,10 +693,19 @@ function referenceScore(modelId: string, refId: string): number {
   return score
 }
 
-/** 设置模型推理强度 → reasoningEfforts（off=不支持推理；单档=off+该档）。 */
-function applyModelReasoning(level: string): Record<string, string | null> | false | null {
+/**
+ * 设置模型推理强度 → reasoningEfforts（off=不支持推理；单档=off+该档）。
+ * 当模型在官方档案里登记了 supported（如 deepseek-v4-flash 的 off/high/max），
+ * 就重述档案支持的全部档位，避免只写单档把模型其余能力钉死（例如 max 消失）。
+ */
+function applyModelReasoning(level: string, supported?: string[] | null): Record<string, string | null> | false | null {
   if (level === '') return null
   if (level === 'off') return false
+  if (Array.isArray(supported) && supported.length > 0) {
+    const dict: Record<string, string | null> = {}
+    for (const l of supported) dict[l] = l === 'off' ? null : l
+    return dict
+  }
   return { off: null, [level]: level }
 }
 
@@ -943,9 +955,19 @@ function LlmProviderSection() {
   const save = (id: string) => {
     const provider = providers?.find((p) => p.id === id)
     if (provider === undefined || busyId !== null) return
+    const newId = (provider.newId ?? '').trim()
+    if (newId !== '' && newId !== id && /[^A-Za-z0-9._-]/.test(newId)) {
+      setError('Provider ID 只能包含字母、数字、点、下划线与连字符')
+      return
+    }
+    if (newId !== '' && newId !== id && (providers ?? []).some((p) => p.id === newId)) {
+      setError(`Provider ID 已存在: ${newId}`)
+      return
+    }
     setBusyId(id)
     setError(null)
     const patch = {
+      ...(newId !== '' && newId !== id ? { newId } : {}),
       displayName: provider.displayName,
       baseURL: provider.baseURL,
       apiKey: provider.apiKey,
@@ -963,8 +985,10 @@ function LlmProviderSection() {
     }).then((r) => r.json()).then((json) => {
       setBusyId(null)
       if (json.ok) {
-        setSavedId(id)
-        toast(t('llmSaved'), 'success')
+        const savedAs = newId !== '' && newId !== id ? newId : id
+        setSavedId(savedAs)
+        toast(newId !== '' && newId !== id ? t('llmSavedRenamed') : t('llmSaved'), 'success')
+        if (newId !== '' && newId !== id) load()
       } else setError(json.error?.message ?? t('llmSaveFailed'))
     }).catch((e: unknown) => {
       setBusyId(null)
@@ -1101,7 +1125,7 @@ function LlmProviderSection() {
                 className: 'evo-llm-provider',
                 children: [
                   jsxs('div', { className: 'evo-tier-head', children: [
-                    jsx('span', { className: 'evo-tier-name', children: `${t('llmProviderId')}: ${provider.id}` }),
+                    jsx('span', { className: 'evo-tier-name', children: provider.displayName !== '' ? provider.displayName : provider.id }),
                     provider.models.length > 0 && jsx('span', { className: 'evo-tier-desc', children: t('fetchedModelsCount').replace('{n}', String(provider.models.length)) }),
                     jsx('span', { className: 'evo-tier-desc', children: provider.api }),
                     jsx('span', { style: { flex: 1 } }),
@@ -1115,26 +1139,44 @@ function LlmProviderSection() {
                       children: jsx(Trash2, {}),
                     }),
                   ] }),
-                  jsx(ModelField, { label: t('llmProviderName'), value: provider.displayName, onChange: (v) => updateProvider(provider.id, { displayName: v }) }),
-                  jsx(ModelField, { label: t('apiUrlLabel'), value: provider.baseURL, onChange: (v) => updateProvider(provider.id, { baseURL: v }) }),
-                  jsxs('label', {
-                    className: 'evo-setting-field',
-                    children: [
-                      jsxs('span', { className: 'evo-setting-field-label', children: [
-                        t('apiKeyLabel'),
-                        provider.apiKeyEnv !== '' && jsx('span', { className: 'evo-setting-field-env', children: `(${provider.apiKeyEnv})` }),
-                      ] }),
-                      jsx('input', {
-                        type: 'text',
-                        className: 'evo-panel-input evo-llm-key-input',
-                        value: provider.apiKey,
-                        spellCheck: false,
-                        autoComplete: 'off',
-                        placeholder: t('apiKeyLabel'),
-                        onInput: (e: { currentTarget: HTMLInputElement }) => updateProvider(provider.id, { apiKey: e.currentTarget.value }),
-                      }),
-                    ],
-                  }),
+                  jsxs('div', { className: 'evo-llm-edit-grid', children: [
+                    jsx(ModelField, { label: t('apiUrlLabel'), value: provider.baseURL, onChange: (v) => updateProvider(provider.id, { baseURL: v }) }),
+                    jsxs('label', {
+                      className: 'evo-setting-field',
+                      children: [
+                        jsxs('span', { className: 'evo-setting-field-label', children: [
+                          t('apiKeyLabel'),
+                          provider.apiKeyEnv !== '' && jsx('span', { className: 'evo-setting-field-env', children: `(${provider.apiKeyEnv})` }),
+                        ] }),
+                        jsx('input', {
+                          type: 'text',
+                          className: 'evo-panel-input evo-llm-key-input',
+                          value: provider.apiKey,
+                          spellCheck: false,
+                          autoComplete: 'off',
+                          placeholder: t('apiKeyLabel'),
+                          onInput: (e: { currentTarget: HTMLInputElement }) => updateProvider(provider.id, { apiKey: e.currentTarget.value }),
+                        }),
+                      ],
+                    }),
+                    jsx(ModelField, { label: t('llmProviderName'), value: provider.displayName, onChange: (v) => updateProvider(provider.id, { displayName: v }) }),
+                    jsxs('label', {
+                      className: 'evo-setting-field',
+                      children: [
+                        jsx('span', { className: 'evo-setting-field-label', children: t('llmProviderId') }),
+                        jsx('input', {
+                          type: 'text',
+                          className: 'evo-panel-input',
+                          value: provider.newId ?? provider.id,
+                          spellCheck: false,
+                          autoComplete: 'off',
+                          onInput: (e: { currentTarget: HTMLInputElement }) => updateProvider(provider.id, { newId: e.currentTarget.value }),
+                        }),
+                        (provider.newId ?? '').trim() !== '' && (provider.newId ?? '').trim() !== provider.id
+                          && jsx('span', { className: 'evo-setting-hint', children: t('llmProviderIdEditHint') }),
+                      ],
+                    }),
+                  ] }),
                   jsx('div', { className: 'evo-setting-hint', children: t('llmKeyHint') }),
                   jsxs('div', { className: 'evo-llm-actions', children: [
                     jsx('button', {

@@ -713,7 +713,7 @@ export function registerWorkspaceApi(ctx: any): void {
         if (method === 'llm-provider-save') {
           const settings = ctx.get('settings')
           if (settings?.replace === undefined) throw httpError(400, 'method-error', 'settings 服务不可用')
-          const provider = requireString(payload, 'provider')
+          let provider = requireString(payload, 'provider')
           const patch = (payload.patch ?? {}) as Record<string, unknown>
           const section = llmPiAiSection(settings)
           let profile = section.providers[provider] as Record<string, unknown> | undefined
@@ -744,6 +744,71 @@ export function registerWorkspaceApi(ctx: any): void {
               api: 'openai-completions',
             }
             section.providers[provider] = profile
+          }
+          // Provider ID 重命名（patch.newId）：迁移 providers 键、自动凭据引用、
+          // 默认模型选择（agent-default-model）与模型分配（model-settings.json）
+          // 中的 provider 引用，避免改名后各处仍指向旧 ID。
+          if (typeof patch.newId === 'string') {
+            const newId = patch.newId.trim()
+            if (newId === '') throw httpError(400, 'bad-request', 'Provider ID 不能为空')
+            if (newId !== provider) {
+              if (/[^A-Za-z0-9._-]/.test(newId)) throw httpError(400, 'bad-request', 'Provider ID 只能包含字母、数字、点、下划线与连字符')
+              if (section.providers[newId] !== undefined) throw httpError(400, 'bad-request', `Provider ID 已存在: ${newId}`)
+              const oldId = provider
+              section.providers[newId] = profile
+              delete section.providers[oldId]
+              provider = newId
+              // 自动生成的凭据引用随 ID 一起迁移（保留原值）；自定义引用保持不变。
+              const autoRef = (id: string): string => `EVORESEARCH_LLM_${id.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}`
+              const oldRef = typeof profile.apiKeyEnv === 'string' ? profile.apiKeyEnv : ''
+              if (oldRef !== '' && oldRef === autoRef(oldId)) {
+                const credentials = ctx.get('credentials')
+                const newRef = autoRef(newId)
+                try {
+                  const hit = credentials?.resolve !== undefined ? await credentials.resolve(oldRef) : undefined
+                  const value = hit?.value
+                  if (typeof value === 'string' && value !== '') {
+                    if (credentials?.set !== undefined) await withWriteRetry(() => credentials.set(newRef, value))
+                    if (credentials?.unset !== undefined) await withWriteRetry(() => credentials.unset(oldRef)).catch(() => {})
+                  }
+                } catch { /* 凭据服务不可用则仅更新引用 */ }
+                profile.apiKeyEnv = newRef
+              }
+              // 默认模型选择同步改名
+              try {
+                const doc = settings?.document
+                const def = (doc?.['agent-default-model'] ?? settings?.get?.('agent-default-model')) as { provider?: string; model?: string } | undefined
+                if (def !== undefined && typeof def.provider === 'string' && def.provider === oldId) {
+                  await withWriteRetry(() => settings.replace('agent-default-model', { provider: newId, model: typeof def.model === 'string' ? def.model : '' }))
+                }
+              } catch { /* 默认模型选择不存在则忽略 */ }
+              // 模型分配（model-settings.json）中的 provider 引用同步改名
+              const evo = ctx.get('evoresearch') as { modelSettingsGet?: () => unknown; modelSettingsSet?: (a: { patch: Record<string, unknown> }) => unknown } | undefined
+              if (evo?.modelSettingsGet !== undefined && evo?.modelSettingsSet !== undefined) {
+                try {
+                  const ms = (await evo.modelSettingsGet()) as Record<string, unknown> | undefined
+                  if (ms !== undefined && typeof ms === 'object') {
+                    const patchMs: Record<string, unknown> = {}
+                    const code = (ms.code ?? {}) as Record<string, { provider?: string } | undefined>
+                    const codeChanged = ['simple', 'medium', 'complex'].some((tier) => code[tier]?.provider === oldId)
+                    if (codeChanged) {
+                      patchMs.code = {
+                        simple: { ...(code.simple ?? {}), ...(code.simple?.provider === oldId ? { provider: newId } : {}) },
+                        medium: { ...(code.medium ?? {}), ...(code.medium?.provider === oldId ? { provider: newId } : {}) },
+                        complex: { ...(code.complex ?? {}), ...(code.complex?.provider === oldId ? { provider: newId } : {}) },
+                      }
+                    }
+                    for (const key of ['vision', 'image', 'voice']) {
+                      const entry = ms[key] as Record<string, unknown> | undefined
+                      if (entry !== undefined && typeof entry === 'object' && entry.provider === oldId) {
+                        patchMs[key] = { ...entry, provider: newId }
+                      }
+                    }
+                    if (Object.keys(patchMs).length > 0) await evo.modelSettingsSet({ patch: patchMs })
+                  }
+                } catch { /* 模型分配同步失败不阻塞保存 */ }
+              }
+            }
           }
           if (patch.displayName !== undefined) profile.displayName = typeof patch.displayName === 'string' && patch.displayName !== '' ? patch.displayName : provider
           if (patch.baseURL !== undefined) profile.baseURL = typeof patch.baseURL === 'string' ? patch.baseURL.trim() : ''

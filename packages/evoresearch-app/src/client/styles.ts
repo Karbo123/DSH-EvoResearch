@@ -680,12 +680,14 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── 模型服务配置（§25.2 扩展）：API URL / Key / 模型推理强度 ── */
 .evo-llm-providers { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }
 .evo-llm-provider { padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
-.evo-llm-actions { display: flex; align-items: center; gap: 8px; }
+.evo-llm-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .evo-llm-key-input { font-family: ui-monospace, Consolas, monospace; }
 .evo-llm-add { align-self: flex-start; }
 .evo-llm-new { border-style: dashed; border-color: var(--color-border); }
 .evo-llm-new-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
 .evo-llm-new-grid .evo-setting-field { gap: 4px; }
+.evo-llm-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+.evo-llm-edit-grid .evo-setting-field { gap: 4px; }
 .evo-llm-span2 { grid-column: 1 / -1; }
 .evo-llm-new-select { width: 100%; }
 /* 设置面板的推理强度选择框：紧凑高度，避免撑开卡片留白 */
