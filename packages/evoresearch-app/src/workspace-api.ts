@@ -863,7 +863,7 @@ export function registerWorkspaceApi(ctx: any): void {
               signal: controller.signal,
             })
             try {
-              let resp = await post({ model, prompt: 'ping', n: 1, size: '1024x1024', quality: 'low', response_format: 'b64_json' })
+              let resp = await post({ model, prompt: 'ping', n: 1, size: '1792x768', quality: 'low', response_format: 'b64_json' })
               if (!resp.ok && resp.status === 400) {
                 const errText = await resp.text().catch(() => '')
                 // 个别网关不接受 quality/size/response_format 参数：去掉重试，
@@ -895,7 +895,7 @@ export function registerWorkspaceApi(ctx: any): void {
                 ok,
                 latencyMs: Date.now() - started,
                 imageGen: true,
-                sample: ok ? '已生成 1 张 1024×1024 低清测试图' : errorText,
+                sample: ok ? '已生成 1 张 1792×768 低清测试图' : errorText,
                 ...(ok ? {} : { error: errorText }),
               })
             } catch (error) {

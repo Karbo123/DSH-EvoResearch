@@ -493,7 +493,7 @@ function ModelAssignSection() {
           const ok = json?.ok === true && value.ok === true
           detail = ok
             ? value.imageGen === true
-              ? `✓ ${value.latencyMs ?? ''}ms（已生成 1 张 1024×1024 低清测试图）`
+              ? `✓ ${value.latencyMs ?? ''}ms（已生成 1 张 1792×768 低清测试图）`
               : (value.latencyMs !== undefined ? `✓ ${value.latencyMs}ms` : '✓')
             : `✗ ${value.error ?? json?.error?.message ?? ''}`
         } catch (e: unknown) {
