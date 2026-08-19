@@ -319,22 +319,6 @@ function ModelAssignSection() {
     if (Array.isArray(sup) && sup.length > 0) return REASONING_LEVELS.filter(([level]) => sup.includes(level))
     return REASONING_LEVELS
   }
-  const applyTier = (tier: string) => {
-    if (saving !== null || assign === null) return
-    const v = assign[tier]
-    if (v === undefined || v.provider === '' || v.model === '') { setError(t('assignSaveFailed')); return }
-    setSaving(`apply:${tier}`)
-    setError(null)
-    void fetch('/evoresearch/fs/model-settings-apply', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tier }),
-    }).then((r) => r.json()).then((json) => {
-      if (json.ok) toast(t('modelSettingsSaved'), 'success')
-      else setError(json.error?.message ?? t('assignSaveFailed'))
-    }).catch((e: unknown) => setError((e as Error)?.message ?? t('assignSaveFailed')))
-      .finally(() => setSaving(null))
-  }
   const saveCard = (keys: string[]) => {
     if (saving !== null || assign === null) return
     const cardKey = keys.join('+')
@@ -355,6 +339,24 @@ function ModelAssignSection() {
           body: JSON.stringify({ patch }),
         }).then((r) => r.json())
         if (saved.ok !== true) throw new Error(saved.error?.message ?? t('assignSaveFailed'))
+        // 代码模型卡片：配置即默认——保存后自动把已配置的档位设为默认模型
+        // （优先均衡档，其次轻量档、深度档），不再需要单独的“设为默认模型”按钮。
+        if (keys[0] === 'simple') {
+          const defaultTier = (['medium', 'simple', 'complex'] as const).find((tier) => {
+            const v = assign[tier]
+            return v !== undefined && v.provider !== '' && v.model !== ''
+          })
+          if (defaultTier !== undefined) {
+            try {
+              const applied = await fetch('/evoresearch/fs/model-settings-apply', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ tier: defaultTier }),
+              }).then((r) => r.json())
+              if (applied.ok !== true) throw new Error(applied.error?.message ?? '')
+            } catch { /* 默认档位应用失败不阻塞分配保存 */ }
+          }
+        }
         // 按 Provider 聚合推理强度写回：同一 Provider 的多档修改合并成一次保存，
         // 避免后写的模型列表覆盖先写的条目。
         const providerLists = new Map<string, Array<{ id: string; name: string; contextWindow: number | null; reasoningEfforts: LlmModelRow['reasoningEfforts'] }>>()
@@ -523,13 +525,6 @@ function ModelAssignSection() {
                     renderSelect(tier, 'provider', providerOptions, (v) => changeProvider(tier, v)),
                     renderSelect(tier, 'model', providerModels(assign[tier].provider).map((m) => [m.id, m.name] as [string, string]), (v) => changeModel(tier, v)),
                     renderSelect(tier, 'reasoningEffort', offeredLevels(tier), (v) => setField(tier, 'reasoningEffort', v)),
-                    jsx('button', {
-                      type: 'button',
-                      className: 'evo-btn evo-btn-run',
-                      disabled: saving !== null,
-                      onClick: () => applyTier(tier),
-                      children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: t('applyAsDefault') })] }),
-                    }),
                   ] }),
                   migrated[tier] !== undefined && jsx('div', { className: 'evo-assign-migrate', children: t('migratedProviderHint').replace('{old}', migrated[tier]).replace('{new}', providerLabel(assign[tier].provider)) }),
                 ] }, tier)),
@@ -1268,7 +1263,7 @@ function LlmProviderSection() {
             jsx('span', { className: 'evo-llm-fetched-count', children: t('fetchedModelsCount').replace('{n}', String(modelPills.length)) }),
             jsx('button', {
               type: 'button',
-              className: 'evo-btn evo-btn-run',
+              className: 'evo-btn evo-btn-test',
               disabled: busyId !== null,
               onClick: fetchAllModels,
               children: jsxs(Fragment, { children: [jsx(Server, {}), jsx('span', { children: busyId === '__all__' ? t('fetchModelsBusy') : t('fetchModels') })] }),

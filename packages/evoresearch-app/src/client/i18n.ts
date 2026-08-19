@@ -301,7 +301,6 @@ const DICT: Record<string, [string, string]> = {
   effortLow: ['Low', '低'],
   effortMedium: ['Medium', '中'],
   effortHigh: ['High', '高'],
-  applyAsDefault: ['Set as default model', '设为默认模型'],
   modelSettingsSaved: ['Model settings saved', '模型设置已保存'],
   assignSaved: ['Model assignment saved', '模型分配已保存'],
   assignSaveFailed: ['Failed to save model assignment', '模型分配保存失败'],
