@@ -12,7 +12,7 @@ import { toast } from './toast'
 import { t } from './i18n'
 
 /** 模态外壳（与设置弹窗同视觉）。§30.2：打开聚焦首个可操作元素，关闭恢复触发按钮焦点。 */
-function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: any }) {
+function ModalShell({ title, onClose, children, className }: { title: string; onClose: () => void; children: any; className?: string }) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
@@ -26,7 +26,7 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
     onPointerDown: (e: { target: HTMLElement; currentTarget: HTMLElement }) => { if (e.target === e.currentTarget) onClose() },
     children: [
       jsxs('div', {
-        className: 'evo-modal',
+        className: `evo-modal${className !== undefined ? ` ${className}` : ''}`,
         role: 'dialog',
         'aria-modal': 'true',
         'aria-label': title,
@@ -380,6 +380,7 @@ export function ConfirmDialog({
   return jsx(ModalShell, {
     title,
     onClose,
+    className: 'evo-modal-sm',
     children: jsxs('div', {
       className: 'evo-confirm',
       children: [

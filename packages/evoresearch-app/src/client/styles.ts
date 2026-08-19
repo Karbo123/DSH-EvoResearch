@@ -469,6 +469,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── 设置弹窗 ── */
 .evo-modal-mask { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
 .evo-modal { width: 75vw; height: 75vh; max-width: 75vw; max-height: 75vh; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
+.evo-modal.evo-modal-sm { width: min(440px, 92vw); height: auto; max-width: 440px; }
 /* 设置面板占满整个窗口（用户要求）：fixed + inset 精确覆盖视口 */
 .evo-modal.evo-modal-full { position: fixed; inset: 0; width: auto; height: auto; max-width: none; max-height: none; border-radius: 0; border: none; }
 .evo-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--color-border-light); }
