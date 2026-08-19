@@ -11,6 +11,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic, Trash2, Server, Plus, X } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
+import { ConfirmDialog } from './session-actions'
 
 export interface SettingsDialogProps {
   onClose: () => void
@@ -149,9 +150,9 @@ interface AssignSetting {
   voiceProvider?: string
 }
 
-function ModelField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+function ModelField({ label, value, onChange, placeholder, className }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) {
   return jsxs('label', {
-    className: 'evo-setting-field',
+    className: className !== undefined ? `evo-setting-field ${className}` : 'evo-setting-field',
     children: [
       jsx('span', { className: 'evo-setting-field-label', children: label }),
       jsx('input', {
@@ -705,6 +706,7 @@ function LlmProviderSection() {
   const [adding, setAdding] = useState(false)
   const [addingBusy, setAddingBusy] = useState(false)
   const [probeWarning, setProbeWarning] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [draft, setDraft] = useState({ id: '', displayName: '', baseURL: '', apiKey: '', api: 'openai-completions', manualModels: '' })
 
   const load = () => {
@@ -907,7 +909,6 @@ function LlmProviderSection() {
 
   const removeProvider = (id: string) => {
     if (busyId !== null) return
-    if (!window.confirm(t('llmDeleteProviderConfirm').replace('{id}', id))) return
     setBusyId(id)
     setError(null)
     void fetch('/evoresearch/fs/llm-provider-save', {
@@ -996,47 +997,69 @@ function LlmProviderSection() {
             className: 'evo-llm-provider evo-llm-new',
             children: [
               jsx('div', { className: 'evo-tier-head', children: jsx('span', { className: 'evo-tier-name', children: t('llmNewProvider') }) }),
-              jsx(ModelField, { label: t('llmProviderId'), value: draft.id, placeholder: t('llmProviderIdAuto'), onChange: (v) => setDraft((d) => ({ ...d, id: v })) }),
-              jsx(ModelField, { label: t('llmProviderName'), value: draft.displayName, onChange: (v) => setDraft((d) => ({ ...d, displayName: v })) }),
-              jsx(ModelField, { label: t('apiUrlLabel'), value: draft.baseURL, onChange: (v) => setDraft((d) => ({ ...d, baseURL: v })) }),
-              jsxs('label', {
-                className: 'evo-setting-field',
+              jsxs('div', {
+                className: 'evo-llm-new-grid',
                 children: [
-                  jsx('span', { className: 'evo-setting-field-label', children: t('apiKeyLabel') }),
-                  jsx('input', {
-                    type: 'text',
-                    className: 'evo-panel-input evo-llm-key-input',
-                    value: draft.apiKey,
-                    spellCheck: false,
-                    autoComplete: 'off',
-                    placeholder: t('apiKeyLabel'),
-                    onInput: (e: { currentTarget: HTMLInputElement }) => {
-                      const v = e.currentTarget.value
-                      setDraft((d) => ({ ...d, apiKey: v }))
-                    },
-                  }),
-                ],
-              }),
-              jsxs('label', {
-                className: 'evo-setting-field',
-                children: [
-                  jsx('span', { className: 'evo-setting-field-label', children: t('llmApiProtocol') }),
-                  jsx('select', {
-                    className: 'evo-panel-input evo-select-compact',
-                    value: draft.api,
-                    onChange: (e: { currentTarget: HTMLSelectElement }) => {
-                      const v = e.currentTarget.value
-                      setDraft((d) => ({ ...d, api: v }))
-                    },
+                  jsx(ModelField, { className: 'evo-llm-span2', label: t('apiUrlLabel'), value: draft.baseURL, placeholder: 'http://127.0.0.1:3000/v1', onChange: (v) => setDraft((d) => ({ ...d, baseURL: v })) }),
+                  jsxs('label', {
+                    className: 'evo-setting-field evo-llm-span2',
                     children: [
-                      jsx('option', { value: 'openai-completions', children: 'openai-completions' }, 'openai-completions'),
-                      jsx('option', { value: 'openai-responses', children: 'openai-responses' }, 'openai-responses'),
-                      jsx('option', { value: 'anthropic-messages', children: 'anthropic-messages' }, 'anthropic-messages'),
+                      jsx('span', { className: 'evo-setting-field-label', children: t('apiKeyLabel') }),
+                      jsx('input', {
+                        type: 'text',
+                        className: 'evo-panel-input evo-llm-key-input',
+                        value: draft.apiKey,
+                        spellCheck: false,
+                        autoComplete: 'off',
+                        placeholder: t('apiKeyLabel'),
+                        onInput: (e: { currentTarget: HTMLInputElement }) => {
+                          const v = e.currentTarget.value
+                          setDraft((d) => ({ ...d, apiKey: v }))
+                        },
+                      }),
                     ],
                   }),
+                  jsxs('label', {
+                    className: 'evo-setting-field',
+                    children: [
+                      jsx('span', { className: 'evo-setting-field-label', children: t('llmApiProtocol') }),
+                      jsx('select', {
+                        className: 'evo-panel-input evo-llm-new-select',
+                        value: draft.api,
+                        onChange: (e: { currentTarget: HTMLSelectElement }) => {
+                          const v = e.currentTarget.value
+                          setDraft((d) => ({ ...d, api: v }))
+                        },
+                        children: [
+                          jsx('option', { value: 'openai-completions', children: 'openai-completions' }, 'openai-completions'),
+                          jsx('option', { value: 'openai-responses', children: 'openai-responses' }, 'openai-responses'),
+                          jsx('option', { value: 'anthropic-messages', children: 'anthropic-messages' }, 'anthropic-messages'),
+                        ],
+                      }),
+                    ],
+                  }),
+                  jsx(ModelField, { label: t('llmProviderName'), value: draft.displayName, placeholder: t('llmProviderIdAuto'), onChange: (v) => setDraft((d) => ({ ...d, displayName: v })) }),
+                  jsxs('label', {
+                    className: 'evo-setting-field',
+                    children: [
+                      jsx('span', { className: 'evo-setting-field-label', children: t('llmProviderId') }),
+                      jsx('input', {
+                        type: 'text',
+                        className: 'evo-panel-input',
+                        value: draft.id,
+                        placeholder: t('llmProviderIdAuto'),
+                        spellCheck: false,
+                        onInput: (e: { currentTarget: HTMLInputElement }) => {
+                          const v = e.currentTarget.value
+                          setDraft((d) => ({ ...d, id: v }))
+                        },
+                      }),
+                      jsx('span', { className: 'evo-setting-hint', children: t('llmProviderIdHint') }),
+                    ],
+                  }),
+                  jsx(ModelField, { label: t('llmManualModels'), value: draft.manualModels, placeholder: t('llmManualModelsPlaceholder'), onChange: (v) => setDraft((d) => ({ ...d, manualModels: v })) }),
                 ],
               }),
-              jsx(ModelField, { label: t('llmManualModels'), value: draft.manualModels, placeholder: t('llmManualModelsPlaceholder'), onChange: (v) => setDraft((d) => ({ ...d, manualModels: v })) }),
               probeWarning !== null && jsx('div', { className: 'evo-llm-probe-warn', children: probeWarning }),
               jsx('div', { className: 'evo-llm-actions', children: [
                 jsx('button', {
@@ -1076,7 +1099,7 @@ function LlmProviderSection() {
                       title: t('llmDeleteProvider'),
                       'aria-label': t('llmDeleteProvider'),
                       disabled: busy,
-                      onClick: () => removeProvider(provider.id),
+                      onClick: () => { setError(null); setConfirmDeleteId(provider.id) },
                       children: jsx(Trash2, {}),
                     }),
                   ] }),
@@ -1160,6 +1183,14 @@ function LlmProviderSection() {
         ],
       }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+      confirmDeleteId !== null && jsx(ConfirmDialog, {
+        title: t('llmDeleteProvider'),
+        message: t('llmDeleteProviderConfirm').replace('{id}', confirmDeleteId),
+        confirmLabel: t('delete'),
+        danger: true,
+        onConfirm: () => removeProvider(confirmDeleteId),
+        onClose: () => setConfirmDeleteId(null),
+      }),
     ],
   })
 }

@@ -684,6 +684,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-key-input { font-family: ui-monospace, Consolas, monospace; }
 .evo-llm-add { align-self: flex-start; }
 .evo-llm-new { border-style: dashed; border-color: var(--color-border); }
+.evo-llm-new-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+.evo-llm-new-grid .evo-setting-field { gap: 4px; }
+.evo-llm-span2 { grid-column: 1 / -1; }
+.evo-llm-new-select { width: 100%; }
 /* 设置面板的推理强度选择框：紧凑高度，避免撑开卡片留白 */
 .evo-select-compact { flex: 0 0 auto; width: auto; min-width: 112px; padding: 3px 8px; font-size: 12px; border-radius: 7px; height: 28px; line-height: 20px; }
 .evo-setting-field-env { opacity: .75; margin-left: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
