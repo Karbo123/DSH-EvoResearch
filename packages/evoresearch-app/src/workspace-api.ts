@@ -109,7 +109,7 @@ async function resolveProviderApiKey(ctx: any, ref: string | undefined): Promise
 async function fetchEndpointModels(
   baseURL: string,
   apiKey: string | undefined,
-): Promise<Array<{ id: string; name?: string; contextWindow?: number }>> {
+): Promise<Array<{ id: string; name?: string; contextWindow?: number; endpoints?: string[]; outputModalities?: string[] }>> {
   const url = `${baseURL.replace(/\/+$/, '')}/models`
   const response = await fetch(url, {
     headers: {
@@ -119,10 +119,57 @@ async function fetchEndpointModels(
     signal: AbortSignal.timeout(8000),
   })
   if (!response.ok) throw new Error(`${url} answered ${response.status}`)
-  const body = await response.json() as { data?: Array<{ id?: string; name?: string; context_window?: number; contextWindow?: number }> }
+  const body = await response.json() as { data?: Array<Record<string, unknown>> }
   return (body.data ?? [])
-    .filter((m) => m.id !== undefined && m.id !== '')
-    .map((m) => ({ id: m.id as string, name: m.name, contextWindow: m.context_window ?? m.contextWindow ?? null }))
+    .filter((m) => typeof m?.id === 'string' && m.id !== '')
+    .map((m) => {
+      const endpoints = Array.isArray(m.supported_endpoint_types) ? (m.supported_endpoint_types as unknown[]).filter((x): x is string => typeof x === 'string') : undefined
+      const outputModalities = Array.isArray(m.output_modalities) ? (m.output_modalities as unknown[]).filter((x): x is string => typeof x === 'string') : undefined
+      return {
+        id: m.id as string,
+        name: typeof m.name === 'string' ? m.name : undefined,
+        contextWindow: typeof m.context_window === 'number' ? m.context_window : (typeof m.contextWindow === 'number' ? m.contextWindow : null),
+        ...(endpoints !== undefined && endpoints.length > 0 ? { endpoints } : {}),
+        ...(outputModalities !== undefined && outputModalities.length > 0 ? { outputModalities } : {}),
+      }
+    })
+}
+
+/** 图片生成模型的常见命名特征（网关没有模态元数据时的兜底判定，避免把纯文本/视觉模型列进图片生成）。 */
+const IMAGE_GEN_NAME_PATTERNS: RegExp[] = [
+  /\bgpt-image/i,
+  /\bdall-?e/i,
+  /\bimagen\b/i,
+  /\bflux\b/i,
+  /\bstable-?diffusion/i,
+  /\bsdxl\b/i,
+  /\bmidjourney/i,
+  /\bnano-?banana/i,
+  /\brecraft/i,
+  /\bideogram/i,
+  /\bcogview/i,
+  /\bpixart/i,
+  /\bkolors\b/i,
+  /\bseedream/i,
+  /\bplayground-v/i,
+  /\bimage(?:-|_)?(?:gen|generation)/i,
+  /\bt2i\b/i,
+  /\btext-?to-?image/i,
+]
+
+/**
+ * 判定模型是否具备图片生成（输出图片）能力：
+ * 1) 网关显式声明输出模态（output_modalities）——声明了但没有 image 即明确排除；
+ * 2) 网关端点类型（supported_endpoint_types）含 image 类端点（如 new-api 的 images）；
+ * 3) 兜底按模型名特征匹配。
+ * 返回 null 表示未知（前端不据此放行图片生成）。
+ */
+function imageOutputModalities(id: string, endpoints: string[] | undefined, outputModalities: string[] | undefined): string[] | null {
+  if (Array.isArray(outputModalities) && outputModalities.length > 0) {
+    return outputModalities.includes('image') ? ['image'] : []
+  }
+  if (Array.isArray(endpoints) && endpoints.some((e) => /image/i.test(e))) return ['image']
+  return IMAGE_GEN_NAME_PATTERNS.some((re) => re.test(id)) ? ['image'] : null
 }
 
 /** pi-ai 内置目录的完整推理档位顺序（与 getSupportedThinkingLevels 一致）。 */
@@ -627,9 +674,9 @@ export function registerWorkspaceApi(ctx: any): void {
           const groups: unknown[] = []
           for (const provider of providers) {
             const profile = profiles[provider.id]
-            let raw: Array<{ id: string; name: string; contextWindow: number | null; input: string[] | null }> = []
+            let raw: Array<{ id: string; name: string; contextWindow: number | null; input: string[] | null; endpoints?: string[]; outputModalities?: string[] }> = []
             try {
-              let listed: Array<{ id?: string; name?: string; contextWindow?: number }> | null = null
+              let listed: Array<{ id?: string; name?: string; contextWindow?: number; supported_endpoint_types?: unknown; output_modalities?: unknown }> | null = null
               // 1) DSH 模型发现：经 llm.discoverModels 读取端点（自动带凭据）
               if (llm.discoverModels !== undefined && profile?.baseURL !== undefined) {
                 try {
@@ -651,16 +698,34 @@ export function registerWorkspaceApi(ctx: any): void {
                   const id = typeof m.id === 'string' ? m.id : ''
                   if (id === '' || seen.has(id)) continue
                   seen.add(id)
-                  raw.push({ id, name: typeof m.name === 'string' && m.name !== '' ? m.name : id, contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null, input: null })
+                  const endpoints = Array.isArray(m.supported_endpoint_types) ? (m.supported_endpoint_types as unknown[]).filter((x): x is string => typeof x === 'string') : undefined
+                  const outputModalities = Array.isArray(m.output_modalities) ? (m.output_modalities as unknown[]).filter((x): x is string => typeof x === 'string') : undefined
+                  raw.push({
+                    id,
+                    name: typeof m.name === 'string' && m.name !== '' ? m.name : id,
+                    contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null,
+                    input: null,
+                    ...(endpoints !== undefined && endpoints.length > 0 ? { endpoints } : {}),
+                    ...(outputModalities !== undefined && outputModalities.length > 0 ? { outputModalities } : {}),
+                  })
                 }
               } else {
                 // 4) 端点不可达 → 回退配置内目录（仅此情况使用本地配置）
                 const configured = await llm.listModels(provider.id)
-                for (const m of (configured ?? []) as Array<{ id?: string; name?: string; contextWindow?: number; inputModalities?: string[] }>) {
+                for (const m of (configured ?? []) as Array<{ id?: string; name?: string; contextWindow?: number; inputModalities?: string[]; supported_endpoint_types?: unknown; output_modalities?: unknown }>) {
                   const id = typeof m.id === 'string' ? m.id : ''
                   if (id === '' || seen.has(id)) continue
                   seen.add(id)
-                  raw.push({ id, name: typeof m.name === 'string' && m.name !== '' ? m.name : id, contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null, input: Array.isArray(m.inputModalities) ? m.inputModalities.filter((x): x is string => typeof x === 'string') : null })
+                  const endpoints = Array.isArray(m.supported_endpoint_types) ? (m.supported_endpoint_types as unknown[]).filter((x): x is string => typeof x === 'string') : undefined
+                  const outputModalities = Array.isArray(m.output_modalities) ? (m.output_modalities as unknown[]).filter((x): x is string => typeof x === 'string') : undefined
+                  raw.push({
+                    id,
+                    name: typeof m.name === 'string' && m.name !== '' ? m.name : id,
+                    contextWindow: typeof m.contextWindow === 'number' ? m.contextWindow : null,
+                    input: Array.isArray(m.inputModalities) ? m.inputModalities.filter((x): x is string => typeof x === 'string') : null,
+                    ...(endpoints !== undefined && endpoints.length > 0 ? { endpoints } : {}),
+                    ...(outputModalities !== undefined && outputModalities.length > 0 ? { outputModalities } : {}),
+                  })
                 }
               }
             } catch { /* 该 provider 无目录 */ }
@@ -669,6 +734,7 @@ export function registerWorkspaceApi(ctx: any): void {
             const models = await mapWithConcurrency(raw, 6, async (m) => {
               let supportedReasoning: string[] | null = null
               let input: string[] | null = null
+              let output: string[] | null = null
               try {
                 const info = await llm.resolveModelInfo(provider.id, m.id, AbortSignal.timeout(5000))
                 const efforts = info?.reasoning?.efforts
@@ -677,6 +743,9 @@ export function registerWorkspaceApi(ctx: any): void {
                 }
                 if (Array.isArray(info?.inputModalities) && info.inputModalities.length > 0) {
                   input = (info.inputModalities as unknown[]).filter((x): x is string => typeof x === 'string')
+                }
+                if (Array.isArray(info?.outputModalities) && info.outputModalities.length > 0) {
+                  output = (info.outputModalities as unknown[]).filter((x): x is string => typeof x === 'string')
                 }
               } catch { /* 无目录元数据或解析失败 → 不限制档位 */ }
               if (supportedReasoning === null) {
@@ -695,7 +764,10 @@ export function registerWorkspaceApi(ctx: any): void {
                   input = nameHit
                 }
               }
-              return { ...m, supportedReasoning, input }
+              if (output === null) {
+                output = imageOutputModalities(m.id, m.endpoints, m.outputModalities)
+              }
+              return { ...m, supportedReasoning, input, output }
             })
             if (models.length > 0) {
               groups.push({ provider: { id: provider.id, name: provider.name ?? provider.id }, models })

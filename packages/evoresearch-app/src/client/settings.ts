@@ -139,12 +139,13 @@ interface TestState {
   message: string
 }
 
-/** 模型分配下拉用的模型条目（含输入模态，用于视觉/语音过滤）。 */
+/** 模型分配下拉用的模型条目（含输入/输出模态，用于视觉/语音/图片生成过滤）。 */
 interface AssignModelOption {
   id: string
   name: string
   supportedReasoning: string[] | null
   input: string[] | null
+  output: string[] | null
 }
 
 function ModelField({ label, value, onChange, placeholder, className }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) {
@@ -168,7 +169,7 @@ function ModelField({ label, value, onChange, placeholder, className }: { label:
 function ModelAssignSection() {
   const [assign, setAssign] = useState<Record<string, AssignSetting> | null>(null)
   const [providers, setProviders] = useState<LlmProviderEditor[]>([])
-  const [catalog, setCatalog] = useState<Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null; input?: string[] | null }> }>>([])
+  const [catalog, setCatalog] = useState<Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null; input?: string[] | null; output?: string[] | null }> }>>([])
   const [saving, setSaving] = useState<string | null>(null)
   const [testState, setTestState] = useState<Record<string, TestState>>({})
   const [error, setError] = useState<string | null>(null)
@@ -178,18 +179,24 @@ function ModelAssignSection() {
     const group = catalog.find((g) => g.provider?.id === providerId)
     const live = (group?.models ?? []).filter((m) => m.id !== undefined && m.id !== '')
     if (live.length > 0) {
-      return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null, input: Array.isArray(m.input) ? m.input as string[] : null }))
+      return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null, input: Array.isArray(m.input) ? m.input as string[] : null, output: Array.isArray(m.output) ? m.output as string[] : null }))
     }
-    return (providers.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning, input: null }))
+    return (providers.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning, input: null, output: null }))
   }
   /** 各分配类型要求的输入模态：vision=图片输入，voice=音频输入；其余不限。 */
   const kindInputModality = (kind: string): string | null => (kind === 'vision' ? 'image' : kind === 'voice' ? 'audio' : null)
-  /** 按模态过滤模型：无模态信息（未知）时放行，避免网关拿不到目录时误伤。 */
+  /** 各分配类型要求的输出模态：image=图片生成（必须能输出图片）；其余不限。 */
+  const kindOutputModality = (kind: string): string | null => (kind === 'image' ? 'image' : null)
+  /** 按模态过滤模型：输入模态未知时放行；图片生成要求明确具备图像输出能力，未知不算。 */
   const modelOptionsFor = (kind: string, providerId: string): AssignModelOption[] => {
     const all = providerModels(providerId)
-    const modality = kindInputModality(kind)
-    if (modality === null) return all
-    return all.filter((m) => m.input === null || m.input.includes(modality))
+    const inMod = kindInputModality(kind)
+    const outMod = kindOutputModality(kind)
+    return all.filter((m) => {
+      if (inMod !== null && m.input !== null && !m.input.includes(inMod)) return false
+      if (outMod !== null && (!Array.isArray(m.output) || !m.output.includes(outMod))) return false
+      return true
+    })
   }
   const defaultReasoning = (supported: string[] | null | undefined): string => {
     if (!Array.isArray(supported) || supported.length === 0) return 'high'
@@ -220,7 +227,7 @@ function ModelAssignSection() {
           supportedReasoning: null,
         })),
       })) : []
-      const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null; input?: string[] | null }> }> = cat.ok === true ? (cat.value?.groups ?? []) : []
+      const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; supportedReasoning?: string[] | null; input?: string[] | null; output?: string[] | null }> }> = cat.ok === true ? (cat.value?.groups ?? []) : []
       setProviders(providerList)
       setCatalog(groups)
       const raw = (ms.ok === true ? ms.value : {}) as Record<string, unknown>
@@ -229,8 +236,8 @@ function ModelAssignSection() {
       const modelsOf = (providerId: string): AssignModelOption[] => {
         const group = groups.find((g) => g.provider?.id === providerId)
         const live = (group?.models ?? []).filter((m) => m.id !== undefined && m.id !== '')
-        if (live.length > 0) return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null, input: Array.isArray(m.input) ? m.input as string[] : null }))
-        return (providerList.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning, input: null }))
+        if (live.length > 0) return live.map((m) => ({ id: m.id as string, name: m.name ?? (m.id as string), supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null, input: Array.isArray(m.input) ? m.input as string[] : null, output: Array.isArray(m.output) ? m.output as string[] : null }))
+        return (providerList.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning, input: null, output: null }))
       }
       const entries: Array<[string, Record<string, unknown>]> = [
         ['simple', (rawCode.simple ?? {}) as Record<string, unknown>],
@@ -267,8 +274,12 @@ function ModelAssignSection() {
         if (next[key].provider === '' && providerList.length > 0) {
           provider = providerList[0].id
           next[key].provider = provider
-          const modality = kindInputModality(key)
-          const candidates = modality === null ? modelsOf(provider) : modelsOf(provider).filter((m) => m.input === null || m.input.includes(modality))
+          const inMod = kindInputModality(key)
+          const outMod = kindOutputModality(key)
+          const candidates = modelsOf(provider).filter((m) =>
+            (inMod === null || m.input === null || m.input.includes(inMod)) &&
+            (outMod === null || (Array.isArray(m.output) && m.output.includes(outMod))),
+          )
           const hit = candidates.find((m) => m.id === model) ?? candidates[0]
           if (hit !== undefined) {
             model = hit.id
@@ -537,7 +548,7 @@ function ModelAssignSection() {
                 const Icon = meta.icon
                 const modelOptions = modelOptionsFor(kind, assign[kind].provider)
                 const modelHasProfile = modelOptions.find((m) => m.id === assign[kind].model)?.supportedReasoning != null
-                const modalityEmpty = kindInputModality(kind) !== null && modelOptions.length === 0
+                const modalityEmpty = (kindInputModality(kind) !== null || kindOutputModality(kind) !== null) && modelOptions.length === 0
                 return jsxs('div', { className: 'evo-tier-card evo-assign-card', children: [
                   jsxs('div', { className: 'evo-assign-head', children: [
                     jsx(Icon, {}),
@@ -549,7 +560,7 @@ function ModelAssignSection() {
                     renderSelect(kind, 'model', modelOptions.map((m) => [m.id, m.name] as [string, string]), (v) => changeModel(kind, v)),
                     renderSelect(kind, 'reasoningEffort', offeredLevels(kind), (v) => setField(kind, 'reasoningEffort', v)),
                   ] }),
-                  modalityEmpty && jsx('div', { className: 'evo-assign-hint', children: kind === 'vision' ? t('noVisionModels') : t('noVoiceModels') }),
+                  modalityEmpty && jsx('div', { className: 'evo-assign-hint', children: kind === 'vision' ? t('noVisionModels') : kind === 'image' ? t('noImageModels') : t('noVoiceModels') }),
                   modelHasProfile === false && !modalityEmpty && jsx('div', { className: 'evo-assign-hint', children: t('assignmentReasoningHint') }),
                   migrated[kind] !== undefined && jsx('div', { className: 'evo-assign-migrate', children: t('migratedProviderHint').replace('{old}', migrated[kind]).replace('{new}', providerLabel(assign[kind].provider)) }),
                   jsxs('div', { className: 'evo-assign-actions', children: [
