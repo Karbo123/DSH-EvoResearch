@@ -1074,7 +1074,7 @@ function LlmProviderSection() {
                       }),
                     ],
                   }),
-                  jsx(ModelField, { label: t('llmProviderName'), value: draft.displayName, placeholder: t('llmProviderIdAuto'), onChange: (v) => setDraft((d) => ({ ...d, displayName: v })) }),
+                  jsx(ModelField, { label: t('llmProviderName'), value: draft.displayName, placeholder: t('llmProviderNamePlaceholder'), onChange: (v) => setDraft((d) => ({ ...d, displayName: v })) }),
                   jsxs('label', {
                     className: 'evo-setting-field',
                     children: [
