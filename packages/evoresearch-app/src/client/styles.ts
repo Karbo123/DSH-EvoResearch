@@ -654,6 +654,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-clear-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .evo-clear-row-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
 .evo-clear-row-desc { font-size: 12px; line-height: 1.5; color: var(--color-text-tertiary); }
+.evo-clear-confirm { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 2px; }
 .evo-btn-danger.confirming { background: var(--color-error); color: #fff; }
 .evo-btn-danger.confirming:hover { background: color-mix(in srgb, var(--color-error) 86%, #000); }
 .evo-tier-grid { display: flex; flex-direction: column; gap: 12px; margin: 10px 0; }

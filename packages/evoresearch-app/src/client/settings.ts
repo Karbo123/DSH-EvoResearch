@@ -771,15 +771,17 @@ function DataClearSection() {
           ] }),
         ],
       }, row.key)) }),
-      confirming && jsx('div', { className: 'evo-panel-error', children: t('clearDataWarning') }),
-      error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-      jsx('button', {
-        type: 'button',
-        className: `evo-btn evo-btn-danger${confirming ? ' confirming' : ''}`,
-        disabled: !anyChecked || busy,
-        onClick: execute,
-        children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: busy ? t('clearDataBusy') : confirming ? t('clearDataConfirm') : t('clearDataBtn') })] }),
-      }),
+      jsxs('div', { className: 'evo-clear-confirm', children: [
+        confirming && jsx('div', { className: 'evo-panel-error', children: t('clearDataWarning') }),
+        error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        jsx('button', {
+          type: 'button',
+          className: `evo-btn evo-btn-danger${confirming ? ' confirming' : ''}`,
+          disabled: !anyChecked || busy,
+          onClick: execute,
+          children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: busy ? t('clearDataBusy') : confirming ? t('clearDataConfirm') : t('clearDataBtn') })] }),
+        }),
+      ] }),
     ],
   })
 }
