@@ -686,16 +686,20 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-new { border-style: dashed; border-color: var(--color-border); }
 /* 设置面板的推理强度选择框：紧凑高度，避免撑开卡片留白 */
 .evo-select-compact { flex: 0 0 auto; width: auto; min-width: 112px; padding: 3px 8px; font-size: 12px; border-radius: 7px; height: 28px; line-height: 20px; }
-.evo-llm-model-row .evo-select-compact { min-width: 96px; }
 .evo-setting-field-env { opacity: .75; margin-left: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
-.evo-llm-models { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--color-border-light); max-height: 260px; overflow-y: auto; }
-.evo-llm-model { display: flex; flex-direction: column; gap: 2px; }
-.evo-llm-model-row { display: flex; align-items: center; gap: 8px; padding: 3px 2px; }
-.evo-llm-model-id { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.evo-llm-model-ctx { flex: 0 0 auto; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
-.evo-llm-ref-row { display: flex; align-items: center; gap: 6px; padding: 0 2px 3px; }
-.evo-llm-ref-label { flex-shrink: 0; font-size: 11px; color: var(--color-text-tertiary); }
-.evo-llm-ref-select { flex: 1; min-width: 180px; }
+/* 统一「已获取模型」：胶囊卡片按字母序排列 */
+.evo-llm-fetched { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
+.evo-llm-fetched-head { display: flex; align-items: baseline; gap: 8px; }
+.evo-llm-fetched-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+.evo-llm-fetched-count { font-size: 11.5px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
+.evo-llm-model-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.evo-llm-model-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 12px; border: 1px solid var(--color-border-light); border-radius: 999px; background: var(--color-surface); }
+.evo-llm-model-pill .evo-llm-model-id { flex: 0 1 auto; min-width: 0; max-width: 260px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-llm-model-n { flex: 0 0 auto; min-width: 16px; text-align: center; font-size: 10.5px; line-height: 1; padding: 2px 5px; border-radius: 999px; background: var(--color-border-light); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.evo-llm-model-x { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: 999px; background: transparent; color: var(--color-text-tertiary); cursor: pointer; }
+.evo-llm-model-x:hover { background: var(--color-border-light); color: var(--color-text-primary); }
+.evo-llm-model-x svg { width: 12px; height: 12px; }
+.evo-llm-model-x:disabled { opacity: .5; cursor: default; }
 .evo-tier-head { display: flex; align-items: baseline; gap: 10px; }
 .evo-tier-name { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); }
 .evo-tier-desc { font-size: 12px; color: var(--color-text-tertiary); }

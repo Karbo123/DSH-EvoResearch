@@ -1,13 +1,14 @@
 /**
  * 设置面板：左侧 tab 导航 + 右侧配置 + 左上角「返回」（图标 + 文字）。
  * - 通用：权限模式 / 默认模型 / 插件清单 / 关于（主题与语言在顶栏，不重复）；
- * - 模型设置：1）模型服务（Provider 与每模型推理强度）；2）模型分配（代码三档 /
- *   图片识别 / 图片生成 / 语音识别，从 Provider 模型列表选择并设置推理强度）；
+ * - 模型设置：1）模型服务（Provider 接口配置 + 统一「已获取模型」列表）；
+ *   2）模型分配（代码三档 / 图片识别 / 图片生成 / 语音识别，从 Provider
+ *   模型列表选择并设置推理强度）；
  * - 清除数据。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic, Trash2, Server, Plus } from 'lucide-react'
+import { ArrowLeft, Cpu, Info, Puzzle, ShieldCheck as ShieldCheckIcon, Code2, Eye, Image as ImageIcon, Mic, Trash2, Server, Plus, X } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
 
@@ -706,37 +707,11 @@ function LlmProviderSection() {
   const [probeWarning, setProbeWarning] = useState<string | null>(null)
   const [draft, setDraft] = useState({ id: '', displayName: '', baseURL: '', apiKey: '', api: 'openai-completions', manualModels: '' })
 
-  /** 把远端目录应用到一个（或全部）provider 的模型列表：远端为准，仅保留仍存在的模型已有的推理强度设置。 */
-  const applyCatalog = (groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; contextWindow?: number | null; supportedReasoning?: string[] | null }> }>, onlyId?: string) => {
-    setProviders((prev) => (prev ?? []).map((p) => {
-      if (onlyId !== undefined && p.id !== onlyId) return p
-      const group = groups.find((g) => g.provider?.id === p.id)
-      const live = group?.models ?? []
-      const existing = new Map(p.models.map((m) => [m.id, m]))
-      const next = live
-        .filter((m) => m.id !== undefined && m.id !== '')
-        .map((m) => {
-          const old = existing.get(m.id as string)
-          return {
-            id: m.id as string,
-            name: m.name ?? String(m.id),
-            contextWindow: m.contextWindow ?? null,
-            reasoningEfforts: old?.reasoningEfforts ?? null,
-            supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null,
-          }
-        })
-      if (next.length === 0) return p
-      return { ...p, models: next }
-    }))
-  }
-
   const load = () => {
     setError(null)
-    void Promise.all([
-      fetch('/evoresearch/fs/llm-providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json()),
-      fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json()).catch(() => ({ ok: false })),
-    ])
-      .then(([providersJson, catalogJson]) => {
+    void fetch('/evoresearch/fs/llm-providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((r) => r.json())
+      .then((providersJson) => {
         if (providersJson.ok) {
           setProviders((providersJson.value?.providers ?? []).map((p: Record<string, unknown>) => ({
             id: String(p.id ?? ''),
@@ -754,9 +729,6 @@ function LlmProviderSection() {
             })),
           })))
         } else setError(providersJson.error?.message ?? '加载失败')
-        if (catalogJson.ok === true) {
-          applyCatalog(catalogJson.value?.groups ?? [])
-        }
       })
       .catch((e: unknown) => setError((e as Error)?.message ?? '加载失败'))
   }
@@ -766,21 +738,88 @@ function LlmProviderSection() {
     setProviders((prev) => (prev ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)))
   }
 
+  /** 模型条目转写回 Provider 配置的 patch 字段（保留推理强度设置）。 */
+  const modelPatch = (m: LlmModelRow): Record<string, unknown> => ({
+    id: m.id,
+    name: m.name !== '' && m.name !== m.id ? m.name : undefined,
+    reasoningEfforts: m.reasoningEfforts === null || m.reasoningEfforts === undefined ? undefined : m.reasoningEfforts,
+  })
+
+  /** 获取可用模型：远端目录为准，更新前端列表并立即写回 Provider 配置。 */
   const fetchModels = (id: string) => {
     if (busyId !== null) return
     setBusyId(id)
     setError(null)
-    void fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-      .then((r) => r.json())
-      .then((json) => {
+    void (async () => {
+      try {
+        const json = await fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json())
         if (json.ok !== true) throw new Error(json.error?.message ?? t('llmFetchFailed'))
-        const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string }> }> = json.value?.groups ?? []
+        const groups: Array<{ provider?: { id?: string }; models?: Array<{ id?: string; name?: string; contextWindow?: number | null; supportedReasoning?: string[] | null }> }> = json.value?.groups ?? []
         const live = groups.find((g) => g.provider?.id === id)?.models ?? []
-        applyCatalog(groups, id)
-        toast(t('llmFetchDone').replace('{n}', String(live.length)), 'success')
-      })
-      .catch((e: unknown) => setError((e as Error)?.message ?? t('llmFetchFailed')))
-      .finally(() => setBusyId(null))
+        const cur = providers?.find((p) => p.id === id)
+        const existing = new Map((cur?.models ?? []).map((m) => [m.id, m]))
+        const nextModels = live
+          .filter((m) => m.id !== undefined && m.id !== '')
+          .map((m) => {
+            const old = existing.get(m.id as string)
+            return {
+              id: m.id as string,
+              name: m.name ?? String(m.id),
+              contextWindow: m.contextWindow ?? null,
+              reasoningEfforts: old?.reasoningEfforts ?? null,
+              supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null,
+            }
+          })
+        if (nextModels.length === 0) {
+          toast(t('llmFetchDone').replace('{n}', '0'), 'success')
+          return
+        }
+        setProviders((prev) => (prev ?? []).map((p) => (p.id === id ? { ...p, models: nextModels } : p)))
+        const saved = await fetch('/evoresearch/fs/llm-provider-save', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ provider: id, patch: { models: nextModels.map(modelPatch) } }),
+        }).then((r) => r.json())
+        if (saved.ok !== true) throw new Error(saved.error?.message ?? t('llmSaveFailed'))
+        toast(t('llmFetchDone').replace('{n}', String(nextModels.length)), 'success')
+      } catch (e: unknown) {
+        setError((e as Error)?.message ?? t('llmFetchFailed'))
+      } finally {
+        setBusyId(null)
+      }
+    })()
+  }
+
+  /** 排除模型：从包含它的全部 Provider 的模型列表中移除并持久化。 */
+  const excludeModel = (modelId: string) => {
+    if (busyId !== null || providers === null) return
+    const affected = providers.filter((p) => p.models.some((m) => m.id === modelId))
+    if (affected.length === 0) return
+    setBusyId(`exclude:${modelId}`)
+    setError(null)
+    void (async () => {
+      try {
+        const failures: string[] = []
+        const remaining = new Map<string, LlmModelRow[]>()
+        for (const p of affected) {
+          const rest = p.models.filter((m) => m.id !== modelId)
+          remaining.set(p.id, rest)
+          const saved = await fetch('/evoresearch/fs/llm-provider-save', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ provider: p.id, patch: { models: rest.map(modelPatch) } }),
+          }).then((r) => r.json())
+          if (saved.ok !== true) failures.push(p.id)
+        }
+        if (failures.length > 0) throw new Error(`${t('modelExcludeFailed')}: ${failures.join('、')}`)
+        setProviders((prev) => (prev ?? []).map((p) => (remaining.has(p.id) ? { ...p, models: remaining.get(p.id) as LlmModelRow[] } : p)))
+        toast(t('modelExcluded').replace('{id}', modelId).replace('{n}', String(affected.length)), 'success')
+      } catch (e: unknown) {
+        setError((e as Error)?.message ?? t('modelExcludeFailed'))
+      } finally {
+        setBusyId(null)
+      }
+    })()
   }
 
   const slugifyId = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -920,6 +959,21 @@ function LlmProviderSection() {
     })
   }
 
+  // 统一「已获取模型」：合并全部 Provider 的模型列表，按名称字母序排列。
+  const allModels = new Map<string, { id: string; name: string; count: number }>()
+  for (const p of providers ?? []) {
+    for (const m of p.models) {
+      const hit = allModels.get(m.id)
+      if (hit !== undefined) hit.count += 1
+      else allModels.set(m.id, { id: m.id, name: m.name !== '' ? m.name : m.id, count: 1 })
+    }
+  }
+  const modelPills = [...allModels.values()].sort((a, b) => {
+    const x = a.id.toLowerCase()
+    const y = b.id.toLowerCase()
+    return x < y ? -1 : x > y ? 1 : 0
+  })
+
   return jsxs('div', {
     className: 'evo-setting',
     children: [
@@ -1013,6 +1067,7 @@ function LlmProviderSection() {
                 children: [
                   jsxs('div', { className: 'evo-tier-head', children: [
                     jsx('span', { className: 'evo-tier-name', children: `${t('llmProviderId')}: ${provider.id}` }),
+                    provider.models.length > 0 && jsx('span', { className: 'evo-tier-desc', children: t('fetchedModelsCount').replace('{n}', String(provider.models.length)) }),
                     jsx('span', { className: 'evo-tier-desc', children: provider.api }),
                     jsx('span', { style: { flex: 1 } }),
                     jsx('button', {
@@ -1046,19 +1101,6 @@ function LlmProviderSection() {
                     ],
                   }),
                   jsx('div', { className: 'evo-setting-hint', children: t('llmKeyHint') }),
-                  provider.models.length > 0 && jsxs('div', {
-                    className: 'evo-llm-models',
-                    children: [
-                      jsx('div', { className: 'evo-setting-field-label', children: t('modelListLabel') }),
-                      provider.models.map((m) => jsxs('div', {
-                        className: 'evo-llm-model-row',
-                        children: [
-                          jsx('span', { className: 'evo-llm-model-id', title: m.id, children: m.id }),
-                          jsx('span', { className: 'evo-llm-model-ctx', children: m.contextWindow != null ? `${m.contextWindow}` : '' }),
-                        ],
-                      }, m.id)),
-                    ],
-                  }),
                   jsxs('div', { className: 'evo-llm-actions', children: [
                     jsx('button', {
                       type: 'button',
@@ -1079,6 +1121,42 @@ function LlmProviderSection() {
                 ],
               }, provider.id)
             }),
+        ],
+      }),
+      jsxs('div', {
+        className: 'evo-llm-fetched',
+        children: [
+          jsxs('div', { className: 'evo-llm-fetched-head', children: [
+            jsx('span', { className: 'evo-llm-fetched-title', children: t('modelListLabel') }),
+            jsx('span', { className: 'evo-llm-fetched-count', children: t('fetchedModelsCount').replace('{n}', String(modelPills.length)) }),
+          ] }),
+          jsx('div', { className: 'evo-setting-hint', children: t('fetchedModelsDesc') }),
+          modelPills.length === 0
+            ? jsx('div', { className: 'evo-setting-hint', children: t('fetchedModelsEmpty') })
+            : jsx('div', {
+                className: 'evo-llm-model-pills',
+                children: modelPills.map((m) => jsxs('span', {
+                  className: 'evo-llm-model-pill',
+                  title: m.name !== m.id ? `${m.id}（${m.name}）` : m.id,
+                  children: [
+                    jsx('span', { className: 'evo-llm-model-id', children: m.id }),
+                    m.count > 1 && jsx('span', {
+                      className: 'evo-llm-model-n',
+                      title: t('fetchedModelsCount').replace('{n}', String(m.count)),
+                      children: String(m.count),
+                    }),
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-llm-model-x',
+                      title: t('excludeModel'),
+                      'aria-label': `${t('excludeModel')}: ${m.id}`,
+                      disabled: busyId !== null,
+                      onClick: () => excludeModel(m.id),
+                      children: jsx(X, {}),
+                    }),
+                  ],
+                }, m.id)),
+              }),
         ],
       }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
