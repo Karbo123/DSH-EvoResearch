@@ -181,7 +181,7 @@ const DICT: Record<string, [string, string]> = {
   goalObjective: ['Objective', '目标'],
   successCriteria: ['Success criteria', '成功标准'],
   constraintsLabel: ['Constraints', '约束'],
-  evidenceLabel: ['Evidence', '证据'],
+  evidenceLabel: ['Evidence', '依据'],
   updatedAt: ['Updated', '更新于'],
   accept: ['Accept', '接受'],
   noProposals: ['No proposals', '暂无提案'],
