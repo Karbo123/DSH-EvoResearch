@@ -692,7 +692,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-new-select { width: 100%; }
 /* 设置面板的推理强度选择框：紧凑高度，避免撑开卡片留白 */
 .evo-select-compact { flex: 0 0 auto; width: auto; min-width: 112px; padding: 3px 8px; font-size: 12px; border-radius: 7px; height: 28px; line-height: 20px; }
-.evo-setting-field-env { opacity: .75; margin-left: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
 /* 统一「已获取模型」：胶囊卡片按字母序排列 */
 .evo-llm-fetched { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
 .evo-llm-fetched-head { display: flex; align-items: baseline; gap: 8px; }

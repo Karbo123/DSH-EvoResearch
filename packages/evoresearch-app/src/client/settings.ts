@@ -1144,10 +1144,7 @@ function LlmProviderSection() {
                     jsxs('label', {
                       className: 'evo-setting-field',
                       children: [
-                        jsxs('span', { className: 'evo-setting-field-label', children: [
-                          t('apiKeyLabel'),
-                          provider.apiKeyEnv !== '' && jsx('span', { className: 'evo-setting-field-env', children: `(${provider.apiKeyEnv})` }),
-                        ] }),
+                        jsx('span', { className: 'evo-setting-field-label', children: t('apiKeyLabel') }),
                         jsx('input', {
                           type: 'text',
                           className: 'evo-panel-input evo-llm-key-input',
