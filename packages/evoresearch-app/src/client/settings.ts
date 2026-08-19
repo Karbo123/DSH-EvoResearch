@@ -39,13 +39,41 @@ function BuildStamp() {
 }
 
 /** 插件清单（官方插件状态快照）。 */
+function pluginStateLabel(state: string): string {
+  switch (state) {
+    case '0': return t('pluginStatePending')
+    case '1': return t('pluginStateLoading')
+    case '2': return t('pluginStateActive')
+    case '3': return t('pluginStateFailed')
+    case '4': return t('pluginStateDisposed')
+    case '5': return t('pluginStateUnloading')
+    case 'loading': return t('pluginStateIdle')
+    default: return state
+  }
+}
+
 function PluginListSection() {
   const [plugins, setPlugins] = useState<PluginRow[] | null>(null)
   useEffect(() => {
     let cancelled = false
-    void fetch('/evoresearch/fs/plugins').then((res) => res.json()).then((json) => {
-      if (!cancelled && json.ok && Array.isArray(json.value)) {
-        setPlugins((json.value as Array<{ id: string; state?: string }>).map((p) => ({ id: p.id, state: p.state ?? '' })))
+    void fetch('/evoresearch/fs/plugins', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    }).then((res) => res.json()).then((json) => {
+      if (!cancelled && json.ok && Array.isArray(json.value?.plugins)) {
+        // 同一插件可能出现多个 fiber 条目（如 dev/hmr），按 id 去重，优先保留运行中状态。
+        const seen = new Map<string, { id: string; state: string }>()
+        for (const p of json.value.plugins as Array<{ id: string; state?: string }>) {
+          const id = String(p.id ?? '')
+          const state = String(p.state ?? '')
+          const prev = seen.get(id)
+          if (prev === undefined || (prev.state === 'loading' && state !== 'loading')) {
+            seen.set(id, { id, state })
+          }
+        }
+        const rows = [...seen.values()].sort((a, b) => a.id.localeCompare(b.id))
+        setPlugins(rows)
       }
     }).catch(() => {})
     return () => { cancelled = true }
@@ -55,13 +83,24 @@ function PluginListSection() {
     children: [
       jsxs('div', {
         className: 'evo-setting-label',
-        children: [jsx(Puzzle, {}), jsx('span', { children: t('plugins') })],
+        children: [jsx(Puzzle, {}), jsx('span', { children: plugins === null ? t('plugins') : `${t('plugins')} · ${plugins.length}` })],
       }),
       plugins === null
         ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
         : plugins.length === 0
           ? jsx('div', { className: 'evo-setting-hint', children: t('noModels') })
-          : jsx('div', { className: 'evo-plugin-list', children: plugins.map((p) => jsxs('div', { className: 'evo-plugin-row', children: [jsx('span', { children: p.id }), jsx('span', { className: 'evo-plugin-state', children: p.state })] }, p.id)) }),
+          : jsx('div', { className: 'evo-plugin-list', children: plugins.map((p) => jsxs('div', {
+              className: 'evo-plugin-row',
+              children: [
+                jsx('span', { children: p.id }),
+                jsx('span', {
+                  className: 'evo-plugin-state',
+                  'data-active': p.state === '2' || undefined,
+                  'data-failed': p.state === '3' || undefined,
+                  children: pluginStateLabel(p.state),
+                }),
+              ],
+            }, p.id)) }),
     ],
   })
 }

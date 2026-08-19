@@ -731,6 +731,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-setting-field-label { font-size: 12px; color: var(--color-text-tertiary); }
 .evo-plugin-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--color-text-secondary); }
 .evo-plugin-state { color: var(--color-text-tertiary); font-size: 11.5px; }
+.evo-plugin-state[data-active] { color: var(--brand); }
+.evo-plugin-state[data-failed] { color: var(--color-error); font-weight: 600; }
 .evo-plugin-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); }
 .evo-plugin-id { font-size: 12px; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-plugin-state { font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }

@@ -244,6 +244,13 @@ const DICT: Record<string, [string, string]> = {
   fullEffect: ['Full effect', '完整权限'],
   permission: ['Permission', '权限'],
   plugins: ['Plugins', '插件'],
+  pluginStateActive: ['Active', '运行中'],
+  pluginStatePending: ['Pending', '等待中'],
+  pluginStateLoading: ['Loading', '加载中'],
+  pluginStateFailed: ['Failed', '加载失败'],
+  pluginStateDisposed: ['Disposed', '已移除'],
+  pluginStateUnloading: ['Unloading', '卸载中'],
+  pluginStateIdle: ['Idle', '待加载'],
   // 会话信息
   threadId: ['Thread ID', '会话 ID'],
   modelProvider: ['Model / Provider', '模型 / 提供商'],
