@@ -497,6 +497,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-row-label { font-size: 12px; font-weight: 600; color: var(--color-text-tertiary); letter-spacing: 0.4px; text-transform: uppercase; }
 .evo-panel-hint { font-size: 13px; color: var(--color-text-tertiary); }
 .evo-panel-error { padding: 8px 12px; border: 1px solid var(--color-error); border-radius: 8px; color: var(--color-error); font-size: 12.5px; }
+.evo-llm-probe-warn { padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--color-border)); border-radius: 8px; color: var(--color-warning); font-size: 12.5px; line-height: 1.6; }
 .evo-panel-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .evo-panel-tag { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: 999px; font-size: 12.5px; color: var(--color-text-secondary); background: var(--color-surface); }
 .evo-panel-tag-link { border-color: color-mix(in srgb, var(--brand) 40%, transparent); color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
