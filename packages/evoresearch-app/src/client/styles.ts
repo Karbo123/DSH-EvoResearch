@@ -692,6 +692,18 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-new-select { width: 100%; }
 /* 设置面板的推理强度选择框：紧凑高度，避免撑开卡片留白 */
 .evo-select-compact { flex: 0 0 auto; width: auto; min-width: 112px; padding: 3px 8px; font-size: 12px; border-radius: 7px; height: 28px; line-height: 20px; }
+/* 主题化下拉（仿左侧搜索排序弹层）：按钮 + 自定义浮层，长列表限高滚动 */
+.evo-dropdown { display: flex; width: 100%; min-width: 0; }
+.evo-dropdown-btn { display: inline-flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: 28px; padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--input-bg); color: var(--color-text-primary); font: inherit; font-size: 12px; line-height: 20px; cursor: pointer; }
+.evo-dropdown-btn:hover, .evo-dropdown-btn.evo-dropdown-open { border-color: color-mix(in srgb, var(--brand) 55%, var(--color-border)); color: var(--brand); }
+.evo-dropdown-btn svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--color-text-tertiary); }
+.evo-dropdown-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.evo-dropdown-menu { position: fixed; z-index: 3000; max-height: 280px; overflow-y: auto; padding: 5px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; gap: 1px; }
+.evo-dropdown-option { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 6px 8px; border: none; border-radius: 6px; background: transparent; color: var(--color-text-secondary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.evo-dropdown-option:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-dropdown-option[data-active] { background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); }
+.evo-dropdown-option svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.evo-dropdown-option span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 统一「已获取模型」：胶囊卡片按字母序排列 */
 .evo-llm-fetched { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
 .evo-llm-fetched-head { display: flex; align-items: center; gap: 8px; }
