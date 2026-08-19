@@ -26,5 +26,14 @@
   "allowScripts": {
     "esbuild@0.27.7": true,
     "esbuild@0.28.2": true
+  },
+  "dependencies": {
+    "@milkdown/core": "^7.22.1",
+    "@milkdown/kit": "^7.22.1",
+    "@milkdown/plugin-history": "^7.22.1",
+    "@milkdown/plugin-listener": "^7.22.1",
+    "@milkdown/preset-commonmark": "^7.22.1",
+    "esbuild": "^0.28.2",
+    "vditor": "^3.11.3"
   }
 }

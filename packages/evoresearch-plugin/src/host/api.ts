@@ -454,7 +454,6 @@ export class EvoResearchApiService extends TypertRemoteService {
         code: { ...DEFAULT_MODEL_SETTINGS.code, ...(raw.code ?? {}) },
         vision: { ...DEFAULT_MODEL_SETTINGS.vision, ...(raw.vision ?? {}) },
         image: { ...DEFAULT_MODEL_SETTINGS.image, ...(raw.image ?? {}) },
-        voice: { ...DEFAULT_MODEL_SETTINGS.voice, ...(raw.voice ?? {}) },
       }
       return merged
     } catch {
@@ -477,7 +476,6 @@ export class EvoResearchApiService extends TypertRemoteService {
       code: { ...current.code, ...(patch.code ?? {}) },
       vision: { ...current.vision, ...(patch.vision ?? {}) },
       image: { ...current.image, ...(patch.image ?? {}) },
-      voice: { ...current.voice, ...(patch.voice ?? {}) },
     }
     const tmp = `${file}.tmp-${process.pid}`
     writeFileSync(tmp, JSON.stringify(merged, null, 2), 'utf8')

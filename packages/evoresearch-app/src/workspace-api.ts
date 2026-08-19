@@ -1079,7 +1079,7 @@ export function registerWorkspaceApi(ctx: any): void {
                         complex: { ...(code.complex ?? {}), ...(code.complex?.provider === oldId ? { provider: newId } : {}) },
                       }
                     }
-                    for (const key of ['vision', 'image', 'voice']) {
+                    for (const key of ['vision', 'image']) {
                       const entry = ms[key] as Record<string, unknown> | undefined
                       if (entry !== undefined && typeof entry === 'object' && entry.provider === oldId) {
                         patchMs[key] = { ...entry, provider: newId }
@@ -1221,7 +1221,7 @@ export function registerWorkspaceApi(ctx: any): void {
               entryModels.push({ provider: e.provider, model: e.model })
             }
           }
-          for (const key of ['code', 'vision', 'image', 'voice']) {
+          for (const key of ['code', 'vision', 'image']) {
             const entry = (patch as Record<string, unknown>)[key]
             if (key === 'code' && entry !== null && typeof entry === 'object') {
               for (const tier of ['simple', 'medium', 'complex']) collect((entry as Record<string, unknown>)[tier])

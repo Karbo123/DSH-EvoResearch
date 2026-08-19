@@ -225,8 +225,6 @@ export interface ModelSettings {
   readonly vision: ModelTierSetting
   /** 图片生成模型。 */
   readonly image: ModelTierSetting
-  /** 语音识别模型。 */
-  readonly voice: ModelTierSetting
 }
 
 /** 默认模型设置（与 ResearchOS 三档语义对齐）。 */
@@ -238,7 +236,6 @@ export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   },
   vision: { model: '', provider: '' },
   image: { model: '', provider: '' },
-  voice: { model: '', provider: '' },
 }
 
 // ── 实验管理（§5.1 Git 式分支/回退/checkpoint）──────────────────────────────

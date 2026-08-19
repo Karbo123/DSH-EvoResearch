@@ -177,7 +177,8 @@ body { margin: 0; }
   .evo-graph-canvas { overflow: auto; }
   .evo-graph-minimap, .evo-graph-inspector { display: none; }
   .evo-composer-wrap { padding-inline: 8px; }
-  .evo-composer { max-width: none; }
+  .evo-composer { width: 100%; max-width: none; }
+  .evo-composer-stats { max-width: 100%; }
   .evo-composer-tools { gap: 2px; padding: 4px 6px 6px; }
   .evo-composer-tool { width: 26px; height: 28px; padding: 4px 5px; gap: 0; justify-content: center; }
   .evo-composer-tool svg { width: 15px; height: 15px; }
@@ -298,7 +299,7 @@ body { margin: 0; }
 .evo-cand-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .evo-cand-title { font-size: 13px; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .evo-cand-sub { font-size: 11.5px; color: var(--color-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.evo-composer { width: 100%; max-width: var(--chat-max-width); border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 2px 12px rgba(0,0,0,.05); }
+.evo-composer { width: 75%; max-width: none; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 2px 12px rgba(0,0,0,.05); }
 .evo-composer-status { display: flex; align-items: center; gap: 7px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); }
 .evo-composer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
 .evo-composer-textarea { width: 100%; padding: 10px 14px 4px; border: none; outline: none; resize: none; background: none; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--color-text-primary); font-size: 14.5px; font-family: inherit; line-height: 1.55; min-height: 44px; max-height: 220px; position: relative; z-index: 1; }
@@ -470,6 +471,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-modal-mask { position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
 .evo-modal { width: 75vw; height: 75vh; max-width: 75vw; max-height: 75vh; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; }
 .evo-modal.evo-modal-sm { width: min(440px, 92vw); height: auto; max-width: 440px; }
+.evo-modal.evo-modal-tiers { width: min(680px, 94vw); max-width: min(680px, 94vw); }
 /* 设置面板占满整个窗口（用户要求）：fixed + inset 精确覆盖视口 */
 .evo-modal.evo-modal-full { position: fixed; inset: 0; width: auto; height: auto; max-width: none; max-height: none; border-radius: 0; border: none; }
 .evo-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--color-border-light); }
@@ -485,12 +487,17 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-setting-option[data-active] { background: var(--brand-solid); border-color: var(--brand-solid); color: var(--brand-foreground); }
 .evo-setting-hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 6px; line-height: 1.6; }
 .evo-setting-error { color: var(--color-error); }
-.evo-model-list { display: flex; flex-direction: column; gap: 4px; }
-.evo-model-group { display: flex; flex-direction: column; gap: 2px; }
-.evo-model-group-name { font-size: 11.5px; color: var(--color-text-tertiary); padding: 6px 2px 2px; letter-spacing: 0.3px; }
-.evo-model-item { text-align: left; padding: 6px 10px; border: none; background: none; border-radius: 8px; color: var(--color-text-secondary); font-size: 13px; cursor: pointer; }
-.evo-model-item:hover { background: var(--hover-bg); color: var(--color-text-primary); }
-.evo-model-item[data-active] { background: var(--hover-bg); color: var(--color-text-primary); font-weight: 600; }
+.evo-tier-picker { display: flex; flex-direction: column; gap: 12px; }
+.evo-tier-list { display: flex; flex-direction: column; gap: 10px; }
+.evo-tier-option { display: flex; flex-direction: column; gap: 7px; width: 100%; text-align: left; padding: 12px 16px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-background); color: var(--color-text-primary); cursor: pointer; transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; }
+.evo-tier-option:hover:not(:disabled) { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 5%, var(--color-background)); }
+.evo-tier-option[data-active] { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); }
+.evo-tier-option:disabled { opacity: 0.55; cursor: not-allowed; }
+.evo-tier-option-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.evo-tier-option-name { font-size: 14px; font-weight: 700; }
+.evo-tier-option-desc { font-size: 12px; color: var(--color-text-tertiary); }
+.evo-tier-option-current { margin-left: auto; padding: 1px 9px; border-radius: 999px; background: var(--brand-solid); color: var(--brand-foreground); font-size: 11px; font-weight: 600; }
+.evo-tier-option-detail { font-size: 12.5px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ── 业务面板（记忆/调度/团队/通道/技能）── */
 .evo-panel { max-width: 760px; margin: 0 auto; padding: 28px 28px 40px; }
 .evo-panel-head { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; color: var(--color-text-primary); margin-bottom: 20px; }
@@ -612,7 +619,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-resize:hover::before, .evo-composer-resize[data-dragging]::before { background: var(--brand); width: 44px; }
 .evo-composer-status { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); flex-wrap: wrap; }
 /* 当前工作路径（§25.4）：单行省略 + tooltip 完整路径 */
-.evo-cwd { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-tertiary); cursor: default; }
+.evo-cwd { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--color-text-tertiary); cursor: default; }
 .evo-cwd:hover { color: var(--color-text-secondary); }
 .evo-status-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: var(--hover-bg); color: var(--color-text-secondary); font-size: 11px; }
 .evo-status-model { border: none; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
@@ -623,7 +630,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-status-full { color: var(--color-error); }
 .evo-stats-line { display: flex; align-items: center; gap: 8px; padding: 6px 14px 9px; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 会话统计行：与输入框同宽，位于圆角框外部正下方、水平居中、紧贴。 */
-.evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: var(--chat-max-width); margin: 0 auto; display: flex; align-items: center; gap: 10px; }
+.evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: 75%; margin: 8px auto 0; display: flex; align-items: center; gap: 10px; }
 .evo-composer-stats .evo-statusbar { flex: 1 1 auto; min-width: 0; width: auto; height: auto; min-height: 16px; padding: 0; border-top: 0; background: transparent; flex-wrap: wrap; row-gap: 0; overflow: visible; white-space: normal; line-height: 16px; justify-content: center; }
 .evo-composer-stats .evo-statusbar-empty { line-height: 16px; }
 /* 模型徽章：品牌色强调、输入框内右下侧（工具栏 spacer 之后、发送按钮之前），点击切换模型 */
@@ -639,8 +646,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-perm .evo-dropdown-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
 .evo-composer-perm .evo-dropdown-value { flex: 0 1 auto; }
 .evo-stats-sep { color: var(--color-border); margin-right: 8px; }
-/* ── 插件清单 ── */
-.evo-plugin-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; width: 100%; max-width: 560px; }
+/* ── 插件清单：自适应多列（窄 1~2 列、宽屏最多 4 列），撑满可用宽度、可垂直滚动 ── */
+.evo-plugin-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 6px 10px; max-height: 180px; overflow-y: auto; width: 100%; align-items: stretch; }
 .evo-settings-modal { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .evo-settings-head { padding: 10px 14px; border-bottom: 1px solid var(--color-border-light); }
 .evo-btn-back { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: transparent; color: var(--color-text-primary); font-size: 13px; cursor: pointer; font: inherit; }
@@ -678,8 +685,9 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-assign-tier-head { display: flex; align-items: baseline; gap: 8px; }
 .evo-assign-tier-name { font-weight: 600; font-size: 13px; color: var(--color-text-primary); }
 .evo-assign-tier-desc { font-size: 12px; color: var(--color-text-tertiary); }
-.evo-assign-grid { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 10px; align-items: end; }
-.evo-assign-grid.tier { grid-template-columns: 1fr 1.5fr 1fr; }
+.evo-assign-grid { display: grid; grid-template-columns: 150px 220px 120px; gap: 10px; align-items: end; }
+.evo-assign-grid.tier { grid-template-columns: 150px 220px 120px; }
+.evo-assign-grid.no-reasoning { grid-template-columns: 150px 220px; }
 .evo-assign-grid .evo-btn { height: 28px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
 .evo-assign-actions { display: flex; justify-content: flex-start; gap: 10px; }
 .evo-assign-migrate { font-size: 12px; color: var(--color-warning); line-height: 1.5; }
@@ -694,11 +702,16 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-key-input { font-family: ui-monospace, Consolas, monospace; }
 .evo-llm-add { align-self: flex-start; }
 .evo-llm-new { border-style: dashed; border-color: var(--color-border); }
-.evo-llm-new-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+.evo-llm-new-grid { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: start; }
 .evo-llm-new-grid .evo-setting-field { gap: 4px; }
-.evo-llm-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+.evo-llm-edit-grid { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: start; }
 .evo-llm-edit-grid .evo-setting-field { gap: 4px; }
-.evo-llm-span2 { grid-column: 1 / -1; }
+.evo-llm-span2 { flex: 1 1 100%; }
+.evo-llm-url { flex: 0 0 360px; }
+.evo-llm-key { flex: 0 0 460px; }
+.evo-llm-name { flex: 0 0 200px; }
+.evo-llm-id { flex: 0 0 200px; }
+.evo-llm-proto { flex: 0 0 160px; }
 .evo-llm-new-select { width: 100%; }
 /* 设置面板的推理强度选择框：紧凑高度，避免撑开卡片留白 */
 .evo-select-compact { flex: 0 0 auto; width: auto; min-width: 112px; padding: 3px 8px; font-size: 12px; border-radius: 7px; height: 28px; line-height: 20px; }
@@ -715,11 +728,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-dropdown-option svg { width: 14px; height: 14px; flex: 0 0 auto; }
 .evo-dropdown-option span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 统一「已获取模型」：胶囊卡片按字母序排列 */
-.evo-llm-fetched { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
+.evo-llm-fetched { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
 .evo-llm-fetched-head { display: flex; align-items: center; gap: 8px; }
 .evo-llm-fetched-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
 .evo-llm-fetched-count { font-size: 11.5px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
-.evo-llm-model-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.evo-llm-model-pills { display: flex; flex-wrap: wrap; gap: 10px 8px; }
 .evo-llm-model-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 12px; border: 1px solid var(--color-border-light); border-radius: 999px; background: var(--color-surface); }
 .evo-llm-model-pill .evo-llm-model-id { flex: 0 1 auto; min-width: 0; max-width: 260px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-llm-model-n { flex: 0 0 auto; min-width: 16px; text-align: center; font-size: 10.5px; line-height: 1; padding: 2px 5px; border-radius: 999px; background: var(--color-border-light); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
@@ -1563,7 +1576,9 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-editor .toastui-editor-contents pre { background: var(--hover-bg); border-color: var(--color-border-light); }
 .evo-composer-editor .toastui-editor-contents code { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-composer-editor .toastui-editor-contents a { color: var(--brand); }
-.evo-composer-markdown-state { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-tertiary); font-size: 11px; }
+.evo-composer-markdown-state { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-tertiary); font-size: 11px; border: 0; background: none; padding: 2px 6px; border-radius: 6px; cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+.evo-composer-markdown-state:hover { background: rgba(128, 128, 128, 0.16); color: var(--color-text-secondary); }
+.evo-composer-markdown-state[data-on] { color: var(--brand); }
 .evo-composer-markdown-state::before { content: 'M'; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 5px; color: var(--brand); font-size: 10px; font-weight: 700; }
 .evo-composer-markdown-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 24px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--color-text-tertiary); cursor: pointer; transition: color .15s ease, background-color .15s ease, border-color .15s ease; }
 .evo-composer-markdown-toggle svg { width: 14px; height: 14px; }

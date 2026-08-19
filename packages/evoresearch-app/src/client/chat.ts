@@ -34,6 +34,69 @@ const SUGGESTED_PROMPTS = [
   'Analyze workspace files',
 ]
 
+/** 自适应工作路径：可用宽度放得下就完整显示；放不下时保留头尾路径段、中间省略（省略号位于两段分隔符之间）。 */
+function CwdPath({ path }: { path: string }) {
+  const ref = useRef<HTMLSpanElement | null>(null)
+  const [text, setText] = useState(path)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el === null) return
+
+    const splitParts = (p: string): string[] => {
+      const parts: string[] = []
+      let cur = ''
+      for (const ch of p) {
+        if (ch === '/' || ch === '\\') { parts.push(cur, ch); cur = '' }
+        else cur += ch
+      }
+      parts.push(cur)
+      return parts
+    }
+    const parts = splitParts(path)
+    const segCount = Math.ceil(parts.length / 2)
+
+    const build = (keep: number): string => {
+      const headKeep = Math.ceil(keep / 2)
+      const tailKeep = Math.floor(keep / 2)
+      const headEnd = 2 * headKeep - 1
+      const tailStart = parts.length - (2 * tailKeep - 1)
+      const headPart = parts.slice(0, headEnd).join('')
+      const tailPart = parts.slice(Math.max(tailStart, 0)).join('')
+      const sep = (headEnd < parts.length && parts[headEnd] !== '')
+        ? parts[headEnd]
+        : (tailStart > 0 && parts[tailStart - 1] !== '') ? parts[tailStart - 1] : '\\'
+      return `${headPart}${sep}…${sep}${tailPart}`
+    }
+
+    const render = () => {
+      const avail = el.clientWidth
+      el.textContent = path
+      if (avail <= 0 || segCount < 2 || el.scrollWidth <= avail + 1) {
+        setText(path)
+        return
+      }
+      let lo = 2
+      let hi = segCount - 1
+      let best = 2
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        el.textContent = build(mid)
+        if (el.scrollWidth <= avail + 1) { best = mid; lo = mid + 1 }
+        else hi = mid - 1
+      }
+      setText(build(best))
+    }
+
+    render()
+    const ro = new ResizeObserver(render)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [path])
+
+  return jsx('span', { ref, className: 'evo-cwd', title: path, children: text })
+}
+
 /** 历史分页（移植规范 §9）：默认每页 100 条；?pageSize=N（2..500）用于调试。 */
 const DEFAULT_PAGE_SIZE = 100
 function pageSizeFromUrl(): number {
@@ -1575,9 +1638,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('span', { className: 'evo-composer-dot', 'data-busy': running || undefined }),
                   jsx('span', { title: currentTitle === null ? t('noActiveConversationHint') : undefined, children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
                   jsx(SessionStatusLine, { session }),
-                  // 当前工作路径（§25.4）：与模型行同行右对齐、单行省略、tooltip 完整路径
-                  cwd !== null && jsx('span', { className: 'evo-cwd', title: cwd, children: cwd }),
-                  jsx('span', { style: { flex: 1 } }),
+                  // 当前工作路径（§25.4）：自适应宽度、中间省略、tooltip 完整路径
+                  cwd !== null && jsx(CwdPath, { path: cwd }),
+                  jsx('span', { style: cwd !== null ? { flex: '0 0 12px' } : { flex: 1 } }),
                   // 停止本轮（官方 session.cancel；host 保留排队消息）
                   running && jsx('button', {
                     type: 'button',
@@ -1587,8 +1650,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     onClick: stopTurn,
                     children: jsx(Square, {}),
                   }),
-                  jsx('span', {
+                  jsx('button', {
+                    type: 'button',
                     className: 'evo-composer-markdown-state',
+                    'data-on': markdownToolbarOpen || undefined,
+                    title: markdownToolbarOpen ? t('hideMarkdownToolbar') : t('showMarkdownToolbar'),
+                    'aria-label': t('markdownWysiwyg'),
+                    'aria-pressed': markdownToolbarOpen || undefined,
+                    onClick: toggleMarkdownToolbar,
                     children: t('markdownWysiwyg'),
                   }),
                   jsx('button', {
