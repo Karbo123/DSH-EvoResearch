@@ -8,11 +8,22 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
-import ToastEditor, { type Editor as ToastEditorInstance } from '@toast-ui/editor'
+import { Editor, rootCtx, defaultValueCtx, commandsCtx, editorViewCtx, parserCtx } from '@milkdown/core'
+import { TextSelection } from '@milkdown/prose/state'
+import {
+  commonmark,
+  wrapInHeadingCommand, toggleStrongCommand, toggleEmphasisCommand,
+  insertHrCommand, wrapInBlockquoteCommand, wrapInBulletListCommand, wrapInOrderedListCommand,
+  toggleLinkCommand, toggleInlineCodeCommand, createCodeBlockCommand,
+} from '@milkdown/preset-commonmark'
+import { gfm, insertTableCommand, toggleStrikethroughCommand } from '@milkdown/preset-gfm'
+import { history as milkdownHistory } from '@milkdown/plugin-history'
+import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import {
   Paperclip, ShieldCheck, Send, Wrench, User, Copy, Check, PenLine,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
   ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History, GitBranch,
+  Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2,
 } from 'lucide-react'
 import { t } from './i18n'
 import { toast } from './toast'
@@ -575,7 +586,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   const listRef = useRef<HTMLDivElement | null>(null)
   const composerEditorHostRef = useRef<HTMLDivElement | null>(null)
-  const composerEditorRef = useRef<ToastEditorInstance | null>(null)
+  const composerEditorRef = useRef<Editor | null>(null)
+  const composerMarkdownRef = useRef(input)
   const submitRef = useRef<() => void>(() => {})
   const candidatesRef = useRef<Candidate[]>([])
   const activeIndexRef = useRef(0)
@@ -588,10 +600,79 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const suppressCandidateTriggerRef = useRef(false)
   const runningRef = useRef(running)
   runningRef.current = running
+  // Milkdown 命令执行辅助：向编辑器动作上下文取 commandsCtx 并执行命令。
+  const runCommand = (command: any, payload?: any) => {
+    composerEditorRef.current?.action((ctx) => {
+      // $command 导出的是插件函数，命令 key 在其 .key（CmdKey）上；
+      // CommandManager 按该 key（或它的字符串名）查找已注册命令。
+      const key = typeof command === 'string' ? command : (command?.key ?? command)
+      ctx.get(commandsCtx).call(key, payload)
+    })
+  }
+  // 聚焦输入框（编辑器实例就绪后）。
+  const focusEditor = () => {
+    composerEditorRef.current?.action((ctx) => ctx.get(editorViewCtx).focus())
+  }
+  // Typora 式代码块退出：光标位于代码块内的空行时按 Enter 跳出代码块。
+  // 必须在捕获阶段拦截（ProseMirror 的 keydown 处理不检查 defaultPrevented）。
+  const tryExitCodeBlock = (view: any): boolean => {
+    const { state } = view
+    if (!state.selection.empty) return false
+    const { $from } = state.selection
+    const parent = $from.parent
+    if (parent.type.name !== 'code_block') return false
+    const start = $from.start()
+    const cursor = $from.pos
+    const before = state.doc.textBetween(start, cursor)
+    // 代码块首行（尚未换行）不退出，保证刚创建代码块时能直接输入代码；
+    // 一旦光标落在空行（前一字符是换行符），按 Enter 即跳出代码块。
+    if (!before.endsWith('\n')) return false
+    let b = before
+    while (b.endsWith('\n')) b = b.slice(0, -1)
+    let a = state.doc.textBetween(cursor, $from.end())
+    while (a.startsWith('\n')) a = a.slice(1)
+    const schema = state.schema
+    const pos = $from.before()
+    const nodes: Array<any> = []
+    if (b !== '') nodes.push(schema.nodes.code_block.create(parent.attrs, schema.text(b)))
+    nodes.push(schema.nodes.paragraph.create(null))
+    if (a !== '') nodes.push(schema.nodes.code_block.create(parent.attrs, schema.text(a)))
+    const tr = state.tr.replaceWith(pos, pos + parent.nodeSize, nodes)
+    let paraPos = pos
+    if (b !== '') paraPos += 2 + b.length
+    const resolved = tr.doc.resolve(Math.min(paraPos + 1, tr.doc.content.size))
+    tr.setSelection(TextSelection.near(resolved))
+    view.dispatch(tr)
+    view.focus()
+    return true
+  }
+  // 光标移到文档末尾（ProseMirror 文本选择）。
+  const moveCursorToEnd = () => {
+    composerEditorRef.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      const doc = view.state.doc
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, doc.content.size)))
+      view.focus()
+    })
+  }
+  // 用 Markdown 文本整体替换编辑器内容（不进入撤销历史，避免历史浏览污染 undo 栈）。
+  const replaceEditorMarkdown = (value: string) => {
+    composerEditorRef.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      const parser = ctx.get(parserCtx)
+      const doc = parser(value)
+      view.dispatch(
+        view.state.tr
+          .replaceWith(0, view.state.doc.content.size, doc.content)
+          .setMeta('addToHistory', false),
+      )
+    })
+  }
   const setComposerMarkdown = (value: string, cursorToEnd = false) => {
     setInput(value)
-    const editor = composerEditorRef.current
-    if (editor !== null && editor.getMarkdown() !== value) editor.setMarkdown(value, cursorToEnd)
+    composerMarkdownRef.current = value
+    if (composerEditorRef.current !== null) replaceEditorMarkdown(value)
+    if (cursorToEnd) requestAnimationFrame(() => moveCursorToEnd())
   }
   // 滚动容器 = 中间栏（消息区内容自适应、页面整体滚动；输入框 sticky 常驻底部）
   const scrollBox = () => document.querySelector<HTMLElement>('.evo-center')
@@ -779,10 +860,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     historyDraftRef.current = null
     setComposerMarkdown(text, true)
     setTrigger(null)
-    const editor = composerEditorRef.current
-    if (editor !== null) {
-      requestAnimationFrame(() => { editor.focus(); editor.moveCursorToEnd(true) })
-    }
+    requestAnimationFrame(() => moveCursorToEnd())
   }
 
   // ── §回溯/编辑重发：fork 截断子会话 + git 工作区恢复（index.ts 处理 promote/open）──
@@ -854,8 +932,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
 
   const applyCandidate = (c: Candidate) => {
-    const editor = composerEditorRef.current
-    const current = editor?.getMarkdown() ?? input
+    const current = composerMarkdownRef.current || input
     const pos = current.length
     const t = detectTrigger(current, pos)
     let next: string
@@ -871,7 +948,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     setComposerMarkdown(next, true)
     setTrigger(null)
     setHistoryIndex(-1)
-    requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
+    requestAnimationFrame(() => moveCursorToEnd())
   }
   applyCandidateRef.current = applyCandidate
 
@@ -880,7 +957,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (entries.length === 0) return
     const current = historyIndexRef.current
     if (delta === 1 && current === -1) return
-    if (delta === -1 && current === -1) historyDraftRef.current = composerEditorRef.current?.getMarkdown() ?? inputRef.current
+    if (delta === -1 && current === -1) historyDraftRef.current = composerMarkdownRef.current || inputRef.current
     let next: number
     if (delta === -1) {
       next = current === -1 ? 0 : Math.min(current + 1, entries.length - 1)
@@ -893,8 +970,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       historyDraftRef.current = null
       setHistoryIndex(-1)
       setComposerMarkdown(draft, true)
-      const editor = composerEditorRef.current
-      requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
+      requestAnimationFrame(() => moveCursorToEnd())
       return
     }
     {
@@ -904,8 +980,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       setHistoryIndex(next)
       setComposerMarkdown(selected, true)
     }
-    const editor = composerEditorRef.current
-    requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
+    requestAnimationFrame(() => moveCursorToEnd())
   }
 
   // ── 历史分页与滚动行为（移植规范 §9）──
@@ -997,7 +1072,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
 
   const submit = async () => {
-    const rawInput = composerEditorRef.current?.getMarkdown() ?? input
+    const rawInput = composerMarkdownRef.current || input
     const text = trimPromptEdges(rawInput)
     // Pending 审批时禁用发送（§21.2：避免新消息污染待审批工具调用）
     if (!text || pendingApprovals.length > 0) return
@@ -1047,83 +1122,122 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
 
   submitRef.current = () => { void submit() }
 
-  // Toast UI 的编辑器是唯一的输入 DOM；React state 只保存其 Markdown 序列化结果。
+  // Milkdown 所见即所得编辑器：敲下 Markdown 语法即刻渲染（# 123 → H1、- item → 列表）。
+  // React state 只保存其 Markdown 序列化结果；编辑器实例在异步 create 完成后挂载。
   useEffect(() => {
     const host = composerEditorHostRef.current
     if (host === null) return
-    const editor = new ToastEditor({
-      el: host,
-      height: '112px',
-      minHeight: '72px',
-      initialValue: input,
-      initialEditType: 'wysiwyg',
-      hideModeSwitch: true,
-      usageStatistics: false,
-      autofocus: false,
-      toolbarItems: [
-        ['heading', 'bold', 'italic', 'strike'],
-        ['hr', 'quote', 'ul', 'ol', 'task'],
-        ['table', 'link', 'code', 'codeblock'],
-      ],
-      events: {
-        change: () => {
-          const next = editor.getMarkdown()
-          setInput(next)
-          inputRef.current = next
-          if (!historyNavigationRef.current) {
-            historyIndexRef.current = -1
-            historyDraftRef.current = null
-            setHistoryIndex(-1)
-          }
-          if (!suppressCandidateTriggerRef.current) setTrigger(detectTrigger(next, next.length))
-        },
-        keydown: (_editorType, event) => {
-          const keepsCandidateHistory = event.key === 'ArrowUp'
-            || event.key === 'ArrowDown'
-            || event.key === 'Tab'
-          if (suppressCandidateTriggerRef.current && !keepsCandidateHistory) suppressCandidateTriggerRef.current = false
-          const currentCandidates = candidatesRef.current
-          const keepsHistoryNavigation = event.key === 'ArrowUp'
-            || event.key === 'ArrowDown'
-            || event.key === 'Tab'
-            || event.key === 'Escape'
-            || (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter')
-          if (historyIndexRef.current !== -1 && !keepsHistoryNavigation) {
-            historyNavigationRef.current = false
-            historyIndexRef.current = -1
-            historyDraftRef.current = null
-            setHistoryIndex(-1)
-          }
-          const historyNavigation = triggerKindRef.current === 'history'
-            || currentCandidates.some((candidate) => candidate.kind === 'history')
-            || suppressCandidateTriggerRef.current
-            || inputRef.current === ''
-          if (historyNavigation && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-            event.preventDefault()
-            browseHistory(event.key === 'ArrowUp' ? -1 : 1)
-            return
-          }
-          if (currentCandidates.length > 0) {
-            if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((index) => (index + 1) % currentCandidates.length); return }
-            if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((index) => (index - 1 + currentCandidates.length) % currentCandidates.length); return }
-            if (event.key === 'Tab') { event.preventDefault(); applyCandidateRef.current(currentCandidates[activeIndexRef.current] ?? currentCandidates[0]!); return }
-            if (event.key === 'Escape') { event.preventDefault(); setTrigger(null); return }
-          }
-          if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-            event.preventDefault()
-            submitRef.current()
-            return
-          }
-          if (event.key === 'Escape' && runningRef.current) {
-            event.preventDefault()
-            stopTurn()
-          }
-        },
-      },
+    let disposed = false
+    let keyCleanup: (() => void) | null = null
+    // 捕获阶段监听：空行回车退出代码块（需在 ProseMirror 处理 Enter 之前拦截）。
+    const onKeydownCapture = (event: KeyboardEvent) => {
+      if (event.isComposing || event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+      const instance = composerEditorRef.current
+      if (instance === null) return
+      const exited = instance.action((ctx) => tryExitCodeBlock(ctx.get(editorViewCtx)))
+      if (exited) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
+    }
+    const onKeydown = (event: KeyboardEvent) => {
+      const keepsCandidateHistory = event.key === 'ArrowUp'
+        || event.key === 'ArrowDown'
+        || event.key === 'Tab'
+      if (suppressCandidateTriggerRef.current && !keepsCandidateHistory) suppressCandidateTriggerRef.current = false
+      const currentCandidates = candidatesRef.current
+      const keepsHistoryNavigation = event.key === 'ArrowUp'
+        || event.key === 'ArrowDown'
+        || event.key === 'Tab'
+        || event.key === 'Escape'
+        || (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter')
+      if (historyIndexRef.current !== -1 && !keepsHistoryNavigation) {
+        historyNavigationRef.current = false
+        historyIndexRef.current = -1
+        historyDraftRef.current = null
+        setHistoryIndex(-1)
+      }
+      const historyNavigation = triggerKindRef.current === 'history'
+        || currentCandidates.some((candidate) => candidate.kind === 'history')
+        || suppressCandidateTriggerRef.current
+        || inputRef.current === ''
+      if (historyNavigation && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault()
+        browseHistory(event.key === 'ArrowUp' ? -1 : 1)
+        return
+      }
+      if (currentCandidates.length > 0) {
+        if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((index) => (index + 1) % currentCandidates.length); return }
+        if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((index) => (index - 1 + currentCandidates.length) % currentCandidates.length); return }
+        if (event.key === 'Tab') { event.preventDefault(); applyCandidateRef.current(currentCandidates[activeIndexRef.current] ?? currentCandidates[0]!); return }
+        if (event.key === 'Escape') { event.preventDefault(); setTrigger(null); return }
+      }
+      if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault()
+        submitRef.current()
+        return
+      }
+      if (event.key === 'Escape' && runningRef.current) {
+        event.preventDefault()
+        stopTurn()
+      }
+    }
+    const editor = Editor.make()
+      .config((ctx) => {
+        ctx.set(rootCtx, host)
+        ctx.set(defaultValueCtx, input)
+        ctx.get(listenerCtx)
+          .markdownUpdated((_ctx, md) => {
+            composerMarkdownRef.current = md
+            setInput(md)
+            inputRef.current = md
+            if (!historyNavigationRef.current) {
+              historyIndexRef.current = -1
+              historyDraftRef.current = null
+              setHistoryIndex(-1)
+            }
+            if (!suppressCandidateTriggerRef.current) setTrigger(detectTrigger(md, md.length))
+          })
+      })
+      .use(commonmark)
+      .use(gfm)
+      .use(milkdownHistory)
+      .use(listener)
+      .create()
+    composerEditorRef.current = null
+    void editor.then((instance) => {
+      if (disposed) { void instance.destroy(); return }
+      composerEditorRef.current = instance
+      // 编辑器异步就绪前若已有外部写入（如建议 prompt 点击），补同步一次。
+      const pending = inputRef.current
+      if (pending !== '') {
+        composerMarkdownRef.current = pending
+        instance.action((ctx) => {
+          const view = ctx.get(editorViewCtx)
+          const parser = ctx.get(parserCtx)
+          const doc = parser(pending)
+          view.dispatch(
+            view.state.tr
+              .replaceWith(0, view.state.doc.content.size, doc.content)
+              .setMeta('addToHistory', false),
+          )
+        })
+      }
+      const dom = instance.action((ctx) => ctx.get(editorViewCtx).dom)
+      if (dom !== undefined && dom !== null) {
+        dom.addEventListener('keydown', onKeydownCapture, { capture: true })
+        dom.addEventListener('keydown', onKeydown)
+        keyCleanup = () => {
+          dom.removeEventListener('keydown', onKeydownCapture, { capture: true })
+          dom.removeEventListener('keydown', onKeydown)
+        }
+      }
     })
-    composerEditorRef.current = editor
     return () => {
-      editor.destroy()
+      disposed = true
+      keyCleanup?.()
+      const current = composerEditorRef.current
+      if (current !== null) void current.destroy()
       composerEditorRef.current = null
     }
   // The editor must be mounted once; its content is synchronized below.
@@ -1194,6 +1308,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const MARKDOWN_TOOLBAR_HEIGHT = 36
   const COMPOSER_BASE_MIN_HEIGHT = 112
   const [markdownToolbarOpen, setMarkdownToolbarOpen] = useState(false)
+  const [headingValue, setHeadingValue] = useState('0')
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkDraft, setLinkDraft] = useState('')
+  const HEADING_OPTIONS = [
+    { value: '0', label: t('mdParagraph') },
+    ...Array.from({ length: 6 }, (_unused, i) => ({ value: String(i + 1), label: `H${i + 1}` })),
+  ]
   const [composerHeight, setComposerHeight] = useState<number | null>(null)
   const composerResizeRef = useRef<{ startY: number; startH: number; moved: boolean } | null>(null)
   const composerResizeCleanupRef = useRef<(() => void) | null>(null)
@@ -1385,8 +1506,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       'aria-label': `${p}（${t('suggestionHint')}）`,
                       onClick: () => {
                         setComposerMarkdown(p, true)
-                        const editor = composerEditorRef.current
-                        requestAnimationFrame(() => { editor?.focus(); editor?.moveCursorToEnd(true) })
+                        requestAnimationFrame(() => moveCursorToEnd())
                       },
                       children: p,
                     }, p)),
@@ -1396,7 +1516,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     className: 'evo-welcome-prompt',
                     title: t('askAnything'),
                     'aria-label': t('askAnything'),
-                    onClick: () => composerEditorRef.current?.focus(),
+                    onClick: () => focusEditor(),
                     children: t('askAnything'),
                   }),
                   jsx(ResearchDashboard, { cwd }),
@@ -1682,7 +1802,139 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                 style: { height: `${composerHeight ?? (COMPOSER_BASE_MIN_HEIGHT + (markdownToolbarOpen ? MARKDOWN_TOOLBAR_HEIGHT : 0))}px` },
                 onPaste: onPasteImages,
                 children: [
-                  jsx('div', { ref: composerEditorHostRef, className: 'evo-composer-editor-host' }),
+                  jsxs('div', {
+                    className: 'evo-md-toolbar',
+                    children: [
+                      jsx(Dropdown, {
+                        value: headingValue,
+                        className: 'evo-md-heading',
+                        icon: Heading1,
+                        onChange: (v: string) => { setHeadingValue(v); runCommand(wrapInHeadingCommand, Number(v)) },
+                        options: HEADING_OPTIONS,
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdBold'),
+                        'aria-label': t('mdBold'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(toggleStrongCommand),
+                        children: jsx(Bold, {}),
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdItalic'),
+                        'aria-label': t('mdItalic'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(toggleEmphasisCommand),
+                        children: jsx(Italic, {}),
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdStrike'),
+                        'aria-label': t('mdStrike'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(toggleStrikethroughCommand),
+                        children: jsx(Strikethrough, {}),
+                      }),
+                      jsx('span', { className: 'evo-md-sep' }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdQuote'),
+                        'aria-label': t('mdQuote'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(wrapInBlockquoteCommand),
+                        children: jsx(Quote, {}),
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdBulletList'),
+                        'aria-label': t('mdBulletList'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(wrapInBulletListCommand),
+                        children: jsx(List, {}),
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdOrderedList'),
+                        'aria-label': t('mdOrderedList'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(wrapInOrderedListCommand),
+                        children: jsx(ListOrdered, {}),
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdHr'),
+                        'aria-label': t('mdHr'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(insertHrCommand),
+                        children: jsx(Minus, {}),
+                      }),
+                      jsx('span', { className: 'evo-md-sep' }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdTable'),
+                        'aria-label': t('mdTable'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(insertTableCommand, { row: 2, col: 2 }),
+                        children: jsx(Table2, {}),
+                      }),
+                      linkOpen
+                        ? jsx('input', {
+                            className: 'evo-md-link-input',
+                            autoFocus: true,
+                            value: linkDraft,
+                            placeholder: t('mdLinkPlaceholder'),
+                            onChange: (e: { currentTarget: { value: string } }) => setLinkDraft(e.currentTarget.value),
+                            onBlur: () => { setLinkOpen(false); setLinkDraft('') },
+                            onKeyDown: (e: { key: string; currentTarget: { value: string }; preventDefault: () => void }) => {
+                              if (e.key === 'Enter') {
+                                const href = e.currentTarget.value.trim()
+                                if (href !== '') runCommand(toggleLinkCommand, { href })
+                                setLinkOpen(false)
+                                setLinkDraft('')
+                                e.preventDefault()
+                              }
+                              if (e.key === 'Escape') { setLinkOpen(false); setLinkDraft('') }
+                            },
+                          })
+                        : jsx('button', {
+                            type: 'button',
+                            className: 'evo-md-btn',
+                            title: t('mdLink'),
+                            'aria-label': t('mdLink'),
+                            onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                            onClick: () => setLinkOpen(true),
+                            children: jsx(LinkIcon, {}),
+                          }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdCode'),
+                        'aria-label': t('mdCode'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(toggleInlineCodeCommand),
+                        children: jsx(Code, {}),
+                      }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-md-btn',
+                        title: t('mdCodeBlock'),
+                        'aria-label': t('mdCodeBlock'),
+                        onMouseDown: (e: { preventDefault: () => void }) => e.preventDefault(),
+                        onClick: () => runCommand(createCodeBlockCommand, ''),
+                        children: jsx(Code2, {}),
+                      }),
+                    ],
+                  }),
+                  jsx('div', { ref: composerEditorHostRef, className: 'evo-composer-editor-host evo-milkdown' }),
                   input === '' && jsx('div', {
                     className: 'evo-composer-placeholder',
                     'aria-hidden': true,

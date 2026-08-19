@@ -1547,35 +1547,50 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-ews-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-secondary); flex-shrink: 0; white-space: nowrap; }
 .evo-ews-badge.ref { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
 .evo-ews-badge.copy { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); }
-/* ── Toast UI WYSIWYG composer ── */
-.evo-composer-editor { position: relative; flex: 0 0 auto; min-height: 112px; height: 112px; overflow: hidden; }
-.evo-composer-editor-host { height: 100%; min-height: 0; overflow: hidden; }
+/* ── Milkdown 所见即所得 composer ── */
+.evo-composer-editor { position: relative; display: flex; flex-direction: column; flex: 0 0 auto; min-height: 112px; height: 112px; overflow: hidden; }
+.evo-composer-editor-host { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .evo-composer-placeholder { position: absolute; top: 10px; left: 14px; right: 14px; color: var(--color-text-placeholder); font: inherit; font-size: 14.5px; line-height: 1.55; pointer-events: none; user-select: none; white-space: pre-wrap; }
 .evo-composer-editor[data-markdown-toolbar-open] .evo-composer-placeholder { top: 46px; }
-.evo-composer-editor .toastui-editor-defaultUI { height: 100% !important; min-height: 0 !important; border: 0; border-radius: 0; background: transparent; color: var(--color-text-primary); font-family: inherit; }
-.evo-composer-editor .toastui-editor-toolbar { display: flex; height: 0; min-height: 0; padding: 0; border: 0; background: transparent; overflow: hidden; visibility: hidden; }
-.evo-composer-editor[data-markdown-toolbar-open] .toastui-editor-toolbar { height: 36px; min-height: 36px; visibility: visible; }
-.evo-composer-editor .toastui-editor-defaultUI-toolbar { display: flex; width: 100%; height: 36px; min-height: 36px; box-sizing: border-box; padding: 4px 10px; border: 0; background: transparent; }
-.evo-composer-editor .toastui-editor-toolbar-group { display: flex; flex: 0 0 auto; height: 28px; margin: 0 3px 0 0; border-right-color: var(--color-border-light); }
-.evo-composer-editor .toastui-editor-toolbar .more { display: none; }
-.evo-composer-editor .toastui-editor-toolbar button { width: 28px; height: 28px; border: 1px solid transparent; border-radius: 7px; background-color: transparent; color: var(--color-text-secondary); }
-.evo-composer-editor .toastui-editor-toolbar button:not(:disabled):hover { background-color: var(--hover-bg); }
-.evo-composer-editor .toastui-editor-toolbar-icons { opacity: .72; }
-.evo-composer-editor .toastui-editor-toolbar button.active { background-color: color-mix(in srgb, var(--brand) 14%, transparent); }
-.evo-composer-editor .toastui-editor-toolbar button.active .toastui-editor-toolbar-icons { opacity: 1; }
-.evo-composer-editor .toastui-editor-main { min-height: 0; height: 100%; background: transparent; }
-.evo-composer-editor .toastui-editor-main-container { height: 100% !important; }
-.evo-composer-editor .toastui-editor-ww-container { height: 100% !important; background: transparent; }
-.evo-composer-editor .toastui-editor-ww-container > .toastui-editor { height: 100% !important; min-height: 0; }
-.evo-composer-editor .toastui-editor-ww-container .toastui-editor-contents { height: 100%; overflow-y: auto; padding: 10px 14px 12px; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; }
-.evo-composer-editor .ProseMirror { color: var(--color-text-primary); }
-.evo-composer-editor .toastui-editor-contents p { margin: 0 0 7px; }
-.evo-composer-editor .toastui-editor-contents p:last-child { margin-bottom: 0; }
-.evo-composer-editor .toastui-editor-contents h1, .evo-composer-editor .toastui-editor-contents h2, .evo-composer-editor .toastui-editor-contents h3 { color: var(--color-text-primary); border-bottom-color: var(--color-border-light); }
-.evo-composer-editor .toastui-editor-contents blockquote { border-left-color: var(--brand); color: var(--color-text-secondary); }
-.evo-composer-editor .toastui-editor-contents pre { background: var(--hover-bg); border-color: var(--color-border-light); }
-.evo-composer-editor .toastui-editor-contents code { background: var(--hover-bg); color: var(--color-text-primary); }
-.evo-composer-editor .toastui-editor-contents a { color: var(--brand); }
+.evo-md-toolbar { display: flex; flex: 0 0 0; align-items: center; gap: 2px; height: 0; min-height: 0; padding: 0 10px; overflow: hidden; border-bottom: 0 solid transparent; }
+.evo-composer-editor[data-markdown-toolbar-open] .evo-md-toolbar { flex-basis: 36px; height: 36px; border-bottom-width: 1px; border-bottom-color: var(--color-border-light); }
+.evo-md-btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 7px; background-color: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background-color 0.15s, color 0.15s, border-color 0.15s; }
+.evo-md-btn svg { width: 15px; height: 15px; }
+.evo-md-btn:hover { background-color: var(--hover-bg); color: var(--color-text-primary); }
+.evo-md-btn:focus-visible { outline: none; border-color: var(--color-border); color: var(--brand); }
+.evo-md-sep { flex: 0 0 auto; width: 1px; height: 18px; margin: 0 5px; background: var(--color-border-light); }
+.evo-md-toolbar .evo-md-heading { flex: 0 0 auto; width: auto; }
+.evo-md-toolbar .evo-md-heading .evo-dropdown-btn { width: auto; height: 28px; padding: 0 7px; font-size: 12px; color: var(--color-text-secondary); }
+.evo-md-toolbar .evo-md-heading .evo-dropdown-btn svg { width: 14px; height: 14px; }
+.evo-md-link-input { flex: 0 1 190px; min-width: 0; height: 28px; padding: 0 9px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-background); color: var(--color-text-primary); font: inherit; font-size: 12.5px; }
+.evo-md-link-input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 18%, transparent); }
+.evo-composer-editor-host .milkdown { height: 100%; min-height: 0; }
+.evo-composer-editor-host .milkdown .ProseMirror { height: 100%; overflow-y: auto; padding: 10px 14px 12px; outline: none; color: var(--color-text-primary); font-family: inherit; font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; caret-color: var(--color-text-primary); }
+.evo-composer-editor-host .milkdown .ProseMirror p { margin: 0 0 7px; }
+.evo-composer-editor-host .milkdown .ProseMirror p:last-child { margin-bottom: 0; }
+.evo-composer-editor-host .milkdown .ProseMirror h1, .evo-composer-editor-host .milkdown .ProseMirror h2, .evo-composer-editor-host .milkdown .ProseMirror h3, .evo-composer-editor-host .milkdown .ProseMirror h4 { color: var(--color-text-primary); margin: 10px 0 6px; line-height: 1.3; }
+.evo-composer-editor-host .milkdown .ProseMirror h1 { font-size: 20px; border-bottom: 1px solid var(--color-border-light); padding-bottom: 4px; }
+.evo-composer-editor-host .milkdown .ProseMirror h2 { font-size: 17px; border-bottom: 1px solid var(--color-border-light); padding-bottom: 3px; }
+.evo-composer-editor-host .milkdown .ProseMirror h3 { font-size: 15.5px; }
+.evo-composer-editor-host .milkdown .ProseMirror blockquote { margin: 6px 0; padding: 2px 12px; border-left: 3px solid var(--brand); color: var(--color-text-secondary); }
+.evo-composer-editor-host .milkdown .ProseMirror pre { margin: 6px 0; padding: 8px 12px; background: var(--hover-bg); border: 1px solid var(--color-border-light); border-radius: 8px; overflow-x: auto; }
+.evo-composer-editor-host .milkdown .ProseMirror pre code { background: transparent; padding: 0; font-size: 12.5px; }
+.evo-composer-editor-host .milkdown .ProseMirror code { background: var(--hover-bg); color: var(--color-text-primary); padding: 1px 5px; border-radius: 5px; font-size: 0.88em; font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace; }
+.evo-composer-editor-host .milkdown .ProseMirror a { color: var(--brand); }
+.evo-composer-editor-host .milkdown .ProseMirror ul, .evo-composer-editor-host .milkdown .ProseMirror ol { margin: 4px 0; padding-left: 22px; }
+.evo-composer-editor-host .milkdown .ProseMirror li { margin: 1px 0; }
+.evo-composer-editor-host .milkdown .ProseMirror li[data-list-type="bullet"] { list-style: disc; }
+.evo-composer-editor-host .milkdown .ProseMirror li[data-list-type="ordered"] { list-style: decimal; }
+.evo-composer-editor-host .milkdown .ProseMirror li[data-item-type="task"] { list-style: none; display: flex; align-items: flex-start; gap: 6px; }
+.evo-composer-editor-host .milkdown .ProseMirror li[data-item-type="task"]::before { content: ''; flex: 0 0 auto; width: 13px; height: 13px; margin-top: 3px; border: 1.5px solid var(--color-text-tertiary); border-radius: 4px; background: var(--color-background); cursor: pointer; }
+.evo-composer-editor-host .milkdown .ProseMirror li[data-item-type="task"][data-checked="true"]::before { background: var(--brand); border-color: var(--brand); }
+.evo-composer-editor-host .milkdown .ProseMirror li[data-item-type="task"][data-checked="true"] > p { text-decoration: line-through; color: var(--color-text-tertiary); }
+.evo-composer-editor-host .milkdown .ProseMirror table { border-collapse: collapse; margin: 6px 0; }
+.evo-composer-editor-host .milkdown .ProseMirror th, .evo-composer-editor-host .milkdown .ProseMirror td { border: 1px solid var(--color-border); padding: 4px 9px; font-size: 13px; }
+.evo-composer-editor-host .milkdown .ProseMirror th { background: var(--hover-bg); font-weight: 600; }
+.evo-composer-editor-host .milkdown .ProseMirror hr { margin: 10px 0; border: 0; border-top: 1px solid var(--color-border); }
+.evo-composer-editor-host .milkdown .ProseMirror .ProseMirror-selectednode { outline: 2px solid color-mix(in srgb, var(--brand) 45%, transparent); outline-offset: 1px; border-radius: 2px; }
+.evo-composer-editor-host .milkdown .ProseMirror .code-block::before { content: attr(data-language); display: block; margin-bottom: 4px; font-size: 10.5px; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.4px; }
 .evo-composer-markdown-state { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-tertiary); font-size: 11px; border: 0; background: none; padding: 2px 6px; border-radius: 6px; cursor: pointer; transition: background-color 0.15s, color 0.15s; }
 .evo-composer-markdown-state:hover { background: rgba(128, 128, 128, 0.16); color: var(--color-text-secondary); }
 .evo-composer-markdown-state[data-on] { color: var(--brand); }
@@ -1584,14 +1599,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-markdown-toggle svg { width: 14px; height: 14px; }
 .evo-composer-markdown-toggle:hover, .evo-composer-markdown-toggle:focus-visible { color: var(--brand); background: var(--hover-bg); border-color: var(--color-border-light); outline: none; }
 .evo-composer-markdown-toggle[data-on] { color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent); border-color: color-mix(in srgb, var(--brand) 28%, var(--color-border-light)); }
-html.dark .evo-composer-editor .toastui-editor-toolbar-icons { filter: invert(1); }
-html.dark .evo-composer-editor .toastui-editor-contents pre { background: color-mix(in srgb, var(--color-background) 72%, white 4%); }
-@media (prefers-reduced-motion: reduce) { .evo-composer-editor .toastui-editor-toolbar button { transition: none; } }
+html.dark .evo-composer-editor-host .milkdown .ProseMirror pre { background: color-mix(in srgb, var(--color-background) 72%, white 4%); }
+@media (prefers-reduced-motion: reduce) { .evo-composer-editor .evo-md-btn { transition: none; } }
 @media (max-width: 620px) {
-  .evo-composer-editor .toastui-editor-toolbar { padding-inline: 5px; overflow-x: auto; }
-  .evo-composer-editor .toastui-editor-defaultUI-toolbar { padding-inline: 5px; }
-  .evo-composer-editor .toastui-editor-toolbar-group { margin-right: 1px; }
-  .evo-composer-editor .toastui-editor-toolbar button { width: 25px; }
+  .evo-composer-editor .evo-md-toolbar { padding-inline: 5px; overflow-x: auto; }
+  .evo-composer-editor .evo-md-btn { width: 26px; }
   .evo-composer-markdown-state { display: none; }
   .evo-composer-markdown-toggle { width: 26px; height: 26px; }
 }

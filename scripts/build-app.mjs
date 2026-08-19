@@ -48,17 +48,6 @@ function generateKatexCss() {
   console.log(`[build-app] katex css → src/client/katex-css.ts（${Math.round(inlined.length / 1024)} KB，字体内联）`)
 }
 
-/** Toast UI Editor 的基础 CSS 也以内联字符串注入，避免插件依赖额外静态资源。 */
-function generateToastUiCss() {
-  const css = readFileSync(join(ROOT, 'node_modules', '@toast-ui', 'editor', 'dist', 'toastui-editor-only.css'), 'utf8')
-  writeFileSync(
-    join(PKG, 'src', 'client', 'toastui-css.ts'),
-    `// 由 scripts/build-app.mjs 构建期生成（Toast UI Editor CSS），勿手改、勿入库。\nexport const TOASTUI_CSS = ${JSON.stringify(css)}\n`,
-    'utf8',
-  )
-  console.log(`[build-app] toastui css → src/client/toastui-css.ts（${Math.round(css.length / 1024)} KB）`)
-}
-
 async function buildNodeHalf() {
   // 包根：空 apply（官方 ui-* node half 同构）；真实运行时在 ./runtime 子路径
   await build({
@@ -97,7 +86,6 @@ async function buildNodeHalf() {
 async function buildClient() {
   // 生成 KaTeX CSS（字体内联为 data URL），供客户端注入
   generateKatexCss()
-  generateToastUiCss()
   // Chat Graph 的 ELK 布局独立打包为 Worker payload，再以内联字符串注入
   // client bundle。这样插件仍只需要 DSH 的单一 client.js 端点，布局不会
   // 回退到主线程，也不会依赖 WebView2 对额外静态资源路由的支持。

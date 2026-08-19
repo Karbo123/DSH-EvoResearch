@@ -19,7 +19,6 @@ import {
 } from 'lucide-react'
 import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
-import { TOASTUI_CSS } from './toastui-css'
 import { applyTheme, resolvedTheme, toggleTheme } from './theme'
 import { ThreadList, normalizeSessionsSnapshot, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
@@ -136,7 +135,6 @@ function installCss() {
   const sheets: Array<[string, string]> = [
     ['@evoresearch/dsh-app/workspace.css', CSS],
     ['@evoresearch/dsh-app/katex.css', KATEX_CSS],
-    ['@evoresearch/dsh-app/toastui.css', TOASTUI_CSS],
   ]
   for (const [tagId, css] of sheets) {
     if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) {
