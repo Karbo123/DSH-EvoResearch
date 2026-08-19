@@ -371,7 +371,7 @@ body { margin: 0; }
 .evo-insp-empty svg { width: 36px; height: 36px; color: var(--color-border); margin-bottom: 8px; }
 .evo-view { flex: 1; overflow-y: auto; }
 /* ── 消息列表 ── */
-.evo-msg-list { flex: none; height: auto; overflow: visible; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 10px; max-width: var(--chat-max-width); width: 100%; margin: 0 auto; position: relative; }
+.evo-msg-list { flex: none; height: auto; overflow: visible; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 10px; width: 60%; max-width: none; min-width: min(560px, 100%); margin: 0 auto; position: relative; }
 .evo-msg-error { padding: 10px 14px; border: 1px solid var(--color-error); border-radius: 10px; color: var(--color-error); font-size: 13px; background: color-mix(in srgb, var(--color-error) 8%, transparent); }
 .evo-useronly-hint { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border: 1px dashed color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 999px; color: var(--color-text-secondary); font-size: 12px; background: color-mix(in srgb, var(--brand) 7%, var(--color-surface)); cursor: pointer; transition: border-color 0.15s, color 0.15s; }
 .evo-useronly-hint:hover { border-color: var(--brand); color: var(--brand); }
@@ -386,8 +386,9 @@ body { margin: 0; }
 .evo-msg-user { flex-direction: row-reverse; }
 .evo-msg-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--color-avatar-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--color-text-secondary); }
 .evo-msg-avatar svg { width: 15px; height: 15px; }
-.evo-msg-body { min-width: 0; max-width: 78%; display: flex; flex-direction: column; gap: 4px; }
-.evo-msg-user-body { min-width: 0; max-width: 78%; }
+.evo-msg-body { min-width: 0; max-width: 50%; display: flex; flex-direction: column; gap: 4px; }
+.evo-msg-user-body { min-width: 0; max-width: 50%; }
+.evo-msg-user .evo-msg-stack { max-width: 50%; }
 .evo-msg-bubble { padding: 8px 14px; border-radius: 13px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .evo-msg-bubble-user { padding-block: 8px; line-height: 1.5; background: var(--color-user-message-bg); color: var(--color-user-message); border-top-right-radius: 4px; }
 .evo-msg-bubble-user .evo-md { line-height: 1.5; }
@@ -397,6 +398,11 @@ body { margin: 0; }
 .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 3px; text-align: right; }
 .evo-msg-cursor { display: inline-block; width: 7px; height: 15px; margin-left: 2px; background: var(--brand); vertical-align: -2px; animation: evo-blink 1s steps(2) infinite; }
 @keyframes evo-blink { 50% { opacity: 0; } }
+/* 窄屏：消息列与审批/命令条占满可用宽度（放在主规则之后，避免被前面的媒体查询覆盖） */
+@media (max-width: 767px) {
+  .evo-msg-list { width: 100%; min-width: 0; }
+  .evo-approval-list, .evo-cmd-card { max-width: 100%; min-width: 0; }
+}
 /* ── Thinking 折叠（§31.6：reasoning 默认折叠，左侧 2px 边线 + 次级文字）── */
 .evo-thinking { margin-top: 6px; }
 .evo-thinking-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; padding: 2px 6px 2px 0; font-size: 12px; color: var(--color-text-tertiary); cursor: pointer; }
@@ -1205,7 +1211,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-stop svg { width: 12px; height: 12px; }
 /* ── HITL 审批条（§21.2）── */
 .evo-approval-strip { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 24px 0; }
-.evo-approval-list { width: 100%; max-width: var(--chat-max-width); display: flex; flex-direction: column; gap: 8px; }
+.evo-approval-list { width: 100%; max-width: 60%; min-width: min(560px, 100%); display: flex; flex-direction: column; gap: 8px; }
 .evo-approval-card { border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--color-warning) 7%, var(--color-surface)); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
 .evo-approval-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--color-warning); }
 .evo-approval-head svg { width: 15px; height: 15px; }
@@ -1258,7 +1264,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-job-duration { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 /* ── 命令执行结果条（§23.3）── */
 .evo-cmd-strip { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 24px 0; }
-.evo-cmd-card { width: 100%; max-width: var(--chat-max-width); display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.evo-cmd-card { width: 100%; max-width: 60%; min-width: min(560px, 100%); display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
 .evo-cmd-card.error { border-color: color-mix(in srgb, var(--color-error) 40%, var(--color-border)); }
 .evo-cmd-card > svg { width: 15px; height: 15px; color: var(--brand); flex-shrink: 0; margin-top: 1px; }
 .evo-cmd-card.error > svg { color: var(--color-error); }
