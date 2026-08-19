@@ -639,7 +639,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-perm .evo-dropdown-value { flex: 0 1 auto; }
 .evo-stats-sep { color: var(--color-border); margin-right: 8px; }
 /* ── 插件清单 ── */
-.evo-plugin-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.evo-plugin-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; width: 100%; max-width: 560px; }
 .evo-settings-modal { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .evo-settings-head { padding: 10px 14px; border-bottom: 1px solid var(--color-border-light); }
 .evo-btn-back { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: transparent; color: var(--color-text-primary); font-size: 13px; cursor: pointer; font: inherit; }
