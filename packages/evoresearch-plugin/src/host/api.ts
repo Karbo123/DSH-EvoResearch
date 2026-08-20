@@ -712,6 +712,53 @@ export class EvoResearchApiService extends TypertRemoteService {
     return { ok: true }
   }
 
+  /** §29：项目元数据（归档/标签色）后端存储——与 session-meta 同层，随项目数据迁移。 */
+  private projectMetaFile(): string {
+    return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'project-meta.json')
+  }
+
+  private readProjectMeta(): Record<string, { archived?: boolean; tagColor?: string | null }> {
+    try {
+      const raw = JSON.parse(readFileSync(this.projectMetaFile(), 'utf8')) as Record<string, unknown>
+      return typeof raw === 'object' && raw !== null ? (raw as Record<string, { archived?: boolean; tagColor?: string | null }>) : {}
+    } catch {
+      return {}
+    }
+  }
+
+  private writeProjectMeta(meta: Record<string, { archived?: boolean; tagColor?: string | null }>): void {
+    const file = this.projectMetaFile()
+    mkdirSync(path.dirname(file), { recursive: true })
+    const tmp = `${file}.tmp-${process.pid}`
+    writeFileSync(tmp, JSON.stringify(meta, null, 2), 'utf8')
+    renameSync(tmp, file)
+  }
+
+  @Remote('projectMetaGet')
+  projectMetaGet(): Record<string, { archived?: boolean; tagColor?: string | null }> {
+    return this.readProjectMeta()
+  }
+
+  @Remote('projectMetaSet')
+  projectMetaSet(args: { path: string; patch: { archived?: boolean; tagColor?: string | null } }): { ok: boolean } {
+    const projectPath = String(args?.path ?? '')
+    if (projectPath === '') return { ok: false }
+    const meta = this.readProjectMeta()
+    const current = meta[projectPath] ?? {}
+    const next: { archived?: boolean; tagColor?: string | null } = { ...current }
+    const patch = args?.patch ?? {}
+    if (patch.archived !== undefined) next.archived = patch.archived
+    if (patch.tagColor !== undefined) next.tagColor = patch.tagColor === null ? null : patch.tagColor
+    // 无归档标记且无标签色则视为空条目，从文件删除
+    if (next.archived !== true && typeof next.tagColor !== 'string') {
+      delete meta[projectPath]
+    } else {
+      meta[projectPath] = next
+    }
+    this.writeProjectMeta(meta)
+    return { ok: true }
+  }
+
   /** §12.4 Profile 文件操作：写（新建/保存）、重命名、删除（名字严格限制在 profile 目录内）。 */
   private profileDirOf(workspaceDir: string | undefined): string {
     const base = workspaceDir && workspaceDir !== this.services.memory.config.dataRoot

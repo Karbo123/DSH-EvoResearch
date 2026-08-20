@@ -701,9 +701,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     })
   }
 
-  // ── 项目级状态（标签颜色 / 归档）：client 侧 localStorage 持久化 ──
-  // 项目由会话 cwd 派生，没有独立的 session-meta 键；标签颜色与“隐藏项目”
-  // 按路径持久化到 localStorage，与左侧手动排序/自动标题等项目级数据同层。
+  // ── 项目级状态（标签颜色 / 归档）：后端 project-meta 持久化（§29），
+  // localStorage 仅作启动缓存；换浏览器后仍以后端文件为准恢复。──
   const PROJECT_TAG_KEY = 'evoresearch-project-tagcolors'
   const PROJECT_ARCHIVED_KEY = 'evoresearch-project-archived'
   const normCwd = (cwd: unknown): string | null =>
@@ -725,6 +724,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       return new Set()
     }
   })
+  /** 写穿到后端 project-meta.json（失败不影响本地状态，下次启动以后端为准）。 */
+  const persistProjectMeta = (path: string, patch: { archived?: boolean; tagColor?: string | null }) => {
+    void fetch('/evoresearch/fs/project-meta-set', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path, ...patch }),
+    }).catch(() => {})
+  }
   const setProjectTagColor = (path: string, color: string | null) => {
     setProjectTagColors((prev) => {
       const next = { ...prev }
@@ -733,6 +740,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       try { localStorage.setItem(PROJECT_TAG_KEY, JSON.stringify(next)) } catch { /* 忽略 */ }
       return next
     })
+    persistProjectMeta(path, { tagColor: color })
     toast(color === null ? '已清除标签颜色' : '已设置标签颜色', 'success')
   }
   /** 归档/恢复项目：同步归档/恢复其全部子聊天（后端 session-meta 持久化）。 */
@@ -753,6 +761,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       try { localStorage.setItem(PROJECT_ARCHIVED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
       return next
     })
+    persistProjectMeta(path, { archived: !isArchived })
     if (!isArchived) {
       toast('项目已归档，可在底部“已归档项目”中恢复', 'success')
       window.dispatchEvent(new CustomEvent('evo:project-archived'))
@@ -809,6 +818,27 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         setPinnedIds((prev) => (pinNext.size > 0 || Object.keys(meta).length > 0 ? pinNext : prev))
         setTagColors((prev) => (Object.keys(tagNext).length > 0 ? tagNext : prev))
         setArchivedIds((prev) => (archNext.size > 0 || Object.keys(meta).length > 0 ? archNext : prev))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // §29：项目元数据（归档/标签色）以后端 project-meta 为准（localStorage 仅作启动缓存）
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/evoresearch/fs/project-meta-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled || !json.ok) return
+        const meta = json.value as Record<string, { archived?: boolean; tagColor?: string | null }>
+        const archNext = new Set<string>()
+        const tagNext: Record<string, string> = {}
+        for (const [path, m] of Object.entries(meta)) {
+          if (m.archived === true) archNext.add(path)
+          if (typeof m.tagColor === 'string') tagNext[path] = m.tagColor
+        }
+        setArchivedProjects((prev) => (archNext.size > 0 || Object.keys(meta).length > 0 ? archNext : prev))
+        setProjectTagColors((prev) => (Object.keys(tagNext).length > 0 ? tagNext : prev))
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -889,6 +919,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       try { localStorage.setItem(PROJECT_ARCHIVED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
       return next
     })
+    persistProjectMeta(path, { archived: false, tagColor: null })
     try {
       const workspace = (workspaces.items ?? []).find((w: any) => typeof w?.path === 'string' && normCwd(w.path) === path)
       if (workspace?.workspaceId !== undefined) await workspacesService?.delete(workspace.workspaceId)

@@ -1216,6 +1216,26 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
+        // §29：项目元数据（归档/标签色）——后端存储，随项目数据迁移
+        if (method === 'project-meta-get') {
+          if (evoresearch?.projectMetaGet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.projectMetaGet as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'project-meta-set') {
+          if (evoresearch?.projectMetaSet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const projectPath = requireString(payload, 'path')
+          const patch: Record<string, unknown> = {}
+          if (typeof payload.archived === 'boolean') patch.archived = payload.archived
+          if (payload.tagColor === null || typeof payload.tagColor === 'string') patch.tagColor = payload.tagColor
+          try {
+            const result = await (evoresearch.projectMetaSet as (a: { path: string; patch: Record<string, unknown> }) => Promise<{ ok: boolean }>).call(evoresearch, { path: projectPath, patch })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         // 模型设置（设置面板）：读 / 写 / 应用代码档为默认模型
         if (method === 'model-settings-get') {
           if (evoresearch?.modelSettingsGet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')

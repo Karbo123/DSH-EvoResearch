@@ -8,6 +8,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
 import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical } from 'lucide-react'
 import { t } from './i18n'
+import { ConfirmDialog } from './session-actions'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
 export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace' | 'channels' | 'team' | 'experiments' | 'notes' | 'library'
@@ -267,6 +268,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   const [showArchived, setShowArchived] = useState(false)
   const [showArchivedProjects, setShowArchivedProjects] = useState(false)
   const [expandedArchivedProject, setExpandedArchivedProject] = useState<string | null>(null)
+  const [confirmDeleteProjectPath, setConfirmDeleteProjectPath] = useState<string | null>(null)
   // 归档项目后自动展开“已归档项目”区，让用户能立刻看到项目去了哪里
   useEffect(() => {
     const expand = () => setShowArchivedProjects(true)
@@ -1147,23 +1149,34 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                       jsx('span', { className: 'evo-tl-row-sub', children: t('subchatCount').replace('{n}', String(p.count)) }),
                     ],
                   }),
-                  jsx('div', {
-                    className: 'evo-tl-row-acts',
-                    children: [
-                      jsx('button', {
-                        type: 'button',
-                        className: 'evo-tl-row-act',
-                        title: t('unarchive'),
-                        'aria-label': t('unarchive'),
-                        onClick: (e: { stopPropagation(): void }) => {
-                          e.stopPropagation()
-                          onToggleProjectArchive(p.path)
-                        },
-                        children: jsx(ArchiveRestore, {}),
+                      jsx('div', {
+                        className: 'evo-tl-row-acts',
+                        children: [
+                          jsx('button', {
+                            type: 'button',
+                            className: 'evo-tl-row-act',
+                            title: t('unarchive'),
+                            'aria-label': t('unarchive'),
+                            onClick: (e: { stopPropagation(): void }) => {
+                              e.stopPropagation()
+                              onToggleProjectArchive(p.path)
+                            },
+                            children: jsx(ArchiveRestore, {}),
+                          }),
+                          jsx('button', {
+                            type: 'button',
+                            className: 'evo-tl-row-act evo-tl-row-act-del',
+                            title: t('deleteProject'),
+                            'aria-label': t('deleteProject'),
+                            onClick: (e: { stopPropagation(): void }) => {
+                              e.stopPropagation()
+                              setConfirmDeleteProjectPath(p.path)
+                            },
+                            children: jsx(Trash2, {}),
+                          }),
+                        ],
                       }),
                     ],
-                  }),
-                ],
               }),
               expandedArchivedProject === p.path && jsx('div', {
                 className: 'evo-tl-archived-subchats',
@@ -1190,6 +1203,14 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
           }, p.path)),
         }),
       ],
+    }),
+    confirmDeleteProjectPath !== null && jsx(ConfirmDialog, {
+      title: t('deleteProject'),
+      message: t('deleteArchivedProjectMsg'),
+      confirmLabel: t('deleteProject'),
+      danger: true,
+      onConfirm: () => { if (confirmDeleteProjectPath !== null) runDeleteProject(confirmDeleteProjectPath) },
+      onClose: () => setConfirmDeleteProjectPath(null),
     }),
     ],
   })

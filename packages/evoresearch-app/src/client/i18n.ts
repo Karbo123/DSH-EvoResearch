@@ -120,6 +120,7 @@ const DICT: Record<string, [string, string]> = {
   deleteSession: ['Delete session', '删除会话'],
   deleteProject: ['Delete project', '删除项目'],
   deleteProjectQ: ['Click again to confirm delete', '再次点击确认删除'],
+  deleteArchivedProjectMsg: ['Delete this project and all its sub-chats? This cannot be undone. Files on disk will be kept.', '将删除该项目及其全部子聊天，此操作不可撤销。磁盘上的项目文件会保留。'],
   archive: ['Archive', '归档'],
   archiveProject: ['Archive project', '归档项目'],
   archivedProjects: ['Archived projects', '已归档项目'],
