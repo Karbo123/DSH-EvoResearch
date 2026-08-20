@@ -53,7 +53,7 @@ const DICT: Record<string, [string, string]> = {
   steerTurn: ['Steer into current turn', '转向本轮'],
   autoApprove: ['Auto-approve', '自动批准'],
   autoApproveConfirmTitle: ['Enable auto-approve?', '开启自动批准？'],
-  autoApproveConfirmMsg: ['Auto-approve will automatically allow tool calls that match the deployment policy (including delete operations), without asking you each time. Clearly dangerous shell commands are still rejected, and scheduled tasks still require confirmation. You can turn it off anytime by clicking the button again.', '自动批准会对符合部署策略的工具调用（含删除操作）自动放行，不再逐次询问。明确危险的 shell 命令仍会被拒绝，定时任务仍要求确认。随时可再次点击按钮关闭。'],
+  autoApproveConfirmMsg: ['Auto-approve switches this conversation to full access: tool calls that match the deployment policy (including delete operations) are allowed without asking each time. Clearly dangerous shell commands are still rejected, and scheduled tasks still require confirmation. You can turn it off anytime by switching back to Read-only or Write.', '自动批准会将本会话切换为完整权限：符合部署策略的工具调用（含删除操作）将自动放行，不再逐次询问。明确危险的 shell 命令仍会被拒绝，定时任务仍要求确认。随时可切换回只读或写入模式关闭。'],
   confirmEnable: ['Enable', '开启'],
   send: ['Send', '发送'],
   attachFiles: ['Attach files', '添加附件'],
@@ -262,7 +262,7 @@ const DICT: Record<string, [string, string]> = {
   // 设置
   readOnly: ['Read-only', '只读'],
   permWrite: ['Write', '写入'],
-  fullEffect: ['Full effect', '完整权限'],
+  fullEffect: ['Auto-approve', '自动批准'],
   permission: ['Permission', '权限'],
   plugins: ['Plugins', '插件'],
   pluginStateActive: ['Active', '运行中'],

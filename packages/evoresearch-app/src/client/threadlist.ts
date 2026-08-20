@@ -266,6 +266,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   const [forkError, setForkError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [showArchivedProjects, setShowArchivedProjects] = useState(false)
+  const [expandedArchivedProject, setExpandedArchivedProject] = useState<string | null>(null)
   // 归档项目后自动展开“已归档项目”区，让用户能立刻看到项目去了哪里
   useEffect(() => {
     const expand = () => setShowArchivedProjects(true)
@@ -442,6 +443,11 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
       }
     }).sort((a, b) => b.updatedAt - a.updatedAt || a.name.localeCompare(b.name, 'zh-Hans'))
   })()
+  // 归档项目展开时展示的子聊天（该项目的全部子会话）
+  const archivedProjectChats = (path: string) => sessionIds
+    .map((id) => sessions.byId[id])
+    .filter((s) => s !== undefined && s.blank !== true && !hideIds.has(s.id) && !deletedIds.has(s.id) && cwdBase(s.cwd) === path)
+    .sort((a, b) => (b.titleTime ?? b.updatedAt ?? 0) - (a.titleTime ?? a.updatedAt ?? 0))
   // 当前项目视图下的会话（精确路径匹配）
   const scopedRows = projectMode === null
     ? []
@@ -812,62 +818,6 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                     }, p.path)
                   })()
                   ),
-                  archivedProjectList.length > 0 && jsxs('div', {
-                    className: 'evo-tl-section evo-tl-archived-projects',
-                    children: [
-                      jsxs('button', {
-                        type: 'button',
-                        className: 'evo-tl-archived-toggle',
-                        'aria-expanded': showArchivedProjects || undefined,
-                        onClick: () => setShowArchivedProjects((v) => !v),
-                        children: [
-                          jsx(ChevronRight, { className: `evo-tool-chev${showArchivedProjects ? ' open' : ''}` }),
-                          jsx(Archive, {}),
-                          jsx('span', { children: `${t('archivedProjects')} (${archivedProjectList.length})` }),
-                        ],
-                      }),
-                      showArchivedProjects && jsx('div', {
-                        className: 'evo-tl-archived-list',
-                        children: archivedProjectList.map((p) => jsxs('div', {
-                          className: 'evo-tl-row evo-tl-archived-row evo-tl-project-row',
-                          'data-evo-dnd-id': p.path,
-                          'data-evo-dnd-scope': 'projects',
-                          onClick: () => { setProjectScope({ name: p.name, path: p.path }); setMenuFor(null); setColorFor(null) },
-                          children: [
-                            jsx(FolderGit2, {}),
-                            projectTagColors[p.path] !== undefined && jsx('span', {
-                              className: 'evo-tl-color-dot',
-                              style: { background: projectTagColors[p.path] },
-                              title: t('tagged'),
-                            }),
-                            jsxs('div', {
-                              className: 'evo-tl-project-main',
-                              children: [
-                                jsx('span', { className: 'evo-tl-title-text', children: p.name }),
-                                jsx('span', { className: 'evo-tl-row-sub', children: t('subchatCount').replace('{n}', String(p.count)) }),
-                              ],
-                            }),
-                            jsx('div', {
-                              className: 'evo-tl-row-acts',
-                              children: [
-                                jsx('button', {
-                                  type: 'button',
-                                  className: 'evo-tl-row-act',
-                                  title: t('unarchive'),
-                                  'aria-label': t('unarchive'),
-                                  onClick: (e: { stopPropagation(): void }) => {
-                                    e.stopPropagation()
-                                    onToggleProjectArchive(p.path)
-                                  },
-                                  children: jsx(ArchiveRestore, {}),
-                                }),
-                              ],
-                            }),
-                          ],
-                        }, p.path)),
-                      }),
-                    ],
-                  }),
                 ],
               })
             : // ── 项目内子聊天列表（对应图谱 Chat Node）──
@@ -1155,6 +1105,89 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
               ],
             }),
           ],
+        }),
+      ],
+    }),
+    // ── 已归档项目（置底固定：不随列表滚动，展开可查看子聊天）──
+    archivedProjectList.length > 0 && jsxs('div', {
+      className: 'evo-tl-footer',
+      children: [
+        jsxs('button', {
+          type: 'button',
+          className: 'evo-tl-archived-toggle',
+          'aria-expanded': showArchivedProjects || undefined,
+          onClick: () => setShowArchivedProjects((v) => !v),
+          children: [
+            jsx(ChevronRight, { className: `evo-tool-chev${showArchivedProjects ? ' open' : ''}` }),
+            jsx(Archive, {}),
+            jsx('span', { children: `${t('archivedProjects')} (${archivedProjectList.length})` }),
+          ],
+        }),
+        showArchivedProjects && jsx('div', {
+          className: 'evo-tl-archived-list',
+          children: archivedProjectList.map((p) => jsxs(Fragment, {
+            children: [
+              jsxs('div', {
+                className: `evo-tl-row evo-tl-archived-row evo-tl-project-row${expandedArchivedProject === p.path ? ' evo-tl-archived-open' : ''}`,
+                'data-evo-dnd-id': p.path,
+                'data-evo-dnd-scope': 'projects',
+                onClick: () => { setExpandedArchivedProject((v) => (v === p.path ? null : p.path)); setMenuFor(null); setColorFor(null) },
+                children: [
+                  jsx(ChevronRight, { className: `evo-tool-chev${expandedArchivedProject === p.path ? ' open' : ''}` }),
+                  jsx(FolderGit2, {}),
+                  projectTagColors[p.path] !== undefined && jsx('span', {
+                    className: 'evo-tl-color-dot',
+                    style: { background: projectTagColors[p.path] },
+                    title: t('tagged'),
+                  }),
+                  jsxs('div', {
+                    className: 'evo-tl-project-main',
+                    children: [
+                      jsx('span', { className: 'evo-tl-title-text', children: p.name }),
+                      jsx('span', { className: 'evo-tl-row-sub', children: t('subchatCount').replace('{n}', String(p.count)) }),
+                    ],
+                  }),
+                  jsx('div', {
+                    className: 'evo-tl-row-acts',
+                    children: [
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-tl-row-act',
+                        title: t('unarchive'),
+                        'aria-label': t('unarchive'),
+                        onClick: (e: { stopPropagation(): void }) => {
+                          e.stopPropagation()
+                          onToggleProjectArchive(p.path)
+                        },
+                        children: jsx(ArchiveRestore, {}),
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+              expandedArchivedProject === p.path && jsx('div', {
+                className: 'evo-tl-archived-subchats',
+                children: archivedProjectChats(p.path).map((s) => jsxs('div', {
+                  className: 'evo-tl-row evo-tl-archived-row evo-tl-archived-subrow',
+                  'data-active': s.id === currentId || undefined,
+                  children: [
+                    jsx('button', {
+                      type: 'button',
+                      className: 'evo-tl-row-main',
+                      title: s.displayTitle ?? s.id.slice(0, 12),
+                      onClick: () => onOpen(s.id),
+                      children: jsxs(Fragment, {
+                        children: [
+                          jsx('span', { className: 'evo-tl-title-text', children: s.displayTitle ?? s.id.slice(0, 12) }),
+                          jsx('div', { className: 'evo-tl-row-sub', children: formatWhen(s.titleTime ?? s.updatedAt) }),
+                        ],
+                      }),
+                    }),
+                  ],
+                }, s.id)),
+              }),
+            ],
+          }, p.path)),
         }),
       ],
     }),

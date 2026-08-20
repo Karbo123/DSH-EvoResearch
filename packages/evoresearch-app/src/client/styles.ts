@@ -249,9 +249,11 @@ body { margin: 0; }
 .evo-tl-archived-list { margin: 2px 0 6px; }
 .evo-tl-archived-row { opacity: 0.75; }
 .evo-tl-archived-row:hover { opacity: 1; }
+.evo-tl-footer { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0; max-height: 44%; padding: 6px 8px 8px; border-top: 1px solid var(--color-border-light); background: color-mix(in srgb, var(--color-surface) 62%, transparent); }
+.evo-tl-footer .evo-tl-archived-list { overflow-y: auto; min-height: 0; margin: 2px 0 0; }
+.evo-tl-archived-subchats { display: flex; flex-direction: column; gap: 1px; margin: 0 0 4px 12px; padding-left: 8px; border-left: 2px solid var(--color-border-light); }
 .evo-tl-fork-error { font-size: 11px; color: var(--color-error); text-align: right; line-height: 1.4; max-width: 70%; }
 .evo-tl-project-error { display: block; margin: 2px 10px 6px; text-align: left; max-width: none; }
-.evo-tl-archived-projects { display: block; padding: 4px 10px 4px; }
 .evo-tl-archived-sessions { display: block; padding: 6px 10px 4px; }
 .evo-tl-row {
   display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; padding: 6px 10px; margin-bottom: 2px;

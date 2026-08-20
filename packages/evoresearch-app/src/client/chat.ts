@@ -20,7 +20,7 @@ import { gfm, insertTableCommand, toggleStrikethroughCommand } from '@milkdown/p
 import { history as milkdownHistory } from '@milkdown/plugin-history'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import {
-  Paperclip, ShieldCheck, Send, Wrench, User, Copy, Check, PenLine,
+  Paperclip, Send, Wrench, User, Copy, Check, PenLine,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
   ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History, GitBranch,
   Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2,
@@ -548,22 +548,6 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
 
 export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onBranchFromMessage, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
-    // §21.4 Auto-approve：按 Thread 持久化（localStorage evoresearch-auto-approve:<sessionId>）；
-  // 开启前先弹风险确认，关闭直接生效。
-  const [autoApprove, setAutoApprove] = useState(false)
-  useEffect(() => {
-    if (sessionId === null) return
-    try { setAutoApprove(localStorage.getItem(`evoresearch-auto-approve:${sessionId}`) === '1') } catch { /* 忽略 */ }
-  }, [sessionId])
-  const persistAutoApprove = (value: boolean) => {
-    setAutoApprove(value)
-    if (sessionId !== null) {
-      try {
-        if (value) localStorage.setItem(`evoresearch-auto-approve:${sessionId}`, '1')
-        else localStorage.removeItem(`evoresearch-auto-approve:${sessionId}`)
-      } catch { /* 忽略 */ }
-    }
-  }
   // ── 会话权限（§25.x）：跟随当前会话，不是全局设置；在输入框工具行切换 ──
   const [permPreset, setPermPreset] = useState<string | null>(null)
   useEffect(() => {
@@ -573,7 +557,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     }).catch(() => {})
     return () => { cancelled = true }
   }, [])
-  const switchPerm = (preset: string) => {
+  const applyPermPreset = (preset: string) => {
     if (sessionId === null) { toast(t('noActiveConversation'), 'error'); return }
     void fetch('/evoresearch/fs/mode', {
       method: 'POST',
@@ -583,6 +567,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       if (json.ok) setPermPreset(preset)
       else toast(json.error?.message ?? '切换失败', 'error')
     }).catch(() => toast('切换失败', 'error'))
+  }
+  // 权限档位切换：「自动批准」为高风险档位，先弹确认框再生效
+  const switchPerm = (preset: string) => {
+    if (preset === 'danger-full-access') {
+      setActionDialog('auto-approve')
+      return
+    }
+    applyPermPreset(preset)
   }
   const listRef = useRef<HTMLDivElement | null>(null)
   const composerEditorHostRef = useRef<HTMLDivElement | null>(null)
@@ -1968,21 +1960,6 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       e.currentTarget.value = ''
                     },
                   }),
-                  jsx('button', {
-                    type: 'button',
-                    className: `evo-composer-tool${autoApprove ? ' evo-aa-on' : ''}`,
-                    'data-on': autoApprove || undefined,
-                    title: t('autoApprove'),
-                    'aria-label': t('autoApprove'),
-                    onClick: () => {
-                      // §21.4：开启先弹风险确认；关闭直接生效
-                      if (autoApprove) persistAutoApprove(false)
-                      else setActionDialog('auto-approve')
-                    },
-                    children: jsxs(Fragment, {
-                      children: [jsx(ShieldCheck, {}), jsx('span', { children: t('autoApprove') })],
-                    }),
-                  }),
                   // ── 会话动作（§25.6）──
                   jsx('button', {
                     type: 'button',
@@ -2068,7 +2045,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     options: [
                       { value: 'read-only', label: t('readOnly') },
                       { value: 'workspace-write', label: t('permWrite') },
-                      { value: 'danger-full-access', label: t('fullEffect') },
+                      { value: 'danger-full-access', label: t('autoApprove') },
                     ],
                   }),
                   // 模型徽章（§25.2）：输入框内右下侧、紧邻发送按钮，点击打开模型选择器
@@ -2116,7 +2093,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         message: t('autoApproveConfirmMsg'),
         confirmLabel: t('confirmEnable'),
         danger: true,
-        onConfirm: () => { persistAutoApprove(true); setActionDialog(null) },
+        onConfirm: () => { setActionDialog(null); applyPermPreset('danger-full-access') },
         onClose: () => setActionDialog(null),
       }),
       actionDialog === 'compact' && jsx(ConfirmDialog, {
