@@ -573,7 +573,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           try { await workspacesService?.rename(state.workspaceId, title) } catch { /* 会话标题已保存 */ }
         }
       }
-      toast('Session renamed', 'success')
+      toast('会话已重命名', 'success')
     }
     return result?.ok === true
   }
@@ -725,6 +725,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       try { localStorage.setItem(PROJECT_TAG_KEY, JSON.stringify(next)) } catch { /* 忽略 */ }
       return next
     })
+    toast(color === null ? '已清除标签颜色' : '已设置标签颜色', 'success')
   }
   /** 归档/恢复项目：同步归档/恢复其全部子聊天（后端 session-meta 持久化）。 */
   const toggleProjectArchive = (path: string) => {
@@ -744,6 +745,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       try { localStorage.setItem(PROJECT_ARCHIVED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
       return next
     })
+    if (!isArchived) {
+      toast('项目已归档，可在底部“已归档项目”中恢复', 'success')
+      window.dispatchEvent(new CustomEvent('evo:project-archived'))
+    } else {
+      toast('项目已恢复', 'success')
+    }
   }
   /** 项目重命名：改 Workspace 显示标题；同时终止项目内会话的自动标题。 */
   const renameProject = async (path: string, title: string): Promise<boolean> => {
@@ -767,7 +774,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         }
       }
       if (changed) writeAutoTitleStates(states)
-      toast('Project renamed', 'success')
+      toast('项目已重命名', 'success')
       return true
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error), 'error')
@@ -835,7 +842,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       if (json.ok !== true) return { ok: false, error: (json.error as { message?: string } | undefined)?.message ?? '删除失败' }
       const cwd = sessions.byId[id]?.cwd ?? null
       markDeleted(id, cwd)
-      toast('Session deleted', 'success')
+      toast('会话已删除', 'success')
       // 删除的是当前会话 → 跳到新会话
       if (sessions.current === id) startNewChat()
       window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
@@ -878,7 +885,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       const workspace = (workspaces.items ?? []).find((w: any) => typeof w?.path === 'string' && normCwd(w.path) === path)
       if (workspace?.workspaceId !== undefined) await workspacesService?.delete(workspace.workspaceId)
     } catch { /* 注册清理失败不影响删除 */ }
-    if (failed === null) toast('Project deleted', 'success')
+    if (failed === null) toast('项目已删除（对话已移除，磁盘文件保留）', 'success')
     else toast(failed, 'error')
     window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
     return { ok: failed === null, error: failed ?? undefined }

@@ -253,6 +253,12 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   const [forkError, setForkError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [showArchivedProjects, setShowArchivedProjects] = useState(false)
+  // 归档项目后自动展开“已归档项目”区，让用户能立刻看到项目去了哪里
+  useEffect(() => {
+    const expand = () => setShowArchivedProjects(true)
+    window.addEventListener('evo:project-archived', expand)
+    return () => window.removeEventListener('evo:project-archived', expand)
+  }, [])
   const [dragState, setDragState] = useState<DragState | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const dragCleanupRef = useRef<(() => void) | null>(null)
@@ -722,6 +728,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                         jsx('div', {
                           className: 'evo-tl-row-acts',
                           'data-menu-open': menuFor === key || undefined,
+                          onClick: (e: { stopPropagation(): void }) => e.stopPropagation(),
                           children: [
                             jsxs('div', {
                               className: 'evo-tl-row-more',

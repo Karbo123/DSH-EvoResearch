@@ -119,7 +119,7 @@ const DICT: Record<string, [string, string]> = {
   deleteQ: ['Delete?', '删除？'],
   deleteSession: ['Delete session', '删除会话'],
   deleteProject: ['Delete project', '删除项目'],
-  deleteProjectQ: ['Delete project?', '删除项目？'],
+  deleteProjectQ: ['Click again to confirm delete', '再次点击确认删除'],
   archive: ['Archive', '归档'],
   archiveProject: ['Archive project', '归档项目'],
   archivedProjects: ['Archived projects', '已归档项目'],
