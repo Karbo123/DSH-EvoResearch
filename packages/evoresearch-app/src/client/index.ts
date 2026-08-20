@@ -894,10 +894,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   /**
    * 删除项目：删除该项目下的全部子聊天（host 删除持久化数据），
    * 清理项目级标签/归档状态与 Workspace 注册。
-   * 磁盘上的项目目录与用户文件保留（与 Workspace 注册删除语义一致），
-   * 避免把可能仍有价值的文件一并销毁。
+   * 默认保留磁盘上的项目目录与用户文件；deleteDisk 为 true 时同时删除磁盘文件。
    */
-  const deleteProject = async (path: string): Promise<{ ok: boolean; error?: string }> => {
+  const deleteProject = async (path: string, opts?: { deleteDisk?: boolean }): Promise<{ ok: boolean; error?: string }> => {
     const ids = (sessions.ids ?? []).filter((id: string) => {
       const s = sessions.byId[id]
       return s !== undefined && normCwd(s.cwd) === path
@@ -924,7 +923,21 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       const workspace = (workspaces.items ?? []).find((w: any) => typeof w?.path === 'string' && normCwd(w.path) === path)
       if (workspace?.workspaceId !== undefined) await workspacesService?.delete(workspace.workspaceId)
     } catch { /* 注册清理失败不影响删除 */ }
-    if (failed === null) toast('项目已删除（对话已移除，磁盘文件保留）', 'success')
+    // 勾选“同时删除磁盘文件”时，删除项目目录（host 端有路径越界保护）
+    if (failed === null && opts?.deleteDisk === true) {
+      try {
+        const res = await fetch('/evoresearch/fs/project-delete-disk', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path }),
+        })
+        const json = await res.json()
+        if (json.value?.ok !== true) failed = json.value?.reason ?? '磁盘文件删除失败'
+      } catch {
+        failed = '磁盘文件删除失败'
+      }
+    }
+    if (failed === null) toast(opts?.deleteDisk === true ? '项目已删除（对话与磁盘文件均已移除）' : '项目已删除（对话已移除，磁盘文件保留）', 'success')
     else toast(failed, 'error')
     window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
     return { ok: failed === null, error: failed ?? undefined }

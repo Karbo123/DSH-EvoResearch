@@ -759,6 +759,25 @@ export class EvoResearchApiService extends TypertRemoteService {
     return { ok: true }
   }
 
+  /** 删除项目磁盘目录（删除项目时可选；带路径越界保护，禁止删 dataRoot 本身或外部路径）。 */
+  @Remote('projectDeleteDisk')
+  projectDeleteDisk(args: { path: string }): { ok: boolean; deleted?: boolean; reason?: string } {
+    const raw = String(args?.path ?? '')
+    if (raw === '') return { ok: false, reason: 'empty path' }
+    const root = this.services.memory.config.dataRoot
+    const rootNorm = path.resolve(root)
+    const targetNorm = path.resolve(raw)
+    if (targetNorm === rootNorm) return { ok: false, reason: 'cannot delete data root' }
+    if (!targetNorm.startsWith(rootNorm + path.sep)) return { ok: false, reason: 'path outside data root' }
+    if (!existsSync(targetNorm)) return { ok: false, reason: 'not found' }
+    try {
+      rmSync(targetNorm, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 })
+      return { ok: true, deleted: true }
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
   /** §12.4 Profile 文件操作：写（新建/保存）、重命名、删除（名字严格限制在 profile 目录内）。 */
   private profileDirOf(workspaceDir: string | undefined): string {
     const base = workspaceDir && workspaceDir !== this.services.memory.config.dataRoot

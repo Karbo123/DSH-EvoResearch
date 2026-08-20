@@ -314,7 +314,7 @@ export function effortLabel(level: string): string | null {
 
 /** 二次确认弹窗（§33.1 需决策操作）。 */
 export function ConfirmDialog({
-  title, message, confirmLabel, danger, onConfirm, onClose,
+  title, message, confirmLabel, danger, onConfirm, onClose, children,
 }: {
   title: string
   message: string
@@ -322,6 +322,7 @@ export function ConfirmDialog({
   danger?: boolean
   onConfirm: () => void
   onClose: () => void
+  children?: any
 }) {
   return jsx(ModalShell, {
     title,
@@ -331,6 +332,7 @@ export function ConfirmDialog({
       className: 'evo-confirm',
       children: [
         jsx('div', { className: 'evo-confirm-msg', children: message }),
+        children,
         jsxs('div', {
           className: 'evo-confirm-actions',
           children: [

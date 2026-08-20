@@ -82,8 +82,8 @@ export interface ThreadListProps {
   deletedIds: Set<string>
   /** 删除会话（host 删除持久化数据；返回是否成功）。 */
   onDelete: (id: string) => Promise<{ ok: boolean; error?: string }>
-  /** 删除项目（删除其全部子聊天与项目级状态；返回是否成功）。 */
-  onDeleteProject: (path: string) => Promise<{ ok: boolean; error?: string }>
+  /** 删除项目（删除其全部子聊天与项目级状态；deleteDisk 可选地同时删除磁盘文件；返回是否成功）。 */
+  onDeleteProject: (path: string, opts?: { deleteDisk?: boolean }) => Promise<{ ok: boolean; error?: string }>
   /** 已归档会话 id（§26.3 Archive：从 Recents 隐藏但保留数据，可恢复）。 */
   archivedIds: Set<string>
   /** 归档/恢复会话（client-side 持久化）。 */
@@ -269,6 +269,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   const [showArchivedProjects, setShowArchivedProjects] = useState(false)
   const [expandedArchivedProject, setExpandedArchivedProject] = useState<string | null>(null)
   const [confirmDeleteProjectPath, setConfirmDeleteProjectPath] = useState<string | null>(null)
+  const [deleteProjectDisk, setDeleteProjectDisk] = useState(false)
   // 归档项目后自动展开“已归档项目”区，让用户能立刻看到项目去了哪里
   useEffect(() => {
     const expand = () => setShowArchivedProjects(true)
@@ -297,10 +298,10 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
       setDelArm(null)
     })
   }
-  /** 删除项目：先二次确认，成功后清排序记录并退出该项目视图。 */
-  const runDeleteProject = (path: string) => {
+  /** 删除项目：成功后清排序记录并退出该项目视图。 */
+  const runDeleteProject = (path: string, deleteDisk = false) => {
     setDeleteError(null)
-    void onDeleteProject(path).then((result) => {
+    void onDeleteProject(path, { deleteDisk }).then((result) => {
       if (!result.ok) {
         setDeleteError(result.error ?? '删除项目失败')
         setTimeout(() => setDeleteError(null), 5000)
@@ -793,22 +794,12 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                                       children: jsxs(Fragment, { children: [jsx(Archive, {}), jsx('span', { children: t('archiveProject') })] }),
                                     }),
                                     jsx('div', { className: 'evo-tl-menu-sep' }),
-                                    delArm === key
-                                      ? jsx('button', {
-                                          type: 'button',
-                                          className: 'evo-tl-menu-item evo-tl-menu-danger',
-                                          onClick: () => { setMenuFor(null); setDelArm(null); runDeleteProject(p.path) },
-                                          children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('deleteProjectQ') })] }),
-                                        })
-                                      : jsx('button', {
-                                          type: 'button',
-                                          className: 'evo-tl-menu-item evo-tl-menu-danger',
-                                          onClick: () => {
-                                            setDelArm(key)
-                                            setTimeout(() => setDelArm((v) => (v === key ? null : v)), 5000)
-                                          },
-                                          children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('deleteProject') })] }),
-                                        }),
+                                    jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-tl-menu-item evo-tl-menu-danger',
+                                      onClick: () => { setMenuFor(null); setConfirmDeleteProjectPath(p.path) },
+                                      children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('deleteProject') })] }),
+                                    }),
                                   ],
                                 }),
                               ],
@@ -1209,8 +1200,19 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
       message: t('deleteArchivedProjectMsg'),
       confirmLabel: t('deleteProject'),
       danger: true,
-      onConfirm: () => { if (confirmDeleteProjectPath !== null) runDeleteProject(confirmDeleteProjectPath) },
-      onClose: () => setConfirmDeleteProjectPath(null),
+      children: jsxs('label', {
+        className: 'evo-confirm-check',
+        children: [
+          jsx('input', {
+            type: 'checkbox',
+            checked: deleteProjectDisk,
+            onChange: (e: { currentTarget: HTMLInputElement }) => setDeleteProjectDisk(e.currentTarget.checked),
+          }),
+          jsx('span', { children: t('deleteDiskFiles') }),
+        ],
+      }),
+      onConfirm: () => { if (confirmDeleteProjectPath !== null) runDeleteProject(confirmDeleteProjectPath, deleteProjectDisk) },
+      onClose: () => { setConfirmDeleteProjectPath(null); setDeleteProjectDisk(false) },
     }),
     ],
   })

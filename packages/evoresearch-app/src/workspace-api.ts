@@ -1236,6 +1236,18 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
+        // 删除项目时可选：同时删除磁盘上的项目目录（host 端有路径越界保护）
+        if (method === 'project-delete-disk') {
+          if (evoresearch?.projectDeleteDisk === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const projectPath = requireString(payload, 'path')
+          try {
+            const result = await (evoresearch.projectDeleteDisk as (a: { path: string }) => Promise<{ ok: boolean; deleted?: boolean; reason?: string }>).call(evoresearch, { path: projectPath })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         // 模型设置（设置面板）：读 / 写 / 应用代码档为默认模型
         if (method === 'model-settings-get') {
           if (evoresearch?.modelSettingsGet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')

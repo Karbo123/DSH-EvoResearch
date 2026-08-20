@@ -1107,6 +1107,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-kbd { display: inline-block; min-width: 30px; padding: 4px 10px; border: 1px solid var(--color-border); border-bottom-width: 2px; border-radius: 6px; background: var(--color-background); color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; font-size: 12px; text-align: center; }
 .evo-confirm { display: flex; flex-direction: column; gap: 14px; }
 .evo-confirm-msg { font-size: 13px; color: var(--color-text-secondary); line-height: 1.7; }
+.evo-confirm-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--color-text-secondary); cursor: pointer; user-select: none; }
+.evo-confirm-check input { width: 14px; height: 14px; accent-color: var(--color-error); cursor: pointer; flex-shrink: 0; }
 .evo-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .evo-clear-notice { flex: 1; display: flex; align-items: center; justify-content: center; }
 .evo-clear-notice-box { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px; border: 1px dashed var(--color-border); border-radius: 14px; text-align: center; }
