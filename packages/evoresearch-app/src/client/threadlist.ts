@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react'
 import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical } from 'lucide-react'
 import { t } from './i18n'
 import { ConfirmDialog } from './session-actions'
+import { clientStateGet, clientStateSet } from './client-state'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
 export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace' | 'channels' | 'team' | 'experiments' | 'notes' | 'library'
@@ -107,15 +108,13 @@ const SORT_KEY = 'evoresearch-thread-sort'
 const ORDER_KEY = 'evoresearch-thread-order'
 
 function readSortMode(): SortMode {
-  try {
-    const value = localStorage.getItem(SORT_KEY)
-    return value === 'title' || value === 'updated' || value === 'manual' ? value : 'recent'
-  } catch { return 'recent' }
+  const value = clientStateGet(SORT_KEY)
+  return value === 'title' || value === 'updated' || value === 'manual' ? value : 'recent'
 }
 
 function readManualOrder(): ManualOrder {
   try {
-    const raw = JSON.parse(localStorage.getItem(ORDER_KEY) ?? '{}') as Partial<ManualOrder>
+    const raw = JSON.parse(clientStateGet(ORDER_KEY) ?? '{}') as Partial<ManualOrder>
     const chats: Record<string, string[]> = {}
     if (raw.chats !== null && typeof raw.chats === 'object') {
       for (const [key, value] of Object.entries(raw.chats)) {
@@ -340,12 +339,12 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
 
   const persistOrder = (next: ManualOrder) => {
     setManualOrder(next)
-    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)) } catch { /* 离线缓存失败不影响当前排序 */ }
+    clientStateSet(ORDER_KEY, JSON.stringify(next))
   }
   const updateSortMode = (value: SortMode) => {
     setSortMode(value)
     setSortOpen(false)
-    try { localStorage.setItem(SORT_KEY, value) } catch { /* 离线缓存失败不影响当前排序 */ }
+    clientStateSet(SORT_KEY, value)
   }
   const sortOptions: Array<{ value: SortMode; label: string; icon: typeof ListFilter }> = [
     { value: 'recent', label: t('sortRecent'), icon: Clock },

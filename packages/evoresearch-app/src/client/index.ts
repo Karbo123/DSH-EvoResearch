@@ -27,6 +27,7 @@ import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
+import { clientStateGet, clientStateHydrate, clientStateMigrateLocalKeys, clientStateSet } from './client-state'
 import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
 import { ExperimentsPanel } from './experiments'
@@ -74,7 +75,7 @@ const AUTO_TITLE_KEY = 'evoresearch-auto-title-state'
 
 function readAutoTitleStates(): Record<string, AutoTitleState> {
   try {
-    const raw = JSON.parse(localStorage.getItem(AUTO_TITLE_KEY) ?? '{}') as Record<string, unknown>
+    const raw = JSON.parse(clientStateGet(AUTO_TITLE_KEY) ?? '{}') as Record<string, unknown>
     const states: Record<string, AutoTitleState> = {}
     for (const [id, value] of Object.entries(raw)) {
       const item = value as Partial<AutoTitleState>
@@ -93,7 +94,7 @@ function readAutoTitleStates(): Record<string, AutoTitleState> {
 }
 
 function writeAutoTitleStates(states: Record<string, AutoTitleState>): void {
-  try { localStorage.setItem(AUTO_TITLE_KEY, JSON.stringify(states)) } catch { /* 本地缓存不可用不影响聊天 */ }
+  clientStateSet(AUTO_TITLE_KEY, JSON.stringify(states))
 }
 
 // 与插件端 core/title.ts 的 isLowInformationInput 保持同一套规则。
@@ -112,24 +113,21 @@ function sideChatKey(cwd: string | null): string {
   return `evoresearch-sidechats:${cwd ?? '__new__'}`
 }
 function readSideChats(cwd: string | null): string[] {
+  const raw = clientStateGet(sideChatKey(cwd))
   try {
-    const raw = JSON.parse(localStorage.getItem(sideChatKey(cwd)) ?? '[]')
-    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []
+    const parsed = JSON.parse(raw ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
   } catch {
     return []
   }
 }
 function recordSideChat(cwd: string | null, id: string): void {
-  try {
-    const list = readSideChats(cwd)
-    if (!list.includes(id)) localStorage.setItem(sideChatKey(cwd), JSON.stringify([...list, id]))
-  } catch { /* 忽略 */ }
+  const list = readSideChats(cwd)
+  if (!list.includes(id)) clientStateSet(sideChatKey(cwd), JSON.stringify([...list, id]))
 }
 function forgetSideChat(cwd: string | null, id: string): void {
-  try {
-    const list = readSideChats(cwd)
-    if (list.includes(id)) localStorage.setItem(sideChatKey(cwd), JSON.stringify(list.filter((x) => x !== id)))
-  } catch { /* 忽略 */ }
+  const list = readSideChats(cwd)
+  if (list.includes(id)) clientStateSet(sideChatKey(cwd), JSON.stringify(list.filter((x) => x !== id)))
 }
 
 /** 注入样式（data-plugin-css 模式，可被 HMR 清理）。 */
@@ -149,6 +147,29 @@ function installCss() {
   }
 }
 
+/** 需要写穿到后端 client-state.json 的全部本地键前缀（迁移用）。 */
+const CLIENT_STATE_PREFIXES = [
+  'evoresearch-theme',
+  'evoresearch-lang',
+  'evoresearch-panels',
+  'evoresearch-thread-sort',
+  'evoresearch-thread-order',
+  'evoresearch-notifications',
+  'evoresearch-useronly',
+  'evoresearch-sched-notified',
+  'evoresearch-pinned',
+  'evoresearch-tagcolors',
+  'evoresearch-archived',
+  'evoresearch-project-tagcolors',
+  'evoresearch-project-archived',
+  'evoresearch-deleted',
+  'evoresearch-promoted',
+  'evoresearch-auto-title-state',
+  'evoresearch-sidechats:',
+  'evoresearch-input-history:',
+  'evoresearch-dynamic-workflows:',
+] as const
+
 const PANELS_KEY = 'evoresearch-panels'
 
 /** URL 查询状态（§43.5）：可分享/可恢复的导航状态（threadId/view/inspector…）。 */
@@ -166,7 +187,7 @@ function patchUrl(patch: Record<string, string | null>): void {
 
 function readPanels(): { left: number; right: number } {
   try {
-    const v = JSON.parse(localStorage.getItem(PANELS_KEY) ?? '')
+    const v = JSON.parse(clientStateGet(PANELS_KEY) ?? '')
     if (typeof v.left === 'number' && typeof v.right === 'number') return v
   } catch { /* 默认值 */ }
   return { left: 264, right: 320 }
@@ -493,7 +514,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // ── §42.4 浏览器通知事件 ──
   const notifyEnabled = (): boolean =>
     typeof Notification !== 'undefined' && Notification.permission === 'granted' && (() => {
-      try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
+      try { return clientStateGet('evoresearch-notifications') === '1' } catch { return false }
     })()
   // 1) Scheduled 任务完成：10s 轮询 + 首次 baseline（不补发）+ taskId:lastRunAt 去重（跨刷新持久化）
   useEffect(() => {
@@ -502,7 +523,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     let known = new Set<string>()
     let baseline = true
     try {
-      const raw = localStorage.getItem(KEY)
+      const raw = clientStateGet(KEY)
       if (raw !== null) {
         known = new Set(JSON.parse(raw))
         baseline = false // 已有去重键：后续新完成事件立即通知
@@ -526,7 +547,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             }
           }
           if (changed) {
-            try { localStorage.setItem(KEY, JSON.stringify([...known])) } catch { /* 忽略 */ }
+            clientStateSet(KEY, JSON.stringify([...known]))
           }
           baseline = false
         })
@@ -637,7 +658,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // ── Recents 置顶（§26.3 Pin）：后端持久化（§29 session-meta），localStorage 作启动缓存 ──
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem('evoresearch-pinned') ?? '[]')
+      const raw = JSON.parse(clientStateGet('evoresearch-pinned') ?? '[]')
       return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
     } catch {
       return new Set()
@@ -650,7 +671,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setPinnedIds((prev) => {
       const next = new Set(prev)
       const value = next.has(id) ? (next.delete(id), false) : (next.add(id), true)
-      try { localStorage.setItem('evoresearch-pinned', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      clientStateSet('evoresearch-pinned', JSON.stringify([...next]))
       persistPin(id, value)
       return next
     })
@@ -659,7 +680,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // ── Recents 标签颜色（§26.3）：后端持久化（§29），localStorage 作启动缓存 ──
   const [tagColors, setTagColors] = useState<Record<string, string>>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem('evoresearch-tagcolors') ?? '{}')
+      const raw = JSON.parse(clientStateGet('evoresearch-tagcolors') ?? '{}')
       return typeof raw === 'object' && raw !== null ? raw : {}
     } catch {
       return {}
@@ -673,7 +694,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       const next = { ...prev }
       if (color === null) delete next[id]
       else next[id] = color
-      try { localStorage.setItem('evoresearch-tagcolors', JSON.stringify(next)) } catch { /* 忽略 */ }
+      clientStateSet('evoresearch-tagcolors', JSON.stringify(next))
       persistTagColor(id, color)
       return next
     })
@@ -682,7 +703,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // ── 会话归档（§26.3 Archive）：后端持久化（§29），localStorage 作启动缓存 ──
   const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem('evoresearch-archived') ?? '[]')
+      const raw = JSON.parse(clientStateGet('evoresearch-archived') ?? '[]')
       return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
     } catch {
       return new Set()
@@ -695,7 +716,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setArchivedIds((prev) => {
       const next = new Set(prev)
       const value = next.has(id) ? (next.delete(id), false) : (next.add(id), true)
-      try { localStorage.setItem('evoresearch-archived', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      clientStateSet('evoresearch-archived', JSON.stringify([...next]))
       persistArchive(id, value)
       return next
     })
@@ -710,7 +731,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
 
   const [projectTagColors, setProjectTagColors] = useState<Record<string, string>>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem(PROJECT_TAG_KEY) ?? '{}')
+      const raw = JSON.parse(clientStateGet(PROJECT_TAG_KEY) ?? '{}')
       return typeof raw === 'object' && raw !== null ? raw : {}
     } catch {
       return {}
@@ -718,7 +739,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   })
   const [archivedProjects, setArchivedProjects] = useState<Set<string>>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem(PROJECT_ARCHIVED_KEY) ?? '[]')
+      const raw = JSON.parse(clientStateGet(PROJECT_ARCHIVED_KEY) ?? '[]')
       return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
     } catch {
       return new Set()
@@ -737,7 +758,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       const next = { ...prev }
       if (color === null) delete next[path]
       else next[path] = color
-      try { localStorage.setItem(PROJECT_TAG_KEY, JSON.stringify(next)) } catch { /* 忽略 */ }
+      clientStateSet(PROJECT_TAG_KEY, JSON.stringify(next))
       return next
     })
     persistProjectMeta(path, { tagColor: color })
@@ -758,7 +779,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       const next = new Set(prev)
       if (isArchived) next.delete(path)
       else next.add(path)
-      try { localStorage.setItem(PROJECT_ARCHIVED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
+      clientStateSet(PROJECT_ARCHIVED_KEY, JSON.stringify([...next]))
       return next
     })
     persistProjectMeta(path, { archived: !isArchived })
@@ -847,7 +868,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // ── 会话删除（附录 B-2/B-9）：host 删除持久化数据；live 残留由本集合过滤，重启后彻底消失 ──
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem('evoresearch-deleted') ?? '[]')
+      const raw = JSON.parse(clientStateGet('evoresearch-deleted') ?? '[]')
       return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
     } catch {
       return new Set()
@@ -857,16 +878,21 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setDeletedIds((prev) => {
       const next = new Set(prev)
       next.add(id)
-      try { localStorage.setItem('evoresearch-deleted', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      clientStateSet('evoresearch-deleted', JSON.stringify([...next]))
       return next
     })
     setPinnedIds((prev) => {
       const next = new Set(prev)
       next.delete(id)
-      try { localStorage.setItem('evoresearch-pinned', JSON.stringify([...next])) } catch { /* 忽略 */ }
+      clientStateSet('evoresearch-pinned', JSON.stringify([...next]))
       return next
     })
-    setTagColors((prev) => { const next = { ...prev }; delete next[id]; return next })
+    setTagColors((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      clientStateSet('evoresearch-tagcolors', JSON.stringify(next))
+      return next
+    })
     forgetSideChat(cwd, id)
   }
   const deleteSessionById = async (id: string): Promise<{ ok: boolean; error?: string }> => {
@@ -909,13 +935,13 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setProjectTagColors((prev) => {
       const next = { ...prev }
       delete next[path]
-      try { localStorage.setItem(PROJECT_TAG_KEY, JSON.stringify(next)) } catch { /* 忽略 */ }
+      clientStateSet(PROJECT_TAG_KEY, JSON.stringify(next))
       return next
     })
     setArchivedProjects((prev) => {
       const next = new Set(prev)
       next.delete(path)
-      try { localStorage.setItem(PROJECT_ARCHIVED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
+      clientStateSet(PROJECT_ARCHIVED_KEY, JSON.stringify([...next]))
       return next
     })
     persistProjectMeta(path, { archived: false, tagColor: null })
@@ -949,7 +975,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const PROMOTED_KEY = 'evoresearch-promoted'
   const readPromoted = (): Set<string> => {
     try {
-      const raw = JSON.parse(localStorage.getItem(PROMOTED_KEY) ?? '[]')
+      const raw = JSON.parse(clientStateGet(PROMOTED_KEY) ?? '[]')
       return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
     } catch {
       return new Set()
@@ -995,7 +1021,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setPromotedIds((prev) => {
       const next = new Set(prev)
       next.add(id)
-      try { localStorage.setItem(PROMOTED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
+      clientStateSet(PROMOTED_KEY, JSON.stringify([...next]))
       return next
     })
     forgetSideChat(cwdNow, id)
@@ -1298,7 +1324,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
 
   const persistPanels = (p: { left: number; right: number }) => {
     setPanels(p)
-    try { localStorage.setItem(PANELS_KEY, JSON.stringify(p)) } catch { /* 忽略 */ }
+    clientStateSet(PANELS_KEY, JSON.stringify(p))
   }
 
   // 拖拽分隔条（简单实现，参照官方 ui-layout DragHandle 模式）
@@ -1728,7 +1754,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
 /** 客户端插件主体。 */
 function apply(ctx: any) {
   installCss()
-  applyTheme()
   registerConversation(ctx)
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
@@ -1742,15 +1767,28 @@ function apply(ctx: any) {
       openDetails() {},
       closeDetails() {},
     })
-    const disposeRegistration = ctx.slots.register({ name: 'root' }, (props: any) => jsx(ErrorBoundary, { children: jsx(EvoFrame, props) }))
+    let disposed = false
+    let disposeRegistration: (() => void) | null = null
+    // 换浏览器/设备后：先以后端 client-state.json 为准回填 localStorage，
+    // 再挂载根组件，保证首帧就渲染恢复后的偏好/历史/布局；
+    // 随后把旧浏览器里尚未写穿的文件/本地键补写一份到后端。
+    void clientStateHydrate().then((state) => {
+      if (disposed || disposeRegistration !== null) return
+      if (typeof state !== 'object' || state === null) return
+      applyTheme()
+      disposeRegistration = ctx.slots.register({ name: 'root' }, (props: any) => jsx(ErrorBoundary, { children: jsx(EvoFrame, props) }))
+      clientStateMigrateLocalKeys(CLIENT_STATE_PREFIXES)
+      window.dispatchEvent(new CustomEvent('evo:client-state-loaded'))
+    })
     return () => {
-      disposeRegistration()
+      disposed = true
+      disposeRegistration?.()
       disposeService()
       connectionSource = null
       sessionsService = null
       workspacesService = null
     }
-  }, 'evoresearch-ui: layout 服务 + root 注册')
+  }, 'evoresearch-ui: layout 服务 + hydration 后 root 注册')
 }
 
 export { apply, inject }

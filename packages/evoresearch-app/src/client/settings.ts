@@ -10,6 +10,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Cpu, Info, Puzzle, Code2, Eye, Image as ImageIcon, Trash2, Server, Plus, X, Zap } from 'lucide-react'
 import { t } from './i18n'
+import { clientStateClear } from './client-state'
 import { toast } from './toast'
 import { ConfirmDialog } from './session-actions'
 import { Dropdown } from './dropdown'
@@ -649,13 +650,14 @@ function DataClearSection() {
     if (checked.projects) scopes.push('projects')
     if (checked.models) scopes.push('models')
     if (checked.prefs) {
-      // 本地偏好（主题/语言/布局/输入历史等）只存在浏览器 localStorage
+      // 本地偏好（主题/语言/布局/输入历史等）同时清除浏览器缓存与后端 client-state.json
       const keys: string[] = []
       for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i)
         if (key !== null && key.startsWith('evoresearch-')) keys.push(key)
       }
       for (const key of keys) localStorage.removeItem(key)
+      clientStateClear()
     }
     const finish = (ok: boolean, message?: string, notice?: string) => {
       setBusy(false)

@@ -26,6 +26,7 @@ import {
   Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2,
 } from 'lucide-react'
 import { t } from './i18n'
+import { clientStateDelete, clientStateGet, clientStateSet } from './client-state'
 import { toast } from './toast'
 import { SessionStatusLine } from './session-dock'
 import { ComposerModelInfo, StatusBar } from './statusbar'
@@ -673,19 +674,17 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'wf-clear' | 'auto-approve'>(null)
   const [clearView, setClearView] = useState(false)
   const [notifyOn, setNotifyOn] = useState(() => {
-    try { return localStorage.getItem('evoresearch-notifications') === '1' } catch { return false }
+    try { return clientStateGet('evoresearch-notifications') === '1' } catch { return false }
   })
-  // 仅显示我的消息（用户消息过滤；localStorage 持久化，全局共享）
+  // 仅显示我的消息（用户消息过滤；文件里持久化，全局共享）
   const [userOnly, setUserOnly] = useState(() => {
-    try { return localStorage.getItem('evoresearch-useronly') === '1' } catch { return false }
+    try { return clientStateGet('evoresearch-useronly') === '1' } catch { return false }
   })
   const toggleUserOnly = () => {
     setUserOnly((v) => {
       const next = !v
-      try {
-        if (next) localStorage.setItem('evoresearch-useronly', '1')
-        else localStorage.removeItem('evoresearch-useronly')
-      } catch { /* 忽略 */ }
+      if (next) clientStateSet('evoresearch-useronly', '1')
+      else clientStateDelete('evoresearch-useronly')
       return next
     })
   }
@@ -806,7 +805,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const toggleNotify = () => {
     if (notifyOn) {
       setNotifyOn(false)
-      try { localStorage.removeItem('evoresearch-notifications') } catch { /* 忽略 */ }
+      clientStateDelete('evoresearch-notifications')
       return
     }
     if (typeof Notification !== 'undefined') {
@@ -815,13 +814,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         void permission.then((result) => {
           if (result === 'granted') {
             setNotifyOn(true)
-            try { localStorage.setItem('evoresearch-notifications', '1') } catch { /* 忽略 */ }
+            clientStateSet('evoresearch-notifications', '1')
             try { new Notification('EvoResearch notifications enabled') } catch { /* 忽略 */ }
           }
         })
       } else if (permission === 'granted') {
         setNotifyOn(true)
-        try { localStorage.setItem('evoresearch-notifications', '1') } catch { /* 忽略 */ }
+        clientStateSet('evoresearch-notifications', '1')
       }
     }
   }
@@ -1384,7 +1383,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const showMessages = hasMessages && !clearView
   const toolResults = toolResultsOf(session)
   const [wfCleared, setWfCleared] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(`evoresearch-dynamic-workflows:${sessionId ?? ''}`) ?? '[]') } catch { return [] }
+    const raw = clientStateGet(`evoresearch-dynamic-workflows:${sessionId ?? ''}`)
+    try { return JSON.parse(raw ?? '[]') } catch { return [] }
   })
   const [wfTick, setWfTick] = useState(0)
   useEffect(() => {
@@ -1392,7 +1392,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     return () => clearInterval(timer)
   }, [])
   useEffect(() => {
-    try { localStorage.setItem(`evoresearch-dynamic-workflows:${sessionId ?? ''}`, JSON.stringify(wfCleared)) } catch { /* 忽略 */ }
+    clientStateSet(`evoresearch-dynamic-workflows:${sessionId ?? ''}`, JSON.stringify(wfCleared))
   }, [wfCleared, sessionId])
   const latestWorkflow = workflowNodes[workflowNodes.length - 1] as (ChatNode & { data: { name?: string; members?: Array<{ seq: number; label: string; phase?: string | null; status: string }>; stopReason?: string; startedAt?: number; endedAt?: number } }) | undefined
   const wfVisible = latestWorkflow !== undefined && !wfCleared.includes(latestWorkflow.key)

@@ -9,6 +9,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
 import { Folder, FileText, Command } from 'lucide-react'
 import { t } from './i18n'
+import { clientStateGet, clientStateSet } from './client-state'
 
 export interface Candidate {
   key: string
@@ -67,18 +68,16 @@ function historyKey(cwd: string | null): string {
 }
 export function readHistory(cwd: string | null): string[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(historyKey(cwd)) ?? '[]')
+    const raw = JSON.parse(clientStateGet(historyKey(cwd)) ?? '[]')
     return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string').slice(0, HISTORY_CAP) : []
   } catch {
     return []
   }
 }
 export function pushHistory(cwd: string | null, text: string): void {
-  try {
-    const list = readHistory(cwd).filter((item) => item !== text)
-    list.unshift(text)
-    localStorage.setItem(historyKey(cwd), JSON.stringify(list.slice(0, HISTORY_CAP)))
-  } catch { /* 存储不可用时忽略 */ }
+  const list = readHistory(cwd).filter((item) => item !== text)
+  list.unshift(text)
+  clientStateSet(historyKey(cwd), JSON.stringify(list.slice(0, HISTORY_CAP)))
 }
 
 interface CommandEntry { name: string; description: string; hint?: string }

@@ -1248,6 +1248,33 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
+        // 客户端状态镜像（UI 偏好/历史等）：后端存储，跨浏览器随项目数据迁移
+        if (method === 'client-state-get') {
+          if (evoresearch?.clientStateGet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          writeOk(res, await (evoresearch.clientStateGet as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'client-state-set') {
+          if (evoresearch?.clientStateSet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const key = requireString(payload, 'key')
+          const value = payload.value === null ? null : (typeof payload.value === 'string' ? payload.value : JSON.stringify(payload.value))
+          try {
+            const result = await (evoresearch.clientStateSet as (a: { key: string; value: string | null }) => Promise<{ ok: boolean }>).call(evoresearch, { key, value })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+        if (method === 'client-state-clear') {
+          if (evoresearch?.clientStateClear === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          try {
+            writeOk(res, await (evoresearch.clientStateClear as () => Promise<{ ok: boolean }>).call(evoresearch))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         // 模型设置（设置面板）：读 / 写 / 应用代码档为默认模型
         if (method === 'model-settings-get') {
           if (evoresearch?.modelSettingsGet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')

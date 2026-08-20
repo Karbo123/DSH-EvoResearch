@@ -778,6 +778,60 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
   }
 
+  /** 客户端状态镜像（原 localStorage 的 UI 偏好/历史等）：跨浏览器随项目数据迁移。 */
+  private clientStateFile(): string {
+    return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'client-state.json')
+  }
+
+  private readClientState(): Record<string, string> {
+    try {
+      const raw = JSON.parse(readFileSync(this.clientStateFile(), 'utf8')) as Record<string, unknown>
+      const out: Record<string, string> = {}
+      if (typeof raw === 'object' && raw !== null) {
+        for (const [k, v] of Object.entries(raw)) {
+          if (typeof v === 'string') out[k] = v
+        }
+      }
+      return out
+    } catch {
+      return {}
+    }
+  }
+
+  private writeClientState(state: Record<string, string>): void {
+    const file = this.clientStateFile()
+    mkdirSync(path.dirname(file), { recursive: true })
+    const tmp = `${file}.tmp-${process.pid}`
+    writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8')
+    renameSync(tmp, file)
+  }
+
+  @Remote('clientStateGet')
+  clientStateGet(): Record<string, string> {
+    return this.readClientState()
+  }
+
+  @Remote('clientStateSet')
+  clientStateSet(args: { key: string; value: string | null }): { ok: boolean } {
+    const key = String(args?.key ?? '')
+    if (key === '') return { ok: false }
+    const state = this.readClientState()
+    const value = args?.value
+    if (value === null) {
+      delete state[key]
+    } else {
+      state[key] = String(value).slice(0, 1024 * 256)
+    }
+    this.writeClientState(state)
+    return { ok: true }
+  }
+
+  @Remote('clientStateClear')
+  clientStateClear(): { ok: boolean } {
+    this.writeClientState({})
+    return { ok: true }
+  }
+
   /** §12.4 Profile 文件操作：写（新建/保存）、重命名、删除（名字严格限制在 profile 目录内）。 */
   private profileDirOf(workspaceDir: string | undefined): string {
     const base = workspaceDir && workspaceDir !== this.services.memory.config.dataRoot

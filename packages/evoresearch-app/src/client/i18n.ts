@@ -1,7 +1,9 @@
 /**
  * 工作台 i18n（中/英）。默认中文；语言偏好存 localStorage
- * （键 evoresearch-lang），切换后刷新页面生效（与主题切换同模式）。
+ * （键 evoresearch-lang）并写穿到后端 client-state.json，
+ * 切换后刷新页面生效（与主题切换同模式）。
  */
+import { clientStateGet, clientStateSet } from './client-state'
 
 const KEY = 'evoresearch-lang'
 
@@ -9,11 +11,11 @@ export type Lang = 'en' | 'zh'
 
 export function readLang(): Lang {
   if (typeof localStorage === 'undefined') return 'zh'
-  return localStorage.getItem(KEY) === 'en' ? 'en' : 'zh'
+  return clientStateGet(KEY) === 'en' ? 'en' : 'zh'
 }
 
 export function setLang(lang: Lang): void {
-  localStorage.setItem(KEY, lang)
+  clientStateSet(KEY, lang)
 }
 
 const DICT: Record<string, [string, string]> = {
