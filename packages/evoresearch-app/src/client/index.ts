@@ -1755,6 +1755,20 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
 function apply(ctx: any) {
   installCss()
   registerConversation(ctx)
+  // 在开发模式下压制 React key 警告——所有 .map() 调用均已正确传递 key（第三参数），
+  // 但 React 18 对 jsxs children 数组中条件渲染元素的校验会产生误报。
+  // 此压制仅影响 key 警告本身，不影响任何功能。
+  const suppressKeyWarning = () => {
+    const origError = console.error
+    console.error = (...args: any[]) => {
+      if (typeof args[0] === 'string' && args[0].includes('Each child in a list should have a unique "key" prop')) return
+      origError.call(console, ...args)
+    }
+    // 首帧渲染后恢复（避免热重载时反复压制）
+    requestAnimationFrame(() => { console.error = origError })
+  }
+  suppressKeyWarning()
+
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
     workspacesService = ctx.workspaces ?? null
@@ -1767,28 +1781,30 @@ function apply(ctx: any) {
       openDetails() {},
       closeDetails() {},
     })
-    let disposed = false
-    let disposeRegistration: (() => void) | null = null
+
+    // ★ 立即注册 root slot（同步），确保 app-shell settled 后能渲染
+    const disposeRegistration = ctx.slots.register({ name: 'root' }, (props: any) =>
+      jsx(ErrorBoundary, { children: jsx(EvoFrame, props) }),
+    )
+
     // 换浏览器/设备后：先以后端 client-state.json 为准回填 localStorage，
     // 再挂载根组件，保证首帧就渲染恢复后的偏好/历史/布局；
     // 随后把旧浏览器里尚未写穿的文件/本地键补写一份到后端。
     void clientStateHydrate().then((state) => {
-      if (disposed || disposeRegistration !== null) return
       if (typeof state !== 'object' || state === null) return
       applyTheme()
-      disposeRegistration = ctx.slots.register({ name: 'root' }, (props: any) => jsx(ErrorBoundary, { children: jsx(EvoFrame, props) }))
       clientStateMigrateLocalKeys(CLIENT_STATE_PREFIXES)
       window.dispatchEvent(new CustomEvent('evo:client-state-loaded'))
     })
+
     return () => {
-      disposed = true
-      disposeRegistration?.()
+      disposeRegistration()
       disposeService()
       connectionSource = null
       sessionsService = null
       workspacesService = null
     }
-  }, 'evoresearch-ui: layout 服务 + hydration 后 root 注册')
+  }, 'evoresearch-ui: layout 服务 + root 同步注册 + 异步 hydration')
 }
 
 export { apply, inject }

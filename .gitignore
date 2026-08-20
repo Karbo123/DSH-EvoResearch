@@ -7,6 +7,14 @@ dist/
 # 测试与临时文件
 .tmp/
 scripts/*.tmp.mjs
+.tmp-dsh-home-functional/
+.tmp-e2e/
+.tmp-web-acceptance/
+.tmp-web-acceptance-*/
+.playwright-cli/
+# 根目录遗留调试脚本（一次性）不再入库
+/tmp_*.cjs
+/tmp_*.mjs
 
 # 桌面构建
 desktop/sidecar/dist/

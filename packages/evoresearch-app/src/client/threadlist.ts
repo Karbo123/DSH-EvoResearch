@@ -521,7 +521,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   useEffect(() => () => { dragCleanupRef.current?.() }, [])
 
   const isDragging = (scope: DragScope, id: string) => dragState?.active === true && dragState.scope === scope && dragState.id === id
-  const placeholder = (key: string) => jsx('div', { className: 'evo-tl-drop-placeholder', 'aria-hidden': true, key })
+  const placeholder = (key: string) => jsx('div', { className: 'evo-tl-drop-placeholder', 'aria-hidden': true }, key)
   const dragGrip = (scope: DragScope, id: string, label: string, detail: string) => jsx('button', {
     type: 'button',
     className: 'evo-tl-drag-grip',

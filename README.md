@@ -40,12 +40,14 @@
 
 ### 网页版
 
+> **依赖版本**：本项目基于 **DSH（DeepSeek Harness）`0.1.0-rc.8`** 构建，请使用同名（或更新且兼容）版本运行。
+
 ```bash
 git clone https://github.com/Karbo123/DSH-EvoResearch.git
 cd DSH-EvoResearch
 npm install
 npm run build
-npx @deepseek-ai/dsh --profile profiles/evoresearch --port 3081
+npx @deepseek-ai/dsh@0.1.0-rc.8 --profile profiles/evoresearch --port 3081
 ```
 
 然后打开 <http://127.0.0.1:3081>。

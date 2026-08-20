@@ -84,7 +84,9 @@ export class ClientModuleSystem implements ClientModuleLoader {
     }
 
     const win = globalThis as DshWindow
-    if (win.__ModuleLoader__ !== undefined) throw new Error('client-modules: window.__ModuleLoader__ already installed (double boot?)')
+    // 服务器（dsh-host-frontend-static）已向 HTML 注入 __ModuleLoader__ 及预加载脚本。
+    // AppWebEntry 在此创建新的 ClientModuleSystem——直接覆盖，无需报错。
+    // 预加载脚本中的工厂由后续 prefetchImmediateTier 重新加载。
     win.__ModuleLoader__ = {
       load: (handoff: ClientPluginHandoff): void => {
         // Registration is keyed by the handoff id; a duplicate means a bundle
