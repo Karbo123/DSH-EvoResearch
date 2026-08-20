@@ -449,8 +449,13 @@ body { margin: 0; }
 .evo-tool-card.error .evo-tool-result-label { color: var(--color-error); }
 .evo-tool-card.success .evo-tool-result-label { color: var(--color-success); }
 /* ── 桌面自绘标题栏 ── */
-html.evo-desktop body { margin: 0 !important; }
-.evo-app[data-desktop] { height: calc(100vh - 36px); margin-top: 36px; }
+/* 桌面模式：#root 与 body 锁死为 100vh 且禁止文档级滚动——避免 margin 撑高 body
+   造成 36px 底部黑边 + 右侧滚动条。标题栏 fixed 覆盖顶部 36px，.evo-app 全高
+   用 padding-top 让位，内容与标题栏不重叠、页面不溢出。 */
+html.evo-desktop { height: 100%; overflow: hidden; }
+html.evo-desktop body { margin: 0 !important; height: 100%; overflow: hidden; }
+html.evo-desktop #root { height: 100%; overflow: hidden; }
+html.evo-desktop .evo-app[data-desktop] { height: 100%; padding-top: 36px; margin-top: 0; box-sizing: border-box; }
 .evo-tb {
   position: fixed; top: 0; left: 0; right: 0; height: 36px; z-index: 2147483647;
   display: flex; align-items: center; justify-content: flex-start; box-sizing: border-box;
