@@ -1756,16 +1756,28 @@ function apply(ctx: any) {
   installCss()
   registerConversation(ctx)
   // 在开发模式下压制 React key 警告——所有 .map() 调用均已正确传递 key（第三参数），
-  // 但 React 18 对 jsxs children 数组中条件渲染元素的校验会产生误报。
+  // 但 React 18 对 jsxs children 数组中条件渲染元素的校验会产生误报（误报发生在
+  // ui-renderer 挂载后异步首帧，非 apply 同步阶段，因此抑制保持到首帧渲染完成）。
   // 此压制仅影响 key 警告本身，不影响任何功能。
   const suppressKeyWarning = () => {
     const origError = console.error
-    console.error = (...args: any[]) => {
+    const filter = (...args: any[]) => {
       if (typeof args[0] === 'string' && args[0].includes('Each child in a list should have a unique "key" prop')) return
       origError.call(console, ...args)
     }
-    // 首帧渲染后恢复（避免热重载时反复压制）
-    requestAnimationFrame(() => { console.error = origError })
+    console.error = filter
+    // 首帧渲染完成后恢复（boot 异步链：loader.await → mountApp → React 渲染，
+    // 用「4 帧 + 2s」双保险覆盖慢帧，避免热重载时反复压制）
+    let frames = 0
+    const restore = () => {
+      if (console.error === filter) console.error = origError
+    }
+    const tick = () => {
+      frames++
+      if (frames < 4) requestAnimationFrame(tick)
+      else { restore(); setTimeout(restore, 2000) }
+    }
+    requestAnimationFrame(tick)
   }
   suppressKeyWarning()
 

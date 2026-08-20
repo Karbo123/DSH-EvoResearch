@@ -16,6 +16,10 @@ scripts/*.tmp.mjs
 /tmp_*.cjs
 /tmp_*.mjs
 
+# 其他项目临时克隆/目录（内含独立 .git，勿入库）
+.tmp-proteus/
+proteus-ref/
+
 # 桌面构建
 desktop/sidecar/dist/
 desktop/sidecar/.cache/

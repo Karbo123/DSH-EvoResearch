@@ -143,6 +143,11 @@
     - id: ui-settings
       name: '@deepseek-ai/dsh-client-ui-settings'
 
+    # 应用 root 渲染器（rc.8 内核要求 uiRenderer 服务；安装 slot renderer 并
+    # 挂载根组件渲染 root slot）。官方 web 表面同样装配该行。
+    - id: ui-renderer
+      name: '@deepseek-ai/dsh-client-ui-renderer'
+
     # EvoResearch 工作台：提供 layout 服务（app-shell 硬依赖）并注册 root slot。
     - id: evoresearch-ui
       name: '@evoresearch/dsh-app'

@@ -72,6 +72,8 @@
 
 ## 8. 版本基线说明
 
-npm 上 `@deepseek-ai/dsh` 系列发布的版本为 `0.1.0-rc.2 / rc.3 / rc.6`，
-**不存在 rc.5**。本机部署与依赖声明统一对齐 **0.1.0-rc.6**（同系列最新，API 与 rc.5 目标一致）。
-本插件自身版本 `0.1.0-rc.1`，peerDependencies 使用 `^0.1.0-rc.6` 范围。
+npm 上 `@deepseek-ai/dsh` 系列发布的版本为 `0.1.0-rc.2 / rc.3 / rc.6 / rc.8`，
+**不存在 rc.5 / rc.7**。当前基线为 **0.1.0-rc.8**（同系列最新，API 与 rc.6 目标一致，
+rc.8 起 `dsh-host-frontend-static` 向 HTML 注入 `__ModuleLoader__` 预引导，
+EvoResearch 前端以 vendored `dsh-client-modules` 覆盖兼容）。
+本插件自身版本 `0.1.0-rc.1`，依赖声明使用 `^0.1.0-rc.8` 范围。

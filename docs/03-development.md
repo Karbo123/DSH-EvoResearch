@@ -81,7 +81,7 @@ node desktop/scripts/bundle sidecar.mjs   skip download   # 重新组装桌面 s
 **目标：科研模块只依赖 `src/host/platform/adapters.ts` 暴露的适配接口，不直接
 散落 DSH 服务名与调用形态；DSH 版本升级只改适配层。**
 
-本插件运行在 DSH 0.1.0-rc.6 之上（`ctx.sessions` / `ctx.llm` / `ctx.tools` /
+本插件运行在 DSH 0.1.0-rc.8 之上（`ctx.sessions` / `ctx.llm` / `ctx.tools` /
 `ctx.approval` / `ctx.skills` / `ctx.subagents` 等 Cordis 服务）。平台目标能力
 （长上下文保护、session query、分层 Skill、MCP 生命周期、子代理、多模型
 Fallback、调度、多通道）部分已由 DSH 提供、部分需要适配接入。适配层由两个文件

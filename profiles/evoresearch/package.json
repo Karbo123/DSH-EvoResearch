@@ -4,7 +4,7 @@
   "private": true,
   "description": "EvoResearch profile：dsh-base（DSH 引擎）+ @evoresearch/dsh-app（自定义浏览器表面）+ @evoresearch/dsh-plugin（科研记忆/调度/通道/团队等 host 服务）",
   "dependencies": {
-    "@deepseek-ai/dsh-base": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-base": "^0.1.0-rc.8",
     "@evoresearch/dsh-app": "file:../../packages/evoresearch-app",
     "@evoresearch/dsh-plugin": "file:../../packages/evoresearch-plugin"
   },
