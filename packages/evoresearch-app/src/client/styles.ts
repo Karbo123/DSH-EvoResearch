@@ -680,9 +680,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-plugin-list { --evo-plugin-row: 31px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 6px 10px; max-height: calc(var(--evo-plugin-row) * 10 + 9 * 6px); overflow-y: auto; width: 100%; align-items: stretch; }
 .evo-settings-modal { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .evo-settings-head { padding: 10px 14px; border-bottom: 1px solid var(--color-border-light); }
-.evo-btn-back { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); font-size: 13px; cursor: pointer; font: inherit; transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; }
-.evo-btn-back:hover { background: color-mix(in srgb, var(--brand) 18%, transparent); border-color: var(--brand); color: var(--brand); }
-.evo-btn-back:active { transform: translateY(0.5px); }
+.evo-btn-back { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: transparent; color: var(--color-text-primary); font-size: 13px; cursor: pointer; font: inherit; }
+.evo-btn-back:hover { background: var(--hover-bg); }
 .evo-btn-back svg { width: 15px; height: 15px; }
 .evo-settings-body { display: flex; flex: 1; min-height: 0; }
 .evo-settings-nav { width: 176px; flex-shrink: 0; border-right: 1px solid var(--color-border-light); padding: 10px 8px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
