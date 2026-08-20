@@ -55,3 +55,6 @@ visual-composer-*.png
 HANDOFF.md
 
 .venv/
+
+# 验收脚本运行产物（截图/调试脚本，不入库）
+scripts/.tmp-*
