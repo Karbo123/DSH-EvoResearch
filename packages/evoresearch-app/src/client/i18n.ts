@@ -785,6 +785,12 @@ const DICT: Record<string, [string, string]> = {
   ledgerKindRejected: ['rejected', '已否决'],
   ledgerKindRun: ['run', '运行'],
   ledgerCopyFailed: ['Copy failed', '复制失败'],
+  ledgerInitFailed: ['Initialization failed', '初始化失败'],
+  ledgerTrialFailed: ['Failed to record trial', '留痕失败'],
+  ledgerRestoreFailed: ['Restore failed', '回退失败'],
+  ledgerExportFailed: ['Export failed', '导出失败'],
+  ledgerRejectFailed: ['Rejection failed', '否决失败'],
+  ledgerResumeWriteFailed: ['Failed to write resume state', '写入失败'],
   // 科研回合（Part B：四阶段模板）
   roundsTitle: ['Research Rounds', '科研回合'],
   roundsObserve: ['Observe', '观察'],

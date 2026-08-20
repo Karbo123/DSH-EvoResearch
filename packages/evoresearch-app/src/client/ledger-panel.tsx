@@ -36,7 +36,7 @@ async function api<T>(method: string, body: Record<string, unknown> = {}): Promi
     body: JSON.stringify(body),
   })
   const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? '请求失败')
+  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
   const v = json.value as T & { error?: string; ok?: boolean }
   // some remotes return { error: string } inside value on service unavailable
   if (v !== null && typeof v === 'object' && 'error' in (v as Record<string, unknown>) && typeof (v as { error?: unknown }).error === 'string') {
@@ -137,7 +137,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
     setBusy(true)
     void api<{ ok: boolean; sha?: string; error?: string }>('experiment-ledger-init', { projectDir: workspaceDir, slug, ...(overwrite ? { overwrite: true } : {}) })
       .then((r) => {
-        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? '初始化失败')
+        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? t('ledgerInitFailed'))
         onNotice(t('ledgerInitOk'))
         setConfirmInit(false); setConfirmOverwrite(false)
         refreshAll()
@@ -153,7 +153,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
       projectDir: workspaceDir, slug, payload: { kind: 'manual', note: manualNote.trim(), createdAt: Date.now() },
     })
       .then((r) => {
-        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? '留痕失败')
+        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? t('ledgerTrialFailed'))
         setManualNote('')
         onNotice(t('ledgerTrialOk'))
         loadLog(); loadRecent()
@@ -166,7 +166,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
     setBusy(true)
     void api<{ ok: boolean; restoredFiles?: number; error?: string }>('experiment-ledger-restore', { projectDir: workspaceDir, slug, sha })
       .then((r) => {
-        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? '回退失败')
+        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? t('ledgerRestoreFailed'))
         setConfirmRestore(null)
         onNotice(`${t('ledgerRestoreOk')}: ${(r as { restoredFiles: number }).restoredFiles} ${t('filesRestored')}`)
         loadLog()
@@ -180,7 +180,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
     setBusy(true)
     void api<{ ok: boolean; path?: string; error?: string }>('experiment-ledger-export', { projectDir: workspaceDir, slug, dest: exportDest.trim() })
       .then((r) => {
-        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? '导出失败')
+        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? t('ledgerExportFailed'))
         onNotice(`${t('ledgerExportOk')}: ${(r as { path: string }).path}`)
       })
       .catch((e: unknown) => onError(String((e as Error)?.message ?? e)))
@@ -194,7 +194,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
       projectDir: workspaceDir, slug, note: rejectNote.trim(),
     })
       .then((r) => {
-        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? '否决失败')
+        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? t('ledgerRejectFailed'))
         setRejectNote('')
         onNotice(t('ledgerRejectOk'))
         loadLog()
@@ -214,7 +214,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
     setBusy(true)
     void api<{ ok: boolean; path?: string; error?: string }>('experiment-ledger-write-resume', { projectDir: workspaceDir, slug, state: recent })
       .then((r) => {
-        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? '写入失败')
+        if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? t('ledgerResumeWriteFailed'))
         onNotice(`${t('ledgerResumeOk')}: ${(r as { path: string }).path}`)
       })
       .catch((e: unknown) => onError(String((e as Error)?.message ?? e)))

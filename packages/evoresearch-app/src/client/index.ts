@@ -1219,9 +1219,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ root: tab.root, path: tab.filePath, text: tab.draft ?? '' }),
     }).then((res) => res.json()).then((json) => {
-      if (json.ok === true) toast('Saved', 'success')
-      else toast(json.error?.message ?? '保存失败', 'error')
-    }).catch(() => { toast('保存失败', 'error') })
+      if (json.ok === true) toast(t('saved'), 'success')
+      else toast(json.error?.message ?? t('llmSaveFailed'), 'error')
+    }).catch(() => { toast(t('llmSaveFailed'), 'error') })
   }
 
   const toggleLanguage = () => {
