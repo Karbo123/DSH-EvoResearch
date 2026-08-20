@@ -47,6 +47,59 @@ function ensureProfilesLink() {
 }
 ensureProfilesLink()
 
+/**
+ * 数据根 profiles 的模块自愈：DSH 的 healProfilesModuleFallback 只从 dsh 包的
+ * 依赖闭包建 symlink（@deepseek-ai/* 等），不覆盖声明在 app 根的 @evoresearch/*
+ * 业务包；而数据根 profiles 是 junction 字面路径，Node 从它向上爬 node_modules
+ * 永远到不了程序目录的 app/node_modules —— 缺了这层 link，插件树加载会
+ * ERR_MODULE_NOT_FOUND（桌面黑窗根因）。这里在 $DSH_HOME/profiles/node_modules
+ * 下为 @evoresearch 的两个包建 junction → 程序目录真实位置（与 heal 的产物共存，
+ * heal 不动我们自己管理的链接）。
+ */
+function ensureEvoModules() {
+  const modulesDir = join(dataHome, 'profiles', 'node_modules')
+  const evoDir = join(modulesDir, '@evoresearch')
+  const sourceScope = join(process.cwd(), 'node_modules', '@evoresearch')
+  if (!existsSync(sourceScope)) return
+  mkdirSync(evoDir, { recursive: true })
+  for (const pkg of ['dsh-app', 'dsh-plugin']) {
+    const link = join(evoDir, pkg)
+    const target = join(sourceScope, pkg)
+    if (!existsSync(target)) continue
+    if (existsSync(link)) {
+      // 已存在的正确 junction 保持；错误/普通目录则重建
+      try {
+        const lstat = require('node:fs').lstatSync(link)
+        if (lstat.isSymbolicLink() && readlinkSafe(link) === target) continue
+        require('node:fs').rmSync(link, { recursive: true, force: true })
+      } catch (e) {
+        if (e.code !== 'ENOENT') {
+          try { require('node:fs').rmSync(link, { recursive: true, force: true }) } catch { /* 只读忽略 */ }
+        }
+      }
+    }
+    try {
+      execSync(`cmd /c mklink /J "${link}" "${target}"`, { stdio: 'ignore' })
+      console.log(`EvoResearch modules link: ${pkg} → ${target}`)
+    } catch {
+      // junction 不可用（非 NTFS 等）：整体复制（慢但兜底）
+      const { cpSync } = require('node:fs')
+      cpSync(target, link, { recursive: true })
+      console.log(`EvoResearch modules copy fallback: ${pkg}`)
+    }
+  }
+}
+ensureEvoModules()
+
+/** 读取 link 的 target（兼容 readlinkSync 抛错场景）。 */
+function readlinkSafe(path) {
+  try {
+    return require('node:fs').readlinkSync(path)
+  } catch {
+    return ''
+  }
+}
+
 /** 首次启动：把程序目录内置的 .credentials.yaml 复制进数据根（用户凭据只写数据根）。 */
 function ensureCredentials() {
   const source = join(process.cwd(), '.credentials.yaml')

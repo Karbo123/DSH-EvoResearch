@@ -7,6 +7,7 @@ dist/
 # 测试与临时文件
 .tmp/
 scripts/*.tmp.mjs
+.tmp-acceptance-backup/
 .tmp-dsh-home-functional/
 .tmp-e2e/
 .tmp-web-acceptance/
