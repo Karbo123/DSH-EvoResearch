@@ -124,7 +124,8 @@ const DICT: Record<string, [string, string]> = {
   archiveProject: ['Archive project', '归档项目'],
   archivedProjects: ['Archived projects', '已归档项目'],
   unarchive: ['Unarchive', '恢复'],
-  archived: ['Archived', '已归档'],
+  archived: ['Archived chats', '已归档对话'],
+  noActiveProjects: ['No active projects', '暂无进行中的项目'],
   showArchived: ['Show archived', '显示已归档'],
   // 聊天区
   editMsg: ['Edit message', '编辑消息'],

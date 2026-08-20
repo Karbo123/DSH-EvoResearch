@@ -250,6 +250,11 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   const archivedRows = sessionIds
     .map((id) => sessions.byId[id])
     .filter((s) => s !== undefined && s.blank !== true && (s.parentSessionId === undefined || isPromoted(s.id)) && !hideIds.has(s.id) && !deletedIds.has(s.id) && archivedIds.has(s.id))
+    // 已归档项目的子对话已归在“已归档项目”下，不再重复出现在“已归档对话”里
+    .filter((s) => {
+      const base = typeof s?.cwd === 'string' && s.cwd !== '' ? s.cwd.replace(/[\\/]+$/, '') : null
+      return base === null || !archivedProjects.has(base)
+    })
     .sort((a, b) => (archivedIds.has(b.id) ? 1 : 0) - (archivedIds.has(a.id) ? 1 : 0))
   const [query, setQuery] = useState('')
   const [sortMode, setSortMode] = useState<SortMode>(readSortMode)
@@ -651,13 +656,15 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                 children: [
                   deleteError !== null && jsx('span', { className: 'evo-tl-fork-error evo-tl-project-error', children: deleteError }),
                   projectList.length === 0
-                ? jsxs('div', {
-                    className: 'evo-tl-empty',
-                    children: [
-                      jsx(FolderGit2, {}),
-                      jsx('div', { children: t('noProjectsYet') }),
-                    ],
-                  })
+                ? archivedProjectList.length === 0
+                  ? jsxs('div', {
+                      className: 'evo-tl-empty',
+                      children: [
+                        jsx(FolderGit2, {}),
+                        jsx('div', { children: t('noProjectsYet') }),
+                      ],
+                    })
+                  : jsx('div', { className: 'evo-tl-empty evo-tl-empty-compact', children: t('noActiveProjects') })
                 : projectRenderItems.map((item) => item.kind === 'placeholder'
                   ? placeholder(item.key)
                   : (() => {
@@ -1084,7 +1091,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
               }),
         // ── 已归档分区（§26.3 Archive：保留数据，可恢复）──
         archivedRows.length > 0 && jsxs('div', {
-          className: 'evo-tl-section',
+          className: 'evo-tl-section evo-tl-archived-sessions',
           children: [
             jsxs('button', {
               type: 'button',

@@ -251,7 +251,8 @@ body { margin: 0; }
 .evo-tl-archived-row:hover { opacity: 1; }
 .evo-tl-fork-error { font-size: 11px; color: var(--color-error); text-align: right; line-height: 1.4; max-width: 70%; }
 .evo-tl-project-error { display: block; margin: 2px 10px 6px; text-align: left; max-width: none; }
-.evo-tl-archived-projects { padding-top: 4px; }
+.evo-tl-archived-projects { display: block; padding: 4px 10px 4px; }
+.evo-tl-archived-sessions { display: block; padding: 6px 10px 4px; }
 .evo-tl-row {
   display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; padding: 6px 10px; margin-bottom: 2px;
   border: none; background: none; border-radius: 8px; cursor: default; position: relative;
@@ -271,6 +272,7 @@ body { margin: 0; }
 .evo-tl-row-sub { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 1px; }
 .evo-tl-empty { padding: 28px 16px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-tl-empty svg { width: 40px; height: 40px; color: var(--color-border); margin-bottom: 8px; }
+.evo-tl-empty-compact { padding: 10px 16px; text-align: left; font-size: 12px; color: var(--color-text-tertiary); }
 /* ── 中间聊天区 ── */
 .evo-chat { flex: 1 1 auto; height: auto; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .evo-welcome { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 24px 32px; min-height: 0; }
