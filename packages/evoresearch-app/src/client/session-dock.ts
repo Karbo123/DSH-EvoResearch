@@ -1,8 +1,7 @@
 /**
  * 会话状态条与统计条（借鉴官方 WebUI 的 composer dock 与 StatsLine）。
  *
- * - SessionStatusLine：排队消息数 / 进行中目标 / 模式徽章（read-only /
- *   workspace-write / full access）/ 上下文用量百分比
+ * - SessionStatusLine：排队消息数 / 进行中目标 / 上下文用量百分比
  * - SessionStatsLine：底部统计条（轮数·步数 | LLM 耗时 · 工具耗时 |
  *   首 token 平均 · tok/s | 缓存命中 | 输入·输出 tokens）
  *
@@ -10,8 +9,7 @@
  * tokenUsage / contextPressure / permissions / goal）与会话快照（queue）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect, useState } from 'react'
-import { ListTodo, Target, ShieldCheck, ShieldOff, Gauge } from 'lucide-react'
+import { ListTodo, Target, Gauge } from 'lucide-react'
 import { t } from './i18n'
 
 /** 时长格式化（官方 formatDuration 语义）。 */
@@ -31,49 +29,24 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-/** 模式徽章文案。 */
-function modeLabel(preset: string | undefined): string | null {
-  if (preset === 'read-only') return t('readOnly')
-  if (preset === 'workspace-write') return t('permWrite')
-  if (preset === 'danger-full-access') return t('fullEffect')
-  if (preset === 'custom') return t('custom')
-  return preset ?? null
-}
-
 export interface SessionDockData {
   session: any
 }
 
 /** 状态条内容：排队 / 目标 / 模式 / 上下文。 */
 export function SessionStatusLine({ session }: SessionDockData) {
-  const [mode, setMode] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const fetchMode = () => fetch('/evoresearch/fs/mode').then((res) => res.json()).then((json) => {
-      if (!cancelled && json.ok) setMode(json.value.preset)
-    }).catch(() => {})
-    void fetchMode()
-    const onChange = () => { void fetchMode() }
-    window.addEventListener('evo-mode-changed', onChange)
-    return () => { cancelled = true; window.removeEventListener('evo-mode-changed', onChange) }
-  }, [session])
-
   if (session === null) return null
 
   const projections = session.projections
   const queue = session.snapshotCache?.queue ?? []
   const goal = projections?.get('goal')
   const pressure = projections?.get('contextPressure')
-  // 模式：投影值优先（会话内切换），回退 host 默认预设
-  const effectivePreset = projections?.get('permissions')?.preset ?? mode
   const occupancy = (() => {
     const used = pressure?.projectedTokens ?? pressure?.pressureTokens
     const total = pressure?.contextWindow
     if (used === undefined || total === undefined || total === 0) return null
     return { percent: Math.min(100, Math.round((used / total) * 100)), used, total }
   })()
-  const modeLabelValue = modeLabel(effectivePreset)
 
   return jsxs(Fragment, {
     children: [
@@ -86,11 +59,6 @@ export function SessionStatusLine({ session }: SessionDockData) {
         className: 'evo-status-chip evo-status-goal',
         title: goal.title ?? t('activeGoal'),
         children: [jsx(Target, {}), jsx('span', { children: goal.title ?? t('goal') })],
-      }),
-      modeLabelValue !== null && jsxs('span', {
-        className: `evo-status-chip${effectivePreset === 'read-only' ? ' evo-status-ro' : effectivePreset === 'danger-full-access' ? ' evo-status-full' : ''}`,
-        title: `${t('permission')}: ${effectivePreset ?? ''}`,
-        children: [effectivePreset === 'read-only' ? jsx(ShieldOff, {}) : jsx(ShieldCheck, {}), jsx('span', { children: modeLabelValue })],
       }),
       occupancy !== null && jsxs('span', {
         className: 'evo-status-chip',

@@ -172,12 +172,20 @@ function readPanels(): { left: number; right: number } {
   return { left: 264, right: 320 }
 }
 
-/** 会话当前标题（byId[current]）。 */
-function currentTitleOf(sessions: any): string | null {
+/** 会话当前标题（byId[current]）；子对话显示为「项目名/子对话名」。 */
+function currentTitleOf(sessions: any, workspaces: any): string | null {
   const id = sessions.current
   if (id === undefined) return null
   const s = sessions.byId[id]
-  return s === undefined ? null : (s.displayTitle ?? id.slice(0, 12))
+  if (s === undefined) return null
+  const title = s.displayTitle ?? id.slice(0, 12)
+  const cwd = typeof s.cwd === 'string' && s.cwd !== '' ? s.cwd.replace(/[\\/]+$/, '') : null
+  if (cwd === null) return title
+  const workspace = (workspaces?.items ?? []).find((w: any) => typeof w?.path === 'string' && w.path.replace(/[\\/]+$/, '') === cwd)
+  const projectName = typeof workspace?.title === 'string' && workspace.title.trim() !== ''
+    ? workspace.title
+    : (cwd.split(/[\\/]/).pop() ?? cwd)
+  return title === projectName ? projectName : `${projectName}/${title}`
 }
 
 /**
@@ -277,7 +285,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
 
   const restoredCurrent = sessions.current
   const current = homeMode ? undefined : restoredCurrent
-  const currentTitle = current === undefined ? null : currentTitleOf(sessions)
+  const currentTitle = current === undefined ? null : currentTitleOf(sessions, workspaces)
   const running = current !== undefined && sessions.byId[current]?.running === true
   // 当前会话的后台任务（§21.6：jobsBySession 快照）
   const currentJobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
