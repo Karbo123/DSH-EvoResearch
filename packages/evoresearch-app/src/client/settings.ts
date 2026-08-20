@@ -175,6 +175,8 @@ function ModelAssignSection() {
   const [saveMsg, setSaveMsg] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [migrated, setMigrated] = useState<Record<string, string>>({})
+  /** 最近一次“应用/设为默认”选择的代码档（三档模型相同时也以此为准）。 */
+  const [storedDefaultTier, setStoredDefaultTier] = useState<string | null>(null)
 
   const providerModels = (providerId: string): AssignModelOption[] => {
     const group = catalog.find((g) => g.provider?.id === providerId)
@@ -234,6 +236,7 @@ function ModelAssignSection() {
       setProviders(providerList)
       setCatalog(groups)
       const raw = (ms.ok === true ? ms.value : {}) as Record<string, unknown>
+      setStoredDefaultTier(raw.defaultTier === 'simple' || raw.defaultTier === 'medium' || raw.defaultTier === 'complex' ? raw.defaultTier : null)
       const rawCode = (raw.code ?? {}) as Record<string, unknown>
       const ids = new Set(providerList.map((p) => p.id))
       const modelsOf = (providerId: string): AssignModelOption[] => {
@@ -344,13 +347,17 @@ function ModelAssignSection() {
           body: JSON.stringify({ patch }),
         }).then((r) => r.json())
         if (saved.ok !== true) throw new Error(saved.error?.message ?? t('assignSaveFailed'))
-        // 代码模型卡片：配置即默认——保存后自动把已配置的档位设为默认模型
-        // （优先均衡档，其次轻量档、深度档），不再需要单独的“设为默认模型”按钮。
+        // 代码模型卡片：配置即默认——保存后自动把“当前档位”设为默认模型。
+        // 以用户最近一次选择的档位为准（修改模型配置不改变档位归属）；
+        // 尚未选过档位时才按均衡档 > 轻量档 > 深度档的优先级兜底。
         if (keys[0] === 'simple') {
-          const defaultTier = (['medium', 'simple', 'complex'] as const).find((tier) => {
+          const stored = storedDefaultTier === 'simple' || storedDefaultTier === 'medium' || storedDefaultTier === 'complex' ? storedDefaultTier : null
+          const defaultTier = (stored !== null && assign[stored] !== undefined && assign[stored]?.provider !== '' && assign[stored]?.model !== ''
+            ? stored
+            : (['medium', 'simple', 'complex'] as const).find((tier) => {
             const v = assign[tier]
             return v !== undefined && v.provider !== '' && v.model !== ''
-          })
+          }))
           if (defaultTier !== undefined) {
             try {
               const applied = await fetch('/evoresearch/fs/model-settings-apply', {

@@ -617,12 +617,13 @@ export function registerWorkspaceApi(ctx: any): void {
             if (evoresearch?.modelSettingsGet !== undefined) {
               const settings = await evoresearch.modelSettingsGet() as { code?: Record<string, { provider?: string; model?: string; reasoningEffort?: string }>; defaultTier?: string } | undefined
               const code = settings?.code ?? {}
-              // 优先采用用户最近一次实际选择的档位（三档模型相同时，
-              // 仅靠 provider+model 无法区分；defaultTier 在应用档位时持久化）。
+              // 档位是权威：用户最近一次实际选择的档位决定“当前”归属，
+              // 不按模型名重新匹配——即使三档模型相同、或之后在设置面板里
+              // 修改了各档位对应的模型，档位身份保持不变（defaultTier 在应用档位时持久化）。
               const stored = settings?.defaultTier
               if (stored === 'simple' || stored === 'medium' || stored === 'complex') {
                 const cfg = code[stored]
-                if (cfg !== undefined && cfg.provider === selection.provider && cfg.model === selection.model) {
+                if (cfg !== undefined && cfg.provider !== undefined && cfg.provider !== '' && cfg.model !== undefined && cfg.model !== '') {
                   tier = stored
                   reasoningEffort = cfg.reasoningEffort ?? null
                 }
