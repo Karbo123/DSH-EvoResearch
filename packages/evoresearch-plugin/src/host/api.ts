@@ -454,6 +454,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         code: { ...DEFAULT_MODEL_SETTINGS.code, ...(raw.code ?? {}) },
         vision: { ...DEFAULT_MODEL_SETTINGS.vision, ...(raw.vision ?? {}) },
         image: { ...DEFAULT_MODEL_SETTINGS.image, ...(raw.image ?? {}) },
+        ...(raw.defaultTier === 'simple' || raw.defaultTier === 'medium' || raw.defaultTier === 'complex' ? { defaultTier: raw.defaultTier } : {}),
       }
       return merged
     } catch {
@@ -476,6 +477,9 @@ export class EvoResearchApiService extends TypertRemoteService {
       code: { ...current.code, ...(patch.code ?? {}) },
       vision: { ...current.vision, ...(patch.vision ?? {}) },
       image: { ...current.image, ...(patch.image ?? {}) },
+      ...(patch.defaultTier === 'simple' || patch.defaultTier === 'medium' || patch.defaultTier === 'complex'
+        ? { defaultTier: patch.defaultTier }
+        : (current.defaultTier !== undefined ? { defaultTier: current.defaultTier } : {})),
     }
     const tmp = `${file}.tmp-${process.pid}`
     writeFileSync(tmp, JSON.stringify(merged, null, 2), 'utf8')
@@ -495,6 +499,15 @@ export class EvoResearchApiService extends TypertRemoteService {
       return { ok: false, error: 'agentDefaultModel 服务不可用' }
     }
     agentDefaultModel.saveSelection({ provider: setting.provider, model: setting.model })
+    // 记录用户实际选择的档位：三档模型相同时，仅靠“当前模型”无法区分档位。
+    try {
+      const file = this.modelSettingsFile()
+      mkdirSync(path.dirname(file), { recursive: true })
+      const current = this.readModelSettings()
+      const tmp = `${file}.tmp-${process.pid}`
+      writeFileSync(tmp, JSON.stringify({ ...current, defaultTier: tier }, null, 2), 'utf8')
+      renameSync(tmp, file)
+    } catch { /* 档位持久化失败不阻塞默认模型应用 */ }
     return { ok: true, provider: setting.provider, model: setting.model }
   }
 

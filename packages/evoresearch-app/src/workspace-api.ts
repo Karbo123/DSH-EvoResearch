@@ -615,14 +615,27 @@ export function registerWorkspaceApi(ctx: any): void {
           try {
             const evoresearch = ctx.get('evoresearch') as { modelSettingsGet?: () => Promise<unknown> } | undefined
             if (evoresearch?.modelSettingsGet !== undefined) {
-              const settings = await evoresearch.modelSettingsGet() as { code?: Record<string, { provider?: string; model?: string; reasoningEffort?: string }> } | undefined
+              const settings = await evoresearch.modelSettingsGet() as { code?: Record<string, { provider?: string; model?: string; reasoningEffort?: string }>; defaultTier?: string } | undefined
               const code = settings?.code ?? {}
-              for (const t of ['simple', 'medium', 'complex'] as const) {
-                const cfg = code[t]
+              // 优先采用用户最近一次实际选择的档位（三档模型相同时，
+              // 仅靠 provider+model 无法区分；defaultTier 在应用档位时持久化）。
+              const stored = settings?.defaultTier
+              if (stored === 'simple' || stored === 'medium' || stored === 'complex') {
+                const cfg = code[stored]
                 if (cfg !== undefined && cfg.provider === selection.provider && cfg.model === selection.model) {
-                  tier = t
+                  tier = stored
                   reasoningEffort = cfg.reasoningEffort ?? null
-                  break
+                }
+              }
+              // 未记录档位或当前模型已变化（不再匹配已存档位）时，回退到按模型匹配。
+              if (tier === null) {
+                for (const t of ['simple', 'medium', 'complex'] as const) {
+                  const cfg = code[t]
+                  if (cfg !== undefined && cfg.provider === selection.provider && cfg.model === selection.model) {
+                    tier = t
+                    reasoningEffort = cfg.reasoningEffort ?? null
+                    break
+                  }
                 }
               }
             }

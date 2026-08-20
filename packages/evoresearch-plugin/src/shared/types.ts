@@ -225,6 +225,8 @@ export interface ModelSettings {
   readonly vision: ModelTierSetting
   /** 图片生成模型。 */
   readonly image: ModelTierSetting
+  /** 最近一次“应用/设为默认”选择的代码档；三档模型相同时仍能区分用户选择。 */
+  readonly defaultTier?: 'simple' | 'medium' | 'complex'
 }
 
 /** 默认模型设置（与 ResearchOS 三档语义对齐）。 */
