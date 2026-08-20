@@ -853,9 +853,15 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                     className: 'evo-tl-section evo-tl-subchat-section',
                     children: [
                       jsxs('div', {
-                        className: 'evo-tl-section-head',
+                        className: 'evo-tl-subchat-head',
                         children: [
-                          jsx('span', { className: 'evo-tl-section-title', children: t('subchats') }),
+                          jsxs('span', {
+                            className: 'evo-tl-subchat-title',
+                            children: [
+                              jsx(MessagesSquare, {}),
+                              jsx('span', { children: t('subchats') }),
+                            ],
+                          }),
                           jsx('button', {
                             type: 'button',
                             className: 'evo-tl-section-action',
@@ -866,7 +872,13 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                           }),
                         ],
                       }),
-                      jsx('span', { className: 'evo-tl-project-context', children: projectMode.name }),
+                      jsxs('div', {
+                        className: 'evo-tl-project-badge',
+                        children: [
+                          jsx(FolderGit2, {}),
+                          jsx('span', { children: projectMode.name }),
+                        ],
+                      }),
                       forkError !== null && jsx('span', { className: 'evo-tl-fork-error', children: forkError }),
                       deleteError !== null && jsx('span', { className: 'evo-tl-fork-error', children: deleteError }),
                     ],

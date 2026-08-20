@@ -234,12 +234,17 @@ body { margin: 0; }
 .evo-tl-body { flex: 1; overflow-y: auto; padding: 6px 8px 16px; min-height: 0; }
 .evo-tl-section { padding: 10px 10px 4px; display: flex; align-items: center; justify-content: space-between; }
 .evo-tl-section-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
-.evo-tl-subchat-section { display: block; padding-top: 8px; }
+.evo-tl-subchat-section { display: block; padding: 2px 10px 10px; margin-bottom: 6px; border-bottom: 1px solid var(--color-border-light); }
+.evo-tl-subchat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.evo-tl-subchat-title { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
+.evo-tl-subchat-title svg { width: 13px; height: 13px; color: var(--brand); }
+.evo-tl-project-badge { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin-top: 7px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--brand) 9%, transparent); border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent); color: var(--color-text-primary); font-size: 12px; font-weight: 500; }
+.evo-tl-project-badge svg { width: 12px; height: 12px; color: var(--brand); flex-shrink: 0; }
+.evo-tl-project-badge span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-tl-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .evo-tl-section-action { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; border-radius: 6px; color: var(--color-text-tertiary); background: transparent; cursor: pointer; }
 .evo-tl-section-action:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-tl-section-action svg { width: 14px; height: 14px; }
-.evo-tl-project-context { display: block; margin-top: 3px; color: var(--color-text-tertiary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .evo-tl-archived-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); background: transparent; border: none; border-radius: 8px; cursor: pointer; font: inherit; }
 .evo-tl-archived-toggle:hover { background: var(--hover-bg); }
 .evo-tl-archived-toggle svg { width: 13px; height: 13px; }

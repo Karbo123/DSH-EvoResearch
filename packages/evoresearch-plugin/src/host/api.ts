@@ -2647,11 +2647,56 @@ export class EvoResearchApiService extends TypertRemoteService {
   async threadsSearch(args: { query: string; limit?: number }): Promise<unknown> {
     const sessionQuery = this.hostCtx.get('sessionQuery')
     if (!sessionQuery) return { hits: [], error: 'sessionQuery 服务不可用' }
-    const page = await sessionQuery.searchEvents({
-      query: args.query,
-      limit: args.limit ?? 50,
-    } as never)
-    return { hits: page as unknown }
+    const query = String(args.query ?? '').trim()
+    if (query === '') return { hits: [] }
+    const limit = Math.max(1, Math.min(args.limit ?? 50, 100))
+    const hits: Array<Record<string, unknown>> = []
+    const seen = new Set<string>()
+    const pushHit = (hit: any, snippet: string) => {
+      const id = hit?.header?.id ?? hit?.sessionId ?? hit?.id
+      if (typeof id !== 'string' || seen.has(id)) return
+      seen.add(id)
+      hits.push({
+        sessionId: id,
+        threadId: id,
+        id,
+        title: hit?.header?.title ?? null,
+        cwd: hit?.header?.cwd ?? null,
+        snippet,
+        text: snippet,
+      })
+    }
+    // 1) FTS 全文搜索（searchSessions 是跨会话搜索；searchEvents 是“会话内”搜索，必须带 sessionId）。
+    //    FTS5 unicode61 分词对英文 token 和独立中文词有效，但匹配不了中文长串里的子串。
+    try {
+      const page = await sessionQuery.searchSessions({ query, limit } as never)
+      for (const hit of page?.items ?? []) {
+        if (hits.length >= limit) break
+        pushHit(hit, hit?.bestMatch?.snippet ?? '')
+      }
+    } catch (error) {
+      // FTS 失败不阻断字面子串扫描
+    }
+    // 2) 字面子串扫描兜底（仅中文/非 ASCII 查询）：对每个会话用 filterEvents 的 text
+    //    子句做字面语义扫描，支持中文子串（如“打招呼”里的“招呼”），并去重补全 FTS 漏掉的命中。
+    const hasNonAscii = /[^\u0000-\u007F]/.test(query)
+    if (hasNonAscii && hits.length < limit) {
+      try {
+        const sessions = await sessionQuery.listSessions()
+        for (const session of sessions ?? []) {
+          if (seen.has(session?.header?.id)) continue
+          if (hits.length >= limit) break
+          const docs = await sessionQuery.filterEvents(session.header.id, [{ kind: 'text', text: query }] as never)
+          if (docs.length > 0) {
+            const snippet = String(docs[0]?.text ?? '').slice(0, 240)
+            pushHit(session, snippet)
+          }
+        }
+      } catch (error) {
+        // 字面扫描失败时保留已收集的 FTS 命中
+      }
+    }
+    return { hits }
   }
 
   // ── 斜杠命令目录（动态读取 dsh-commands 全局注册表） ──────────────────────

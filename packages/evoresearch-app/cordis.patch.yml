@@ -25,11 +25,11 @@
 - id: hmr
   disabled: true
 
-# 全文本会话搜索默认关闭（openAt: never），首次搜索才打开内存索引。
+# 全文本会话搜索懒加载（openAt: first-search）：首次搜索才打开内存索引。
 - id: session-query-sqlite
   config:
     path: ':memory:'
-    openAt: never
+    openAt: first-search
 
 - id: tools
   config:
