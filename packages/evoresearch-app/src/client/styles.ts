@@ -234,13 +234,13 @@ body { margin: 0; }
 .evo-tl-body { flex: 1; overflow-y: auto; padding: 6px 8px 16px; min-height: 0; }
 .evo-tl-section { padding: 10px 10px 4px; display: flex; align-items: center; justify-content: space-between; }
 .evo-tl-section-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
-.evo-tl-subchat-section { display: block; padding: 2px 10px 10px; margin-bottom: 6px; border-bottom: 1px solid var(--color-border-light); }
+.evo-tl-subchat-section { display: block; padding: 2px 10px 12px; margin-bottom: 8px; border-bottom: 1px solid var(--color-border-light); }
 .evo-tl-subchat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .evo-tl-subchat-title { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
 .evo-tl-subchat-title svg { width: 13px; height: 13px; color: var(--brand); }
-.evo-tl-project-badge { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin-top: 7px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--brand) 9%, transparent); border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent); color: var(--color-text-primary); font-size: 12px; font-weight: 500; }
-.evo-tl-project-badge svg { width: 12px; height: 12px; color: var(--brand); flex-shrink: 0; }
-.evo-tl-project-badge span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-tl-project-context { display: flex; align-items: center; gap: 8px; max-width: 100%; margin-top: 6px; padding: 7px 10px; border-radius: 8px; background: color-mix(in srgb, var(--brand) 8%, transparent); border: 1px solid color-mix(in srgb, var(--brand) 16%, transparent); box-shadow: inset 3px 0 0 var(--brand); color: var(--color-text-primary); font-size: 12.5px; font-weight: 600; user-select: none; cursor: default; }
+.evo-tl-project-context svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
+.evo-tl-project-context span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-tl-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .evo-tl-section-action { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; border-radius: 6px; color: var(--color-text-tertiary); background: transparent; cursor: pointer; }
 .evo-tl-section-action:hover { color: var(--color-text-primary); background: var(--hover-bg); }

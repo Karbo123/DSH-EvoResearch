@@ -890,7 +890,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                         ],
                       }),
                       jsxs('div', {
-                        className: 'evo-tl-project-badge',
+                        className: 'evo-tl-project-context',
                         children: [
                           jsx(FolderGit2, {}),
                           jsx('span', { children: projectMode.name }),
