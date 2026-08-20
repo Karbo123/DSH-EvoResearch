@@ -22,6 +22,9 @@ import type { RewindService } from './rewind.js'
 import type { NotesService } from './notes.js'
 import type { ExperimentWorkspaceService, ExperimentWorkspaceInfo, ExperimentWorkspaceDetail, ExperimentWorkspaceEntry, ExperimentWorkspaceTree } from './experiment-workspace.js'
 import type { ExperimentProcessService, RunRecord, ExperimentGraphRef, ExperimentGraphRefResolution } from './experiment-process.js'
+import type { ExperimentLedgerService } from './experiment-ledger.js'
+import type { ExperimentRoundsService } from './experiment-rounds.js'
+import type { DailyReportService } from './daily-report.js'
 import type { WorktreeService } from './worktrees.js'
 import type { LibraryIndexer, LibrarySearch } from './library/index.js'
 import type {
@@ -96,6 +99,12 @@ export interface HostServices {
   readonly experimentProcess?: ExperimentProcessService
   /** Git worktree（§7.4；ENV-01/02）。 */
   readonly worktrees?: WorktreeService
+  /** 实验 Git 账本（Part A：8 条纪律落地）。 */
+  readonly experimentLedger?: ExperimentLedgerService
+  /** 四阶段科研回合（Part B：observe→propose→act→reflect）。 */
+  readonly experimentRounds?: ExperimentRoundsService
+  /** 实验日报（Part C：手动 + 自动定时）。 */
+  readonly dailyReport?: DailyReportService
   /** 科学自演化循环（SCI-08/09），状态快照可跨重启恢复。 */
   readonly scienceLoops?: ScienceLoopService
   /** RA/EA/EMA 到 Chat Graph/Evolution 的明确边界桥接。 */
@@ -1043,11 +1052,11 @@ export class EvoResearchApiService extends TypertRemoteService {
   // ── 实验工作区（§7 自由形式实验管理；EXP-02..04，t39 片段）────────────────
 
   @Remote('experimentWorkspaceCreate')
-  experimentWorkspaceCreate(args: { project: string; name: string }): ExperimentWorkspaceInfo | { error: string } {
+  experimentWorkspaceCreate(args: { project: string; name: string; overwrite?: boolean }): ExperimentWorkspaceInfo | { error: string } {
     try {
       const svc = this.services.experimentWorkspace
       if (svc === undefined) return { error: 'experimentWorkspace 服务不可用' }
-      return svc.createWorkspace(String(args?.project ?? ''), String(args?.name ?? ''))
+      return svc.createWorkspace(String(args?.project ?? ''), String(args?.name ?? ''), { overwrite: args?.overwrite === true })
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -1120,6 +1129,143 @@ export class EvoResearchApiService extends TypertRemoteService {
       })
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 实验账本（Part A：Git 8 条纪律落地）───────────────────────────────────
+
+  @Remote('experimentLedgerExists')
+  experimentLedgerExists(args: { projectDir: string; slug: string }): { exists: boolean } | { error: string } {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { error: 'experimentLedger 服务不可用' }
+      return { exists: svc.exists(String(args?.projectDir ?? ''), String(args?.slug ?? '')) }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLedgerInit')
+  experimentLedgerInit(args: { projectDir: string; slug: string; overwrite?: boolean }): { ok: true; sha: string } | { ok: false; error: string } {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { ok: false, error: 'experimentLedger 服务不可用' }
+      return svc.init(String(args?.projectDir ?? ''), String(args?.slug ?? ''), { overwrite: args?.overwrite === true })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLedgerTrial')
+  experimentLedgerTrial(args: { projectDir: string; slug: string; payload: { kind: 'checkpoint' | 'manual' | 'rejected' | 'run'; note: string; state?: Record<string, unknown>; createdAt?: number } }): { ok: true; sha: string } | { ok: false; error: string } {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { ok: false, error: 'experimentLedger 服务不可用' }
+      const p = args?.payload as { kind?: string; note?: string; state?: Record<string, unknown>; createdAt?: number }
+      return svc.trial(String(args?.projectDir ?? ''), String(args?.slug ?? ''), {
+        kind: (p?.kind === 'checkpoint' || p?.kind === 'rejected' || p?.kind === 'run' ? p.kind : 'manual') as 'checkpoint' | 'manual' | 'rejected' | 'run',
+        note: String(p?.note ?? ''),
+        ...(p?.state !== undefined ? { state: p.state } : {}),
+        createdAt: typeof p?.createdAt === 'number' ? p.createdAt : Date.now(),
+      })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLedgerLog')
+  experimentLedgerLog(args: { projectDir: string; slug: string; limit?: number }): Array<{ sha: string; message: string; when: number; kind: string }> | { error: string } {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { error: 'experimentLedger 服务不可用' }
+      return svc.log(String(args?.projectDir ?? ''), String(args?.slug ?? ''), typeof args?.limit === 'number' ? args.limit : undefined)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLedgerRecentState')
+  experimentLedgerRecentState(args: { projectDir: string; slug: string; n?: number }): Record<string, unknown> | null | { error: string } {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { error: 'experimentLedger 服务不可用' } as unknown as Record<string, unknown>
+      return svc.recentState(String(args?.projectDir ?? ''), String(args?.slug ?? ''), typeof args?.n === 'number' ? args.n : undefined)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) } as unknown as Record<string, unknown>
+    }
+  }
+
+  @Remote('experimentLedgerRestore')
+  experimentLedgerRestore(args: { projectDir: string; slug: string; sha: string }): { ok: true; restoredFiles: number } | { ok: false; error: string } {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { ok: false, error: 'experimentLedger 服务不可用' }
+      return svc.restore(String(args?.projectDir ?? ''), String(args?.slug ?? ''), String(args?.sha ?? ''))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLedgerExport')
+  experimentLedgerExport(args: { projectDir: string; slug: string; dest: string }): { ok: true; path: string } | { ok: false; error: string } {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { ok: false, error: 'experimentLedger 服务不可用' }
+      return svc.export(String(args?.projectDir ?? ''), String(args?.slug ?? ''), String(args?.dest ?? ''))
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLedgerReject')
+  experimentLedgerReject(args: { projectDir: string; slug: string; note: string; state?: Record<string, unknown> }): { ok: true; rejectedSha: string; restoredFiles: number } | { ok: false; error: string } {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { ok: false, error: 'experimentLedger 服务不可用' }
+      return svc.rejectAndRestore(String(args?.projectDir ?? ''), String(args?.slug ?? ''), {
+        note: String(args?.note ?? ''),
+        ...(args?.state !== undefined ? { state: args.state as Record<string, unknown> } : {}),
+      })
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentLedgerProvenance')
+  experimentLedgerProvenance(args: { projectDir: string; slug: string }): unknown {
+    try {
+      const svc = this.services.experimentLedger
+      if (svc === undefined) return { error: 'experimentLedger 服务不可用' } as unknown
+      // 直接读 provenance.json 文件（与 captureProvenance 同源）
+      const expDir = path.join(path.resolve(String(args?.projectDir ?? '')), 'experiments', String(args?.slug ?? ''))
+      const file = path.join(expDir, 'provenance.json')
+      try {
+        return JSON.parse(readFileSync(file, 'utf8')) as unknown
+      } catch {
+        return null
+      }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) } as unknown
+    }
+  }
+
+  @Remote('experimentLedgerWriteResume')
+  experimentLedgerWriteResume(args: { projectDir: string; slug: string; state?: Record<string, unknown> }): { ok: true; path: string } | { ok: false; error: string } {
+    try {
+      const projectDir = String(args?.projectDir ?? '').trim()
+      const slug = String(args?.slug ?? '').trim()
+      if (projectDir === '' || slug === '') return { ok: false, error: '缺少 projectDir 或 slug' }
+      const expDir = path.join(path.resolve(projectDir), 'experiments', slug)
+      if (!existsSync(expDir) || !statSync(expDir).isDirectory()) return { ok: false, error: `实验不存在: ${slug}` }
+      const state = args?.state as Record<string, unknown> | undefined
+      const content = `# 恢复指引 · ${slug}\n\n> 由实验账本 recentState 生成于 ${new Date().toISOString()}\n\n## 上次状态摘要\n\n\`\`\`json\n${JSON.stringify(state ?? {}, null, 2)}\n\`\`\`\n\n## 下一步\n- 检查上方状态中的 phase / lastConclusion / nextStep\n- 在 LAB_NOTE.md 记录恢复计划\n- 必要时用账本回退到对应提交\n`
+      const file = path.join(expDir, 'resume-state.md')
+      const tmp = `${file}.tmp-${process.pid}`
+      writeFileSync(tmp, content, 'utf8')
+      renameSync(tmp, file)
+      return { ok: true, path: file }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -1242,6 +1388,56 @@ export class EvoResearchApiService extends TypertRemoteService {
       const svc = this.services.experimentProcess
       if (svc === undefined) return { error: 'experimentProcess 服务不可用' }
       return svc.resolveGraphRef(args?.ref as ExperimentGraphRef)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── 四阶段科研回合（Part B：observe→propose→act→reflect）──────────────────
+
+  @Remote('experimentRoundsStart')
+  experimentRoundsStart(args: { projectDir?: string; workspaceDir?: string; slug: string }): unknown {
+    try {
+      const svc = this.services.experimentRounds
+      if (svc === undefined) return { error: 'experimentRounds 服务不可用' }
+      const dir = String((args as { projectDir?: string; workspaceDir?: string })?.projectDir ?? (args as { workspaceDir?: string })?.workspaceDir ?? '')
+      return svc.start(dir, String(args?.slug ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentRoundsCurrent')
+  experimentRoundsCurrent(args: { projectDir?: string; workspaceDir?: string; slug: string }): unknown {
+    try {
+      const svc = this.services.experimentRounds
+      if (svc === undefined) return { error: 'experimentRounds 服务不可用' }
+      const dir = String((args as { projectDir?: string; workspaceDir?: string })?.projectDir ?? (args as { workspaceDir?: string })?.workspaceDir ?? '')
+      return svc.current(dir, String(args?.slug ?? '')) ?? null
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentRoundsComplete')
+  experimentRoundsComplete(args: { projectDir?: string; workspaceDir?: string; slug: string; phaseId: string; outputText: string }): { ok: true; round: unknown } | { error: string } {
+    try {
+      const svc = this.services.experimentRounds
+      if (svc === undefined) return { error: 'experimentRounds 服务不可用' }
+      const dir = String((args as { projectDir?: string; workspaceDir?: string })?.projectDir ?? (args as { workspaceDir?: string })?.workspaceDir ?? '')
+      return svc.completePhase(dir, String(args?.slug ?? ''), String(args?.phaseId ?? ''), String(args?.outputText ?? ''))
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('experimentRoundsCancel')
+  experimentRoundsCancel(args: { projectDir?: string; workspaceDir?: string; slug: string }): { ok: true } | { error: string } {
+    try {
+      const svc = this.services.experimentRounds
+      if (svc === undefined) return { error: 'experimentRounds 服务不可用' }
+      const dir = String((args as { projectDir?: string; workspaceDir?: string })?.projectDir ?? (args as { workspaceDir?: string })?.workspaceDir ?? '')
+      return svc.cancel(dir, String(args?.slug ?? ''))
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -3153,5 +3349,62 @@ export class EvoResearchApiService extends TypertRemoteService {
   skillsUninstallLayered(args: { workspaceDir?: string; layer: SkillLayer; name: string }): { ok: boolean; fallback?: SkillEntry } | { error: string } {
     try { return this.skillRegistryOf(args?.workspaceDir).uninstall(args.name, args.layer) }
     catch (error) { return { error: this.errMessage(error) } }
+  }
+
+  // ── 实验日报（Part C：手动 + 自动触发）─────────────────────────────────────
+
+  @Remote('dailyReportGenerate')
+  async dailyReportGenerate(args: { projectDir: string; slugs?: string[]; llm?: boolean }): Promise<unknown> {
+    const svc = this.services.dailyReport
+    if (!svc) return { error: 'dailyReport 服务不可用' }
+    try {
+      const projectDir = String(args?.projectDir ?? '')
+      if (projectDir.trim() === '') return { error: 'projectDir 不能为空' }
+      return await svc.generate({ projectDir, ...(Array.isArray(args?.slugs) ? { slugs: args.slugs.map(String) } : {}), ...(args?.llm === true ? { llm: true } : {}) }, 'manual')
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  @Remote('dailyReportList')
+  dailyReportList(): unknown {
+    const svc = this.services.dailyReport
+    if (!svc) return { error: 'dailyReport 服务不可用' }
+    try { return svc.list() } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  @Remote('dailyReportRead')
+  dailyReportRead(args: { reportId: string }): unknown {
+    const svc = this.services.dailyReport
+    if (!svc) return { error: 'dailyReport 服务不可用' }
+    try {
+      const result = svc.read(String(args?.reportId ?? ''))
+      if (result === null) return { error: '报告不存在' }
+      return result
+    } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  @Remote('dailyReportGetSchedule')
+  dailyReportGetSchedule(): unknown {
+    const svc = this.services.dailyReport
+    if (!svc) return { error: 'dailyReport 服务不可用' }
+    try { return svc.getSchedule() } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  @Remote('dailyReportSetSchedule')
+  dailyReportSetSchedule(args: { schedule: unknown }): unknown {
+    const svc = this.services.dailyReport
+    if (!svc) return { error: 'dailyReport 服务不可用' }
+    try {
+      const schedule = args?.schedule as Parameters<DailyReportService['setSchedule']>[0]
+      return svc.setSchedule(schedule)
+    } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  @Remote('dailyReportToggle')
+  dailyReportToggle(args: { force?: boolean } = {}): unknown {
+    const svc = this.services.dailyReport
+    if (!svc) return { error: 'dailyReport 服务不可用' }
+    try { return svc.toggle(typeof args?.force === 'boolean' ? args.force : undefined) } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
   }
 }

@@ -21,6 +21,8 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
 import { FlaskConical, Plus, Download, RefreshCw, FileText, FolderTree, Play, Square, Terminal, FileClock, Folder, File, ChevronDown, Check, X as XIcon, Pencil } from 'lucide-react'
+import { RoundsPanel } from './rounds-panel'
+import { DailyReportCard } from './daily-report-card'
 
 // ── wire 类型（与 host 服务返回一致）────────────────────────────────────────
 
@@ -508,6 +510,8 @@ function WorkspaceDetail({ workspaceDir, slug, onReload, onError, onNotice }: {
       }),
       // 运行管理
       jsx(RunSection, { workspaceDir, slug, onError, onNotice }),
+      // 科研回合（Part B：四阶段模板）
+      jsx(RoundsPanel, { workspaceDir, slug, onError, onNotice }),
       // 目录树
       jsxs('div', {
         className: 'evo-ews-section',
@@ -595,6 +599,7 @@ export function ExperimentWorkspacePanel({ cwd, onOpenSession }: {
   const [importName, setImportName] = useState('')
   const [copyMode, setCopyMode] = useState(false)
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null)
+  const [reportOpen, setReportOpen] = useState(false)
   const workspaceDir = cwd ?? ''
 
   const load = (fresh = false) => {
@@ -647,7 +652,18 @@ export function ExperimentWorkspacePanel({ cwd, onOpenSession }: {
     children: [
       jsxs('div', {
         className: 'evo-panel-head',
-        children: [jsx(FlaskConical, {}), jsx('span', { children: t('expWsTitle') })],
+        children: [
+          jsx(FlaskConical, {}),
+          jsx('span', { children: t('expWsTitle') }),
+          jsx('span', { style: { flex: 1 } }),
+          jsx('button', {
+            type: 'button',
+            className: 'evo-panel-add evo-ews-report-btn',
+            title: t('dailyReportTitle'),
+            onClick: () => setReportOpen(true),
+            children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: t('dailyReportTitle') })] }),
+          }),
+        ],
       }),
       jsx('div', { className: 'evo-panel-body', children: [
         workspaceUnbound && jsx('div', { className: 'evo-panel-hint', children: t('expWsNoWorkspace') }),
@@ -757,6 +773,11 @@ export function ExperimentWorkspacePanel({ cwd, onOpenSession }: {
                 }, row.slug)),
               }),
       ] }),
+      reportOpen && jsx(DailyReportCard, {
+        workspaceDir,
+        onClose: () => setReportOpen(false),
+        onError: (message) => setError(message),
+      }),
     ],
   })
 }

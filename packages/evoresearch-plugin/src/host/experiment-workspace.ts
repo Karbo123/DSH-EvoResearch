@@ -231,14 +231,25 @@ export class ExperimentWorkspaceService {
    * 不创建 phase-0、不写 manifest、不要求任何表单字段。
    * @param project 项目名 或 项目目录绝对路径（须已存在）。
    * @param name 实验显示名（用于 slug 与笔记模板标题）。
+   * @param opts.overwrite=true 时覆盖同名实验（删除重建，同时删除对应账本）。
    */
-  createWorkspace(project: string, name: string): ExperimentWorkspaceInfo {
+  createWorkspace(project: string, name: string, opts?: { overwrite?: boolean }): ExperimentWorkspaceInfo {
     const ws = this.resolveProject(project)
     const root = path.join(ws, EXP_DIR_NAME)
     fs.mkdirSync(root, { recursive: true })
     const trimmed = String(name ?? '').trim()
     if (trimmed === '') throw new Error('实验名称不能为空')
-    const slug = this.uniqueSlug(root, this.slugify(trimmed))
+    const baseSlug = this.slugify(trimmed)
+    const targetDir = path.join(root, baseSlug)
+    if (fs.existsSync(targetDir)) {
+      if (opts?.overwrite !== true) throw new Error(`实验已存在: ${baseSlug}`)
+      // 覆盖并重建：删除实验目录及对应账本（A.5 纪律 6）
+      fs.rmSync(targetDir, { recursive: true, force: true })
+      const sanitized = slugifyProjectName(path.basename(ws))
+      const ledgerRepo = path.join(this.config.dataRoot, '.evoresearch-data', 'ledgers', sanitized, `${baseSlug}.git`)
+      try { fs.rmSync(ledgerRepo, { recursive: true, force: true }) } catch { /* best effort */ }
+    }
+    const slug = baseSlug
     const dir = path.join(root, slug)
     fs.mkdirSync(dir, { recursive: true })
     const note = path.join(dir, NOTE_NAME)

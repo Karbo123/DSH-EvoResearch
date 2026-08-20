@@ -1958,6 +1958,7 @@ export function registerWorkspaceApi(ctx: any): void {
         if (method.startsWith('experiment-workspace-') || method.startsWith('experiment-run-') || method.startsWith('experiment-log-')
           || method === 'experiment-recover' || method === 'experiment-retrospective-draft' || method === 'experiment-workspace-append-note'
           || method === 'experiment-workspace-artifacts' || method === 'experiment-graph-ref-resolve'
+          || method.startsWith('experiment-rounds-') || method.startsWith('experiment-ledger-') || method.startsWith('daily-report-')
           || method.startsWith('library-') || method.startsWith('manuscript-') || method.startsWith('evolution-')
           || method === 'autoskills-generate-from-traces' || method === 'autoskills-update-proposal-content' || method === 'autoskills-run-skill'
           || method.startsWith('context-')) {

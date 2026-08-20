@@ -5,8 +5,8 @@
  * - 每完成一个回合，host 自动提交项目工作区（git commit "auto-turn N"）；
  * - 回溯/编辑 = 以目标消息之前的事件为边界 fork 出截断历史的子会话（新的独立会话，
  *   旧会话保留——git 式"分支"语义）：
- *   ① git：先安全提交当前工作区（rewind-safety），再 reset --hard 到目标回合完成后的
- *      自动提交（工作区文件回到当时）；② fork 子会话（历史 = 目标点之前）；
+ *   ① git：先安全提交当前工作区（rewind-safety），再 restore --source 到目标回合完成后的
+ *      自动提交 + clean -fdx（工作区文件回到当时，非破坏式）；② fork 子会话（历史 = 目标点之前）；
  *   ③ 前端打开子会话；编辑场景下前端对子会话发送修正文本（官方 prompt 流程）。
  */
 import * as fs from 'node:fs'
@@ -165,11 +165,13 @@ export class RewindService {
     })
   }
 
-  /** 恢复工作区到某提交：先安全提交当前状态（rewind-safety），再 git reset --hard。 */
+  /** 恢复工作区到某提交：先安全提交当前状态（rewind-safety），再非破坏性 restore + clean（禁用 reset --hard，纪律 3）。 */
   restoreWorkspace(projectDir: string, targetSha: string): { safety: string | null; target: string } {
     const dir = this.assertProjectDir(projectDir)
     const safety = this.commitWorkspace(dir, `rewind-safety ${new Date().toISOString()}`)
-    git(dir, ['reset', '--hard', targetSha])
+    // 非破坏性回滚：restore --source + clean -fdx（被回退内容已在 safety commit 保留）
+    git(dir, ['restore', '--source', targetSha, '--staged', '--worktree', '--', '.'])
+    git(dir, ['clean', '-fdx'])
     return { safety, target: targetSha }
   }
 

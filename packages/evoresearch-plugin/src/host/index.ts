@@ -38,6 +38,9 @@ import { NotesService } from './notes.js'
 import { ExperimentWorkspaceService } from './experiment-workspace.js'
 import { ExperimentProcessService } from './experiment-process.js'
 import { WorktreeService } from './worktrees.js'
+import { ExperimentLedgerService } from './experiment-ledger.js'
+import { ExperimentRoundsService } from './experiment-rounds.js'
+import { DailyReportService } from './daily-report.js'
 import { LibraryIndexer, LibrarySearch } from './library/index.js'
 import { ManuscriptService } from './manuscript.js'
 import { SignalStore } from './evolution/signals.js'
@@ -197,6 +200,10 @@ function apply(ctx: Context): void {
   const experimentWorkspace = new ExperimentWorkspaceService({ dataRoot })
   const experimentProcess = new ExperimentProcessService({ dataRoot })
   const worktrees = new WorktreeService(dataRoot)
+  // Part A/B/C 实验控制台升级（账本 / 回合 / 日报）
+  const experimentLedger = new ExperimentLedgerService(dataRoot)
+  const experimentRounds = new ExperimentRoundsService({ dataRoot, ledger: experimentLedger })
+  const dailyReport = new DailyReportService(dataRoot)
   const scienceLoops = new ScienceLoopService(dataRoot, {
     appenderFor: (loop) => loop.workspaceDir === undefined
       ? { append: () => ({ ok: true }) }
@@ -423,7 +430,7 @@ function apply(ctx: Context): void {
   }
 
   // 6) Remote API（构造即注册 services.evoresearch）
-  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, experimentWorkspace, experimentProcess, worktrees, scienceLoops, scienceGraphBridge, chatGraph, projectEnv, rewind, notes, libraryIndexer, librarySearch, manuscript, evo: { signals, registry }, contextGuard, contextRuntime, contextAssembler, platform }
+  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, experimentWorkspace, experimentProcess, worktrees, experimentLedger, experimentRounds, dailyReport, scienceLoops, scienceGraphBridge, chatGraph, projectEnv, rewind, notes, libraryIndexer, librarySearch, manuscript, evo: { signals, registry }, contextGuard, contextRuntime, contextAssembler, platform }
   void new EvoResearchApiService(ctx, services)
 
   // 7) 斜杠命令
@@ -617,6 +624,7 @@ function apply(ctx: Context): void {
   const disposeMemory = memory.attach(ctx)
   const disposeScheduler = scheduler.attach(ctx)
   const disposeChannels = channels.attach(ctx)
+  const disposeDailyReport = dailyReport.attach(ctx)
   // §整合 P0c：上下文窗口保护层 + AutoSkills 真实执行（runSkill 依赖 attach 探测 DSH skills）
   const disposeContextRuntime = contextRuntime.attach(ctx)
   const disposeAutoskills = autoskills.attach(ctx)
@@ -632,6 +640,7 @@ function apply(ctx: Context): void {
       disposeMemory()
       disposeScheduler()
       disposeChannels()
+      disposeDailyReport()
       disposeContextRuntime()
       disposeAutoskills()
       disposeContextAssemblerPrompt?.()

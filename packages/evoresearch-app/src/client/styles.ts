@@ -1640,4 +1640,95 @@ html.dark .evo-composer-editor-host .milkdown .ProseMirror pre { background: col
   .evo-composer-markdown-state { display: none; }
   .evo-composer-markdown-toggle { width: 26px; height: 26px; }
 }
+/* ── 科研回合（Part B：四阶段模板）── */
+.evo-rounds-card { gap: 10px; }
+.evo-rounds-id { font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
+.evo-rounds-progress { display: flex; gap: 6px; flex-wrap: wrap; }
+.evo-rounds-step { flex: 1; min-width: 72px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px; border: 1px solid var(--color-border-light); border-radius: 9px; background: var(--color-background); }
+.evo-rounds-step[data-status='done'] { border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border)); background: color-mix(in srgb, var(--color-success) 8%, var(--color-background)); }
+.evo-rounds-step[data-current] { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 18%, transparent); }
+.evo-rounds-step-num { font-size: 14px; font-weight: 700; color: var(--color-text-secondary); }
+.evo-rounds-step[data-status='done'] .evo-rounds-step-num { color: var(--color-success); }
+.evo-rounds-step[data-current] .evo-rounds-step-num { color: var(--brand); }
+.evo-rounds-step-label { font-size: 11px; font-weight: 600; color: var(--color-text-secondary); }
+.evo-rounds-step-check { width: 13px; height: 13px; color: var(--color-success); }
+.evo-rounds-step-spin { width: 13px; height: 13px; color: var(--brand); animation: evo-spin 1s linear infinite; }
+.evo-rounds-done-hint { padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--color-success) 10%, transparent); color: var(--color-success); }
+.evo-rounds-phases { display: flex; flex-direction: column; gap: 8px; }
+.evo-rounds-phase { border: 1px solid var(--color-border-light); border-radius: 9px; background: var(--color-surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.evo-rounds-phase[data-current] { border-color: color-mix(in srgb, var(--brand) 40%, var(--color-border)); }
+.evo-rounds-phase[data-status='done'] { background: color-mix(in srgb, var(--color-success) 5%, var(--color-surface)); }
+.evo-rounds-phase-head { display: flex; align-items: center; gap: 8px; }
+.evo-rounds-phase-num { font-weight: 700; color: var(--brand); font-size: 12.5px; }
+.evo-rounds-phase-name { font-weight: 600; color: var(--color-text-primary); font-size: 12.5px; }
+.evo-rounds-phase-status { margin-left: auto; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--hover-bg); color: var(--color-text-tertiary); }
+.evo-rounds-phase[data-status='done'] .evo-rounds-phase-status { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
+.evo-rounds-phase[data-current] .evo-rounds-phase-status { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand); }
+.evo-rounds-prompt { font-size: 11.5px; line-height: 1.5; }
+.evo-rounds-editor { display: flex; flex-direction: column; gap: 6px; }
+.evo-rounds-textarea { min-height: 88px; resize: vertical; font-family: inherit; line-height: 1.6; }
+.evo-rounds-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.evo-rounds-ai-btn { opacity: 0.55; }
+.evo-rounds-done-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-rounds-view { border: 1px solid var(--color-border-light); border-radius: 9px; background: var(--color-background); overflow: hidden; }
+.evo-rounds-view-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--color-border-light); font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+.evo-rounds-view-body { margin: 0; padding: 8px 10px; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto; color: var(--color-text-secondary); font-family: ui-monospace, Consolas, monospace; }
+/* ── 日报卡片（Part C：手动 + 定时）── */
+.evo-ews-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.evo-report-drawer { position: fixed; inset: 0; z-index: 400; display: flex; justify-content: flex-end; }
+.evo-report-mask { flex: 1; background: rgba(0,0,0,0.28); }
+.evo-report-card { width: min(480px, 92vw); height: 100%; background: var(--color-surface); border-left: 1px solid var(--color-border); display: flex; flex-direction: column; overflow: hidden; box-shadow: -8px 0 24px rgba(0,0,0,0.16); }
+.evo-report-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--color-border-light); font-weight: 600; color: var(--color-text-primary); }
+.evo-report-head svg { width: 16px; height: 16px; color: var(--brand); }
+.evo-report-body { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; }
+.evo-report-section { border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-background); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.evo-report-section-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary); }
+.evo-report-section-head svg { width: 14px; height: 14px; color: var(--brand); }
+.evo-report-generate { width: 100%; justify-content: center; }
+.evo-report-preview-wrap { display: flex; flex-direction: column; gap: 6px; }
+.evo-report-preview-head { display: flex; align-items: center; gap: 8px; }
+.evo-report-preview { margin: 0; padding: 8px 10px; background: var(--color-surface); border: 1px solid var(--color-border-light); border-radius: 8px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); max-height: 260px; overflow-y: auto; font-family: ui-monospace, Consolas, monospace; }
+.evo-report-modes { display: flex; gap: 6px; flex-wrap: wrap; }
+.evo-report-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.evo-report-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); }
+.evo-report-row[data-active] { border-color: var(--brand); }
+.evo-report-row-main { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.evo-report-row-time { font-size: 12px; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; }
+.evo-report-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; flex-shrink: 0; }
+.evo-report-badge.manual { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand); }
+.evo-report-badge.auto { background: var(--hover-bg); color: var(--color-text-tertiary); }
+.evo-spin { animation: evo-spin 1s linear infinite; }
+/* ── 实验账本（Part A：Git 8 条纪律）── */
+.evo-ledger-exp-list { display: flex; gap: 6px; flex-wrap: wrap; }
+.evo-ledger-exp { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--color-border-light); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; }
+.evo-ledger-exp:hover { border-color: var(--brand); color: var(--color-text-primary); }
+.evo-ledger-exp[data-active] { background: color-mix(in srgb, var(--brand) 12%, var(--color-surface)); border-color: var(--brand); color: var(--brand); font-weight: 600; }
+.evo-ledger-exp svg { width: 14px; height: 14px; }
+.evo-ledger-exp-name { font-weight: 600; }
+.evo-ledger-exp-time { font-size: 11px; color: var(--color-text-tertiary); }
+.evo-ledger-detail { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.evo-ledger-card { border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.evo-ledger-card-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary); flex-wrap: wrap; }
+.evo-ledger-card-head svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }
+.evo-ledger-ok { color: var(--color-success); font-weight: 600; font-size: 12.5px; }
+.evo-ledger-bad { color: var(--color-error); font-size: 12.5px; }
+.evo-ledger-exists { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-ledger-notfound { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evo-ledger-confirm { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-secondary); }
+.evo-ledger-cancel { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: var(--hover-bg); border-radius: 6px; color: var(--color-text-tertiary); cursor: pointer; }
+.evo-ledger-cancel:hover { color: var(--color-text-primary); }
+.evo-ledger-log { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; }
+.evo-ledger-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-background); }
+.evo-ledger-row[data-kind='rejected'] { border-color: color-mix(in srgb, var(--color-error) 30%, var(--color-border-light)); }
+.evo-ledger-kind { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: var(--hover-bg); color: var(--color-text-secondary); flex-shrink: 0; }
+.evo-ledger-kind svg { width: 13px; height: 13px; }
+.evo-ledger-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.evo-ledger-msg { font-size: 12.5px; color: var(--color-text-primary); display: flex; gap: 6px; align-items: center; min-width: 0; }
+.evo-ledger-kind-label { padding: 1px 6px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-secondary); flex-shrink: 0; }
+.evo-ledger-meta { font-size: 11px; color: var(--color-text-tertiary); display: flex; gap: 8px; font-family: ui-monospace, Consolas, monospace; }
+.evo-ledger-notice { padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface)); color: var(--color-success); font-size: 12.5px; border: 1px solid color-mix(in srgb, var(--color-success) 24%, transparent); }
+.evo-ledger-json { margin: 0; padding: 8px 10px; background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--color-text-secondary); font-family: ui-monospace, Consolas, monospace; max-height: 240px; overflow-y: auto; }
+.evo-ledger-prov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+.evo-ledger-k { display: inline-block; min-width: 48px; font-weight: 600; color: var(--color-text-tertiary); margin-right: 6px; }
+.evo-ledger-recent { display: flex; flex-direction: column; gap: 6px; }
 `

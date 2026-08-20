@@ -13,8 +13,9 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
-import { FlaskConical, Plus, Trash2, RefreshCw, GitBranch, RotateCcw, Camera, Check, X as XIcon, MessageSquare, ChevronRight, ChevronDown, FolderKanban, NotepadText } from 'lucide-react'
+import { FlaskConical, Plus, Trash2, RefreshCw, GitBranch, RotateCcw, Camera, Check, X as XIcon, MessageSquare, ChevronRight, ChevronDown, FolderKanban, NotepadText, History } from 'lucide-react'
 import { ExperimentWorkspacePanel } from './experiment-workspace'
+import { LedgerPanel } from './ledger-panel'
 
 interface CheckpointRow {
   id: string
@@ -583,7 +584,7 @@ export function ExperimentsPanel(props: {
   sessionId: string | null
   onOpenSession: (id: string) => void
 }) {
-  const [tab, setTab] = useState<'workspace' | 'legacy'>('workspace')
+  const [tab, setTab] = useState<'workspace' | 'legacy' | 'ledger'>('workspace')
   return jsxs('div', {
     className: 'evo-panel',
     children: [
@@ -600,6 +601,13 @@ export function ExperimentsPanel(props: {
           jsx('button', {
             type: 'button',
             className: 'evo-ews-tab',
+            'data-active': tab === 'ledger' || undefined,
+            onClick: () => setTab('ledger'),
+            children: jsxs(Fragment, { children: [jsx(History, {}), jsx('span', { children: t('ledgerTab') })] }),
+          }),
+          jsx('button', {
+            type: 'button',
+            className: 'evo-ews-tab',
             'data-active': tab === 'legacy' || undefined,
             onClick: () => setTab('legacy'),
             children: jsxs(Fragment, { children: [jsx(FolderKanban, {}), jsx('span', { children: t('expWsLegacyTab') })] }),
@@ -608,7 +616,9 @@ export function ExperimentsPanel(props: {
       }),
       tab === 'workspace'
         ? jsx(ExperimentWorkspacePanel, props)
-        : jsx(LegacyExperimentsPanel, props),
+        : tab === 'ledger'
+          ? jsx(LedgerPanel, props)
+          : jsx(LegacyExperimentsPanel, props),
     ],
   })
 }
