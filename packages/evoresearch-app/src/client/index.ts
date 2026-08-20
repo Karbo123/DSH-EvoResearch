@@ -58,6 +58,8 @@ let sessionsService: {
 let workspacesService: {
   create(input: { path: string }): Promise<any>
   rename(workspaceId: string, title: string): Promise<any>
+  /** 删除 Workspace 注册（不触碰目录、文件与会话日志；会话转为未分组）。 */
+  delete(workspaceId: string): Promise<void>
 } | null = null
 
 type AutoTitleKind = 'project' | 'subchat'
@@ -691,6 +693,88 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     })
   }
 
+  // ── 项目级状态（标签颜色 / 归档）：client 侧 localStorage 持久化 ──
+  // 项目由会话 cwd 派生，没有独立的 session-meta 键；标签颜色与“隐藏项目”
+  // 按路径持久化到 localStorage，与左侧手动排序/自动标题等项目级数据同层。
+  const PROJECT_TAG_KEY = 'evoresearch-project-tagcolors'
+  const PROJECT_ARCHIVED_KEY = 'evoresearch-project-archived'
+  const normCwd = (cwd: unknown): string | null =>
+    typeof cwd === 'string' && cwd !== '' ? cwd.replace(/[\\/]+$/, '') : null
+
+  const [projectTagColors, setProjectTagColors] = useState<Record<string, string>>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PROJECT_TAG_KEY) ?? '{}')
+      return typeof raw === 'object' && raw !== null ? raw : {}
+    } catch {
+      return {}
+    }
+  })
+  const [archivedProjects, setArchivedProjects] = useState<Set<string>>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PROJECT_ARCHIVED_KEY) ?? '[]')
+      return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [])
+    } catch {
+      return new Set()
+    }
+  })
+  const setProjectTagColor = (path: string, color: string | null) => {
+    setProjectTagColors((prev) => {
+      const next = { ...prev }
+      if (color === null) delete next[path]
+      else next[path] = color
+      try { localStorage.setItem(PROJECT_TAG_KEY, JSON.stringify(next)) } catch { /* 忽略 */ }
+      return next
+    })
+  }
+  /** 归档/恢复项目：同步归档/恢复其全部子聊天（后端 session-meta 持久化）。 */
+  const toggleProjectArchive = (path: string) => {
+    const isArchived = archivedProjects.has(path)
+    const ids = (sessions.ids ?? []).filter((id: string) => {
+      const s = sessions.byId[id]
+      return s !== undefined && normCwd(s.cwd) === path && !deletedIds.has(id)
+    })
+    for (const id of ids) {
+      const shouldFlip = isArchived ? archivedIds.has(id) : !archivedIds.has(id)
+      if (shouldFlip) toggleArchive(id)
+    }
+    setArchivedProjects((prev) => {
+      const next = new Set(prev)
+      if (isArchived) next.delete(path)
+      else next.add(path)
+      try { localStorage.setItem(PROJECT_ARCHIVED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
+      return next
+    })
+  }
+  /** 项目重命名：改 Workspace 显示标题；同时终止项目内会话的自动标题。 */
+  const renameProject = async (path: string, title: string): Promise<boolean> => {
+    const trimmed = title.trim()
+    if (trimmed === '') return false
+    try {
+      const existing = (workspaces.items ?? []).find((w: any) => typeof w?.path === 'string' && normCwd(w.path) === path)
+      let workspace = existing
+      if (workspace === undefined) workspace = await ensureWorkspace(path)
+      if (workspace?.workspaceId === undefined) return false
+      await workspacesService?.rename(workspace.workspaceId, trimmed)
+      // 手动命名后，该项目内会话的自动标题全部定稿，避免后续 AI 标题覆盖显示名。
+      const states = readAutoTitleStates()
+      let changed = false
+      for (const sid of sessions.ids ?? []) {
+        const s = sessions.byId[sid]
+        const state = states[sid]
+        if (s !== undefined && normCwd(s.cwd) === path && state !== undefined && state.finalized !== true) {
+          states[sid] = { ...state, finalized: true }
+          changed = true
+        }
+      }
+      if (changed) writeAutoTitleStates(states)
+      toast('Project renamed', 'success')
+      return true
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error), 'error')
+      return false
+    }
+  }
+
   // §29：启动时以后端 session-meta 为准合并三态（localStorage 仅作离线缓存）
   useEffect(() => {
     let cancelled = false
@@ -740,7 +824,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setTagColors((prev) => { const next = { ...prev }; delete next[id]; return next })
     forgetSideChat(cwd, id)
   }
-  const deleteSession = async (id: string): Promise<{ ok: boolean; error?: string }> => {
+  const deleteSessionById = async (id: string): Promise<{ ok: boolean; error?: string }> => {
     try {
       const res = await fetch('/evoresearch/fs/session-delete', {
         method: 'POST',
@@ -759,6 +843,45 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
+  }
+  const deleteSession: typeof deleteSessionById = deleteSessionById
+
+  /**
+   * 删除项目：删除该项目下的全部子聊天（host 删除持久化数据），
+   * 清理项目级标签/归档状态与 Workspace 注册。
+   * 磁盘上的项目目录与用户文件保留（与 Workspace 注册删除语义一致），
+   * 避免把可能仍有价值的文件一并销毁。
+   */
+  const deleteProject = async (path: string): Promise<{ ok: boolean; error?: string }> => {
+    const ids = (sessions.ids ?? []).filter((id: string) => {
+      const s = sessions.byId[id]
+      return s !== undefined && normCwd(s.cwd) === path
+    })
+    let failed: string | null = null
+    for (const id of ids) {
+      const result = await deleteSessionById(id)
+      if (!result.ok && failed === null) failed = result.error ?? '删除失败'
+    }
+    setProjectTagColors((prev) => {
+      const next = { ...prev }
+      delete next[path]
+      try { localStorage.setItem(PROJECT_TAG_KEY, JSON.stringify(next)) } catch { /* 忽略 */ }
+      return next
+    })
+    setArchivedProjects((prev) => {
+      const next = new Set(prev)
+      next.delete(path)
+      try { localStorage.setItem(PROJECT_ARCHIVED_KEY, JSON.stringify([...next])) } catch { /* 忽略 */ }
+      return next
+    })
+    try {
+      const workspace = (workspaces.items ?? []).find((w: any) => typeof w?.path === 'string' && normCwd(w.path) === path)
+      if (workspace?.workspaceId !== undefined) await workspacesService?.delete(workspace.workspaceId)
+    } catch { /* 注册清理失败不影响删除 */ }
+    if (failed === null) toast('Project deleted', 'success')
+    else toast(failed, 'error')
+    window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
+    return { ok: failed === null, error: failed ?? undefined }
   }
 
   // ── 复制历史到新对话（§5.3）：fork 出独立会话后「提升」为主聊天 ──
@@ -1266,6 +1389,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   onProjectModeChange: setProjectScope,
                   hasActive: (sessions.ids ?? []).some((id: string) => sessions.byId[id]?.blank !== true),
                   onRename: renameSession,
+                  onRenameProject: renameProject,
                   onForkSideChat: forkSideChat,
                   onCopyHistory: copyHistoryToNewChat,
                   onExport: exportSession,
@@ -1273,11 +1397,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   onTogglePin: togglePin,
                   tagColors,
                   onSetTagColor: setTagColor,
+                  projectTagColors,
+                  onSetProjectTagColor: setProjectTagColor,
                   hideIds: sideChatIds,
                   deletedIds,
                   onDelete: deleteSession,
+                  onDeleteProject: deleteProject,
                   archivedIds,
                   onToggleArchive: toggleArchive,
+                  archivedProjects,
+                  onToggleProjectArchive: toggleProjectArchive,
                   runningIds,
                   promotedIds,
                 }),

@@ -247,6 +247,8 @@ body { margin: 0; }
 .evo-tl-archived-row { opacity: 0.75; }
 .evo-tl-archived-row:hover { opacity: 1; }
 .evo-tl-fork-error { font-size: 11px; color: var(--color-error); text-align: right; line-height: 1.4; max-width: 70%; }
+.evo-tl-project-error { display: block; margin: 2px 10px 6px; text-align: left; max-width: none; }
+.evo-tl-archived-projects { padding-top: 4px; }
 .evo-tl-row {
   display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; padding: 6px 10px; margin-bottom: 2px;
   border: none; background: none; border-radius: 8px; cursor: default; position: relative;
@@ -1180,6 +1182,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tl-menu-danger svg { color: var(--color-error); }
 .evo-tl-menu-danger:hover { background: color-mix(in srgb, var(--color-error) 10%, transparent); }
 .evo-tl-row-acts[data-menu-open] .evo-tl-row-act[data-on] { color: var(--brand); }
+.evo-tl-row-acts[data-menu-open] { opacity: 1; }
 .evo-tl-del:hover, .evo-tl-del-confirm { color: var(--color-error); }
 .evo-tl-del-confirm { width: auto; padding: 0 6px; font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--color-error) 14%, transparent); }
 .evo-tl-del-confirm:hover { background: var(--color-error); color: var(--color-surface); }

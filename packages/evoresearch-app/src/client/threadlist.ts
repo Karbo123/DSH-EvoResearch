@@ -58,6 +58,8 @@ export interface ThreadListProps {
   hasActive: boolean
   /** 重命名会话（官方 session.rename；返回是否成功）。 */
   onRename: (id: string, title: string) => Promise<boolean>
+  /** 重命名项目（Workspace 显示标题；返回是否成功）。 */
+  onRenameProject: (path: string, title: string) => Promise<boolean>
   /** 以某会话为起点创建继承型 Side Chat（官方 session.fork；返回结果）。 */
   onForkSideChat: (id: string) => Promise<{ ok: boolean; id?: string; error?: string }>
   /** 复制历史到新对话（fork 后提升为主聊天；返回结果）。 */
@@ -70,16 +72,25 @@ export interface ThreadListProps {
   /** 会话标签颜色（§26.3，client-side 持久化；null 清除）。 */
   tagColors: Record<string, string>
   onSetTagColor: (id: string, color: string | null) => void
+  /** 项目标签颜色（client 侧持久化；null 清除）。 */
+  projectTagColors: Record<string, string>
+  onSetProjectTagColor: (path: string, color: string | null) => void
   /** 应从 Recents 隐藏的会话 id（侧聊/内部线程，§22.1）。 */
   hideIds: Set<string>
   /** 已删除会话 id（client-side 持久化；live 残留过滤，重启后彻底消失）。 */
   deletedIds: Set<string>
   /** 删除会话（host 删除持久化数据；返回是否成功）。 */
   onDelete: (id: string) => Promise<{ ok: boolean; error?: string }>
+  /** 删除项目（删除其全部子聊天与项目级状态；返回是否成功）。 */
+  onDeleteProject: (path: string) => Promise<{ ok: boolean; error?: string }>
   /** 已归档会话 id（§26.3 Archive：从 Recents 隐藏但保留数据，可恢复）。 */
   archivedIds: Set<string>
   /** 归档/恢复会话（client-side 持久化）。 */
   onToggleArchive: (id: string) => void
+  /** 已归档项目路径集合（client 侧持久化；项目由会话 cwd 派生）。 */
+  archivedProjects: Set<string>
+  /** 归档/恢复项目（同时归档/恢复其全部子聊天）。 */
+  onToggleProjectArchive: (path: string) => void
   /** 运行/停止中的会话 id（§26.3 行内运行状态点）。 */
   runningIds: Set<string>
   /** 已提升为主聊天的复制会话 id（§5.3：有 parentSessionId 但不再按侧聊对待）。 */
@@ -139,6 +150,9 @@ function moveIdToIndex(ids: string[], id: string, index: number): string[] {
   return next
 }
 
+/** 项目级 UI 键（菜单/调色板/删除/重命名状态）：与会话 id 隔离，避免路径撞键。 */
+const projKey = (path: string): string => `proj:${path}`
+
 type DragScope = 'projects' | 'chats'
 type DragState = {
   scope: DragScope
@@ -193,7 +207,7 @@ export function normalizeSessionsSnapshot(input: any): any {
   return { ...input, ids, byId, current, jobsBySession: input.jobsBySession ?? {} }
 }
 
-export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, onNewChat, onProjectModeChange, hasActive, onRename, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, hideIds, deletedIds, onDelete, archivedIds, onToggleArchive, runningIds, promotedIds }: ThreadListProps) {
+export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, onNewChat, onProjectModeChange, hasActive, onRename, onRenameProject, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, projectTagColors, onSetProjectTagColor, hideIds, deletedIds, onDelete, onDeleteProject, archivedIds, onToggleArchive, archivedProjects, onToggleProjectArchive, runningIds, promotedIds }: ThreadListProps) {
   const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
   const workspaces = useWorkspaces((s) => s)
   const currentId = sessions.current
@@ -238,6 +252,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   const [renameValue, setRenameValue] = useState('')
   const [forkError, setForkError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false)
   const [dragState, setDragState] = useState<DragState | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const dragCleanupRef = useRef<(() => void) | null>(null)
@@ -258,6 +273,23 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
         setTimeout(() => setDeleteError(null), 5000)
       }
       setDelArm(null)
+    })
+  }
+  /** 删除项目：先二次确认，成功后清排序记录并退出该项目视图。 */
+  const runDeleteProject = (path: string) => {
+    setDeleteError(null)
+    void onDeleteProject(path).then((result) => {
+      if (!result.ok) {
+        setDeleteError(result.error ?? '删除项目失败')
+        setTimeout(() => setDeleteError(null), 5000)
+      } else {
+        const nextOrder: ManualOrder = { projects: manualOrder.projects.filter((p) => p !== path), chats: { ...manualOrder.chats } }
+        delete nextOrder.chats[path]
+        persistOrder(nextOrder)
+        if (projectMode?.path === path) setProjectScope(null)
+      }
+      setDelArm(null)
+      setMenuFor(null)
     })
   }
 
@@ -370,6 +402,26 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
       if (sortMode === 'title') return a.name.localeCompare(b.name, 'zh-Hans')
       return b.updatedAt - a.updatedAt
     })
+  })()
+  // 已归档项目（由 archivedProjects 路径集合派生；名称/子聊天数取全部会话）
+  const archivedProjectList = (() => {
+    const allSessions = sessionIds
+      .map((id) => sessions.byId[id])
+      .filter((s) => s !== undefined && s.blank !== true && !hideIds.has(s.id) && !deletedIds.has(s.id))
+    return [...archivedProjects].map((path) => {
+      const base = path.split(/[\\/]/).pop() ?? path
+      const workspace = (workspaces.items ?? []).find((item: any) => typeof item?.path === 'string' && cwdBase(item.path) === path)
+      const count = allSessions.filter((s) => cwdBase(s.cwd) === path).length
+      const updatedAt = allSessions
+        .filter((s) => cwdBase(s.cwd) === path)
+        .reduce((max, s) => Math.max(max, s.updatedAt ?? 0), 0)
+      return {
+        name: typeof workspace?.title === 'string' && workspace.title.trim() !== '' ? workspace.title : base,
+        path,
+        count,
+        updatedAt,
+      }
+    }).sort((a, b) => b.updatedAt - a.updatedAt || a.name.localeCompare(b.name, 'zh-Hans'))
   })()
   // 当前项目视图下的会话（精确路径匹配）
   const scopedRows = projectMode === null
@@ -581,7 +633,10 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
         children: [
           projectMode === null
             ? // ── 项目列表视图（§二级聊天）──
-              projectList.length === 0
+              jsxs(Fragment, {
+                children: [
+                  deleteError !== null && jsx('span', { className: 'evo-tl-fork-error evo-tl-project-error', children: deleteError }),
+                  projectList.length === 0
                 ? jsxs('div', {
                     className: 'evo-tl-empty',
                     children: [
@@ -593,15 +648,54 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                   ? placeholder(item.key)
                   : (() => {
                     const p = item.value
+                    const key = projKey(p.path)
+                    if (renaming === key) {
+                      return jsxs('div', {
+                        className: 'evo-tl-row evo-tl-rename evo-tl-project-row',
+                        children: [
+                          jsx(FolderGit2, {}),
+                          jsx('input', {
+                            type: 'text',
+                            className: 'evo-tl-rename-input',
+                            value: renameValue,
+                            autoFocus: true,
+                            placeholder: t('renameProjectInput'),
+                            onInput: (e) => setRenameValue(e.currentTarget.value),
+                            onKeyDown: (e) => {
+                              if (e.key === 'Enter') {
+                                void onRenameProject(p.path, renameValue.trim()).then((ok) => { if (ok) setRenaming(null) })
+                              }
+                              if (e.key === 'Escape') setRenaming(null)
+                            },
+                          }),
+                          jsx('button', {
+                            type: 'button',
+                            className: 'evo-tl-row-act',
+                            title: t('save'),
+                            'aria-label': t('save'),
+                            onClick: (e: { stopPropagation(): void }) => {
+                              e.stopPropagation()
+                              void onRenameProject(p.path, renameValue.trim()).then((ok) => { if (ok) setRenaming(null) })
+                            },
+                            children: jsx(Check, {}),
+                          }),
+                        ],
+                      }, p.path)
+                    }
                     return jsxs('div', {
                       className: `evo-tl-row evo-tl-project-row${isDragging('projects', p.path) ? ' evo-tl-row-dragging' : ''}`,
                       'data-active': currentProject === p.name || undefined,
                       'data-evo-dnd-id': p.path,
                       'data-evo-dnd-scope': 'projects',
-                      onClick: () => { setProjectScope({ name: p.name, path: p.path }); setMenuFor(null) },
+                      onClick: () => { setProjectScope({ name: p.name, path: p.path }); setMenuFor(null); setColorFor(null) },
                       children: [
                         canReorder && dragGrip('projects', p.path, p.name, t('subchatCount').replace('{n}', String(p.count))),
                         jsx(FolderGit2, {}),
+                        projectTagColors[p.path] !== undefined && jsx('span', {
+                          className: 'evo-tl-color-dot',
+                          style: { background: projectTagColors[p.path] },
+                          title: t('tagged'),
+                        }),
                         jsxs('div', {
                           className: 'evo-tl-project-main',
                           children: [
@@ -609,11 +703,149 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                             jsx('span', { className: 'evo-tl-row-sub', children: t('subchatCount').replace('{n}', String(p.count)) }),
                           ],
                         }),
+                        colorFor === key && jsx('div', {
+                          className: 'evo-tl-palette',
+                          children: TAG_PALETTE.map((color) => jsx('button', {
+                            type: 'button',
+                            className: 'evo-tl-color-swatch',
+                            'data-active': projectTagColors[p.path] === color || undefined,
+                            style: { background: color },
+                            title: projectTagColors[p.path] === color ? t('removeTag') : t('tag'),
+                            'aria-label': projectTagColors[p.path] === color ? t('removeTagColor') : t('setTagColor'),
+                            onClick: (e: { stopPropagation(): void }) => {
+                              e.stopPropagation()
+                              onSetProjectTagColor(p.path, projectTagColors[p.path] === color ? null : color)
+                              setColorFor(null)
+                            },
+                          }, color)),
+                        }),
+                        jsx('div', {
+                          className: 'evo-tl-row-acts',
+                          'data-menu-open': menuFor === key || undefined,
+                          children: [
+                            jsxs('div', {
+                              className: 'evo-tl-row-more',
+                              children: [
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-row-act',
+                                  title: t('moreActions'),
+                                  'aria-label': t('moreActions'),
+                                  'data-on': menuFor === key || undefined,
+                                  onClick: (e: { stopPropagation(): void }) => {
+                                    e.stopPropagation()
+                                    setMenuFor((v) => (v === key ? null : key))
+                                  },
+                                  children: jsx(MoreHorizontal, {}),
+                                }),
+                                menuFor === key && jsx('div', {
+                                  className: 'evo-tl-row-menu',
+                                  onClick: (e: { stopPropagation(): void }) => e.stopPropagation(),
+                                  children: [
+                                    jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-tl-menu-item',
+                                      onClick: () => { setMenuFor(null); setRenameValue(p.name); setRenaming(key) },
+                                      children: jsxs(Fragment, { children: [jsx(Pencil, {}), jsx('span', { children: t('renameProject') })] }),
+                                    }),
+                                    jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-tl-menu-item',
+                                      onClick: () => { setMenuFor(null); setColorFor((v) => (v === key ? null : key)) },
+                                      children: jsxs(Fragment, { children: [jsx(Palette, {}), jsx('span', { children: t('tagColor') })] }),
+                                    }),
+                                    jsx('button', {
+                                      type: 'button',
+                                      className: 'evo-tl-menu-item',
+                                      onClick: () => { setMenuFor(null); onToggleProjectArchive(p.path) },
+                                      children: jsxs(Fragment, { children: [jsx(Archive, {}), jsx('span', { children: t('archiveProject') })] }),
+                                    }),
+                                    jsx('div', { className: 'evo-tl-menu-sep' }),
+                                    delArm === key
+                                      ? jsx('button', {
+                                          type: 'button',
+                                          className: 'evo-tl-menu-item evo-tl-menu-danger',
+                                          onClick: () => { setMenuFor(null); setDelArm(null); runDeleteProject(p.path) },
+                                          children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('deleteProjectQ') })] }),
+                                        })
+                                      : jsx('button', {
+                                          type: 'button',
+                                          className: 'evo-tl-menu-item evo-tl-menu-danger',
+                                          onClick: () => {
+                                            setDelArm(key)
+                                            setTimeout(() => setDelArm((v) => (v === key ? null : v)), 5000)
+                                          },
+                                          children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('deleteProject') })] }),
+                                        }),
+                                  ],
+                                }),
+                              ],
+                            }),
+                          ],
+                        }),
                         jsx(ChevronRight, {}),
                       ],
                     }, p.path)
                   })()
-                )
+                  ),
+                  archivedProjectList.length > 0 && jsxs('div', {
+                    className: 'evo-tl-section evo-tl-archived-projects',
+                    children: [
+                      jsxs('button', {
+                        type: 'button',
+                        className: 'evo-tl-archived-toggle',
+                        'aria-expanded': showArchivedProjects || undefined,
+                        onClick: () => setShowArchivedProjects((v) => !v),
+                        children: [
+                          jsx(ChevronRight, { className: `evo-tool-chev${showArchivedProjects ? ' open' : ''}` }),
+                          jsx(Archive, {}),
+                          jsx('span', { children: `${t('archivedProjects')} (${archivedProjectList.length})` }),
+                        ],
+                      }),
+                      showArchivedProjects && jsx('div', {
+                        className: 'evo-tl-archived-list',
+                        children: archivedProjectList.map((p) => jsxs('div', {
+                          className: 'evo-tl-row evo-tl-archived-row evo-tl-project-row',
+                          'data-evo-dnd-id': p.path,
+                          'data-evo-dnd-scope': 'projects',
+                          onClick: () => { setProjectScope({ name: p.name, path: p.path }); setMenuFor(null); setColorFor(null) },
+                          children: [
+                            jsx(FolderGit2, {}),
+                            projectTagColors[p.path] !== undefined && jsx('span', {
+                              className: 'evo-tl-color-dot',
+                              style: { background: projectTagColors[p.path] },
+                              title: t('tagged'),
+                            }),
+                            jsxs('div', {
+                              className: 'evo-tl-project-main',
+                              children: [
+                                jsx('span', { className: 'evo-tl-title-text', children: p.name }),
+                                jsx('span', { className: 'evo-tl-row-sub', children: t('subchatCount').replace('{n}', String(p.count)) }),
+                              ],
+                            }),
+                            jsx('div', {
+                              className: 'evo-tl-row-acts',
+                              children: [
+                                jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tl-row-act',
+                                  title: t('unarchive'),
+                                  'aria-label': t('unarchive'),
+                                  onClick: (e: { stopPropagation(): void }) => {
+                                    e.stopPropagation()
+                                    onToggleProjectArchive(p.path)
+                                  },
+                                  children: jsx(ArchiveRestore, {}),
+                                }),
+                              ],
+                            }),
+                          ],
+                        }, p.path)),
+                      }),
+                    ],
+                  }),
+                ],
+              })
             : // ── 项目内子聊天列表（对应图谱 Chat Node）──
               jsxs(Fragment, {
                 children: [
