@@ -215,13 +215,21 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [sortOpen, setSortOpen] = useState(false)
   const sortRef = useRef<HTMLDivElement | null>(null)
-  // 「⋯」更多菜单外点击关闭
+  const menuAnchorRef = useRef<HTMLDivElement | null>(null)
+  const colorAnchorRef = useRef<HTMLDivElement | null>(null)
+  // 「⋯」更多菜单外点击关闭：mousedown 时若点击目标在打开的菜单/触发按钮内则不关闭，
+  // 否则 mousedown 阶段就卸载菜单，后续 click 永远落不到菜单项上（真实鼠标点击失效）。
   useEffect(() => {
-    if (menuFor === null) return
-    const onDoc = () => setMenuFor(null)
+    if (menuFor === null && colorFor === null) return
+    const onDoc = (event: MouseEvent) => {
+      const target = event.target
+      if (target instanceof Node && (menuAnchorRef.current?.contains(target) || colorAnchorRef.current?.contains(target))) return
+      setMenuFor(null)
+      setColorFor(null)
+    }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
-  }, [menuFor])
+  }, [menuFor, colorFor])
   useEffect(() => {
     if (!sortOpen) return
     const onDoc = (event: MouseEvent) => {
@@ -711,6 +719,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                         }),
                         colorFor === key && jsx('div', {
                           className: 'evo-tl-palette',
+                          ref: colorAnchorRef,
                           children: TAG_PALETTE.map((color) => jsx('button', {
                             type: 'button',
                             className: 'evo-tl-color-swatch',
@@ -732,6 +741,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                           children: [
                             jsxs('div', {
                               className: 'evo-tl-row-more',
+                              ref: menuFor === key ? menuAnchorRef : undefined,
                               children: [
                                 jsx('button', {
                                   type: 'button',
@@ -959,6 +969,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                     }),
                     colorFor === s.id && jsx('div', {
                       className: 'evo-tl-palette',
+                      ref: colorAnchorRef,
                       children: TAG_PALETTE.map((color) => jsx('button', {
                         type: 'button',
                         className: 'evo-tl-color-swatch',
@@ -992,6 +1003,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                         // 「⋯」更多菜单（§侧栏重构：低频/高风险操作收纳，避免横排占满）
                         jsxs('div', {
                           className: 'evo-tl-row-more',
+                          ref: menuFor === s.id ? menuAnchorRef : undefined,
                           children: [
                             jsx('button', {
                               type: 'button',
