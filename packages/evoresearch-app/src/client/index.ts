@@ -27,7 +27,7 @@ import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
-import { clientStateGet, clientStateHydrate, clientStateMigrateLocalKeys, clientStateSet } from './client-state'
+import { clientStateFlush, clientStateGet, clientStateHydrate, clientStateMigrateLocalKeys, clientStateSet } from './client-state'
 import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
 import { ExperimentsPanel } from './experiments'
@@ -105,7 +105,7 @@ function lowInformationTitleInput(text: string): boolean {
 function localTitleFallback(kind: AutoTitleKind, inputs: string[]): string {
   const meaningful = inputs.find((text) => !lowInformationTitleInput(text))
   const seed = (meaningful ?? '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 28)
-  return seed !== '' ? seed : kind === 'subchat' ? '未命名研究子对话' : '未命名科研项目'
+  return seed !== '' ? seed : kind === 'subchat' ? t('untitledSubchat') : t('untitledProject')
 }
 
 /** 空白 Side Chat 追踪键（每 workspace；fork 型由 parentSessionId 识别，无需记录）。 */
@@ -224,8 +224,8 @@ class ErrorBoundary extends (Component as any) {
       return jsxs('div', {
         className: 'evo-fatal',
         children: [
-          jsx('h2', { children: '页面无法加载' }),
-          jsx('p', { children: '渲染发生错误。Reload 将保留当前会话；Go back 返回首页。' }),
+          jsx('h2', { children: t('pageLoadErrorTitle') }),
+          jsx('p', { children: t('pageLoadErrorDesc') }),
           jsxs('div', {
             className: 'evo-fatal-acts',
             children: [
@@ -608,7 +608,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const forkSideChat = async (id: string): Promise<{ ok: boolean; id?: string; error?: string }> => {
     const manager = sessionsService?.manager
-    if (manager?.fork === undefined) return { ok: false, error: 'fork 服务不可用' }
+    if (manager?.fork === undefined) return { ok: false, error: t('forkUnavailable') }
     let result
     try {
       // 保持 this 绑定（manager 方法依赖 this.summaries / this.api）
@@ -623,7 +623,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }
     // 官方 fork 要求源会话存在已完成轮次（host 错误原文透出）
     const message = (result?.error as { message?: string } | undefined)?.message
-    return { ok: false, error: message ?? 'fork 失败' }
+    return { ok: false, error: message ?? t('forkFailed') }
   }
   const createBlankSideChat = async (cwd: string | null): Promise<string | null> => {
     const id = await sessionsService?.create(cwd === null ? {} : { cwd })

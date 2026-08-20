@@ -486,7 +486,7 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId }: {
                   children: [
                     jsx(ChevronRight, { className: `evo-tool-chev${toolsOpen ? ' open' : ''}` }),
                     anyRunning ? jsx('span', { className: 'evo-tool-spinner', 'aria-label': t('runningDot') }) : jsx(Wrench, {}),
-                    jsx('span', { children: `Tools · ${tools.length}` }),
+                    jsx('span', { children: t('toolsCount').replace('{n}', String(tools.length)) }),
                     jsx('span', { className: 'evo-tool-group-state', children: anyRunning ? t('runningDot') : t('done') }),
                   ],
                 }),
@@ -566,8 +566,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       body: JSON.stringify({ sessionId, preset }),
     }).then((r) => r.json()).then((json) => {
       if (json.ok) setPermPreset(preset)
-      else toast(json.error?.message ?? '切换失败', 'error')
-    }).catch(() => toast('切换失败', 'error'))
+      else toast(json.error?.message ?? t('permSwitchFailed'), 'error')
+    }).catch(() => toast(t('permSwitchFailed'), 'error'))
   }
   // 权限档位切换：「自动批准」为高风险档位，先弹确认框再生效
   const switchPerm = (preset: string) => {
@@ -737,7 +737,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     setQueueError(null)
     void s.updateQueue(itemId, { kind: 'steer' }).then((r: any) => {
       if (r?.ok !== true) {
-        const message = (r?.error as { message?: string } | undefined)?.message ?? 'steer 失败'
+        const message = (r?.error as { message?: string } | undefined)?.message ?? t('steerFailed')
         setQueueError(message)
         setTimeout(() => setQueueError(null), 5000)
       }
@@ -815,7 +815,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           if (result === 'granted') {
             setNotifyOn(true)
             clientStateSet('evoresearch-notifications', '1')
-            try { new Notification('EvoResearch notifications enabled') } catch { /* 忽略 */ }
+            try { new Notification(t('notificationsEnabled')) } catch { /* 忽略 */ }
           }
         })
       } else if (permission === 'granted') {
@@ -863,9 +863,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         window.dispatchEvent(new CustomEvent('evo-rewind', { detail: { childId: json.value.childSessionId, ...(resend !== undefined ? { resend } : {}) } }))
       } else {
         setOpBusy(false)
-        toast(json.error?.message ?? '操作失败', 'error')
+        toast(json.error?.message ?? t('opFailed'), 'error')
       }
-    }).catch(() => { setOpBusy(false); toast('操作失败', 'error') })
+    }).catch(() => { setOpBusy(false); toast(t('opFailed'), 'error') })
   }
   const editAndResend = (seq: number, text: string) => {
     runRewindOp('/evoresearch/fs/usermsg-edit', { sessionId, seq }, text)
@@ -1239,24 +1239,24 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     const images = files.filter((f) => f.type.startsWith('image/'))
     const others = files.filter((f) => !f.type.startsWith('image/'))
     if (others.length > 0) {
-      setAttachError('仅支持图片附件（文本文件可用 @ 引用注入内容）')
+      setAttachError(t('attachImagesOnly'))
       setTimeout(() => setAttachError(null), 5000)
     }
     if (images.length === 0) return
     if (pendingImages.length + images.length > MAX_IMAGES_PER_MESSAGE) {
-      setAttachError(`一次最多 ${MAX_IMAGES_PER_MESSAGE} 个附件`)
+      setAttachError(t('attachMaxCount').replace('{n}', String(MAX_IMAGES_PER_MESSAGE)))
       setTimeout(() => setAttachError(null), 5000)
       return
     }
     const oversized = images.filter((f) => f.size > MAX_IMAGE_BYTES)
     if (oversized.length > 0) {
-      setAttachError(`${oversized[0]!.name} 超过 5MB 限制`)
+      setAttachError(t('attachOversized').replace('{name}', oversized[0]!.name))
       setTimeout(() => setAttachError(null), 5000)
     }
     const admitted = images.filter((f) => f.size <= MAX_IMAGE_BYTES)
     if (admitted.length === 0) return
     const added = admitted.map((f) => ({ id: `att-${++attachUidRef.current}-${Date.now()}`, name: f.name, mediaType: f.type || 'image/png', dataUrl: '', bytes: f.size }))
-    toast(`Added ${added.length} attachment${added.length > 1 ? 's' : ''}`, 'success')
+    toast(t('attachAdded').replace('{n}', String(added.length)), 'success')
     setPendingImages((prev) => [...prev, ...added])
     for (let i = 0; i < admitted.length; i += 1) {
       try {
@@ -1416,7 +1416,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               ref: listRef,
               className: 'evo-msg-list',
               children: [
-                error !== null && jsx('div', { className: 'evo-msg-error', children: `发送失败：${error}` }),
+                error !== null && jsx('div', { className: 'evo-msg-error', children: t('sendFailed').replace('{error}', error) }),
                 userOnly && jsx('button', {
                   type: 'button',
                   className: 'evo-useronly-hint',
@@ -1467,7 +1467,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   className: 'evo-clear-notice-box',
                   children: [
                     jsx('div', { className: 'evo-clear-notice-title', children: t('viewCleared') }),
-                    jsx('div', { className: 'evo-clear-notice-sub', children: '仅清空了本页展示，会话数据未删除；刷新页面即可恢复全部消息。' }),
+                    jsx('div', { className: 'evo-clear-notice-sub', children: t('clearViewNotice') }),
                     jsx('button', {
                       type: 'button',
                       className: 'evo-btn evo-btn-run',
@@ -1628,7 +1628,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   className: 'evo-approval-head',
                   children: [
                     jsx(HelpCircle, {}),
-                    jsx('span', { children: questions.length > 1 ? `${t('question')}（${questions.length}）` : t('question') }),
+                    jsx('span', { children: questions.length > 1 ? t('questionCount').replace('{n}', String(questions.length)) : t('question') }),
                   ],
                 }),
                 questions.map((q) => {
@@ -2098,7 +2098,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       }),
       actionDialog === 'compact' && jsx(ConfirmDialog, {
         title: t('compact'),
-        message: 'Compact 会对较早的活跃上下文生成摘要投影（§10.3），完整聊天仍保存在数据库中。确认继续？',
+        message: t('compactConfirmMsg'),
         confirmLabel: t('compact'),
         onConfirm: () => {
           // 直接执行 /compact 命令（官方 session.command，不产生模型回复回显）
@@ -2109,7 +2109,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       }),
       actionDialog === 'wf-clear' && latestWorkflow !== undefined && jsx(ConfirmDialog, {
         title: t('clearWorkflow'),
-        message: '清除当前 Dynamic Workflow 的展示记录（§24：仅移除浏览器持久化记录，不影响会话与执行）。确认？',
+        message: t('wfClearConfirmMsg'),
         confirmLabel: t('clear'),
         danger: true,
         onConfirm: () => setWfCleared((list) => [...list, latestWorkflow.key]),
@@ -2122,7 +2122,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
           jsxs('div', {
             className: 'evo-queue-head',
             children: [
-              jsx('span', { className: 'evo-insp-subtab-title', children: `Queued messages（${queueItems.length}）` }),
+              jsx('span', { className: 'evo-insp-subtab-title', children: t('queuedMsgCount').replace('{n}', String(queueItems.length)) }),
               queueError !== null && jsx('span', { className: 'evo-tl-fork-error', children: queueError }),
               jsx('span', { style: { flex: 1 } }),
               jsx('button', {
@@ -2214,7 +2214,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         children: [
           jsx('div', {
             className: 'evo-queue-head',
-            children: jsx('span', { className: 'evo-insp-subtab-title', children: `Background jobs（${jobs.length}）` }),
+            children: jsx('span', { className: 'evo-insp-subtab-title', children: t('bgJobsCount').replace('{n}', String(jobs.length)) }),
           }),
           jsx('div', {
             className: 'evo-queue-list',

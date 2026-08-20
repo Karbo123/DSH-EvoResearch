@@ -440,7 +440,7 @@ export function inspectLayout(input: ChatGraphLayoutRequest, response: ChatGraph
     const points = edgeIds.map((id) => response.routes?.find((route) => route.id === id)?.labelPosition).filter((point): point is LayoutRoutePoint => point !== undefined)
     return { edgeIds, distinct: new Set(points.map((point) => `${Math.round(point.x)}:${Math.round(point.y)}`)).size === points.length }
   })
-  const hiddenLabels = (response.routes ?? []).filter((route) => route.labelHidden === true).map((route) => ({ edgeId: route.id, reason: '没有找到不遮挡节点或其他标签的可用位置' }))
+  const hiddenLabels = (response.routes ?? []).filter((route) => route.labelHidden === true).map((route) => ({ edgeId: route.id, reason: 'hiddenLabelReason' }))
   return { nodeOverlaps, routeNodeHits, labelCollisions, parallelEdgeOffsets, hiddenLabels }
 }
 

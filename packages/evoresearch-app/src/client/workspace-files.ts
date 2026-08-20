@@ -89,7 +89,7 @@ function TreeNode({ entry, root, depth, onOpenFile }: {
       expanded && children !== null && children.length === 0 && jsx('div', {
         className: 'evo-fs-empty',
         style: { paddingLeft: 24 + depth * 14 },
-        children: '（空目录）',
+        children: t('emptyFolder'),
       }),
     ],
   })

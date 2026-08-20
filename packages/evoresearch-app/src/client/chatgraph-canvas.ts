@@ -1,5 +1,6 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect } from 'react'
+import { t } from './i18n'
 import {
   Background,
   BaseEdge,
@@ -97,18 +98,18 @@ function GraphGroupView({ data }: NodeProps<XYNode<GraphGroupData>>) {
   return jsxs('div', {
     className: `evo-graph-group evo-graph-group-${group.kind ?? 'freeform'}${group.collapsed ? ' collapsed' : ''}`,
     role: 'group',
-    'aria-label': `${group.title}，${data.memberCount} 个节点${group.collapsed ? '，已折叠' : ''}`,
+    'aria-label': `${group.title}${t('graphAriaSep')}${t('graphMemberCount').replace('{n}', String(data.memberCount))}${group.collapsed ? t('graphGroupCollapsed') : ''}`,
     children: [
       jsxs('div', { className: 'evo-graph-group-header', children: [
         jsx('button', {
           type: 'button',
           className: 'evo-graph-group-toggle',
           'aria-expanded': group.collapsed !== true,
-          'aria-label': `${group.collapsed === true ? '展开' : '折叠'}分组：${group.title}`,
+          'aria-label': (group.collapsed === true ? t('graphGroupExpandAria') : t('graphGroupCollapseAria')).replace('{title}', group.title),
           onClick: (event: MouseEvent) => { event.stopPropagation(); data.onToggleGroup(group.id) },
           children: jsx('span', { className: 'evo-graph-group-title', children: group.title }),
         }),
-        jsx('span', { className: 'evo-graph-group-count', 'aria-label': `${data.memberCount} 个节点`, children: `${data.memberCount}` }),
+        jsx('span', { className: 'evo-graph-group-count', 'aria-label': t('graphMemberCount').replace('{n}', String(data.memberCount)), children: `${data.memberCount}` }),
       ]}),
     ],
   })
@@ -126,18 +127,18 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
     position: type === 'source' ? Position.Right : Position.Left,
     className: `evo-graph-socket ${className}${data.advancedMode ? '' : ' evo-graph-socket-hidden'}`,
     style: { top, transform: 'translateY(-50%)' },
-    'aria-label': id === 'context' ? '分支输入' : id === 'memory' ? '参考输入' : '连接输出',
+    'aria-label': id === 'context' ? t('graphSocketContext') : id === 'memory' ? t('graphSocketMemory') : t('graphSocketOutput'),
     'aria-hidden': data.advancedMode ? undefined : true,
   })
   const shortPreview = node.ref !== undefined
-    ? preview === undefined ? '读取中…' : preview.ok ? (preview.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 24) : (preview.error ?? '资料不可用').slice(0, 24)
+    ? preview === undefined ? t('graphReading') : preview.ok ? (preview.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 24) : (preview.error ?? t('graphRefUnavailable')).slice(0, 24)
     : (node.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 24)
   const action = (label: string, onClick: () => void, className = '') => jsx('button', {
     type: 'button',
     className: `evo-graph-node-action ${className}`,
     onClick: (event: MouseEvent) => { event.stopPropagation(); onClick() },
     onKeyDown: (event: KeyboardEvent) => event.stopPropagation(),
-    'aria-label': `${label}：${node.title}`,
+    'aria-label': t('graphActionAria').replace('{action}', label).replace('{title}', node.title),
     children: label,
   })
   return jsxs('div', {
@@ -149,8 +150,8 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
     'data-pinned': node.pinned === true || undefined,
     tabIndex: 0,
     role: 'group',
-    'aria-roledescription': 'Chat Graph 节点',
-    'aria-label': `${node.title}，${isChat ? '聊天' : (node.displayKind ?? '资料')}${data.highlighted ? '，本轮已读取' : ''}`,
+    'aria-roledescription': t('graphNodeAriaRole'),
+    'aria-label': `${node.title}${t('graphAriaSep')}${isChat ? t('graphChat') : (node.displayKind ?? t('graphResource'))}${data.highlighted ? t('graphReadThisTurn') : ''}`,
     onDoubleClick: () => data.onOpen(node),
     onContextMenu: (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); data.onContextMenu(event, node) },
     onKeyDown: (event: KeyboardEvent) => {
@@ -161,32 +162,32 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
       jsx('div', { className: 'evo-graph-node-titlebar', children: jsxs(Fragment, { children: [
         jsx('span', { className: 'evo-graph-node-dot', 'aria-hidden': true }),
         jsx('span', { className: 'evo-graph-node-title', title: node.title, children: node.title }),
-        node.origin === 'agent' && jsx('span', { className: 'evo-graph-node-candidate-badge', children: 'AI 候选' }),
+        node.origin === 'agent' && jsx('span', { className: 'evo-graph-node-candidate-badge', children: t('graphCandidateBadge') }),
       ] }) }),
       isChat
         ? jsxs('div', { className: 'evo-graph-node-body', children: [
           socket('context', 'target', 'evo-graph-socket-in evo-graph-socket-ctx', 37),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-ctx', children: '分支' }),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-ctx', children: t('graphBranch') }),
           socket('memory', 'target', 'evo-graph-socket-in evo-graph-socket-mem', 55),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-mem', children: '参考' }),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-mem', children: t('graphRef') }),
           jsx('span', { className: 'evo-graph-node-sid', title: node.sessionId, children: (node.sessionId ?? '').slice(0, 8) }),
           socket('output', 'source', 'evo-graph-socket-out', 46),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', children: '连接' }),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', children: t('graphConnect') }),
           !data.advancedMode && jsxs('div', { className: 'evo-graph-node-actions', children: [
-            action('分支', () => data.onNaturalBranch(node)),
-            action('参考', () => data.onNaturalReference(node)),
-            action('关系', () => data.onNaturalRelation(node)),
+            action(t('graphBranch'), () => data.onNaturalBranch(node)),
+            action(t('graphRef'), () => data.onNaturalReference(node)),
+            action(t('graphNaturalRelation'), () => data.onNaturalRelation(node)),
           ] }),
         ] })
         : jsxs('div', { className: 'evo-graph-node-body', children: [
-          jsx('span', { className: 'evo-graph-node-tag', children: node.scope === 'global' ? '全局' : (isMemory ? '记忆' : '项目') }),
+          jsx('span', { className: 'evo-graph-node-tag', children: node.scope === 'global' ? t('graphGlobal') : (isMemory ? t('graphMemory') : t('graphProject')) }),
           jsx('span', { className: node.ref === undefined && isMemory ? 'evo-graph-node-preview' : 'evo-graph-node-ref-name', title: node.ref?.path ?? node.content, children: node.ref === undefined ? shortPreview : refDisplayName(node.ref.path) }),
           socket('output', 'source', 'evo-graph-socket-out', 32),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', children: '连接' }),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', children: t('graphConnect') }),
           node.ref !== undefined && jsx('span', { className: `evo-graph-node-preview${preview?.ok === false ? ' evo-graph-node-preview-err' : ''}`, title: preview?.text ?? preview?.error, children: shortPreview }),
           !data.advancedMode && jsxs('div', { className: 'evo-graph-node-actions', children: [
-            action('参考', () => data.onNaturalReference(node)),
-            action('关系', () => data.onNaturalRelation(node)),
+            action(t('graphRef'), () => data.onNaturalReference(node)),
+            action(t('graphNaturalRelation'), () => data.onNaturalRelation(node)),
           ] }),
         ] }),
     ],
@@ -237,7 +238,7 @@ function GraphEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
     }) }),
     !isFork && label !== '' && jsx(EdgeLabelRenderer, { children: jsx('div', {
       className: `evo-graph-edge-label${graphEdge?.labelHidden === true ? ' evo-graph-edge-label-hidden' : ''}`,
-      'aria-label': graphEdge?.labelHidden === true ? `边说明（空间不足，已隐藏）：${label}` : `边说明：${label}`,
+      'aria-label': graphEdge?.labelHidden === true ? t('graphEdgeLabelHidden').replace('{label}', label) : t('graphEdgeLabel').replace('{label}', label),
       style: {
         transform: `translate(-50%, -50%) translate(${labelPoint.x}px,${labelPoint.y - 6}px)`,
         ...(graphEdge?.labelWidth !== undefined ? { width: `${graphEdge.labelWidth}px` } : {}),
@@ -407,7 +408,7 @@ export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
   useEffect(() => {
     const minimap = document.querySelector<HTMLElement>('.evo-graph-canvas .react-flow__minimap')
     minimap?.setAttribute('role', 'img')
-    minimap?.setAttribute('aria-label', '图谱小地图')
+    minimap?.setAttribute('aria-label', t('graphMiniMap'))
   })
 
   const handleDragStop = (_event: unknown, _node: CanvasNode, draggedNodes?: CanvasNode[]) => {
@@ -426,15 +427,15 @@ export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
       props.onContextMenu({ x: event.clientX - rect.left, y: event.clientY - rect.top })
     },
     children: [
-      jsx('div', { className: 'evo-graph-narrow-list', 'aria-label': 'Chat Graph 节点列表', children: narrowNodes.map((node) => jsx('button', {
+      jsx('div', { className: 'evo-graph-narrow-list', 'aria-label': t('graphNodeListAria'), children: narrowNodes.map((node) => jsx('button', {
       type: 'button',
         className: `evo-graph-narrow-item${node.id === props.focusedNodeId ? ' active' : ''}`,
-        'aria-label': `${node.title}，${node.type === 'chat' ? '聊天' : (node.displayKind ?? '资料')}，${node.scope === 'global' ? '全局' : '项目'}`,
+        'aria-label': `${node.title}${t('graphAriaSep')}${node.type === 'chat' ? t('graphChat') : (node.displayKind ?? t('graphResource'))}${t('graphAriaSep')}${node.scope === 'global' ? t('graphGlobal') : t('graphProject')}`,
         onClick: () => props.onNarrowOpen(node),
         children: jsxs(Fragment, { children: [
-          jsx('span', { className: 'evo-graph-narrow-kind', children: node.type === 'chat' ? '聊天' : (node.displayKind ?? '资料') }),
+          jsx('span', { className: 'evo-graph-narrow-kind', children: node.type === 'chat' ? t('graphChat') : (node.displayKind ?? t('graphResource')) }),
           jsx('span', { className: 'evo-graph-narrow-title', children: node.title }),
-          jsx('span', { className: 'evo-graph-narrow-meta', children: node.scope === 'global' ? '全局' : '项目' }),
+          jsx('span', { className: 'evo-graph-narrow-meta', children: node.scope === 'global' ? t('graphGlobal') : t('graphProject') }),
         ] }),
       }, node.id)) }),
       jsx(ReactFlow, {
@@ -455,12 +456,12 @@ export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
         onNodeContextMenu: (event: MouseEvent, node: CanvasNode) => { if (node.type === 'graph') props.onNodeContextMenu(event, (node.data as GraphNodeData).graphNode) },
         onEdgeContextMenu: (event: MouseEvent, edge: XYEdge<{ graphEdge: GraphEdge }>) => { const original = props.graph.edges.find((item) => item.id === edge.id); if (original !== undefined) props.onEdgeContextMenu(event, original) },
         onConnect: props.onConnect,
-        'aria-label': 'Chat Graph 研究上下文图',
+        'aria-label': t('graphCanvasAria'),
         proOptions: { hideAttribution: true },
         children: [
           jsx(Background, { gap: 20, size: 1.2, color: 'var(--graph-grid)' }),
-          jsx(Controls, { showInteractive: true, 'aria-label': '图谱缩放与适配控制' }),
-          jsx(MiniMap, { pannable: true, zoomable: true, 'aria-label': '图谱小地图', nodeColor: (node: CanvasNode) => node.type === 'graphGroup' ? 'var(--graph-minimap-group)' : (node.data as GraphNodeData).graphNode.type === 'chat' ? 'var(--graph-minimap-chat)' : 'var(--graph-minimap-resource)' }),
+          jsx(Controls, { showInteractive: true, 'aria-label': t('graphControlsAria') }),
+          jsx(MiniMap, { pannable: true, zoomable: true, 'aria-label': t('graphMiniMap'), nodeColor: (node: CanvasNode) => node.type === 'graphGroup' ? 'var(--graph-minimap-group)' : (node.data as GraphNodeData).graphNode.type === 'chat' ? 'var(--graph-minimap-chat)' : 'var(--graph-minimap-resource)' }),
         ],
       }),
       props.menuElement,

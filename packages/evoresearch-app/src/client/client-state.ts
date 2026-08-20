@@ -13,6 +13,23 @@ const CLEAR_URL = '/evoresearch/fs/client-state-clear'
 /** 高频写穿队列：同键多次覆盖时丢弃旧值，只发最后一次（如输入历史节流）。 */
 const pending = new Map<string, { value: string | null; timer: ReturnType<typeof setTimeout> }>()
 
+function postSet(key: string, value: string | null): void {
+  const body = JSON.stringify({ key, value })
+  // 关键偏好（语言等）用 keepalive/sendBeacon 保证卸载前送达
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function' && (key === 'evoresearch-lang' || key === 'evoresearch-theme')) {
+      const blob = new Blob([body], { type: 'application/json' })
+      if (navigator.sendBeacon(SET_URL, blob)) return
+    }
+  } catch { /* 回退 fetch */ }
+  void fetch(SET_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body,
+    keepalive: true,
+  } as RequestInit).catch(() => {})
+}
+
 function syncSet(key: string, value: string | null): void {
   const pendingItem = pending.get(key)
   if (pendingItem !== undefined) clearTimeout(pendingItem.timer)
@@ -22,13 +39,27 @@ function syncSet(key: string, value: string | null): void {
       const item = pending.get(key)
       pending.delete(key)
       if (item === undefined) return
-      void fetch(SET_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key, value: item.value }),
-      }).catch(() => {})
+      postSet(key, item.value)
     }, 80),
   })
+}
+
+/** 立即写穿（用于语言切换等需在 reload 前持久化的关键操作）。 */
+export function clientStateFlush(key?: string): void {
+  if (key !== undefined) {
+    const item = pending.get(key)
+    if (item !== undefined) {
+      clearTimeout(item.timer)
+      pending.delete(key)
+      postSet(key, item.value)
+    }
+    return
+  }
+  for (const [k, item] of [...pending.entries()]) {
+    clearTimeout(item.timer)
+    pending.delete(k)
+    postSet(k, item.value)
+  }
 }
 
 /** 写穿：localStorage + 后端文件（value 为要写入 localStorage 的原始字符串）。 */
@@ -58,6 +89,12 @@ export async function clientStateHydrate(): Promise<Record<string, string>> {
       : {}
     for (const [key, value] of Object.entries(state)) {
       if (typeof value === 'string') {
+        // 若本地已有值（用户刚切换语言但后端尚未持久化，或本地更新更近），保留本地，避免 reload 后被旧后端值覆盖导致切换失效
+        let local: string | null = null
+        try { local = localStorage.getItem(key) } catch { /* 忽略 */ }
+        if (local !== null && (key === 'evoresearch-lang' || key === 'evoresearch-theme' || key.startsWith('evoresearch-'))) {
+          continue
+        }
         try { localStorage.setItem(key, value) } catch { /* 忽略 */ }
       }
     }

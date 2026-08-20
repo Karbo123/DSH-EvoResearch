@@ -339,7 +339,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
     void api<{ node: GraphNode; rev?: number }>('graph-memory-collection', {
       workspaceDir: cwd,
-      title: scope === 'global' ? '全局 Memory Collection' : '项目 Memory Collection',
+      title: scope === 'global' ? t('graphGlobalCollection') : t('graphProjectCollection'),
       scope, x: spot.x, y: spot.y,
     })
       .then(appendCreatedNode)
@@ -352,7 +352,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     const source = nodeById(nodeId)
     if (source === undefined) return
     void api<{ node: GraphNode; rev?: number }>('graph-memory-copy', {
-      workspaceDir: cwd, nodeId, title: `${source.title}（独立副本）`,
+      workspaceDir: cwd, nodeId, title: t('graphCopyTitle').replace('{title}', source.title),
       ...freeSpot(source.x + NODE_W + 36, source.y),
     })
       .then(appendCreatedNode)
@@ -363,7 +363,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const useExistingMemory = () => {
     setMenu(null)
     if (cwd === null) { setError(t('graphNeedProject')); return }
-    const raw = window.prompt('已有 Memory 的标题、locator 或 Markdown 路径', '')
+    const raw = window.prompt(t('graphUseMemoryPrompt'), '')
     if (raw === null || raw.trim() === '') return
     const value = raw.trim().toLowerCase()
     const matches = graph.nodes.filter((node) =>
@@ -568,7 +568,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         workspaceDir: cwd ?? undefined, nodeId: id, content,
         operationId: `memory-write-${id}-${Date.now().toString(36)}`,
       }).then((result) => {
-        if (result.ok !== true) { setError(result.error ?? 'Memory 写入失败'); return }
+        if (result.ok !== true) { setError(result.error ?? t('graphMemoryWriteFailed')); return }
         if (result.node !== undefined) setGraph((previous) => ({ ...previous, nodes: previous.nodes.map((node) => node.id === id ? result.node! : node) }))
       }).catch((error: unknown) => setError(String((error as Error)?.message ?? error)))
       return
@@ -668,7 +668,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       }
       setGraph(next)
       setLayoutPreview({ previous: graph, next, ...(result.warning === undefined ? {} : { warning: result.warning }) })
-      if (result.warning !== undefined) toast(`ELK 回退布局：${result.warning}`)
+      if (result.warning !== undefined) toast(t('graphLayoutFallback').replace('{msg}', result.warning))
     }).catch((error: unknown) => setError(String((error as Error)?.message ?? error))).finally(() => setBusy(false))
   }
 
@@ -695,7 +695,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const addResourceNode = () => {
     setMenu(null)
     if (cwd === null) { setError(t('graphNeedProject')); return }
-    const rawPath = window.prompt('资料路径（相对项目目录或绝对路径）', '')
+    const rawPath = window.prompt(t('graphResourcePathPrompt'), '')
     if (rawPath === null || rawPath.trim() === '') return
     const value = rawPath.trim()
     const lower = value.toLowerCase()
@@ -774,7 +774,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     void api<{ ok?: boolean; error?: string }>('graph-remove-group', {
       workspaceDir: cwd, groupId, operationId: `group-remove-${groupId}-${Date.now().toString(36)}`,
     }).then((result) => {
-      if (result.ok !== true) { setError(result.error ?? '删除分组失败'); return }
+      if (result.ok !== true) { setError(result.error ?? t('graphDeleteGroupFailed')); return }
       load()
     }).catch((error: unknown) => setError(String((error as Error)?.message ?? error)))
   }
@@ -822,7 +822,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       operationId: `canvas-reference-${connection.source}-${connection.target}-${Date.now().toString(36)}`,
       edge: { from: connection.source, to: connection.target, toPort: 'memory', behavior: 'reference', enabled: true },
     }).then((result) => {
-      if (result.edge === undefined) { setError(result.error ?? '参考连线保存失败'); load(); return }
+      if (result.edge === undefined) { setError(result.error ?? t('graphRefEdgeSaveFailed')); load(); return }
       setGraph((previous) => ({ ...previous, edges: [...previous.edges, result.edge!] }))
       if (typeof result.rev === 'number') revRef.current = result.rev
     }).catch((error: unknown) => { setError(String((error as Error)?.message ?? error)); load() })
@@ -834,7 +834,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 普通模式的自然语言操作：不要求研究者理解 Handle/port。 */
   const connectReferenceFromNode = (source: GraphNode) => {
     const target = currentChatNode
-    if (target === undefined || source.id === target.id) { setError('请先打开一个目标聊天'); return }
+    if (target === undefined || source.id === target.id) { setError(t('graphNeedTargetChat')); return }
     if (graph.edges.some((edge) => edge.from === source.id && edge.to === target.id && edge.toPort === 'memory' && edge.behavior !== 'relation')) return
     void api<{ edge?: GraphEdge; rev?: number }>('graph-add-edge', {
       workspaceDir: cwd ?? undefined,
@@ -848,8 +848,8 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const createNaturalRelation = (node: GraphNode) => {
     const source = currentChatNode
-    if (source === undefined || source.id === node.id) { setError('请先打开一个目标聊天'); return }
-    const label = window.prompt('关系说明（可留空）', '')
+    if (source === undefined || source.id === node.id) { setError(t('graphNeedTargetChat')); return }
+    const label = window.prompt(t('graphRelationLabelPrompt'), '')
     if (label === null) return
     void api<{ edge?: GraphEdge; rev?: number }>('graph-add-edge', {
       workspaceDir: cwd ?? undefined,
@@ -883,18 +883,18 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     style: { left: menu.x, top: menu.y },
     onClick: (event: MouseEvent) => event.stopPropagation(),
     children: [
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy || cwd === null, onClick: () => { void createChatNode() }, children: '新建聊天' }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryNode('project'), children: '新建项目记忆' }),
-      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => editEdgeLabel(menu.edgeId as string), children: '编辑边说明' }),
-      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => toggleEdgeMode(menu.edgeId as string), children: '切换边行为' }),
-      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteEdge(menu.edgeId as string), children: '删除连线' }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: '重命名' }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => togglePinned(menu.nodeId as string), children: nodeById(menu.nodeId)?.pinned === true ? '取消固定' : '固定节点' }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: () => forkDirection(menu.nodeId as string), children: '从这里分支' }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const node = nodeById(menu.nodeId as string); if (node !== undefined) startEditMemory(node) }, children: '编辑记忆' }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => useExistingMemory(), children: '使用已有 Memory' }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && (nodeById(menu.nodeId)?.displayKind === 'memory' || nodeById(menu.nodeId)?.displayKind === 'memory-collection' || nodeById(menu.nodeId)?.type === 'memory') && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => copyMemoryNode(menu.nodeId as string), children: '复制为独立 Memory' }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: '删除节点' }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy || cwd === null, onClick: () => { void createChatNode() }, children: t('graphNewChat') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryNode('project'), children: t('graphNewMemory') }),
+      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => editEdgeLabel(menu.edgeId as string), children: t('graphEditLabel') }),
+      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => toggleEdgeMode(menu.edgeId as string), children: t('graphToggleEdge') }),
+      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteEdge(menu.edgeId as string), children: t('graphDeleteEdge') }),
+      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
+      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => togglePinned(menu.nodeId as string), children: nodeById(menu.nodeId)?.pinned === true ? t('graphUnpinNode') : t('graphPinNode') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: () => forkDirection(menu.nodeId as string), children: t('graphBranchFromHere') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const node = nodeById(menu.nodeId as string); if (node !== undefined) startEditMemory(node) }, children: t('graphEditMemory') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => useExistingMemory(), children: t('graphUseExistingMemory') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && (nodeById(menu.nodeId)?.displayKind === 'memory' || nodeById(menu.nodeId)?.displayKind === 'memory-collection' || nodeById(menu.nodeId)?.type === 'memory') && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => copyMemoryNode(menu.nodeId as string), children: t('graphCopyMemory') }),
+      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: t('graphDeleteNode') }),
     ],
   })
 
@@ -909,7 +909,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           jsx(Search, { 'aria-hidden': true }),
           jsx('input', {
             type: 'text',
-            'aria-label': '搜索 Chat Graph 节点',
+            'aria-label': t('graphSearchAria'),
             placeholder: t('graphSearchNodes'),
             value: query,
             onInput: (e) => setQuery(e.currentTarget.value),
@@ -932,66 +932,66 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         }),
         jsx('button', {
           type: 'button', className: 'evo-graph-btn', disabled: cwd === null,
-          title: '使用已有 Memory', onClick: useExistingMemory,
-          children: jsxs(Fragment, { children: [jsx(Database, {}), jsx('span', { children: '使用已有' })] }),
+          title: t('graphUseExistingMemory'), onClick: useExistingMemory,
+          children: jsxs(Fragment, { children: [jsx(Database, {}), jsx('span', { children: t('graphUseExisting') })] }),
         }),
         jsx('button', {
           type: 'button', className: 'evo-graph-btn', disabled: cwd === null,
-          title: '新建 Memory Collection', onClick: () => createMemoryCollection(),
-          children: jsxs(Fragment, { children: [jsx(FolderGit2, {}), jsx('span', { children: '新建集合' })] }),
+          title: t('graphNewCollection'), onClick: () => createMemoryCollection(),
+          children: jsxs(Fragment, { children: [jsx(FolderGit2, {}), jsx('span', { children: t('graphNewCollectionShort') })] }),
         }),
         jsx('button', {
           type: 'button', className: 'evo-graph-btn', disabled: cwd === null,
-          title: '固定资料', onClick: addResourceNode,
-          children: jsxs(Fragment, { children: [jsx(File, {}), jsx('span', { children: '固定资料' })] }),
+          title: t('graphPinResource'), onClick: addResourceNode,
+          children: jsxs(Fragment, { children: [jsx(File, {}), jsx('span', { children: t('graphPinResource') })] }),
         }),
         jsx('button', {
           type: 'button', className: 'evo-graph-btn', title: t('graphFocusNeighbors'),
           onClick: () => setViewMode((mode) => mode === 'neighbors' ? 'all' : 'neighbors'),
-          children: '邻域',
+          children: t('graphFocusNeighbors'),
         }),
         jsx('button', {
           type: 'button', className: 'evo-graph-btn', title: t('graphFocusBranch'),
           onClick: () => setViewMode((mode) => mode === 'branch' ? 'all' : 'branch'),
-          children: '分支',
+          children: t('graphFocusBranch'),
         }),
         jsx('button', {
           type: 'button', className: 'evo-graph-btn', title: t('graphLayout'), disabled: busy,
           onClick: layoutVisible,
-          children: layoutPreview === null ? 'ELK 整理' : '重新整理',
+          children: layoutPreview === null ? t('graphLayoutBtn') : t('graphRelayoutBtn'),
         }),
         layoutPreview !== null && jsx('button', {
-          type: 'button', className: 'evo-graph-btn evo-graph-btn-primary', title: '确认布局并保存', onClick: confirmLayout,
-          children: '确认保存',
+          type: 'button', className: 'evo-graph-btn evo-graph-btn-primary', title: t('graphConfirmLayoutTitle'), onClick: confirmLayout,
+          children: t('graphConfirmSave'),
         }),
         layoutPreview !== null && jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: '取消布局预览', onClick: cancelLayout,
-          children: '取消预览',
+          type: 'button', className: 'evo-graph-btn', title: t('graphCancelLayoutTitle'), onClick: cancelLayout,
+          children: t('graphCancelPreview'),
         }),
         layoutUndo !== null && jsx('button', {
           type: 'button', className: 'evo-graph-btn', title: t('graphUndoLayout'), onClick: undoLayout,
-          children: '撤销',
+          children: t('graphUndoLayout'),
         }),
         jsx('button', {
-          type: 'button', className: `evo-graph-btn${advancedMode ? ' active' : ''}`, title: advancedMode ? '关闭高级端口' : '显示高级端口',
+          type: 'button', className: `evo-graph-btn${advancedMode ? ' active' : ''}`, title: advancedMode ? t('graphHidePortsTitle') : t('graphShowPortsTitle'),
           'aria-pressed': advancedMode,
           onClick: () => setAdvancedMode((value) => !value),
-          children: advancedMode ? '高级端口' : '普通操作',
+          children: advancedMode ? t('graphAdvancedPorts') : t('graphNormalOps'),
         }),
         jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: '查看本轮实际参考',
+          type: 'button', className: 'evo-graph-btn', title: t('graphViewTurnRefsTitle'),
           onClick: () => setContextDrawerOpen(true),
-          children: '本轮参考',
+          children: t('contextTraceTitle'),
         }),
         ...(graph.groups ?? []).map((group) => jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: group.collapsed || collapsedGroups.has(group.id) ? '展开分组' : '折叠分组',
+          type: 'button', className: 'evo-graph-btn', title: group.collapsed || collapsedGroups.has(group.id) ? t('graphExpandGroupTitle') : t('graphCollapseGroupTitle'),
           onClick: () => toggleGroup(group.id),
-          children: `${group.collapsed || collapsedGroups.has(group.id) ? '展开' : '折叠'} ${group.title}`,
+          children: `${group.collapsed || collapsedGroups.has(group.id) ? t('graphExpand') : t('graphCollapse')} ${group.title}`,
         }, `group-${group.id}`)),
         ...(graph.groups ?? []).map((group) => jsx('button', {
-          type: 'button', className: 'evo-graph-btn evo-graph-btn-danger', title: `删除分组：${group.title}`,
+          type: 'button', className: 'evo-graph-btn evo-graph-btn-danger', title: t('graphDeleteGroupTitle').replace('{title}', group.title),
           onClick: () => removeGroup(group.id),
-          children: `删除 ${group.title}`,
+          children: t('graphDeleteGroup').replace('{title}', group.title),
         }, `remove-group-${group.id}`)),
       ]}),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
@@ -1037,40 +1037,40 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       }),
       selectedNode !== undefined && inspectorOpen && jsxs('aside', {
         className: 'evo-graph-inspector',
-        'aria-label': '节点检查器',
+        'aria-label': t('graphInspectorAria'),
         children: [
           jsxs('div', { className: 'evo-graph-inspector-head', children: [
             jsx('strong', { children: selectedNode.title }),
             jsx('span', { style: { flex: 1 } }),
-            jsx('button', { type: 'button', className: 'evo-icon-btn', title: '关闭节点检查器', 'aria-label': '关闭节点检查器', onClick: () => setInspectorOpen(false), children: jsx(X, {}) }),
+            jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('graphCloseInspector'), 'aria-label': t('graphCloseInspector'), onClick: () => setInspectorOpen(false), children: jsx(X, {}) }),
           ]}),
           jsxs('div', { className: 'evo-graph-inspector-meta', children: [
-            jsx('span', { children: selectedNode.type === 'chat' ? '聊天' : (selectedNode.displayKind ?? '资料') }),
-            jsx('span', { children: selectedNode.scope === 'global' ? '全局' : '项目' }),
+            jsx('span', { children: selectedNode.type === 'chat' ? t('graphChat') : (selectedNode.displayKind ?? t('graphResource')) }),
+            jsx('span', { children: selectedNode.scope === 'global' ? t('graphGlobal') : t('graphProject') }),
             selectedNode.status !== undefined && jsx('span', { className: `evo-graph-status evo-graph-status-${selectedNode.status}`, children: selectedNode.status }),
           ]}),
           selectedNode.sessionId !== undefined && jsx('code', { children: selectedNode.sessionId }),
           selectedNode.ref !== undefined && jsx('code', { title: selectedNode.ref.path, children: selectedNode.ref.path }),
           selectedNode.content !== undefined && selectedNode.content.trim() !== '' && jsx('p', { className: 'evo-graph-inspector-preview', children: selectedNode.content.replace(/\s+/g, ' ').slice(0, 260) }),
-          selectedNode.type === 'chat' && jsx('button', { type: 'button', className: 'evo-graph-inspector-action', onClick: () => openChatNode(selectedNode), children: '打开聊天' }),
-          (selectedNode.displayKind === 'memory' || selectedNode.displayKind === 'memory-collection' || selectedNode.type === 'memory') && jsx('button', { type: 'button', className: 'evo-graph-inspector-action', onClick: () => startEditMemory(selectedNode), children: '编辑 Memory' }),
-          selectedNode.ref !== undefined && jsx('button', { type: 'button', className: 'evo-graph-inspector-action', onClick: () => openRefViewer(selectedNode), children: '打开资料' }),
+          selectedNode.type === 'chat' && jsx('button', { type: 'button', className: 'evo-graph-inspector-action', onClick: () => openChatNode(selectedNode), children: t('graphOpenChat') }),
+          (selectedNode.displayKind === 'memory' || selectedNode.displayKind === 'memory-collection' || selectedNode.type === 'memory') && jsx('button', { type: 'button', className: 'evo-graph-inspector-action', onClick: () => startEditMemory(selectedNode), children: t('graphEditMemory') }),
+          selectedNode.ref !== undefined && jsx('button', { type: 'button', className: 'evo-graph-inspector-action', onClick: () => openRefViewer(selectedNode), children: t('graphOpenResource') }),
           selectedNode.type === 'chat' && selectedReferenceEdges.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [
-            jsx('span', { children: '回答时参考' }),
+            jsx('span', { children: t('graphAnswerRefs') }),
             ...selectedReferenceEdges.map((edge) => {
               const source = graph.nodes.find((node) => node.id === edge.from)
               return jsxs('div', { className: 'evo-graph-inspector-reference', children: [
                 jsx('button', { type: 'button', onClick: () => source !== undefined && setSelectedId(source.id), children: source?.title ?? edge.from }),
-                jsx('button', { type: 'button', className: 'evo-graph-inspector-toggle', 'aria-pressed': edge.enabled !== false, onClick: () => toggleEdgeEnabled(edge.id), children: edge.enabled === false ? '已关闭' : '已启用' }),
+                jsx('button', { type: 'button', className: 'evo-graph-inspector-toggle', 'aria-pressed': edge.enabled !== false, onClick: () => toggleEdgeEnabled(edge.id), children: edge.enabled === false ? t('graphEnabledOff') : t('graphEnabledOn') }),
               ] }, `reference-${edge.id}`)
             }),
           ] }),
-          selectedRelationEdges.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: '普通关系' }), ...selectedRelationEdges.map((edge) => jsx('button', { type: 'button', onClick: () => editEdgeLabel(edge.id), children: edge.label || '未命名关系' }, `relation-${edge.id}`))] }),
-          selectedParents.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: '上游' }), ...selectedParents.map((node) => jsx('button', { type: 'button', onClick: () => setSelectedId(node.id), children: node.title }, `parent-${node.id}`))] }),
-          selectedChildren.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: '下游' }), ...selectedChildren.map((node) => jsx('button', { type: 'button', onClick: () => setSelectedId(node.id), children: node.title }, `child-${node.id}`))] }),
+          selectedRelationEdges.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: t('graphRelation') }), ...selectedRelationEdges.map((edge) => jsx('button', { type: 'button', onClick: () => editEdgeLabel(edge.id), children: edge.label || t('graphUnnamedRelation') }, `relation-${edge.id}`))] }),
+          selectedParents.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: t('graphUpstream') }), ...selectedParents.map((node) => jsx('button', { type: 'button', onClick: () => setSelectedId(node.id), children: node.title }, `parent-${node.id}`))] }),
+          selectedChildren.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: t('graphDownstream') }), ...selectedChildren.map((node) => jsx('button', { type: 'button', onClick: () => setSelectedId(node.id), children: node.title }, `child-${node.id}`))] }),
         ],
       }),
-      selectedNode !== undefined && !inspectorOpen && jsx('button', { type: 'button', className: 'evo-graph-inspector-reopen', title: '打开节点检查器', 'aria-label': '打开节点检查器', onClick: () => setInspectorOpen(true), children: '检查器' }),
+      selectedNode !== undefined && !inspectorOpen && jsx('button', { type: 'button', className: 'evo-graph-inspector-reopen', title: t('graphOpenInspector'), 'aria-label': t('graphOpenInspector'), onClick: () => setInspectorOpen(true), children: t('graphInspector') }),
       graph.nodes.length === 0 && jsx('div', { className: 'evo-graph-hint', children: jsxs(Fragment, { children: [
         jsx(GitBranch, {}),
         jsx('span', { children: t('graphEmptyHint') }),
@@ -1180,6 +1180,6 @@ async function api<T>(method: string, body: Record<string, unknown> = {}): Promi
     body: JSON.stringify(body),
   })
   const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? '请求失败')
+  if (!json.ok) throw new Error(json.error?.message ?? t('graphApiFailed'))
   return json.value as T
 }

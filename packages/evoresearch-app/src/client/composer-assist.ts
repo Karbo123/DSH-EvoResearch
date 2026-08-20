@@ -85,24 +85,24 @@ interface FileEntry { path: string; isDir: boolean }
 
 /** 平台/常见命令补充（§23.3 目录；agent 作用域命令不在全局注册表，静态镜像）。 */
 const PLATFORM_COMMANDS: CommandEntry[] = [
-  { name: 'help', description: '列出全部命令、参数、别名与说明' },
-  { name: 'model', description: '切换当前模型；--save 同时写配置', hint: '[name] [--save]' },
-  { name: 'model-fallback', description: '管理有序备用模型链', hint: 'list|add|remove|clear|save|help' },
-  { name: 'compact', description: '对较早活跃上下文生成摘要投影（不删历史）' },
-  { name: 'new', description: '开始新的 Thread' },
-  { name: 'clear', description: '清理当前 UI/会话视图（不删持久数据）' },
-  { name: 'threads', description: '列出最近持久会话' },
-  { name: 'resume', description: '用唯一 Thread ID 或前缀恢复会话', hint: '<id-or-prefix>' },
-  { name: 'delete', description: '永久删除指定会话（需确认）', hint: '<id-or-prefix>' },
-  { name: 'current', description: '显示当前 Thread、workspace、模型与状态' },
-  { name: 'skills', description: '按 workspace/global/built-in 三层列出技能' },
-  { name: 'install-skill', description: '从本地目录或远端仓库安装技能', hint: '<source> [--local]' },
-  { name: 'uninstall-skill', description: '删除可删除技能', hint: '<name>' },
-  { name: 'experts', description: '列出已安装 Expert 及当前邀请状态' },
-  { name: 'mcp', description: '管理 MCP server', hint: 'list|config|add|edit|remove|install' },
-  { name: 'plan', description: '进入计划模式' },
-  { name: 'exit', description: '退出' },
-]
+  { name: 'help', description: 'List all commands, args, aliases and descriptions', _i18nKey: 'cmdHelpDesc' },
+  { name: 'model', description: 'Switch current model; --save also writes config', _i18nKey: 'cmdModelDesc', hint: '[name] [--save]' },
+  { name: 'model-fallback', description: 'Manage ordered fallback model chain', _i18nKey: 'cmdModelFallbackDesc', hint: 'list|add|remove|clear|save|help' },
+  { name: 'compact', description: 'Generate a summary projection of earlier active context (keeps history)', _i18nKey: 'cmdCompactDesc' },
+  { name: 'new', description: 'Start a new Thread', _i18nKey: 'cmdNewDesc' },
+  { name: 'clear', description: 'Clear current UI/session view (keeps persisted data)', _i18nKey: 'cmdClearDesc' },
+  { name: 'threads', description: 'List recent persisted sessions', _i18nKey: 'cmdThreadsDesc' },
+  { name: 'resume', description: 'Resume a session by unique Thread ID or prefix', _i18nKey: 'cmdResumeDesc', hint: '<id-or-prefix>' },
+  { name: 'delete', description: 'Permanently delete a session (requires confirmation)', _i18nKey: 'cmdDeleteDesc', hint: '<id-or-prefix>' },
+  { name: 'current', description: 'Show current Thread, workspace, model and status', _i18nKey: 'cmdCurrentDesc' },
+  { name: 'skills', description: 'List skills by workspace/global/built-in layers', _i18nKey: 'cmdSkillsDesc' },
+  { name: 'install-skill', description: 'Install a skill from a local directory or remote repo', _i18nKey: 'cmdInstallSkillDesc', hint: '<source> [--local]' },
+  { name: 'uninstall-skill', description: 'Remove a removable skill', _i18nKey: 'cmdUninstallSkillDesc', hint: '<name>' },
+  { name: 'experts', description: 'List installed Experts and current invitation status', _i18nKey: 'cmdExpertsDesc' },
+  { name: 'mcp', description: 'Manage MCP server', _i18nKey: 'cmdMcpDesc', hint: 'list|config|add|edit|remove|install' },
+  { name: 'plan', description: 'Enter plan mode', _i18nKey: 'cmdPlanDesc' },
+  { name: 'exit', description: 'Exit', _i18nKey: 'cmdExitDesc' },
+] as Array<CommandEntry & { _i18nKey?: string }>
 
 /** 命令目录：后端注册表动态读取 + 平台命令补充（按名称去重）。 */
 export function useCommandCatalog(): CommandEntry[] {
@@ -117,7 +117,8 @@ export function useCommandCatalog(): CommandEntry[] {
       if (cancelled) return
       const dynamic: CommandEntry[] = json.ok && Array.isArray(json.value?.commands) ? json.value.commands : []
       const names = new Set(dynamic.map((c) => c.name))
-      setCatalog([...dynamic, ...PLATFORM_COMMANDS.filter((c) => !names.has(c.name))])
+      const platform = PLATFORM_COMMANDS.filter((c) => !names.has(c.name)).map((c) => (c as any)._i18nKey ? { ...c, description: t((c as any)._i18nKey) } : c)
+      setCatalog([...dynamic, ...platform])
     }).catch(() => {})
     return () => { cancelled = true }
   }, [])

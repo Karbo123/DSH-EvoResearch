@@ -9,6 +9,10 @@
 # §21.3/§10.6：官方 dsh-base 默认不含 ask_user 工具行——补挂 tool-ask-user，
 # 使主 Agent 获得 ask_user_question 工具（模型主动提问 → 工作台问题卡片作答，
 # 科研代码模式 Lite/More Effort 选择依赖它）。
+# rc.8 内核要求 uiRenderer 服务（由 @deepseek-ai/dsh-client-ui-renderer 提供），
+# evoresearch-app  bundle 已声明，但 profile 层显式插入以确保解析。
 - insert:
     - id: tool-ask-user
       name: '@deepseek-ai/dsh-tool-ask-user'
+    - id: ui-renderer
+      name: '@deepseek-ai/dsh-client-ui-renderer'

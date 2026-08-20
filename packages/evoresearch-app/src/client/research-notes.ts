@@ -107,7 +107,7 @@ async function api<T>(method: string, body: Record<string, unknown> = {}): Promi
     body: JSON.stringify(body),
   })
   const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? '请求失败')
+  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
   return json.value as T
 }
 
@@ -522,7 +522,7 @@ function DocBlock({ workspaceDir, kind, onError }: { workspaceDir: string; kind:
       .then((result) => {
         setSaving(false)
         if (result.ok) { setEditing(false); load() }
-        else onError('保存失败')
+        else onError(t('saveFailed'))
       })
       .catch((e: any) => { setSaving(false); onError(String(e?.message ?? e)) })
   }

@@ -9,6 +9,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ExternalLink, Link2, Pin, RefreshCw, X } from 'lucide-react'
+import { t } from './i18n'
 import type { ChatGraph, GraphNode } from './chatgraph'
 
 interface PreviewItem {
@@ -70,7 +71,7 @@ async function callApi<T>(method: string, body: Record<string, unknown>): Promis
     body: JSON.stringify(body),
   })
   const json = await response.json() as { ok?: boolean; value?: T; error?: { message?: string } }
-  if (json.ok !== true) throw new Error(json.error?.message ?? `${method} 请求失败`)
+  if (json.ok !== true) throw new Error(json.error?.message ?? t('contextTraceApiFailed').replace('{method}', method))
   return json.value as T
 }
 
@@ -172,7 +173,7 @@ export function ContextTraceDrawer(props: ContextTraceDrawerProps) {
 
   const refresh = async (deep: boolean): Promise<void> => {
     if (props.sessionId.trim() === '' || question.trim() === '') {
-      setLocalError('请输入本轮问题，才能构造参考')
+      setLocalError(t('contextTraceErrorRequired'))
       return
     }
     setLoading(true)
@@ -236,7 +237,7 @@ export function ContextTraceDrawer(props: ContextTraceDrawerProps) {
   const pinTrace = async (entry: LinkTraceEntry) => {
     const kind = localResourceKind(entry.kind, entry.target)
     if (kind === undefined || props.workspaceDir === undefined) {
-      setLocalError('外部网页或聊天需要从原入口打开，不能作为项目文件固定')
+      setLocalError(t('contextTracePinExternal'))
       return
     }
     setPinning(entry.locator)
@@ -275,53 +276,53 @@ export function ContextTraceDrawer(props: ContextTraceDrawerProps) {
     className: 'evo-context-trace',
     role: 'dialog',
     'aria-modal': 'true',
-    'aria-label': '本轮 Context Trace',
+    'aria-label': t('contextTraceAria'),
     'aria-busy': loading,
     ref: drawerRef,
     children: [
       jsxs('div', { className: 'evo-context-trace-head', children: [
-        jsxs('div', { children: [jsx('strong', { children: '本轮参考' }), jsx('p', { children: 'Memory 段落 → 链接 → 原始资料' })] }),
-        jsx('button', { ref: closeRef, type: 'button', className: 'evo-icon-btn', 'aria-label': '关闭本轮参考', title: '关闭（Esc）', onClick: props.onClose, children: jsx(X, {}) }),
+        jsxs('div', { children: [jsx('strong', { children: t('contextTraceTitle') }), jsx('p', { children: t('contextTraceSubtitle') })] }),
+        jsx('button', { ref: closeRef, type: 'button', className: 'evo-icon-btn', 'aria-label': t('contextTraceCloseAria'), title: t('contextTraceCloseTitle'), onClick: props.onClose, children: jsx(X, {}) }),
       ] }),
       jsxs('div', { className: 'evo-context-trace-question', children: [
-        jsx('label', { htmlFor: 'evo-context-question', children: '本轮问题' }),
-        jsx('textarea', { id: 'evo-context-question', rows: 2, value: question, placeholder: '例如：为什么 BM25 + 向量检索的 citation accuracy 更高？', onInput: (event) => setQuestion(event.currentTarget.value) }),
+        jsx('label', { htmlFor: 'evo-context-question', children: t('contextTraceQuestion') }),
+        jsx('textarea', { id: 'evo-context-question', rows: 2, value: question, placeholder: t('contextTracePlaceholder'), onInput: (event) => setQuestion(event.currentTarget.value) }),
         jsxs('div', { className: 'evo-context-trace-actions', children: [
-          jsx('button', { type: 'button', className: 'evo-graph-btn', disabled: loading, onClick: () => { void refresh(false) }, children: jsxs(Fragment, { children: [jsx(RefreshCw, { 'aria-hidden': true }), jsx('span', { children: '预览参考' })] }) }),
-          jsx('button', { type: 'button', className: 'evo-btn evo-btn-run', disabled: loading, onClick: () => { void refresh(true) }, children: jsxs(Fragment, { children: [jsx(Check, { 'aria-hidden': true }), jsx('span', { children: '读取并生成 Trace' })] }) }),
+          jsx('button', { type: 'button', className: 'evo-graph-btn', disabled: loading, onClick: () => { void refresh(false) }, children: jsxs(Fragment, { children: [jsx(RefreshCw, { 'aria-hidden': true }), jsx('span', { children: t('contextTracePreview') })] }) }),
+          jsx('button', { type: 'button', className: 'evo-btn evo-btn-run', disabled: loading, onClick: () => { void refresh(true) }, children: jsxs(Fragment, { children: [jsx(Check, { 'aria-hidden': true }), jsx('span', { children: t('contextTraceGenerate') })] }) }),
         ] }),
       ] }),
       error !== null && jsx('div', { className: 'evo-context-trace-error', role: 'alert', children: error }),
-      loading && jsx('div', { className: 'evo-context-trace-loading', role: 'status', 'aria-live': 'polite', children: '正在构造本轮参考…' }),
-      degraded.length > 0 && jsx('div', { className: 'evo-context-trace-degraded', role: 'status', 'aria-live': 'polite', children: `降级：${degraded.join('；')}` }),
-      items.length === 0 && trace.length === 0 && jsx('div', { className: 'evo-context-trace-empty', children: assembled ? '本轮没有读取到可展开的链接资料。' : '先预览或读取本轮问题的参考资料。' }),
+      loading && jsx('div', { className: 'evo-context-trace-loading', role: 'status', 'aria-live': 'polite', children: t('contextTraceLoading') }),
+      degraded.length > 0 && jsx('div', { className: 'evo-context-trace-degraded', role: 'status', 'aria-live': 'polite', children: t('contextTraceDegraded').replace('{list}', degraded.join(t('contextTraceDegradedSep'))) }),
+      items.length === 0 && trace.length === 0 && jsx('div', { className: 'evo-context-trace-empty', children: assembled ? t('contextTraceEmptyAssembled') : t('contextTraceEmptyFirst') }),
       items.length > 0 && jsxs('section', { className: 'evo-context-trace-section', 'aria-labelledby': 'evo-context-candidates-title', children: [
-        jsx('h3', { id: 'evo-context-candidates-title', children: `候选资料（${items.length}）` }),
+        jsx('h3', { id: 'evo-context-candidates-title', children: t('contextTraceCandidatesCount').replace('{n}', String(items.length)) }),
         ...items.map((item) => {
           const excluded = excludedIds.has(item.id)
           const supplemented = includedIds.has(item.id)
           return jsxs('article', { className: `evo-context-trace-item${excluded ? ' excluded' : ''}`, children: [
-            jsxs('div', { className: 'evo-context-trace-item-head', children: [jsx('strong', { children: item.title }), jsx('span', { className: item.connected ? 'connected' : '', children: item.connected ? '已连接' : item.kind })] }),
+            jsxs('div', { className: 'evo-context-trace-item-head', children: [jsx('strong', { children: item.title }), jsx('span', { className: item.connected ? 'connected' : '', children: item.connected ? t('contextTraceConnected') : item.kind })] }),
             jsx('p', { children: item.snippet || item.reason }),
             jsxs('div', { className: 'evo-context-trace-item-actions', children: [
-              jsx('button', { type: 'button', onClick: () => toggleExcluded(item.id), 'aria-pressed': excluded, children: excluded ? '恢复' : '临时移除' }),
-              jsx('button', { type: 'button', onClick: () => toggleIncluded(item.id), 'aria-pressed': supplemented, children: supplemented ? '取消补充' : '补充本轮' }),
+              jsx('button', { type: 'button', onClick: () => toggleExcluded(item.id), 'aria-pressed': excluded, children: excluded ? t('contextTraceRestore') : t('contextTraceExcludeTemp') }),
+              jsx('button', { type: 'button', onClick: () => toggleIncluded(item.id), 'aria-pressed': supplemented, children: supplemented ? t('contextTraceUnsupplement') : t('contextTraceSupplement') }),
             ] }),
           ] }, `candidate-${item.kind}-${item.id}`)
         }),
       ] }),
       trace.length > 0 && jsxs('section', { className: 'evo-context-trace-section', 'aria-labelledby': 'evo-context-trace-title', children: [
-        jsx('h3', { id: 'evo-context-trace-title', children: `实际读取链路（${trace.length}）` }),
+        jsx('h3', { id: 'evo-context-trace-title', children: t('contextTraceLinksCount').replace('{n}', String(trace.length)) }),
         ...trace.map((entry) => jsxs('article', { className: 'evo-context-trace-link', children: [
           jsxs('div', { className: 'evo-context-trace-link-line', children: [jsx(Link2, {}), jsx('button', { type: 'button', onClick: () => openTrace(entry), children: entry.label || entry.sourceLocator }), jsx('span', { children: '→' }), jsx('code', { title: entry.target, children: traceTargetLabel(entry) })] }),
-          jsx('small', { children: entry.opened ? entry.reason : `未打开：${entry.reason}` }),
+          jsx('small', { children: entry.opened ? entry.reason : t('contextTraceNotOpened').replace('{reason}', entry.reason) }),
           jsxs('div', { className: 'evo-context-trace-item-actions', children: [
-            jsx('button', { type: 'button', onClick: () => openTrace(entry), children: jsxs(Fragment, { children: [jsx(ExternalLink, {}), jsx('span', { children: '打开' })] }) }),
-            jsx('button', { type: 'button', disabled: pinning !== null, onClick: () => { void pinTrace(entry) }, 'aria-busy': pinning === entry.locator, children: jsxs(Fragment, { children: [jsx(Pin, { 'aria-hidden': true }), jsx('span', { children: pinning === entry.locator ? '正在固定…' : '固定到图' })] }) }),
+            jsx('button', { type: 'button', onClick: () => openTrace(entry), children: jsxs(Fragment, { children: [jsx(ExternalLink, {}), jsx('span', { children: t('contextTraceOpen') })] }) }),
+            jsx('button', { type: 'button', disabled: pinning !== null, onClick: () => { void pinTrace(entry) }, 'aria-busy': pinning === entry.locator, children: jsxs(Fragment, { children: [jsx(Pin, { 'aria-hidden': true }), jsx('span', { children: pinning === entry.locator ? t('contextTracePinning') : t('contextTracePinToGraph') })] }) }),
           ] }),
         ] }, `trace-${entry.locator}-${entry.target}`)),
       ] }),
-      jsx('button', { type: 'button', className: 'evo-context-trace-close-bottom', onClick: props.onClose, children: '完成' }),
+      jsx('button', { type: 'button', className: 'evo-context-trace-close-bottom', onClick: props.onClose, children: t('contextTraceDone') }),
     ],
   })
 }

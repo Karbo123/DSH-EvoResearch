@@ -151,3 +151,4 @@
     # EvoResearch 工作台：提供 layout 服务（app-shell 硬依赖）并注册 root slot。
     - id: evoresearch-ui
       name: '@evoresearch/dsh-app'
+      inject: [uiRenderer]

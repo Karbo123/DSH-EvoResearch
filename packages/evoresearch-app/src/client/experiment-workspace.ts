@@ -97,7 +97,7 @@ async function api<T>(method: string, body: Record<string, unknown> = {}): Promi
     body: JSON.stringify(body),
   })
   const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? '请求失败')
+  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
   return json.value as T
 }
 

@@ -163,7 +163,7 @@ async function api<T>(method: string, body: Record<string, unknown> = {}): Promi
     body: JSON.stringify(body),
   })
   const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? '请求失败')
+  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
   return json.value as T
 }
 
@@ -225,7 +225,7 @@ function PaperDetail({ project, paperId, initialPage, onBack, onChanged, onError
       .then((row) => {
         setBusy(false)
         if (row === null) {
-          onError(`论文不存在: ${paperId}`)
+          onError(t('paperNotFound').replace('{id}', paperId))
           return
         }
         setPaper(row)
@@ -517,7 +517,7 @@ function PapersTab({ project, onError }: { project: string; onError: (message: s
     if (p === '') return
     setActionMsg('')
     void api<AddPaperResult>('library-add-paper', { project, pdfPath: p })
-      .then((r) => { setActionMsg(`${r.status}: ${r.title}（${r.extractionStatus}${r.extractError ? `: ${r.extractError}` : ''}）`); setPdfPath(''); load() })
+      .then((r) => { setActionMsg(t('paperAddedMsg').replace('{status}', r.status).replace('{title}', r.title).replace('{extraction}', `${r.extractionStatus}${r.extractError ? `: ${r.extractError}` : ''}`)); setPdfPath(''); load() })
       .catch((e: any) => onError(String(e?.message ?? e)))
   }
 

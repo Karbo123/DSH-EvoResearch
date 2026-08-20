@@ -16,8 +16,14 @@ import {
 } from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {
-  idea: '想法', method: '方法', experiment: '实验',
-  related_work: '相关工作', reproduction: '复现', project: '项目', general: '通用',
+  idea: 'catIdea', method: 'catMethod', experiment: 'catExperiment',
+  related_work: 'catRelatedWork', reproduction: 'catReproduction', project: 'catProject', general: 'catGeneral',
+}
+
+/** 分类标签（i18n 化；未知分类透传原文）。 */
+function categoryLabel(category: string): string {
+  const key = CATEGORY_LABELS[category]
+  return key !== undefined ? t(key) : category
 }
 
 /** 面板外壳（标题 + 内容）。 */
@@ -46,7 +52,7 @@ async function api<T>(method: string, body: Record<string, unknown> = {}): Promi
     body: JSON.stringify(body),
   })
   const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? '请求失败')
+  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
   return json.value as T
 }
 
@@ -104,7 +110,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
       .then((r) => {
         setProfileBusy(false)
         if (r.ok) { setEditing(null); reloadProfile() }
-        else setError('保存失败')
+        else setError(t('saveFailed'))
       })
       .catch((e: any) => { setProfileBusy(false); setError(String(e?.message ?? e)) })
   }
@@ -119,7 +125,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
       .then((r) => {
         setProfileBusy(false)
         if (r.ok) { setNewFileName(''); reloadProfile() }
-        else setError('创建失败')
+        else setError(t('createFailed'))
       })
       .catch((e: any) => { setProfileBusy(false); setError(String(e?.message ?? e)) })
   }
@@ -233,9 +239,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
               jsx('div', { className: 'evo-panel-stat', children: jsxs(Fragment, { children: [jsx('div', { className: 'evo-panel-stat-num', children: totalTurns }), jsx('div', { className: 'evo-panel-stat-label', children: t('turns') })] }) }),
               ...(catalog ?? []).map((item) => jsx('div', {
                 className: 'evo-panel-stat',
-                children: jsxs(Fragment, {
-                  children: [jsx('div', { className: 'evo-panel-stat-num', children: item.count }), jsx('div', { className: 'evo-panel-stat-label', children: CATEGORY_LABELS[item.category] ?? item.category })],
-                }),
+                children: jsxs(Fragment, { children: [jsx('div', { className: 'evo-panel-stat-num', children: item.count }), jsx('div', { className: 'evo-panel-stat-label', children: categoryLabel(item.category) })] }),
               }, item.category)),
             ],
           }),
@@ -407,7 +411,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                             }),
                             o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: `superseded by ${o.supersededBy.slice(0, 18)}` }),
                             o.content !== '' && jsx('div', { className: 'evo-skill-desc', children: o.content.slice(0, 220) }),
-                            (o.categories ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: CATEGORY_LABELS[c] ?? c }, c)) }),
+                            (o.categories ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: categoryLabel(c) }, c)) }),
                             (o.relatedObservationIds ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.relatedObservationIds ?? []).map((rid) => jsx('span', { className: 'evo-panel-tag evo-panel-tag-link', title: rid, children: `${t('relatedTo')} ${rid.slice(0, 10)}` }, rid)) }),
                           ],
                         }, o.observationId)),
@@ -552,10 +556,10 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                             jsxs('div', {
                               className: 'evo-history-main',
                               children: [
-                                jsx('div', { className: 'evo-history-text', children: turn.userText.slice(0, 120) || '(empty prompt)' }),
+                                jsx('div', { className: 'evo-history-text', children: turn.userText.slice(0, 120) || t('emptyPrompt') }),
                                 jsxs('div', { className: 'evo-history-meta', children: [
                                   jsx('span', { children: new Date(turn.createdAt).toLocaleString() }),
-                                  ...(turn.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: CATEGORY_LABELS[c] ?? c }, c)),
+                                  ...(turn.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: categoryLabel(c) }, c)),
                                 ] }),
                               ],
                             }),
@@ -641,14 +645,14 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
     if (!name.trim() || !prompt.trim()) return
     const cronValue = cronPreview
     if (!/^\d{1,2} \d{1,2} (\d{1,2}|\*) (\d{1,2}|\*) (\d{1,2}|\*)$/.test(cronValue)) {
-      setError('cron 表达式非法（5 段：分 时 日 月 周）')
+      setError(t('cronInvalid'))
       return
     }
     setAdding(true)
     void api<{ ok: boolean }>('scheduler-add', { name: name.trim(), cron: cronValue, prompt: prompt.trim() }).then((result) => {
       setAdding(false)
       if (result.ok) { setName(''); setPrompt(''); setMode('daily'); load() }
-      else setError('添加失败')
+      else setError(t('addFailed'))
     }).catch((e: any) => { setAdding(false); setError(String(e?.message ?? e)) })
   }
 
@@ -680,7 +684,7 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
         if (typeof result.text === 'string' && result.text !== '') {
           window.dispatchEvent(new CustomEvent('evo-report-to-chat', { detail: { text: result.text } }))
         } else {
-          setError(result.error ?? '任务尚未运行')
+          setError(result.error ?? t('taskNotRun'))
         }
       })
       .catch((e: any) => { setReporting(null); setError(String(e?.message ?? e)) })
@@ -940,7 +944,7 @@ export function SkillsPanel() {
       .then((result) => {
         setGenerating(false)
         if (result.created > 0) load()
-        else setError('没有新的候选簇（需要 ≥3 条观测且 ≥2 条方法/实验）')
+        else setError(t('noCandidateClusters'))
       })
       .catch((e: any) => { setGenerating(false); setError(String(e?.message ?? e)) })
   }
@@ -951,7 +955,7 @@ export function SkillsPanel() {
       .then((result) => {
         setBusy(null)
         if (result.ok) load()
-        else setError('操作失败')
+        else setError(t('opFailed'))
       })
       .catch((e: any) => { setBusy(null); setError(String(e?.message ?? e)) })
   }
@@ -1018,7 +1022,7 @@ export function SkillsPanel() {
             onClick: () => {
               setAsSaving(true)
               void api<{ saved?: boolean; cron?: string | null }>('autoskills-config', { enabled: asEnabled, mode: asMode, cadence: asCadence, time: asTime })
-                .then((r) => { setAsSaving(false); setAsCron(r.cron ?? null); setError(r.saved === true ? null : '保存失败') })
+                .then((r) => { setAsSaving(false); setAsCron(r.cron ?? null); setError(r.saved === true ? null : t('saveFailed')) })
                 .catch((e: any) => { setAsSaving(false); setError(String(e?.message ?? e)) })
             },
             children: jsxs(Fragment, { children: [jsx(Check, {}), jsx('span', { children: asSaving ? t('saving') : t('save') })] }),
@@ -1316,7 +1320,7 @@ export function WorkspacePanel() {
     void api<ProjectRow>('projects-create', { name: newName.trim() }).then((project) => {
       setCreating(false)
       if (project?.name !== undefined) { setNewName(''); load() }
-      else setError('创建失败')
+      else setError(t('createFailed'))
     }).catch((e: any) => { setCreating(false); setError(String(e?.message ?? e)) })
   }
 
@@ -1330,7 +1334,7 @@ export function WorkspacePanel() {
     }).then((project) => {
       setImporting(false)
       if (project?.name !== undefined) { setSourcePath(''); setName(''); load() }
-      else setError('导入失败')
+      else setError(t('importFailed'))
     }).catch((e: any) => { setImporting(false); setError(String(e?.message ?? e)) })
   }
 
@@ -1449,7 +1453,7 @@ export function ChannelsPanel() {
       .then((result) => {
         setBusy(null)
         if (result.ok) load()
-        else setError('操作失败')
+        else setError(t('opFailed'))
       })
       .catch((e: any) => { setBusy(null); setError(String(e?.message ?? e)) })
   }
@@ -1524,7 +1528,7 @@ export function TeamPanel() {
       .then((result) => {
         setBusy(null)
         if (result.ok) load()
-        else setError('邀请失败')
+        else setError(t('inviteFailed'))
       })
       .catch((e: any) => { setBusy(null); setError(String(e?.message ?? e)) })
   }
@@ -1535,7 +1539,7 @@ export function TeamPanel() {
       .then((result) => {
         setBusy(null)
         if (result.ok) load()
-        else setError('清空失败')
+        else setError(t('clearFailed'))
       })
       .catch((e: any) => { setBusy(null); setError(String(e?.message ?? e)) })
   }

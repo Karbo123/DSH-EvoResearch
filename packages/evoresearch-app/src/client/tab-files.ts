@@ -71,7 +71,7 @@ function TreeNode({ entry, depth, onPick }: { entry: FsEntry; depth: number; onP
       expanded && children !== null && children.length === 0 && jsx('div', {
         className: 'evo-tab-tree-empty',
         style: { paddingLeft: 24 + depth * 13 },
-        children: '（空）',
+        children: t('emptyDir'),
       }),
     ],
   })
@@ -91,7 +91,7 @@ export function WorkspaceTabPicker({ root, onPick }: { root: string; onPick: (pa
       body: JSON.stringify({ root }),
     }).then((res) => res.json()).then((json) => {
       if (json.ok) setEntries(json.value.entries)
-      else setError(json.error?.message ?? '加载失败')
+      else setError(json.error?.message ?? t('loadFailed'))
     }).catch((e: any) => setError(String(e?.message ?? e)))
   }
 

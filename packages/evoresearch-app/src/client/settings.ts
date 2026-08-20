@@ -87,7 +87,7 @@ function PluginListSection() {
         children: [jsx(Puzzle, {}), jsx('span', { children: plugins === null ? t('plugins') : `${t('plugins')} · ${plugins.length}` })],
       }),
       plugins === null
-        ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+        ? jsx('div', { className: 'evo-setting-hint', children: t('loading') })
         : plugins.length === 0
           ? jsx('div', { className: 'evo-setting-hint', children: t('noModels') })
           : jsx('div', { className: 'evo-plugin-list', children: plugins.map((p) => jsxs('div', {
@@ -304,7 +304,7 @@ function ModelAssignSection() {
       }
       setAssign(next)
       setMigrated(migratedMap)
-    }).catch((e: unknown) => setError((e as Error)?.message ?? '加载失败'))
+    }).catch((e: unknown) => setError((e as Error)?.message ?? t('loadFailed')))
   }
   useEffect(load, [])
 
@@ -410,7 +410,7 @@ function ModelAssignSection() {
           }).then((r) => r.json())
           if (wb.ok !== true) failures.push(pid)
         }
-        if (failures.length > 0) setError(`分配已保存，但推理强度写回 Provider 失败：${failures.join('、')}`)
+        if (failures.length > 0) setError(t('assignSavedPartialFail').replace('{ids}', failures.join('、')))
         else {
           toast(t('assignSaved'), 'success')
           setSaveMsg((s) => ({ ...s, [cardKey]: t('assignSaved') }))
@@ -501,7 +501,7 @@ function ModelAssignSection() {
           const ok = json?.ok === true && value.ok === true
           detail = ok
             ? value.imageGen === true
-              ? `✓ ${value.latencyMs ?? ''}ms（已生成 1 张 1792×768 低清测试图）`
+              ? t('testImageGen').replace('{ms}', String(value.latencyMs ?? ''))
               : (value.latencyMs !== undefined ? `✓ ${value.latencyMs}ms` : '✓')
             : `✗ ${value.error ?? json?.error?.message ?? ''}`
         } catch (e: unknown) {
@@ -523,7 +523,7 @@ function ModelAssignSection() {
       jsx('div', { className: 'evo-setting-hint', children: t('modelAssignmentsHint') }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
       assign === null
-        ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+        ? jsx('div', { className: 'evo-setting-hint', children: t('loading') })
         : providers.length === 0
           ? jsx('div', { className: 'evo-setting-hint', children: t('noLlmProviders') })
           : jsxs(Fragment, { children: [
@@ -837,9 +837,9 @@ function LlmProviderSection() {
               supportedReasoning: null,
             })),
           })))
-        } else setError(providersJson.error?.message ?? '加载失败')
+        } else setError(providersJson.error?.message ?? t('loadFailed'))
       })
-      .catch((e: unknown) => setError((e as Error)?.message ?? '加载失败'))
+      .catch((e: unknown) => setError((e as Error)?.message ?? t('loadFailed')))
   }
   useEffect(load, [])
 
@@ -972,7 +972,7 @@ function LlmProviderSection() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ baseURL, apiKey, api }),
-      }).then((r) => r.json()).catch(() => ({ ok: false, error: { message: '网络请求失败' } }))
+      }).then((r) => r.json()).catch(() => ({ ok: false, error: { message: t('networkFailed') } }))
       const listed: Array<{ id?: string; name?: string }> = probe.ok === true ? (probe.value?.models ?? []) : []
       if (probe.ok !== true) {
         setProbeWarning(t('llmProbeWarn').replace('{msg}', probe.error?.message ?? t('llmProbeFailed')))
@@ -1052,11 +1052,11 @@ function LlmProviderSection() {
     if (provider === undefined || busyId !== null) return
     const newId = (provider.newId ?? '').trim()
     if (newId !== '' && newId !== id && /[^A-Za-z0-9._-]/.test(newId)) {
-      setError('Provider ID 只能包含字母、数字、点、下划线与连字符')
+      setError(t('providerIdChars'))
       return
     }
     if (newId !== '' && newId !== id && (providers ?? []).some((p) => p.id === newId)) {
-      setError(`Provider ID 已存在: ${newId}`)
+      setError(t('providerIdExists').replace('{id}', newId))
       return
     }
     setBusyId(id)
@@ -1208,7 +1208,7 @@ function LlmProviderSection() {
             ],
           }),
           providers === null
-            ? jsx('div', { className: 'evo-setting-hint', children: 'Loading…' })
+            ? jsx('div', { className: 'evo-setting-hint', children: t('loading') })
             : providers.length === 0
               ? jsx('div', { className: 'evo-setting-hint', children: t('noLlmProviders') })
               : providers.map((provider) => {
