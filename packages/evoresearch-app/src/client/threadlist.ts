@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, MessagesSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical } from 'lucide-react'
 import { t } from './i18n'
 
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
@@ -873,18 +873,10 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
                         className: 'evo-tl-subchat-head',
                         children: [
                           jsxs('span', {
-                            className: 'evo-tl-subchat-title',
+                            className: 'evo-tl-subchat-project',
                             children: [
-                              jsx(MessagesSquare, {}),
-                              jsx('span', { children: t('subchats') }),
-                              jsx('span', { className: 'evo-tl-subchat-title-sep', children: '·' }),
-                              jsxs('span', {
-                                className: 'evo-tl-subchat-project',
-                                children: [
-                                  jsx(FolderGit2, {}),
-                                  jsx('span', { children: projectMode.name }),
-                                ],
-                              }),
+                              jsx(FolderGit2, {}),
+                              jsx('span', { children: projectMode.name }),
                             ],
                           }),
                           jsx('button', {

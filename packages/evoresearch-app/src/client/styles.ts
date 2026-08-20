@@ -236,10 +236,7 @@ body { margin: 0; }
 .evo-tl-section-title { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
 .evo-tl-subchat-section { display: block; padding: 6px 10px 9px; margin-bottom: 6px; border-bottom: 1px solid var(--color-border-light); }
 .evo-tl-subchat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.evo-tl-subchat-title { display: inline-flex; align-items: center; gap: 5px; flex: 1; min-width: 0; font-size: 11.5px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .2px; }
-.evo-tl-subchat-title svg { width: 13px; height: 13px; color: var(--brand); flex-shrink: 0; }
-.evo-tl-subchat-title-sep { flex-shrink: 0; color: var(--color-text-tertiary); font-weight: 400; }
-.evo-tl-subchat-project { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 58%; color: var(--color-text-primary); font-size: 12px; font-weight: 600; letter-spacing: 0; }
+.evo-tl-subchat-project { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; color: var(--color-text-primary); font-size: 12.5px; font-weight: 600; }
 .evo-tl-subchat-project svg { width: 12px; height: 12px; color: var(--brand); flex-shrink: 0; }
 .evo-tl-subchat-project > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-tl-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
