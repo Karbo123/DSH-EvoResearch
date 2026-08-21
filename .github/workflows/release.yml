@@ -20,6 +20,12 @@ on:
 permissions:
   contents: write
 
+# 同一时刻只跑一条流水线：上一轮未结束时新一轮排队（不取消在跑的），
+# 避免 prepare-release 删 Release 时上一轮 desktop job 还在传资产（404 竞态）
+concurrency:
+  group: release-${{ github.workflow }}
+  cancel-in-progress: false
+
 env:
   APP_NAME: EvoResearch
   TAG: v0.1.0-rc.1
