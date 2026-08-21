@@ -58,6 +58,57 @@ export function defaultApprovalPolicy(): ApprovalPolicy {
 }
 
 /**
+ * P3-2 无人值守危险 shell 命令段判定（纯函数）：
+ * 把命令按管道/分节符（| ; && ||）切段后，任一段首词命中 deny-list 即 fail-closed。
+ * allow-list 按「首段 + 子段」匹配（settings.yaml evoresearch.unattended.allowCommands）。
+ */
+/** 无人值守默认拒绝的命令段首词（比工具级清单更细：shell 内具体动作）。 */
+export const UNATTENDED_SHELL_DENY_PATTERNS: readonly RegExp[] = [
+  /^\s*(rm|rmdir)\s/i,
+  /^\s*del\s/i,
+  /^\s*rd\s/i,
+  /^\s*format\s/i,
+  /^\s*mkfs/i,
+  /^\s*dd\s/i,
+  /^\s*taskkill\b/i,
+  /^\s*(ba)?sh\s*$/i,
+  /^\s*powershell\s+-enc/i,
+]
+
+/** 会话来源 → 是否无人值守（scheduled/channel/science 触发的会话无人在看）。 */
+export function isUnattendedSource(source: string | undefined | null): boolean {
+  if (typeof source !== 'string') return false
+  return /evoresearch:(channel|scheduler|science-candidate)/.test(source)
+}
+
+/**
+ * 判定一条无人值守 shell 命令是否放行（P3-2 纯函数，fail-closed）：
+ * - 任一命令段命中 deny 模式 → 拒绝；
+ * - 存在 allow-list 且整条命令未命中任何允许前缀 → 拒绝（未配置时仅按 deny 模式）；
+ * @param command 完整命令文本。
+ * @param allowCommands 允许的命令首段列表（如 ['python', 'uv pip install']；空 = 未配置白名单）。
+ */
+export function decideUnattendedShell(command: string, allowCommands: readonly string[] = []): { allowed: boolean; reason: string } {
+  const segments = command.split(/\|\||&&|;|\|/).map((s) => s.trim()).filter((s) => s !== '')
+  for (const segment of segments) {
+    for (const pattern of UNATTENDED_SHELL_DENY_PATTERNS) {
+      if (pattern.test(segment)) {
+        return { allowed: false, reason: `无人值守会话拒绝危险命令段「${segment.slice(0, 60)}」（命中 ${pattern}）；请有人在会话中确认后手动执行` }
+      }
+    }
+  }
+  if (allowCommands.length > 0) {
+    const firstWord = (segments[0] ?? '').split(/\s+/)[0] ?? ''
+    const ok = allowCommands.some((allow) => segments[0]?.toLowerCase().startsWith(allow.toLowerCase()) === true)
+      && firstWord !== ''
+    if (!ok) {
+      return { allowed: false, reason: `无人值守会话命令不在 allow-list 中（首个命令段「${(segments[0] ?? '').slice(0, 60)}」）；可在 settings.yaml evoresearch.unattended.allowCommands 配置` }
+    }
+  }
+  return { allowed: true, reason: '未命中无人值守拒绝规则' }
+}
+
+/**
  * 同步策略判定（PLAT-15 纯函数）：
  * - 工具名命中危险清单 → overrides 单工具覆盖 > 默认模式；
  * - 未命中危险清单 → allow（普通工具不需要审批）；

@@ -136,6 +136,12 @@ evoresearch:
     model: deepseek v4 flash
   autoStartChannels: false         # 启动时自动启动已配置通道
   memoryEnabled: true
+  visionEnabled: true              # 注册 vision_check 工具（模型未配置时自动跳过）
+  autoskillsSchedule: '7 3 * * 1'  # P1-1 定时挖掘 cron（默认每周一凌晨 3:07；'off' 关闭）
+  unattended:                      # P3-2 无人值守（scheduler/channel 触发的会话）shell 门控
+    allowCommands:                 # 危险段之外还须命中这些前缀才放行（不配置则只按 deny 清单）
+      - python
+      - uv pip install
 ```
 
 ## 如何新增一个通道适配器
