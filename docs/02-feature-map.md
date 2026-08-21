@@ -245,15 +245,15 @@
 | NF-03 后台任务注册表（P0-3） | jobs.ts `JobHubService`（register/complete/fail/markCancelled/cancelBySession/dispose，环形历史 cap 100）；host 四挂接点之一实验进程登记；Remote `jobsList`/`jobsCancel`/`jobsCountForSession` | ✅ |
 | NF-04 @会话引用数据层（P0-1 后端） | thread-preview.ts `extractPreview`/`resolveThreadPreview`（live → sessionQuery → 持久化 jsonl 三级降级）；composer 会话候选 UI 依赖此数据层 | ✅ 数据层 |
 | NF-05 AutoSkills 定时挖掘（P1-1） | autoskills.ts `mineAllWorkspaces`（观测聚类 + 笔记挖掘，mining 互斥）；host 内置调度任务（默认 `7 3 * * 1`，`evoresearch.autoskillsSchedule` 覆盖/off） | ✅ |
-| NF-06 记忆类型化关联边（P1-2） | store 迁移 v7 `observation_links` 表；`setObservationLink`/`listObservationLinks`；supersede 自动写 supersedes 边；link_observations 工具 `edge_type` 枚举；Remote `memoryObservationEdges` | ✅ |
+| NF-06 记忆类型化关联边（P1-2） | store 迁移 v7 `observation_links` 表；`setObservationLink`/`listObservationLinks`；supersede 自动写 supersedes 边；link_observations 工具 `edge_type` 枚举；Remote `memoryObservationEdges`；Knowledge 卡片徽标按边类型着色（互补=青 / 矛盾=橙红 / 取代=灰删除线） | ✅ |
 | NF-07 ask_researcher 工具（P1-3） | tools/ask.ts 适配平台 ctx.userQuestions（超时降级文本提问，无人值守不卡死）；问题卡 UI 复用官方 pending question 帧 | ✅ |
 | NF-08 超限自动映射重试（P1-4） | context/overflow-watch.ts：turn/end 错误特征识别（9 条中英文）→ guard.overflowRetry 一次，冷却 + 同 turn 去重 + compaction 缺失降级告警 | ✅ |
-| NF-09 论文图片工作流后端（P2-1） | figures.ts `FigureService`（项目 venv 渲染 → figures/<id>/v<N>/ 版本历史 manifest+history.jsonl 原子落盘）+ render_figure/list_figures/critique_figure 三工具 | ✅ |
-| NF-10 文献网络检索三工具（P2-2） | library/tools.ts：search_library（本地库）/ search_literature（本地+web_search 合并，未配置明确降级不伪造在线）/ import_literature（50MB 上限 + %PDF 魔数三道闸门防付费墙伪造） | ✅ |
+| NF-09 论文图片工作流后端（P2-1） | figures.ts `FigureService`（项目 venv 渲染 → figures/<id>/v<N>/ 版本历史 manifest+history.jsonl 原子落盘）+ render_figure/list_figures/critique_figure 三工具 + Remote `figuresList`/`figuresGet` + Library 面板「图纸」分区（缩略图网格 + 版本历史） | ✅ |
+| NF-10 文献网络检索三工具（P2-2） | library/tools.ts：search_library（本地库）/ search_literature（本地+web_search 合并，未配置明确降级不伪造在线）/ import_literature（50MB 上限 + %PDF 魔数三道闸门防付费墙伪造）；Library 面板「网络检索」入口（Remote `libraryLiteratureWeb`，未配置时明确降级提示） | ✅ |
 | NF-11 LaTeX 环境检测（P2-3） | manuscript.ts `detectLatexEnv`（引擎/kpsewhich 宏包抽查/ctex/建议纯函数）；Remote `manuscriptLatexEnv` | ✅ |
 | NF-12 斜杠命令图片输入（P2-4） | workspace-api commands-execute 透传 EncodedImageAttachment；chat.ts 带图命令执行（executor 拒绝时降级普通消息原图不丢） | ✅ |
 | NF-13 会话删除级联取消（P3-1） | Remote `sessionDeleteCascade`（cancelBySession → 删持久化目录）；客户端 deleteSessionById 改走级联端点并 toast 取消数 | ✅ |
-| NF-14 无人值守 shell 门控（P3-2） | approval-policy.ts `decideUnattendedShell`（管道切段逐段 deny-list fail-closed + allow-list 前缀）+ `isUnattendedSource`；配置样例见 docs/03-development.md | ✅ |
+| NF-14 无人值守 shell 门控（P3-2） | approval-policy.ts `decideUnattendedShell`（管道切段逐段 deny-list fail-closed + allow-list 前缀）+ `isUnattendedSource`；运行时接线：unattended-registry.ts 登记 scheduler/channel/science 会话 → host 挂载 `tools.guard`（bash/pwsh 命令执行前判定，拒绝返回原因），配置样例见 docs/03-development.md | ✅ |
 | NF-15 继续上次入口（P3-4） | threadlist New Chat 下方「继续上次」按钮：按 titleTime/updatedAt 打开最近活跃主线程 | ✅ |
 
 > P3-3（追问卡折叠保草稿）由官方 ask_user_question 问题卡语义吸收；rc.8 SQLite 存储格式变更的桌面 sidecar 升级注意见 docs/04-desktop.md 与提案书 §4。

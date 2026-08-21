@@ -1019,6 +1019,21 @@ const DICT: Record<string, [string, string]> = {
   resumeLast: ['Resume last', '继续上次'],
   // P3-1 删除级联
   deleteWillCancelJobs: ['Deleting will cancel {n} running task(s)', '删除将取消 {n} 个正在运行的任务'],
+  // P1-2 边类型徽标
+  edgeContradicts: ['contradicts', '矛盾'],
+  edgeSupersedes: ['supersedes', '取代'],
+  edgeComplements: ['complements', '互补'],
+  // P2-2 Library 网络检索入口
+  libWebSearchBtn: ['Web search', '网络检索'],
+  libWebSearchPlaceholder: ['Web queries (separate with ;, up to 4)', '网络检索词（; 分隔，最多 4 条）'],
+  libWebDegraded: ['Web search not configured — results unavailable', '未配置网络检索——无法返回网络结果'],
+  libWebImportHint: ['To import a paper, ask the AI in chat: "import <url>"', '导入论文请在对话中让 AI 执行：导入 <链接>'],
+  // P2-1 图纸分区
+  libFiguresTab: ['Figures', '图纸'],
+  libFiguresEmpty: ['No figures yet — ask the AI to render one (render_figure)', '暂无图纸——可在对话中让 AI 渲染（render_figure）'],
+  libFigureVersions: ['versions', '个版本'],
+  libFigureLatest: ['latest', '最新'],
+  libFigureScript: ['Script', '脚本'],
 }
 
 export function t(key: string): string {

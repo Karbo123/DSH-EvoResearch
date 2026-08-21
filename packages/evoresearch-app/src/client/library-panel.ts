@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react'
 import { t } from './i18n'
 import {
   BookOpen, FileText, Search, RefreshCw, Plus, ArrowLeft, ExternalLink, Save,
-  FolderOpen, FileCode2, Play, Quote,
+  FolderOpen, FileCode2, Play, Quote, Globe,
 } from 'lucide-react'
 
 // ── 与服务端对齐的纯 JSON 行类型 ─────────────────────────────────────────────
@@ -151,6 +151,74 @@ interface ProjectInfo {
   path: string
   dataDir: string
   createdAt: number
+}
+
+// ── P2-1 图纸分区 ───────────────────────────────────────────────────────────
+
+/** figures-list 返回行（与 FigureService wire 对齐）。 */
+interface FigureRow {
+  figureId: string
+  title: string
+  scriptPath: string
+  versions: Array<{ version: number; renderedAt: number; ok: boolean; exitCode: number | null; artifacts: readonly string[] }>
+  latestPath: string | null
+}
+
+/**
+ * 图纸分区：缩略图网格 + 版本历史。渲染入口在对话（render_figure 工具，F1），
+ * 面板只读展示最新成功产物与历史版本数。
+ */
+function FiguresTab({ onError }: { onError: (message: string) => void }) {
+  const [figures, setFigures] = useState<FigureRow[] | null>(null)
+  const [thumbs, setThumbs] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setFigures(null)
+    void api<FigureRow[] | { error: string }>('figures-list', {})
+      .then((rows) => setFigures(Array.isArray(rows) ? rows : []))
+      .catch((e: any) => onError(String(e?.message ?? e)))
+  }, [])
+
+  // 最新成功产物 → 缩略图（懒加载 base64；失败静默占位）
+  useEffect(() => {
+    if (figures === null) return
+    let cancelled = false
+    for (const fig of figures) {
+      if (fig.latestPath === null || thumbs[fig.figureId] !== undefined) continue
+      void fetch('/evoresearch/fs/artifact-image', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: fig.latestPath }),
+      })
+        .then((r) => r.json())
+        .then((data: { ok?: boolean; mime?: string; base64?: string }) => {
+          if (cancelled || data?.ok !== true || typeof data.mime !== 'string' || typeof data.base64 !== 'string') return
+          setThumbs((prev) => ({ ...prev, [fig.figureId]: `data:${data.mime};base64,${data.base64}` }))
+        })
+        .catch(() => { /* 占位 */ })
+    }
+    return () => { cancelled = true }
+  }, [figures])
+
+  if (figures === null) return jsx('div', { className: 'evo-panel-hint', children: t('loading') })
+  if (figures.length === 0) return jsx('div', { className: 'evo-panel-hint', children: t('libFiguresEmpty') })
+  return jsx('div', {
+    className: 'evo-panel-list',
+    children: figures.map((fig) => jsxs('div', {
+      className: 'evo-skill-card',
+      children: [
+        jsx('div', { className: 'evo-skill-head', children: jsx('span', { className: 'evo-panel-item-main', children: fig.title || fig.figureId }) }),
+        fig.latestPath !== null && thumbs[fig.figureId] !== undefined && jsx('img', {
+          src: thumbs[fig.figureId],
+          alt: fig.title,
+          className: 'evo-figure-thumb',
+          onClick: () => window.open(`/evoresearch/fs/file?path=${encodeURIComponent(fig.latestPath!)}`, '_blank'),
+        }),
+        jsx('div', { className: 'evo-skill-src', children: `${fig.versions.length} ${t('libFigureVersions')}` }),
+        jsx('div', { className: 'evo-note-hit-meta', children: `${t('libFigureScript')}: ${fig.scriptPath}` }),
+      ],
+    }, fig.figureId)),
+  })
 }
 
 // ── 工具 ────────────────────────────────────────────────────────────────────
@@ -485,6 +553,11 @@ function PapersTab({ project, onError }: { project: string; onError: (message: s
   const [scanDir, setScanDir] = useState('')
   const [actionMsg, setActionMsg] = useState('')
   const [loading, setLoading] = useState(false)
+  // P2-2 网络检索入口
+  const [webQuery, setWebQuery] = useState('')
+  const [webHits, setWebHits] = useState<Array<{ kind: string; query: string; excerpt?: string; error?: string }> | null>(null)
+  const [webDegraded, setWebDegraded] = useState(false)
+  const [webLoading, setWebLoading] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -531,6 +604,18 @@ function PapersTab({ project, onError }: { project: string; onError: (message: s
         load()
       })
       .catch((e: any) => onError(String(e?.message ?? e)))
+  }
+
+  // P2-2 网络检索：分号分隔的多条检索词，走 library-literature-web 代理
+  const doWebSearch = () => {
+    const queries = webQuery.split(';').map((q) => q.trim()).filter((q) => q !== '').slice(0, 4)
+    if (queries.length === 0) return
+    setWebLoading(true)
+    setWebHits(null)
+    setWebDegraded(false)
+    void api<{ results: Array<{ kind: string; query: string; excerpt?: string; error?: string }>; degraded: boolean }>('library-literature-web', { queries })
+      .then((r) => { setWebLoading(false); setWebHits(r.results); setWebDegraded(r.degraded) })
+      .catch((e: any) => { setWebLoading(false); onError(String(e?.message ?? e)) })
   }
 
   if (open !== null) {
@@ -598,6 +683,44 @@ function PapersTab({ project, onError }: { project: string; onError: (message: s
         ],
       }),
       actionMsg !== '' && jsx('div', { className: 'evo-note-pager-info', children: actionMsg }),
+      // P2-2 网络检索入口（未配置时明确降级提示）
+      jsxs('div', {
+        className: 'evo-note-toolbar',
+        children: [
+          jsx(Globe, { size: 15 }),
+          jsx('input', {
+            type: 'text',
+            className: 'evo-note-search',
+            placeholder: t('libWebSearchPlaceholder'),
+            value: webQuery,
+            onInput: (e: { currentTarget: { value: string } }) => setWebQuery(e.currentTarget.value),
+            onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') doWebSearch() },
+            'aria-label': t('libWebSearchPlaceholder'),
+          }),
+          jsx('button', { type: 'button', className: 'evo-panel-add', disabled: webLoading, onClick: doWebSearch, children: jsx(Search, {}) }),
+        ],
+      }),
+      webDegraded && jsx('div', { className: 'evo-panel-hint', children: t('libWebDegraded') }),
+      webHits !== null && webHits.length > 0 && jsx('div', {
+        className: 'evo-panel-row',
+        children: [
+          jsx('span', { className: 'evo-panel-row-label', children: `${t('libWebSearchBtn')}（${webHits.length}）` }),
+          jsx('div', {
+            className: 'evo-panel-list',
+            children: webHits.map((hit, i) => jsxs('div', {
+              className: 'evo-note-hit',
+              children: [
+                jsxs('div', { className: 'evo-note-hit-title', children: [
+                  jsx('span', { children: hit.query }),
+                  jsx('span', { className: hit.kind === 'web' ? 'evo-lib-badge ok' : 'evo-lib-badge miss', children: hit.kind === 'web' ? 'web' : 'error' }),
+                ] }),
+                jsx('div', { className: 'evo-note-hit-meta', children: hit.kind === 'web' ? (hit.excerpt ?? '') : (hit.error ?? '') }),
+              ],
+            }, `${hit.query}-${i}`)),
+          }),
+          jsx('div', { className: 'evo-panel-hint', children: t('libWebImportHint') }),
+        ],
+      }),
       // 搜索结果（含原文位置）
       hits !== null && hits.length > 0 && jsx('div', {
         className: 'evo-panel-row',
@@ -992,7 +1115,7 @@ function ManuscriptTab({ project, onError }: { project: string; onError: (messag
 
 /** 文献与稿件面板（左侧栏注册点见文件头注释）。 */
 export function LibraryPanel({ cwd }: { cwd: string | null }) {
-  const [tab, setTab] = useState<'papers' | 'manuscript'>('papers')
+  const [tab, setTab] = useState<'papers' | 'manuscript' | 'figures'>('papers')
   const [error, setError] = useState<string | null>(null)
   const [projects, setProjects] = useState<ProjectInfo[] | null>(null)
   const [project, setProject] = useState<string | null>(null)
@@ -1011,7 +1134,7 @@ export function LibraryPanel({ cwd }: { cwd: string | null }) {
       .catch((e: any) => setError(String(e?.message ?? e)))
   }, [cwd])
 
-  const tabBtn = (key: 'papers' | 'manuscript', label: string, icon: any) => jsx('button', {
+  const tabBtn = (key: 'papers' | 'manuscript' | 'figures', label: string, icon: any) => jsx('button', {
     type: 'button',
     className: 'evo-insp-subtab',
     'data-active': tab === key || undefined,
@@ -1044,14 +1167,17 @@ export function LibraryPanel({ cwd }: { cwd: string | null }) {
             children: [
               tabBtn('papers', t('libPapers'), FileText),
               tabBtn('manuscript', t('libManuscript'), FileCode2),
+              tabBtn('figures', t('libFiguresTab'), FolderOpen),
             ],
           }),
           error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
-          project === null
-            ? jsx('div', { className: 'evo-panel-hint', children: t('libNoProject') })
-            : tab === 'papers'
-              ? jsx(PapersTab, { project, onError: setError })
-              : jsx(ManuscriptTab, { project, onError: setError }),
+          tab === 'figures'
+            ? jsx(FiguresTab, { onError: setError })
+            : project === null
+              ? jsx('div', { className: 'evo-panel-hint', children: t('libNoProject') })
+              : tab === 'papers'
+                ? jsx(PapersTab, { project, onError: setError })
+                : jsx(ManuscriptTab, { project, onError: setError }),
         ],
       }),
     ],

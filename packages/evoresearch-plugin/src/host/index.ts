@@ -56,7 +56,8 @@ import { EvoResearchApiService, type HostServices, type PlatformServices } from 
 import { registerCommands } from './commands.js'
 import { listProjects, projectNameFromWorkspace } from './core/paths.js'
 import { registerVisionTool } from './vision.js'
-import { defaultApprovalPolicy } from './platform/approval-policy.js'
+import { defaultApprovalPolicy, decideUnattendedShell, isUnattendedSource } from './platform/approval-policy.js'
+import { markUnattendedSession, isMarkedUnattended } from './platform/unattended-registry.js'
 import {
   emptyFallbackState,
   recordFailure,
@@ -93,6 +94,8 @@ export interface EvoResearchPluginConfig {
   readonly visionEnabled?: boolean
   /** P1-1 AutoSkills 定时挖掘 cron（默认 '7 3 * * 1' 每周一凌晨；'off' 关闭）。 */
   readonly autoskillsSchedule?: string
+  /** P3-2 无人值守 shell 门控：allow-list 前缀（deny 清单恒生效）。 */
+  readonly unattended?: { allowCommands?: string[] }
 }
 
 /** 从 settings/env 解析配置。 */
@@ -121,6 +124,7 @@ export async function deliverToAgent(
   const sessionId = (handle as unknown as { session?: { id?: string } }).session?.id
     ?? (handle as unknown as { id?: string }).id
   if (!sessionId) throw new Error('无法解析新会话 id')
+  if (isUnattendedSource(source)) markUnattendedSession(sessionId)
   return sessionId
 }
 
@@ -439,8 +443,17 @@ function apply(ctx: Context): void {
       : new LayeredSkillRegistry({ dataRoot, workspaceDir }),
   }
 
-  // 6) Remote API（构造即注册 services.evoresearch）
-  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, experimentWorkspace, experimentProcess, worktrees, experimentLedger, experimentRounds, dailyReport, scienceLoops, scienceGraphBridge, chatGraph, projectEnv, rewind, notes, libraryIndexer, librarySearch, manuscript, evo: { signals, registry }, contextGuard, contextRuntime, contextAssembler, platform, jobHub }
+  // 6) Remote API（构造即注册 services.evoresearch）；figureService 在下方 7.5 节
+  // 构造，此处用 getter 延迟解析（Remote 方法调用时已就绪）。
+  const services: HostServices = {
+    workspace, memory, scheduler, channels, autoskills, experts, experiments,
+    experimentWorkspace, experimentProcess, worktrees, experimentLedger,
+    experimentRounds, dailyReport, scienceLoops, scienceGraphBridge, chatGraph,
+    projectEnv, rewind, notes, libraryIndexer, librarySearch, manuscript,
+    evo: { signals, registry }, contextGuard, contextRuntime, contextAssembler,
+    platform, jobHub,
+    get figureService() { return figureServiceRef.current },
+  }
   void new EvoResearchApiService(ctx, services)
 
   // 7) 斜杠命令
@@ -463,6 +476,33 @@ function apply(ctx: Context): void {
     },
   })
   disposersNf.push(overflowWatch.attach(ctx))
+  // P3-2 无人值守 shell 门控：scheduler/channel/science 会话的 bash/pwsh 命令
+  // 在执行前经 decideUnattendedShell 判定（deny-list fail-closed + allow-list）。
+  const unattendedAllowCommands = config.unattended?.allowCommands ?? []
+  try {
+    const toolRuntime = ctx.get('tools') as
+      | { guard?(guard: (execution: unknown) => string | undefined): () => void }
+      | undefined
+    if (typeof toolRuntime?.guard === 'function') {
+      disposersNf.push(toolRuntime.guard((execution: unknown) => {
+        const exec = execution as { name?: string; arguments?: unknown; agent?: { session?: { id?: string } } }
+        const toolName = typeof exec?.name === 'string' ? exec.name : ''
+        if (!/^(bash|pwsh|powershell)$/.test(toolName)) return undefined
+        const sessionId = exec?.agent?.session?.id ?? ''
+        if (!isMarkedUnattended(sessionId)) return undefined
+        const args = exec?.arguments as { command?: unknown } | undefined
+        const command = typeof args?.command === 'string' ? args.command : ''
+        if (command.trim() === '') return '无人值守会话拒绝无法解析命令文本的 shell 调用（fail-closed）'
+        const verdict = decideUnattendedShell(command, unattendedAllowCommands)
+        return verdict.allowed ? undefined : verdict.reason
+      }))
+      console.log('[evoresearch] P3-2 无人值守 shell 门控已挂载（tools.guard）')
+    } else {
+      console.warn('[evoresearch] P3-2 tools.guard 不可用，无人值守 shell 门控降级为仅记录')
+    }
+  } catch (error) {
+    console.warn(`[evoresearch] P3-2 无人值守 shell 门控挂载失败（不影响其余功能）: ${String(error)}`)
+  }
   // P2-2 文献检索三工具：本地库 + 平台 web_search 探测合并
   const libraryToolsDeps: LibraryToolsDeps = {
     dataRoot,
@@ -488,6 +528,7 @@ function apply(ctx: Context): void {
   }
   disposersNf.push(registerLibraryTools(ctx, libraryToolsDeps))
   // P2-1 论文图片工作流三工具：项目 venv 渲染脚本 + critique 复用 vision
+  const figureServiceRef: { current: FigureService | undefined } = { current: undefined }
   const figureService = new FigureService({
     dataRoot,
     resolvePython: (projectDirPath) => {
@@ -496,6 +537,7 @@ function apply(ctx: Context): void {
       return fs.existsSync(python) ? python : null
     },
   })
+  figureServiceRef.current = figureService
   disposersNf.push(registerFigureTools(ctx, {
     service: figureService,
     dataRoot,

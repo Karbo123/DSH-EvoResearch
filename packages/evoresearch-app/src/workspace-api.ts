@@ -1367,6 +1367,15 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.memoryObservations as (a: typeof args) => Promise<unknown>)(args))
           return
         }
+        // P1-2：Observation 类型化关联边（Knowledge 卡片徽标着色数据源）
+        if (method === 'memory-observation-edges') {
+          if (evoresearch?.memoryObservationEdges === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: { observationId?: string; edgeType?: string } = {}
+          if (typeof payload.observationId === 'string') args.observationId = payload.observationId
+          if (typeof payload.edgeType === 'string') args.edgeType = payload.edgeType
+          writeOk(res, await (evoresearch.memoryObservationEdges as (a: typeof args) => unknown)(args))
+          return
+        }
         if (method === 'memory-goals') {
           if (evoresearch?.memoryGoals === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.memoryGoals as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))
@@ -1981,6 +1990,20 @@ export function registerWorkspaceApi(ctx: any): void {
         // ── P0-2 工具结果图片：资产探测 + 读取（直连插件 Remote 方法）──
         if (method === 'artifact-image-detect' || method === 'artifact-image') {
           const serviceName = method === 'artifact-image-detect' ? 'artifactImageDetect' : 'artifactImage'
+          const fn = evoresearch?.[serviceName] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = { ...payload }
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
+        // ── P2-1 图纸面板：列表 / 单个（直连插件 Remote 方法）──
+        if (method === 'figures-list' || method === 'figures-get') {
+          const serviceName = method === 'figures-list' ? 'figuresList' : 'figuresGet'
           const fn = evoresearch?.[serviceName] as ((a: Record<string, unknown>) => unknown) | undefined
           if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const args: Record<string, unknown> = { ...payload }

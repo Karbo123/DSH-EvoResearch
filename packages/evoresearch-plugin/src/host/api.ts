@@ -66,6 +66,7 @@ import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, G
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 import type { ApprovalPolicy, ApprovalDecision } from './platform/approval-policy.js'
 import { decideApproval, defaultApprovalPolicy, validateApprovalPolicy } from './platform/approval-policy.js'
+import { unmarkUnattendedSession } from './platform/unattended-registry.js'
 import type { FallbackState, ModelRoute, SelectModelOptions } from './platform/models-selector.js'
 import { emptyFallbackState, routeKey, selectModel, recordFailure, recordSuccess } from './platform/models-selector.js'
 import type { ToolDef } from './platform/tools-selector.js'
@@ -132,6 +133,8 @@ export interface HostServices {
   readonly platform?: PlatformServices
   /** P0-3 后台任务注册表（JobHub；删除级联取消 P3-1 的查询入口）。 */
   readonly jobHub?: JobHubService
+  /** P2-1 论文图纸服务（figures/<id>/v<N>/ 版本历史；面板图纸分区数据源）。 */
+  readonly figureService?: import('./figures.js').FigureService
 }
 
 /** 平台能力服务集合（PLAT-13..20；可选接线）。 */
@@ -1597,6 +1600,45 @@ export class EvoResearchApiService extends TypertRemoteService {
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  /**
+   * P2-2 面板侧网络检索（仅网络部分，供 Library 面板「网络检索」入口使用）。
+   * 平台 web_search 不可用时明确降级（degraded: true），不伪造在线结果。
+   */
+  @Remote('libraryLiteratureWeb')
+  async libraryLiteratureWeb(args: { queries: string[] }): Promise<{ results: Array<{ kind: string; query: string; excerpt?: string; error?: string }>; degraded: boolean }> {
+    const queries = (Array.isArray(args?.queries) ? args.queries : [])
+      .map((q) => String(q ?? '').trim())
+      .filter((q) => q !== '')
+      .slice(0, 4)
+    if (queries.length === 0) return { results: [], degraded: true }
+    let toolsRuntime: { get?(name: string): unknown; execute?(input: { callId: string; name: string; arguments: unknown }): Promise<{ content: readonly unknown[]; isError: boolean }> } | undefined
+    try {
+      toolsRuntime = this.hostCtx.get('tools') as typeof toolsRuntime
+    } catch {
+      toolsRuntime = undefined
+    }
+    if (toolsRuntime?.get?.('web_search') === undefined || toolsRuntime.execute === undefined) {
+      return { results: [], degraded: true }
+    }
+    const results: Array<{ kind: string; query: string; excerpt?: string; error?: string }> = []
+    for (const q of queries) {
+      try {
+        const result = await toolsRuntime.execute({ callId: `evoresearch-web-panel-${Date.now()}`, name: 'web_search', arguments: { query: q } })
+        if (result.isError) throw new Error('web_search 执行失败')
+        const text = result.content
+          .map((block) => {
+            const b = block as { type?: unknown; text?: unknown }
+            return typeof b?.type === 'string' && b.type === 'text' && typeof b.text === 'string' ? b.text : ''
+          })
+          .join('\n')
+        results.push({ kind: 'web', query: q, excerpt: String(text ?? '').slice(0, 400) })
+      } catch (error) {
+        results.push({ kind: 'web_error', query: q, error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    return { results, degraded: false }
   }
 
   @Remote('libraryGetTextRange')
@@ -3561,6 +3603,7 @@ export class EvoResearchApiService extends TypertRemoteService {
           removed += 1
         }
       } catch { /* 会话目录不存在 */ }
+      unmarkUnattendedSession(sessionId)
       return { ok: removed > 0 || cancelled > 0, cancelled }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
@@ -3621,6 +3664,32 @@ export class EvoResearchApiService extends TypertRemoteService {
       return { ok: true, mime, name: path.basename(resolved), base64, bytes: stat.size }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** P2-1 面板图纸分区：列出某工作区的全部图纸（manifest + 版本历史）。 */
+  @Remote('figuresList')
+  figuresList(args: { workspaceDir?: string }): Array<import('./figures.js').FigureInfo> | { error: string } {
+    try {
+      const svc = this.services.figureService
+      if (svc === undefined) return { error: 'figureService 服务不可用' }
+      const dir = String(args?.workspaceDir ?? '') || this.services.memory.config.dataRoot
+      return svc.listFigures(dir)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** P2-1 单个图纸（含全部版本）；非法 id 返回 null。 */
+  @Remote('figuresGet')
+  figuresGet(args: { figureId: string; workspaceDir?: string }): import('./figures.js').FigureInfo | null | { error: string } {
+    try {
+      const svc = this.services.figureService
+      if (svc === undefined) return { error: 'figureService 服务不可用' }
+      const dir = String(args?.workspaceDir ?? '') || this.services.memory.config.dataRoot
+      return svc.getFigure(dir, String(args?.figureId ?? '')) ?? null
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
     }
   }
 }
