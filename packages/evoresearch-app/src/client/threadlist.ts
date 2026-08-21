@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical, History } from 'lucide-react'
 import { t } from './i18n'
 import { ConfirmDialog } from './session-actions'
 import { clientStateGet, clientStateSet } from './client-state'
@@ -586,6 +586,22 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
             onClick: () => onNewChat(projectMode?.path),
             children: jsxs(Fragment, { children: [jsx(SquarePen, {}, 'icon'), jsx('span', { children: t('newChat') }, 'label')] }),
           }, 'new-chat'),
+          // P3-4 继续上次：打开最近活跃会话（按 titleTime/updatedAt 降序取第一条非 blank 主线程）
+          (() => {
+            const sessionIds: string[] = Array.isArray(sessions.ids) ? sessions.ids : Object.keys(sessions.byId ?? {})
+            const last = sessionIds
+              .map((id) => sessions.byId[id])
+              .filter((s) => s !== undefined && s.blank !== true && !deletedIds.has(s.id) && (s.parentSessionId === undefined || promotedIds.has(s.id)))
+              .sort((a, b) => (b.titleTime ?? b.updatedAt ?? 0) - (a.titleTime ?? a.updatedAt ?? 0))[0]
+            if (last === undefined) return null
+            return jsx('button', {
+              type: 'button',
+              className: 'evo-tl-item evo-tl-resume-item',
+              title: String(last.displayTitle ?? last.id.slice(0, 12)),
+              onClick: () => onOpen(last.id),
+              children: jsxs(Fragment, { children: [jsx(History, {}, 'icon'), jsx('span', { children: t('resumeLast') }, 'label')] }),
+            }, 'resume-last')
+          })(),
           ...MENU.map((item) => {
             const Icon = item.icon
             return jsx('button', {
