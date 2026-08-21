@@ -11,6 +11,7 @@
  * 实现说明：标题栏与网页顶栏是同一 React 应用，直接调用同一批 handler。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
+import { useEffect } from 'react'
 import { t } from './i18n'
 
 const TB_ICONS = {
@@ -55,26 +56,37 @@ const DRAG_THRESHOLD = 4
 function useTitlebarDrag(): { onPointerDown(e: PointerEvent): void } {
   let state: { pointerId: number; startX: number; startY: number; active: boolean } | null = null
 
+  useEffect(() => {
+    const onPointerMove = (e: PointerEvent) => {
+      if (!state || state.pointerId !== e.pointerId) return
+      if (!state.active) {
+        const dx = e.screenX - state.startX
+        const dy = e.screenY - state.startY
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
+        state.active = true
+        e.preventDefault()
+        callWindow('window_start_drag') // OS 接管拖动
+      }
+    }
+    const clear = () => { state = null }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', clear)
+    window.addEventListener('pointercancel', clear)
+    // 组件卸载时解绑，避免重挂载后监听器叠加（全仓此前唯一一处体内 addEventListener）。
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', clear)
+      window.removeEventListener('pointercancel', clear)
+    }
+  }, [])
+
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return
     const target = e.target as HTMLElement
     if (target.closest('.evo-tb-tools, .evo-tb-actions, .evo-tb-controls, .evo-tb-brand')) return
     state = { pointerId: e.pointerId, startX: e.screenX, startY: e.screenY, active: false }
   }
-
-  window.addEventListener('pointermove', (e: PointerEvent) => {
-    if (!state || state.pointerId !== e.pointerId) return
-    if (!state.active) {
-      const dx = e.screenX - state.startX
-      const dy = e.screenY - state.startY
-      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return
-      state.active = true
-      e.preventDefault()
-      callWindow('window_start_drag') // OS 接管拖动
-    }
-  })
-  window.addEventListener('pointerup', () => { state = null })
-  window.addEventListener('pointercancel', () => { state = null })
 
   return { onPointerDown }
 }

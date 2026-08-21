@@ -2357,17 +2357,6 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
   }
 
-  @Remote('graphMigrate')
-  graphMigrate(args: { workspaceDir?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      const result = this.services.chatGraph.migrate(name)
-      return { ok: true, graph: result.graph, report: result.report, rev: this.services.chatGraph.rev(name) }
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-
   /** 新建空白 Markdown Memory，不复用图中已有 locator。 */
   @Remote('graphMemoryCreate')
   graphMemoryCreate(args: { workspaceDir?: string; title?: string; scope?: 'project' | 'global'; x?: number; y?: number }): unknown {

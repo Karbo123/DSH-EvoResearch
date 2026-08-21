@@ -748,34 +748,6 @@ export class ChatGraphService {
     throw new Error('图谱并发修改过多，追加连线失败；请重试')
   }
 
-  /** 显式迁移入口（CG-MIG-01..07）：诊断脚本和 UI 可重复调用且幂等。 */
-  migrate(projectName: string): { graph: ChatGraph; report: GraphMigrationReport } {
-    const project = this.readProject(projectName)
-    const global = this.readGlobal()
-    const normalized = normalizeGraph({
-      nodes: [...project.nodes, ...global.nodes],
-      edges: project.edges,
-      groups: project.groups,
-      schemaVersion: CHAT_GRAPH_SCHEMA_VERSION,
-    })
-    const projectReport = migrateGraph(project).report
-    const globalReport = migrateGraph(global).report
-    const legacyGlobals = project.nodes.filter((node) => node.scope === 'global').length
-    const report: GraphMigrationReport = {
-      changed: projectReport.changed || globalReport.changed || legacyGlobals > 0,
-      migratedNodes: projectReport.migratedNodes + globalReport.migratedNodes,
-      migratedEdges: projectReport.migratedEdges + globalReport.migratedEdges,
-      mergedMemoryNodes: projectReport.mergedMemoryNodes + globalReport.mergedMemoryNodes,
-      mergedEdges: projectReport.mergedEdges + globalReport.mergedEdges,
-      backupRequired: projectReport.backupRequired || globalReport.backupRequired || legacyGlobals > 0,
-    }
-    if (report.changed) {
-      const saved = this.save(projectName, normalized)
-      if (!saved.ok) throw new Error(saved.error ?? '图谱迁移保存失败')
-    }
-    return { graph: this.readNormalized(projectName), report }
-  }
-
   private memoryBase(workspaceDir: string | undefined, scope: 'project' | 'global'): string {
     return scope === 'global' || workspaceDir === undefined || workspaceDir === '' || workspaceDir === this.dataRoot
       ? this.dataRoot
