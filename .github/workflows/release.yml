@@ -120,10 +120,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev libfuse2
 
-      # linuxdeploy 本身是 AppImage：runner 无 libfuse2 时无法自挂载，
-      # 让它自解压运行（tauri-apps/tauri#14796 的 CI 标准解法）
+      # linuxdeploy 本身是 AppImage：双保险——EXTRACT_AND_RUN 自解压 + libfuse2
+      # 兜底（部分 linuxdeploy 构建即使自解压也需要 /dev/fuse 存在）
       - name: AppImage 工具免 FUSE 运行
         if: runner.os == 'Linux'
         run: echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
