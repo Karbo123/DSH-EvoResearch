@@ -131,6 +131,12 @@ jobs:
         shell: bash
         run: node desktop/scripts/bundle-sidecar.mjs
 
+      # frontendDist ../dist 占位页（真实 UI 由 sidecar 运行期提供；desktop/dist
+      # 被 .gitignore 的 dist/ 规则覆盖，需从入库的 dist.placeholder 复制）
+      - name: 生成 frontendDist 占位页
+        shell: bash
+        run: mkdir -p desktop/dist && cp desktop/dist.placeholder/index.html desktop/dist/index.html
+
       - name: 清理 tauri 资源残留目录
         shell: bash
         run: rm -rf desktop/src-tauri/target/release/_up_
