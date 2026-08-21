@@ -122,8 +122,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
 
-      - name: 安装 Tauri CLI（cargo 版，与本地一致）
-        run: cargo install tauri-cli --version '^2' --locked
+      # Tauri CLI：优先用 npm 版（免编译，~30s）；cargo install 要 6 分钟+
+      - name: 安装 Tauri CLI
+        run: npm i -g @tauri-apps/cli@'^2'
 
       # 前端/插件产物（sidecar 组装需要 packages/*/lib、evoresearch-app/dist）
       - name: 构建工作区（插件 + Web 资源）
@@ -205,8 +206,9 @@ jobs:
           "$SDKM" --install "ndk;26.3.11579264" > /dev/null
           echo "NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
 
+      # Tauri CLI：npm 版免编译（cargo install 要 6 分钟+）
       - name: 安装 Tauri CLI
-        run: cargo install tauri-cli --version '^2' --locked
+        run: npm i -g @tauri-apps/cli@'^2'
 
       - name: 构建工作区（插件 + Web 资源）
         run: |
