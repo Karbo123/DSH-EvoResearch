@@ -1,9 +1,14 @@
 [package]
 name = "evoresearch-desktop"
 version = "0.1.0-rc.1"
-description = "EvoResearch Windows 桌面壳（WebView2 + Node sidecar）"
+description = "EvoResearch 桌面/移动壳（WebView + Node sidecar）"
 authors = ["EvoResearch TS 项目组"]
 edition = "2021"
+
+# Tauri 2 移动端要求 lib target：Android 经 cdylib 加载（tauri_mobile_entry_point）
+[lib]
+name = "evoresearch_desktop"
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
