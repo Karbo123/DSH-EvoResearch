@@ -58,13 +58,13 @@ jobs:
           # 用当前 main HEAD 重新打 tag（覆盖语义：始终指向最新一次触发）
           git tag -f "${TAG}" "${GITHUB_SHA}"
           git push origin "refs/tags/${TAG}"
-          UPLOAD_URL=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/releases" \
-            -f tag_name="${TAG}" \
+          RELEASE_JSON=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/releases" \
+            -F tag_name="${TAG}" \
             -f target_commitish="${GITHUB_SHA}" \
             -f name="${RELEASE_NAME}" \
-            -f draft=false \
-            -f prerelease=true)
-          RELEASE_ID=$(echo "$UPLOAD_URL" | jq -r '.id')
+            -F draft=false \
+            -F prerelease=true)
+          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
           echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
 
   # ── Desktop：Windows / Linux / macOS 并行编译 ────────────────────────────
