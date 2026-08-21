@@ -25,7 +25,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { normPath, projectDir } from './core/paths.js'
 import { LibrarySearch } from './library/search.js'
 import type { ResolvedLibraryRef } from './library/types.js'
@@ -183,6 +183,64 @@ export function probeLatexTools(): LatexTools {
     xelatex: findExecutable('xelatex'),
     lualatex: findExecutable('lualatex'),
   }
+}
+
+/** LaTeX 环境检测结果（P2-3 wire JSON）。 */
+export interface LatexEnvReport {
+  /** 就绪 = 至少一个编译引擎可用。 */
+  ready: boolean
+  engines: Array<{ name: LatexTool; path: string | null }>
+  /** kpsewhich 抽查的关键包（ctex/graphicx 等）；kpsewhich 不可用时为空数组 + note。 */
+  packages: Array<{ name: string; found: boolean }>
+  ctexAvailable: boolean | null
+  kpsewhichPath: string | null
+  /** 中文写作建议（ctex 缺失时提示 xelatex+ctex 组合）。 */
+  advice: string[]
+}
+
+/**
+ * P2-3：LaTeX 环境检测（纯函数）——探测编译引擎 + kpsewhich 抽查关键宏包，
+ * 输出可操作建议。run 参数可注入（测试用假实现）；默认用 spawnSync 包装。
+ * 结果不缓存（调用方决定缓存策略；本函数保持纯）。
+ */
+export function detectLatexEnv(run?: (exe: string, args: string[], timeoutMs?: number) => { status: number | null; stdout: string }): LatexEnvReport {
+  const exec = run ?? ((exe: string, args: string[], timeoutMs?: number) => {
+    const result = spawnSync(exe, args, { encoding: 'utf8', timeout: timeoutMs ?? 5000, windowsHide: true })
+    return { status: result.status, stdout: typeof result.stdout === 'string' ? result.stdout : '' }
+  })
+  // 引擎探测
+  const tools = probeLatexTools()
+  const engines = (['latexmk', 'pdflatex', 'xelatex', 'lualatex'] as const).map((name) => ({ name, path: tools[name] }))
+  const ready = engines.some((engine) => engine.path !== null)
+  // kpsewhich 宏包抽查
+  const kpsewhichPath = findExecutable('kpsewhich')
+  const packages: Array<{ name: string; found: boolean }> = []
+  let ctexAvailable: boolean | null = null
+  if (kpsewhichPath !== null) {
+    for (const pkg of ['article.cls', 'ctex.sty', 'graphicx.sty', 'amsmath.sty', 'booktabs.sty', 'hyperref.sty']) {
+      let found = false
+      try {
+        const result = exec(kpsewhichPath, [pkg])
+        found = result.status === 0 && result.stdout.trim() !== ''
+      } catch {
+        found = false
+      }
+      packages.push({ name: pkg, found })
+      if (pkg === 'ctex.sty') ctexAvailable = found
+    }
+  }
+  // 建议规则
+  const advice: string[] = []
+  if (!ready) {
+    advice.push('未找到 LaTeX 引擎，建议安装 TeX Live 或 MiKTeX（Windows 可 winget install MiKTeX.MiKTeX）')
+  }
+  if (ctexAvailable === false && tools.xelatex !== null) {
+    advice.push('中文论文建议使用 xelatex + ctex 宏包；当前 ctex 缺失，可在 MiKTeX Console 安装 ctex')
+  }
+  if (kpsewhichPath === null) {
+    advice.push('kpsewhich 不可用，跳过宏包检查（不影响编译）')
+  }
+  return { ready, engines, packages, ctexAvailable, kpsewhichPath, advice }
 }
 
 // ── 纯函数：编译错误解析（WRITE-04） ───────────────────────────────────────
@@ -518,6 +576,14 @@ export class ManuscriptService {
           ? `编译成功（${tool}，main.pdf 已生成）；日志: ${logPath}`
           : `编译失败（exit ${exitCode ?? '?'}，${errors.length} 处错误）；完整日志: ${logPath}`,
     }
+  }
+
+  /**
+   * P2-3：LaTeX 环境检测（薄包装 detectLatexEnv 纯函数）——
+   * 引擎 + 宏包就绪状态与中文写作建议；api 层统一入口用。
+   */
+  detectLatexEnv(): LatexEnvReport {
+    return detectLatexEnv()
   }
 
   /**

@@ -77,6 +77,15 @@ export interface TopicState {
   readonly updatedAt: number
 }
 
+/**
+ * 观测关联边类型（P1-2）：relates 默认弱关联；complements 互补；
+ * contradicts 矛盾；supersedes 取代。
+ */
+export type ObservationEdgeType = 'relates' | 'complements' | 'contradicts' | 'supersedes'
+
+/** 全部合法的观测关联边类型（校验/枚举展示用）。 */
+export const OBSERVATION_EDGE_TYPES: readonly ObservationEdgeType[] = ['relates', 'complements', 'contradicts', 'supersedes']
+
 /** 长期 Observation（Markdown 文件 + frontmatter 的索引镜像）。 */
 export interface ObservationMeta {
   readonly observationId: string
@@ -91,6 +100,8 @@ export interface ObservationMeta {
   readonly sourceTurnIds: readonly string[]
   /** 关联的其他 Observation id（link_observations 双向维护）。 */
   readonly relatedObservationIds: readonly string[]
+  /** 各 related id 对应的边类型（与 relatedObservationIds 同序对齐；缺省 relates，P1-2）。 */
+  readonly edgeTypes?: readonly ObservationEdgeType[]
   /** active | superseded（supersede 保留旧文件标记，检索默认只出 ACTIVE）。 */
   readonly status: 'active' | 'superseded'
   /** 被谁取代（observation id）。 */
