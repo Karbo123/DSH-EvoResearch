@@ -1077,10 +1077,15 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   @Remote('experimentWorkspaceList')
-  experimentWorkspaceList(args: { workspaceDir?: string }): ExperimentWorkspaceInfo[] {
-    const svc = this.services.experimentWorkspace
-    if (svc === undefined) return []
-    return svc.list(String(args?.workspaceDir ?? ''))
+  experimentWorkspaceList(args: { workspaceDir?: string }): ExperimentWorkspaceInfo[] | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return []
+      return svc.list(String(args?.workspaceDir ?? ''))
+    } catch (error) {
+      // 未绑定工作区等校验失败按 { error } 返回，避免整包 500；客户端已有对应降级提示。
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   @Remote('experimentWorkspaceDetail')

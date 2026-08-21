@@ -155,6 +155,11 @@ async function buildFrontend() {
       'process.versions.node': '"0.0.0"',
       'process.execArgv': '[]',
       'process.env.CORDIS_SHARED': 'undefined',
+      // 生产构建：esbuild 缺省把 NODE_ENV 折叠为 development，会内联 React 的
+      // dev 版 jsx-runtime 并经 staticModules 表分发给所有插件，导致每个
+      // jsxs 静态数组子元素都告警缺 key（生产运行时不做该校验）。显式指定
+      // production 与官方 vite build 行为一致。
+      'process.env.NODE_ENV': '"production"',
     },
     // 传递依赖（katex 等）的 CSS 引用了字体/图片资源：直接内联为 dataurl，
     // 避免 esbuild 需要文件 loader 且运行时额外请求。

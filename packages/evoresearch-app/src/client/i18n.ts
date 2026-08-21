@@ -931,6 +931,7 @@ const DICT: Record<string, [string, string]> = {
   graphDownstream: ['Downstream', '下游'],
   graphEditMemory: ['Edit Memory', '编辑 Memory'],
   hiddenLabelReason: ['No non-overlapping position found for label', '没有找到不遮挡节点或其他标签的可用位置'],
+  copyFailed: ['Copy failed', '复制失败'],
   importFailed: ['Import failed', '导入失败'],
   inviteFailed: ['Invite failed', '邀请失败'],
   noCandidateClusters: ['No new candidate clusters', '没有新的候选簇'],

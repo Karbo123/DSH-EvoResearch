@@ -249,7 +249,6 @@ class ErrorBoundary extends (Component as any) {
 function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
   const workspaces = useWorkspaces((w) => w)
   const [projectScope, setProjectScope] = useState<{ name: string; path: string } | null>(null)
-  const [sidebar, setSidebar] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('sidebar') !== '0' : true)
   const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('inspector') === '1' : false)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() => {
     if (typeof window === 'undefined') return 'workspace'
@@ -274,10 +273,27 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 首次发送创建会话后，视图快照可能晚一拍；用短生命周期引用承接紧接着的第二条输入。
   const justCreatedSessionRef = useRef<string | null>(null)
 
-  // 响应式（§26.1）：<768px 左右栏改为抽屉 + 黑色 40% 遮罩
+  // 响应式（§26.1）：<768px 左右栏改为抽屉 + 黑色 40% 遮罩。
+  // 窄屏首屏抽屉默认收起：抽屉 z-index 高于顶栏，若初始展开会遮住整屏
+  // （含导航开关），用户必须先点遮罩才能操作。URL 参数 sidebar=1 强制展开。
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
+  const [sidebar, setSidebar] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const param = new URLSearchParams(location.search).get('sidebar')
+    if (param === '1') return true
+    if (param === '0') return false
+    return window.innerWidth >= 768
+  })
   useEffect(() => {
-    const onResize = () => setNarrow(window.innerWidth < 768)
+    const onResize = () => {
+      const nextNarrow = window.innerWidth < 768
+      setNarrow((prev) => {
+        // 桌面 → 窄屏时收起抽屉，避免遮罩盖住顶栏；反向展开恢复侧栏。
+        if (nextNarrow && !prev) setSidebar(false)
+        else if (!nextNarrow && prev) setSidebar(true)
+        return nextNarrow
+      })
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -1380,7 +1396,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               jsx('button', {
                 type: 'button',
                 className: 'evo-brand-btn',
-                onClick: startNewChat,
+                // 不能直接传 startNewChat：onClick 会把事件对象当作 projectCwd 传入。
+                onClick: () => startNewChat(),
                 title: t('goHome'),
                 children: jsxs(Fragment, {
                   children: [
@@ -1399,7 +1416,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               !sidebar && jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
-                onClick: startNewChat,
+                onClick: () => startNewChat(),
                 title: t('newChat'),
                 children: jsx(SquarePen, {}),
               }),
