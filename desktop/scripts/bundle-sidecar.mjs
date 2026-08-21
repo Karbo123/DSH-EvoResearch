@@ -3,12 +3,12 @@
  *
  * 产物布局（构建期生成，不入库）：
  *   desktop/sidecar/dist/
- *   ├── node.exe          # 官方 Windows x64 Node（LZMA 压缩后 ~35-45MB）
+ *   ├── node(.exe)        # 官方 Node（按当前平台下载：win-x64 / linux-x64 / darwin-{x64,arm64}）
  *   ├── launch.js         # 启动脚本（本目录同层复制）
  *   └── app/              # DSH profile 的 standalone 副本（node_modules 裁剪后）
  *
  * 步骤：
- * 1. 下载官方 Node Windows x64 zip（可用镜像），解压出 node.exe；
+ * 1. 下载官方 Node 当前平台发行包，解压出 node 二进制；
  * 2. 用 `npm ci --omit=dev --production` 在临时目录安装
  *    dsh-base + dsh-web-app + @evoresearch/dsh-plugin（含 profiles/evoresearch 的 bundle 声明）；
  * 3. 裁剪：删除 SDK 测试套件、*.map、文档（deepseek profile 思路）；
@@ -17,7 +17,7 @@
  * 用法：node desktop/scripts/bundle-sidecar.mjs [--skip-download]
  *   --skip-download：使用已缓存的 node.exe（多次构建加速）。
  */
-import { mkdirSync, copyFileSync, existsSync, rmSync, writeFileSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdirSync, copyFileSync, existsSync, rmSync, writeFileSync, readdirSync, readFileSync, statSync, chmodSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -26,7 +26,21 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SIDECAR = join(ROOT, 'desktop', 'sidecar')
 const DIST = join(SIDECAR, 'dist')
 const NODE_VERSION = 'v24.19.0' // Node LTS（Krypton）；DSH rc.6 需要 ≥23（node:zlib zstd / node:sqlite）
-const NODE_URL = `https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-win-x64.zip`
+// 按 host 平台选择官方发行包（CI 三平台桌面各跑一次本脚本，各自嵌入对应平台的 Node）
+const NODE_DIST = (() => {
+  switch (process.platform) {
+    case 'win32': return { pkg: `node-${NODE_VERSION}-win-x64.zip`, sub: '' }
+    case 'darwin': return process.arch === 'arm64'
+      ? { pkg: `node-${NODE_VERSION}-darwin-arm64.tar.gz`, binary: 'node', sub: `node-${NODE_VERSION}-darwin-arm64/bin` }
+      : { pkg: `node-${NODE_VERSION}-darwin-x64.tar.gz`, binary: 'node', sub: `node-${NODE_VERSION}-darwin-x64/bin` }
+    default: return process.arch === 'arm64'
+      ? { pkg: `node-${NODE_VERSION}-linux-arm64.tar.gz`, binary: 'node', sub: `node-${NODE_VERSION}-linux-arm64/bin` }
+      : { pkg: `node-${NODE_VERSION}-linux-x64.tar.gz`, binary: 'node', sub: `node-${NODE_VERSION}-linux-x64/bin` }
+  }
+})()
+const IS_WINDOWS = process.platform === 'win32'
+const NODE_BINARY = IS_WINDOWS ? 'node.exe' : 'node'
+const NODE_URL = `https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST.pkg}`
 const CACHE = join(SIDECAR, '.cache')
 
 function step(label, fn) {
@@ -41,34 +55,46 @@ step('清理旧产物', () => {
   mkdirSync(DIST, { recursive: true })
 })
 
+const archiveName = IS_WINDOWS ? 'node.zip' : NODE_DIST.pkg
+
 if (!skipDownload) {
-  step(`下载 Node ${NODE_VERSION}（win-x64）`, () => {
+  step(`下载 Node ${NODE_VERSION}（${NODE_DIST.pkg}）`, () => {
     mkdirSync(CACHE, { recursive: true })
-    const zip = join(CACHE, 'node.zip')
-    const result = spawnSync('powershell', ['-NoProfile', '-Command', `Invoke-WebRequest -Uri '${NODE_URL}' -OutFile '${zip}'`], { stdio: 'inherit' })
-    if (result.status !== 0) throw new Error('Node 下载失败（可手动下载后放入 .cache/node.zip 并加 --skip-download）')
+    // 统一用 curl（三平台 GitHub runner / Win10+ 均自带），避免 PowerShell 平台耦合
+    const result = spawnSync('curl', ['-fL', '-o', join(CACHE, archiveName), NODE_URL], { stdio: 'inherit' })
+    if (result.status !== 0) throw new Error('Node 下载失败（可手动下载后放入 .cache/ 并加 --skip-download）')
   })
 } else {
   console.log('[bundle-sidecar] 跳过下载（--skip-download）')
 }
 
-step('解压 node.exe', () => {
-  const zip = join(CACHE, 'node.zip')
-  if (!existsSync(zip)) {
+step(`解压 ${NODE_BINARY}`, () => {
+  const archive = join(CACHE, archiveName)
+  if (!existsSync(archive)) {
     // 允许直接从已有 Node 安装复制（开发机加速）
-    const local = spawnSync('where', ['node'], { encoding: 'utf8' }).stdout.trim().split(/\r?\n/)[0]
+    const local = IS_WINDOWS
+      ? spawnSync('where', ['node'], { encoding: 'utf8' }).stdout.trim().split(/\r?\n/)[0]
+      : spawnSync('sh', ['-c', 'command -v node'], { encoding: 'utf8' }).stdout.trim().split(/\r?\n/)[0]
     if (local) {
-      copyFileSync(local, join(DIST, 'node.exe'))
+      copyFileSync(local, join(DIST, NODE_BINARY))
       return
     }
-    throw new Error('缺少 node.zip，请先下载或使用 --skip-download')
+    throw new Error(`缺少 ${archiveName}，请先下载或使用 --skip-download`)
   }
   const extractDir = join(CACHE, 'extracted')
   rmSync(extractDir, { recursive: true, force: true })
-  const result = spawnSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -Force '${zip}' '${extractDir}'`], { stdio: 'inherit' })
+  mkdirSync(extractDir, { recursive: true })
+  // zip → tar.exe（Win10+ 自带 bsdtar，可解 zip）；tar.gz → 三平台通用 tar -z
+  const extractArgs = IS_WINDOWS ? ['-xf', archive, '-C', extractDir] : ['-xzf', archive, '-C', extractDir]
+  const result = spawnSync('tar', extractArgs, { stdio: 'inherit' })
   if (result.status !== 0) throw new Error('解压失败')
-  const inner = readdirSync(extractDir)[0]
-  copyFileSync(join(extractDir, inner, 'node.exe'), join(DIST, 'node.exe'))
+  if (IS_WINDOWS) {
+    // win zip：根目录即 node.exe
+    copyFileSync(join(extractDir, 'node.exe'), join(DIST, 'node.exe'))
+  } else {
+    // tar.gz：<pkg>/bin/node
+    copyFileSync(join(extractDir, NODE_DIST.sub, 'node'), join(DIST, 'node'))
+  }
 })
 
 step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
@@ -116,7 +142,7 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   }
   // 体积裁剪（deepseek profile 思路）：
   // 1) 删除未使用的 provider SDK（保留 openai/pi-ai 与 @deepseek-ai 核心）；
-  // 2) 原生模块只保留 win32-x64 prebuilds（node-pty/sharp 的 linux/darwin 产物占 ~65MB）。
+  // 2) 原生模块只保留当前平台的 prebuilds（node-pty/sharp 的其它平台产物占 ~65MB）。
   const nodeModules = join(appDir, 'node_modules')
   // provider SDK 裁剪：anthropic/google/mistral/aws 适配器按需惰性 import，
   // 不选这些 provider 就不加载（deepseek profile 语义）。
@@ -130,6 +156,11 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
 step('复制 launch.js', () => {
   copyFileSync(join(SIDECAR, 'launch.js'), join(DIST, 'launch.js'))
 })
+
+// POSIX 二进制需要可执行位（tar 保留；从本地 Node 复制的场景兜底）
+if (!IS_WINDOWS) {
+  try { chmodSync(join(DIST, 'node'), 0o755) } catch { /* 已可执行则忽略 */ }
+}
 
 console.log('[bundle-sidecar] 完成 → desktop/sidecar/dist/')
 
@@ -161,24 +192,35 @@ function prunePackages(nodeModules, packages) {
   }
 }
 
-/** 原生模块 prebuilds 只保留 win32-x64（node-pty / @img/sharp 等）。 */
+/** 当前平台的 prebuild 目录名（node-pty / @img/sharp 命名约定）。 */
+function nativePrebuildPlatform() {
+  switch (process.platform) {
+    case 'win32': return `win32-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
+    case 'darwin': return `darwin-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
+    default: return `linux-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
+  }
+}
+
+/** 原生模块 prebuilds 只保留当前平台（node-pty / @img/sharp 等）。 */
 function pruneNativePrebuilds(nodeModules) {
-  // node-pty prebuilds：只留 win32-x64
+  const keep = nativePrebuildPlatform()
+  // node-pty prebuilds：只留当前平台
   const pty = join(nodeModules, 'node-pty', 'prebuilds')
   if (existsSync(pty)) {
     for (const entry of readdirSync(pty)) {
       const full = join(pty, entry)
       if (!statSync(full).isDirectory()) continue
-      if (entry === 'win32-x64') continue
+      if (entry === keep) continue
       rmSync(full, { recursive: true, force: true })
       console.log(`[bundle-sidecar] 裁剪 node-pty prebuild ${entry}`)
     }
   }
-  // @img/sharp：只删 linux/darwin 平台包（保留 win32-x64 与工具包如 colour）
+  // @img/sharp：只删非当前平台的 sharp 包（保留当前平台与工具包如 colour）
   const img = join(nodeModules, '@img')
   if (existsSync(img)) {
     for (const entry of readdirSync(img)) {
-      if (!/sharp.*(linux|darwin)/.test(entry)) continue
+      if (!/@?sharp/.test(entry)) continue
+      if (entry.includes(keep) || !/(linux|darwin|win32)/.test(entry)) continue
       const full = join(img, entry)
       if (!statSync(full).isDirectory()) continue
       const size = dirSize(full)

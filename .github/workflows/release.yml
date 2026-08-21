@@ -1,0 +1,234 @@
+# EvoResearch 三平台云端构建（Linux / macOS / Windows 桌面 + Android APK）。
+#
+# 版本固定策略：Release 始终为「EvoResearch v0.1.0-rc.1」（tag v0.1.0-rc.1）。
+# tag 已存在时：删除远端旧 tag 与旧 Release 后重建，tauri-action / gh release
+# 以 `clobber` 语义覆盖同名资产 —— 即"自动覆盖更新资产"。
+#
+# 触发：push 到 main，或 Actions 页手动 workflow_dispatch。
+# 说明：
+# - Desktop 矩阵三平台并行，产物统一上传到上述 Release；
+# - Android 任务生成 unsigned APK（无签名密钥时），同样挂到 Release；
+# - macOS 使用 Ad-hoc 签名（本地可启动）；如需分发签名见 docs/05-release-ci.md。
+
+name: Release EvoResearch
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: EvoResearch
+  TAG: v0.1.0-rc.1
+  RELEASE_NAME: EvoResearch v0.1.0-rc.1
+
+jobs:
+  # ── 固定版本号：确保 tag/Release 存在；已存在则删除重建（覆盖资产）──────────
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_release.outputs.release_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 删除已存在的同名 Tag 与 Release（覆盖更新）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # 删除旧 Release（若存在）——保留其资产之外的讨论等由 GitHub 自动清理
+          RELEASE_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.id' 2>/dev/null || true)
+          if [ -n "$RELEASE_ID" ]; then
+            echo "删除旧 Release id=$RELEASE_ID"
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID"
+          fi
+          # 删除旧 Tag（remote 与 local）
+          git push origin ":refs/tags/${TAG}" 2>/dev/null || echo "远端无旧 tag"
+
+      - name: 创建 Release（EvoResearch v0.1.0-rc.1）
+        id: create_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # 用当前 main HEAD 重新打 tag（覆盖语义：始终指向最新一次触发）
+          git tag -f "${TAG}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${TAG}"
+          UPLOAD_URL=$(gh api -X POST "repos/${GITHUB_REPOSITORY}/releases" \
+            -f tag_name="${TAG}" \
+            -f target_commitish="${GITHUB_SHA}" \
+            -f name="${RELEASE_NAME}" \
+            -f draft=false \
+            -f prerelease=true)
+          RELEASE_ID=$(echo "$UPLOAD_URL" | jq -r '.id')
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+
+  # ── Desktop：Windows / Linux / macOS 并行编译 ────────────────────────────
+  desktop:
+    needs: [prepare-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            targets: x86_64-pc-windows-msvc
+            bundles: nsis
+          - os: ubuntu-latest
+            targets: x86_64-unknown-linux-gnu
+            bundles: appimage,deb
+          - os: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            bundles: dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装 Rust（stable）
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - name: Rust 编译缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # Linux：Tauri 依赖的系统库（webkit2gtk 等）
+      - name: 安装 Linux 系统依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev libayatana-appindicator3-dev
+
+      - name: 安装 Tauri CLI（cargo 版，与本地一致）
+        run: cargo install tauri-cli --version '^2' --locked
+
+      # 前端/插件产物（sidecar 组装需要 packages/*/lib、evoresearch-app/dist）
+      - name: 构建工作区（插件 + Web 资源）
+        shell: bash
+        run: |
+          npm ci
+          npm run build
+
+      # sidecar 组装（Node 二进制按 runner 平台下载；CI 内无需缓存加速参数）
+      - name: 组装 Node sidecar
+        shell: bash
+        run: node desktop/scripts/bundle-sidecar.mjs
+
+      - name: 清理 tauri 资源残留目录
+        shell: bash
+        run: rm -rf desktop/src-tauri/target/release/_up_
+
+      - name: Tauri 桌面构建（tauri-action 上传到 Release）
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS Ad-hoc 签名（未配置证书时保证产物本地可用）
+          APPLE_SIGNING_IDENTITY: '-'
+        with:
+          projectPath: desktop
+          tagName: ${{ env.TAG }}
+          releaseName: ${{ env.RELEASE_NAME }}
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
+          args: --target ${{ matrix.targets }} --bundles ${{ matrix.bundles }}
+
+  # ── Android：交叉编译 APK（unsigned；有签名密钥则自动签名）───────────────
+  android:
+    needs: [prepare-release]
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 安装 Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 安装 Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装 Rust 与 Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust 编译缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # Android SDK 由 ubuntu-latest 预装（ANDROID_HOME 已设置）；补 NDK
+      - name: 安装 Android SDK 组件
+        run: |
+          sdkmanager --install "ndk;26.3.11579264" >/dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
+
+      - name: 安装 Tauri CLI
+        run: cargo install tauri-cli --version '^2' --locked
+
+      - name: 构建工作区（插件 + Web 资源）
+        run: |
+          npm ci
+          npm run build
+
+      # frontendDist ../dist 占位页（Android 不跑 Node sidecar，壳加载内置页）
+      - name: 生成 frontendDist 占位页
+        run: mkdir -p desktop/dist && cp desktop/dist.placeholder/index.html desktop/dist/index.html
+
+      - name: 初始化 Android 工程（gen/android 不入库）
+        working-directory: desktop/src-tauri
+        run: cargo tauri android init || echo "gen/android 已存在"
+
+      - name: Tauri Android 构建（APK，--config 套用 android 配置）
+        working-directory: desktop/src-tauri
+        run: |
+          CONFIG_ARGS="--config tauri.android.conf.json"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.jks"
+            export TAURI_ANDROID_KEY_STORE_FILE="$RUNNER_TEMP/keystore.jks"
+            export TAURI_ANDROID_KEY_STORE_PASSWORD="$KEYSTORE_PASSWORD"
+            export TAURI_ANDROID_KEY_ALIAS="$KEY_ALIAS"
+            export TAURI_ANDROID_KEY_PRIVATE_KEY_PASSWORD="$KEY_PASSWORD"
+            echo "::notice::使用 secrets 中的 keystore 签名 APK"
+          else
+            echo "::notice::未配置签名密钥（ANDROID_KEYSTORE_BASE64 等 secrets），产出 unsigned/debug APK"
+          fi
+          cargo tauri android build --apk --split-per-abi $CONFIG_ARGS
+
+      - name: 收集 APK 产物
+        id: collect_apks
+        run: |
+          mkdir -p apks
+          find desktop/src-tauri/gen/android -name "*.apk" -exec cp {} apks/ \;
+          ls -la apks/
+
+      - name: 上传 APK 到 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for f in apks/*.apk; do
+            [ -e "$f" ] || continue
+            echo "上传 $f → ${TAG}"
+            gh release upload "${TAG}" "$f" --repo "${GITHUB_REPOSITORY}" --clobber
+          done

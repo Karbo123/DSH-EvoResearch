@@ -77,7 +77,7 @@ function CwdPath({ path }: { path: string }) {
       const tailPart = parts.slice(Math.max(tailStart, 0)).join('')
       const sep = (headEnd < parts.length && parts[headEnd] !== '')
         ? parts[headEnd]
-        : (tailStart > 0 && parts[tailStart - 1] !== '') ? parts[tailStart - 1] : '\\'
+        : (tailStart > 0 && parts[tailStart - 1] !== '') ? parts[tailStart - 1] : '/'
       return `${headPart}${sep}…${sep}${tailPart}`
     }
 

@@ -152,3 +152,14 @@ cargo tauri build --bundles nsis
 - 仅 Windows x64（目标机需 Windows 10 1803+，自带 WebView2 Runtime；旧系统需装 Evergreen Bootstrapper）；
 - Linux/WSL2 不在本期范围；sidecar 打包脚本已按平台参数化，未来可扩展；
 - sidecar 目录不可写问题：安装到 `%LOCALAPPDATA%\<AppName>`（不装 Program Files 写保护目录）。
+
+## 跨平台与云端构建（0.1.0-rc.1 起）
+
+- sidecar 组装脚本已平台化：按 runner 平台下载官方 Node
+  （win-x64 zip / linux-x64、darwin-{x64,arm64} tar.gz，curl + tar 解压），
+  原生模块 prebuilds 只保留当前平台；壳侧 `node.exe`/`node` 按平台探测。
+- 壳 `main.rs` 拆分 desktop / mobile 双入口：桌面三平台走既有 sidecar 协议
+  （POSIX 数据目录为 `~/.local/share/com.evoresearch.desktop`）；
+  Android 无 Node 运行时 → `mobile_main` 占位壳，
+  配置见 `tauri.android.conf.json`（resources 清空）。
+- 三平台桌面 + Android APK 的云端编译发布流水线见 [05-release-ci.md](05-release-ci.md)。

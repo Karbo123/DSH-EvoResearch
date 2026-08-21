@@ -45,11 +45,15 @@ function requireAbsolute(path: string): string {
   return resolve(path)
 }
 
-/** target 是否位于 base 下（含相等；容忍分隔符与 Windows 大小写）。 */
+/** target 是否位于 base 下（含相等；统一分隔符后比较；Windows 额外容忍大小写）。 */
 function isWithin(target: string, base: string): boolean {
-  const t = target.toLowerCase().replace(/\//g, '\\')
-  const b = base.toLowerCase().replace(/\//g, '\\')
-  return t === b || t.startsWith(b.endsWith('\\') ? b : `${b}\\`)
+  const norm = (p: string) => {
+    const unified = p.replace(/\\/g, '/')
+    return process.platform === 'win32' ? unified.toLowerCase() : unified
+  }
+  const t = norm(target)
+  const b = norm(base).replace(/\/+$/, '')
+  return t === b || t.startsWith(`${b}/`)
 }
 
 function httpError(status: number, code: string, message: string): Error {

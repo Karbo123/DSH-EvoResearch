@@ -27,6 +27,9 @@ desktop/sidecar/.cache/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
 
+# Serena MCP 本地配置（工具自动生成，不入库）
+.serena/
+
 # 运行时数据
 .evosci-data/
 projects/

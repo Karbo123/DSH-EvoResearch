@@ -135,7 +135,7 @@ function FileViewer({ path, root, onBack }: { path: string; root: string; onBack
     setSaving(false)
   }
 
-  const name = path.slice(path.lastIndexOf('\\') + 1).slice(path.lastIndexOf('/') + 1) || path
+  const name = path.slice(Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')) + 1) || path
 
   return jsxs('div', {
     className: 'evo-fs-viewer',

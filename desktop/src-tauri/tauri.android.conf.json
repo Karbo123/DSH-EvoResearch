@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "EvoResearch",
+  "version": "0.1.0",
+  "identifier": "com.evoresearch.desktop",
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "shortDescription": "EvoResearch 科研 Agent（Android 预览壳）",
+    "longDescription": "EvoResearch 的 Android 壳：DSH 后端依赖 Node 运行时，移动端暂不内置 sidecar，本包仅提供应用入口与占位页（完整功能请使用桌面版）。",
+    "resources": [],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png"
+    ]
+  }
+}

@@ -193,12 +193,12 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const absRefPath = (node: GraphNode): string | null => {
     const ref = node.ref
     if (ref === undefined || cwd === null) return null
-    const join = (base: string, p: string) => (base.endsWith('\\') || base.endsWith('/') ? base + p : `${base}\\${p}`)
+    const join = (base: string, p: string) => (base.endsWith('\\') || base.endsWith('/') ? base + p : `${base}/${p}`)
     // Global Memory nodes may store an absolute note locator. Resolve it before
     // applying the project note root; otherwise a valid global document would
     // be looked up below the currently open project.
     if (ref.path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(ref.path)) return ref.path
-    if (ref.kind === 'note') return join(join(cwd, '.evoresearch-data\\memories\\notes'), ref.path)
+    if (ref.kind === 'note') return join(join(cwd, '.evoresearch-data/memories/notes'), ref.path)
     if (ref.kind === 'session' || ref.kind === 'memory') return null
     return join(cwd, ref.path)
   }

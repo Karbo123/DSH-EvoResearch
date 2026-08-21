@@ -1092,7 +1092,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 同步镜像（setState updater 在 React 18 是延迟执行的，不能在里面捕获 targetId）
   const tabsRef = useRef<WorkspaceTab[]>(tabs)
   tabsRef.current = tabs
-  const tabNameOf = (path: string): string => path.slice(path.lastIndexOf('\\') + 1).slice(path.lastIndexOf('/') + 1) || path
+  const tabNameOf = (path: string): string => path.slice(Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')) + 1) || path
   const activateTab = (id: string) => { setActiveTabId(id); setTabMenuOpen(false) }
   const openTabPdf = (path: string, root: string) => {
     const existing = tabsRef.current.find((tab) => tab.kind === 'pdf' && tab.filePath === path)
@@ -1126,7 +1126,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     setTabBusy(true)
     // 允许子目录（如 notes/draft.md）；仅净化危险字符
     const safe = name.replace(/[<>:"|?*\u0000-\u001f]/g, '_')
-    const path = `${root.replace(/[\\/]$/, '')}\\${safe.replace(/\//g, '\\')}`
+    const path = `${root.replace(/[\\/]$/, '')}/${safe}`
     void fetch('/evoresearch/fs/write', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

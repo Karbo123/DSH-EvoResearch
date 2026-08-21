@@ -265,7 +265,7 @@ export async function resolveMentions(text: string, cwd: string | null): Promise
   const MAX_INLINE_BYTES = 16 * 1024
   const resolved = await Promise.all(tokens.map(async (token) => {
     const ref = token.slice(1)
-    const path = ref.startsWith('/') || /^[A-Za-z]:[\\/]/.test(ref) ? ref : `${cwd}\\${ref.replace(/\//g, '\\')}`
+    const path = ref.startsWith('/') || /^[A-Za-z]:[\\/]/.test(ref) ? ref : `${cwd}/${ref}`
     try {
       const res = await fetch('/evoresearch/fs/read', {
         method: 'POST',
