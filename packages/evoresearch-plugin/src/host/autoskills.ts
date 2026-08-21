@@ -214,6 +214,8 @@ export class AutoSkillsService {
   private readonly skillsDir: string
   private ctx: Context | undefined
   private skills: SkillsRegistryLike | undefined
+  /** 定时挖掘进行中标志（P1-1：防与手动触发并发写 proposals.json）。 */
+  private mining = false
 
   constructor(readonly config: AutoSkillsConfig) {
     this.file = path.join(config.dataRoot, '.evoresearch-data', 'autoskills.json')
@@ -263,6 +265,56 @@ export class AutoSkillsService {
   listProposals(status?: AutoSkillProposal['status']): AutoSkillProposal[] {
     const list = status ? this.proposals.filter((p) => p.status === status) : this.proposals
     return [...list].sort((a, b) => b.createdAt - a.createdAt)
+  }
+
+  /**
+   * P1-1 定时挖掘：遍历全部项目工作区，逐项目跑观测聚类 + 笔记挖掘，
+   * 汇总新增提案数。与手动触发互斥（mining 标志；save 已是 tmp+rename 原子写）。
+   * @param storeFor 按工作区解析记忆库的回调（MemoryRuntime.storeFor）。
+   * @param workspaces 项目目录列表（host 入口传 listProjects(dataRoot) 全路径）。
+   * @returns { created, skipped } skipped=true 表示已有一次挖掘在进行。
+   */
+  async mineAllWorkspaces(storeFor: (workspaceDir: string) => ResearchMemoryStore, workspaces: readonly string[]): Promise<{ created: number; skipped: boolean }> {
+    if (this.mining) return { created: 0, skipped: true }
+    this.mining = true
+    try {
+      let created = 0
+      for (const workspaceDir of workspaces) {
+        try {
+          const store = storeFor(workspaceDir)
+          // 观测聚类（§42.7 固定规则）
+          created += this.generateFromObservations(store, workspaceDir)
+          // EVO-07 笔记/轨迹挖掘：从项目笔记正文发现重复做法
+          const notes = this.readNoteTexts(workspaceDir)
+          if (notes.length > 0) {
+            created += this.generateFromTraces({ texts: notes, workspaceDir })
+          }
+        } catch (error) {
+          // 单项目失败不阻断其余项目
+          console.warn(`[evoresearch:autoskills] 定时挖掘跳过 ${workspaceDir}: ${String(error)}`)
+        }
+      }
+      return { created, skipped: false }
+    } finally {
+      this.mining = false
+    }
+  }
+
+  /** 读取某工作区研究笔记正文（P1-1 挖掘输入；目录缺失返回空）。 */
+  private readNoteTexts(workspaceDir: string): string[] {
+    const notesDir = path.join(workspaceDir || this.config.dataRoot, '.evoresearch-data', 'memories', 'notes')
+    const texts: string[] = []
+    try {
+      for (const entry of fs.readdirSync(notesDir)) {
+        if (!entry.endsWith('.md')) continue
+        try {
+          const stat = fs.statSync(path.join(notesDir, entry))
+          if (!stat.isFile() || stat.size > 256 * 1024) continue
+          texts.push(fs.readFileSync(path.join(notesDir, entry), 'utf8'))
+        } catch { /* 单文件不可读跳过 */ }
+      }
+    } catch { /* 目录不存在 */ }
+    return texts
   }
 
   /**
