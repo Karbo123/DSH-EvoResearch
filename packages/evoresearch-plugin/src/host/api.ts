@@ -78,6 +78,7 @@ import type { McpServerConfig, McpServerStatus } from './mcp/supervisor.js'
 import type { LayeredSkillRegistry, SkillLayer, SkillEntry } from './skills/registry.js'
 import type { ScienceLoopService, ScienceLoop, ScienceLoopAction } from './science/loops.js'
 import type { ScienceChatGraphBridge } from './science/chat-graph-bridge.js'
+import type { JobHubService } from './jobs.js'
 import { callJson } from './core/llm.js'
 
 /** 各服务集合（host 入口注入）。 */
@@ -129,6 +130,8 @@ export interface HostServices {
   readonly contextAssembler?: ContextAssembler
   /** 平台能力层（PLAT-13..20；t19 交付，按需接线）。 */
   readonly platform?: PlatformServices
+  /** P0-3 后台任务注册表（JobHub；删除级联取消 P3-1 的查询入口）。 */
+  readonly jobHub?: JobHubService
 }
 
 /** 平台能力服务集合（PLAT-13..20；可选接线）。 */
@@ -3498,6 +3501,70 @@ export class EvoResearchApiService extends TypertRemoteService {
     const svc = this.services.dailyReport
     if (!svc) return { error: 'dailyReport 服务不可用' }
     try { return svc.toggle(typeof args?.force === 'boolean' ? args.force : undefined) } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  // ── P0-3 后台任务面板（JobHub）────────────────────────────────────────────
+
+  /** 列出后台任务（可选按会话过滤；running 在前）。 */
+  @Remote('jobsList')
+  jobsList(args: { sessionId?: string; activeOnly?: boolean } = {}): unknown {
+    const hub = this.services.jobHub
+    if (hub === undefined) return { error: 'jobHub 服务不可用' }
+    return {
+      jobs: hub.list({
+        ...(args?.sessionId ? { sessionId: String(args.sessionId) } : {}),
+        ...(args?.activeOnly === true ? { activeOnly: true } : {}),
+      }),
+      countActive: hub.countActive(),
+    }
+  }
+
+  /** 取消一条后台任务（两段式确认由客户端负责）。 */
+  @Remote('jobsCancel')
+  async jobsCancel(args: { jobId: string }): Promise<{ ok: boolean; error?: string }> {
+    const hub = this.services.jobHub
+    if (hub === undefined) return { ok: false, error: 'jobHub 服务不可用' }
+    const job = hub.get(String(args?.jobId ?? ''))
+    if (job === undefined) return { ok: false, error: `任务不存在: ${String(args?.jobId ?? '')}` }
+    // cancel 实现挂在注册表内部；这里经 markCancelled 走完结流转
+    const cancelled = hub.markCancelled(String(args.jobId))
+    return { ok: cancelled, ...(cancelled ? {} : { error: '任务已不在运行中' }) }
+  }
+
+  /** P3-1 前置查询：某会话有多少 active 任务（删除确认框展示用）。 */
+  @Remote('jobsCountForSession')
+  jobsCountForSession(args: { sessionId: string }): { count: number } {
+    const hub = this.services.jobHub
+    if (hub === undefined) return { count: 0 }
+    return { count: hub.countActive(String(args?.sessionId ?? '')) }
+  }
+
+  /**
+   * P3-1 会话删除级联取消：先查 JobHub 该会话的 active 任务，逐个取消后再删。
+   * 返回被取消的任务数（0 = 无需级联）。
+   */
+  @Remote('sessionDeleteCascade')
+  async sessionDeleteCascade(args: { sessionId: string }): Promise<{ ok: boolean; cancelled: number } | { error: string }> {
+    try {
+      const hub = this.services.jobHub
+      const sessionId = String(args?.sessionId ?? '')
+      if (sessionId === '') return { error: '缺少 sessionId' }
+      const cancelled = hub !== undefined ? await hub.cancelBySession(sessionId) : 0
+      // 复用既有持久化数据删除路径（与客户端 session-delete 同源）
+      const sessionsRoot = sessionStoreRoot()
+      let removed = 0
+      try {
+        const entries = readdirSync(sessionsRoot)
+        for (const name of entries) {
+          if (name !== sessionId) continue
+          rmSync(path.join(sessionsRoot, name), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+          removed += 1
+        }
+      } catch { /* 会话目录不存在 */ }
+      return { ok: removed > 0 || cancelled > 0, cancelled }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   // ── P0-2 工具结果图片渲染 ─────────────────────────────────────────────────

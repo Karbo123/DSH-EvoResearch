@@ -440,7 +440,7 @@ function apply(ctx: Context): void {
   }
 
   // 6) Remote API（构造即注册 services.evoresearch）
-  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, experimentWorkspace, experimentProcess, worktrees, experimentLedger, experimentRounds, dailyReport, scienceLoops, scienceGraphBridge, chatGraph, projectEnv, rewind, notes, libraryIndexer, librarySearch, manuscript, evo: { signals, registry }, contextGuard, contextRuntime, contextAssembler, platform }
+  const services: HostServices = { workspace, memory, scheduler, channels, autoskills, experts, experiments, experimentWorkspace, experimentProcess, worktrees, experimentLedger, experimentRounds, dailyReport, scienceLoops, scienceGraphBridge, chatGraph, projectEnv, rewind, notes, libraryIndexer, librarySearch, manuscript, evo: { signals, registry }, contextGuard, contextRuntime, contextAssembler, platform, jobHub }
   void new EvoResearchApiService(ctx, services)
 
   // 7) 斜杠命令

@@ -1954,6 +1954,22 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── P0-3/P3-1 后台任务：列表 / 取消 / 会话删除级联 ──
+        if (method === 'jobs-list' || method === 'jobs-cancel' || method === 'jobs-count-for-session' || method === 'session-delete-cascade') {
+          const serviceName = method === 'jobs-list' ? 'jobsList'
+            : method === 'jobs-cancel' ? 'jobsCancel'
+              : method === 'jobs-count-for-session' ? 'jobsCountForSession'
+                : 'sessionDeleteCascade'
+          const fn = evoresearch?.[serviceName] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          try {
+            writeOk(res, await fn.call(evoresearch, { ...payload }))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
         // ── P0-2 工具结果图片：资产探测 + 读取（直连插件 Remote 方法）──
         if (method === 'artifact-image-detect' || method === 'artifact-image') {
           const serviceName = method === 'artifact-image-detect' ? 'artifactImageDetect' : 'artifactImage'
