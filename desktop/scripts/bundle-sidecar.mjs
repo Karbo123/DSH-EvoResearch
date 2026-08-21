@@ -199,7 +199,7 @@ function pruneDir(dir, suffixes) {
   }
 }
 
-/** 删除指定包目录（整体，含 @scope 下的子包）。 */
+/** 删除指定包目录（整体，含 @scope 下的子包），并清理 .bin 里指向它们的悬空链接。 */
 function prunePackages(nodeModules, packages) {
   for (const name of packages) {
     const target = join(nodeModules, name)
@@ -207,6 +207,20 @@ function prunePackages(nodeModules, packages) {
       const size = dirSize(target)
       rmSync(target, { recursive: true, force: true })
       console.log(`[bundle-sidecar] 裁剪 ${name}（-${Math.round(size / 1024 / 1024)} MB）`)
+    }
+  }
+  // tauri resources 打包要求 glob 全部存在：删包后 .bin 的悬空符号链接会让
+  // `../sidecar/dist/**/*` 收集失败（"resource path doesn't exist"），一并移除
+  const binDir = join(nodeModules, '.bin')
+  if (existsSync(binDir)) {
+    for (const entry of readdirSync(binDir)) {
+      const full = join(binDir, entry)
+      try {
+        statSync(full) // 悬空链接 stat 抛 ENOENT
+      } catch {
+        rmSync(full, { force: true })
+        console.log(`[bundle-sidecar] 清理悬空 .bin 链接 ${entry}`)
+      }
     }
   }
 }

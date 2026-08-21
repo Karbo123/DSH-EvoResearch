@@ -84,7 +84,7 @@ jobs:
             targets: x86_64-unknown-linux-gnu
             bundles: appimage,deb
           - os: macos-latest
-            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            targets: aarch64-apple-darwin
             bundles: dmg
     runs-on: ${{ matrix.os }}
     steps:
