@@ -18,8 +18,8 @@ after(() => {
 function makeProject(name: string): { dataRoot: string; projectDir: string } {
   const base = fs.mkdtempSync(path.join(TMP_ROOT, `${name}-`))
   const dataRoot = path.join(base, 'data')
-  const projectDir = path.join(base, 'proj')
-  fs.mkdirSync(dataRoot, { recursive: true })
+  // 账本服务要求 projectDir 是 dataRoot/projects/<name> 项目目录（与工作区服务同契约）
+  const projectDir = path.join(dataRoot, 'projects', name)
   fs.mkdirSync(path.join(projectDir, 'experiments'), { recursive: true })
   return { dataRoot, projectDir }
 }

@@ -10,6 +10,7 @@ import * as path from 'node:path'
 import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, renameSync, existsSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { WorkspaceService } from './workspace.js'
+import { resolveDshHomePath } from './core/paths.js'
 import type { MemoryRuntime } from './memory/index.js'
 import type { SchedulerService } from './scheduler.js'
 import type { ChannelManager } from './channels/index.js'
@@ -190,9 +191,9 @@ function isSameOrInside(target: string, base: string): boolean {
   return t === b || t.startsWith(`${b}/`)
 }
 
-/** 会话存储根（与客户端 session-delete 同源）。 */
+/** 会话存储根（与客户端 session-delete 同源；DSH_HOME 未设时回退 ~/.dsh 而非 cwd）。 */
 function sessionStoreRoot(): string {
-  return path.join(process.env.DSH_HOME ?? process.cwd(), 'sessions')
+  return path.join(resolveDshHomePath(), 'sessions')
 }
 
 /**

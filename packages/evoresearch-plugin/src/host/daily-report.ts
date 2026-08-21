@@ -249,17 +249,20 @@ export class DailyReportService {
       if (!fs.existsSync(roundsDir) || !fs.statSync(roundsDir).isDirectory()) return '无进行中回合'
       const entries = fs.readdirSync(roundsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()
       if (entries.length === 0) return '无进行中回合'
-      // 检查是否有 current 回合标记文件
-      // rounds 服务若存在会在实验目录下写 current.json；尝试读取
-      const currentFile = path.join(expDir, '.evoresearch-data-round-current.json')
-      if (fs.existsSync(currentFile)) {
+      // 读取 rounds 服务的规范状态文件（experiment-rounds.ts 原子写入），
+      // 从 state.current 判断进行中回合；不再读幽灵文件。
+      const stateFile = path.join(expDir, '.evoresearch-rounds.json')
+      if (fs.existsSync(stateFile)) {
         try {
-          const data = JSON.parse(fs.readFileSync(currentFile, 'utf8')) as { roundId?: string; currentIndex?: number; status?: string }
-          if (data.status === 'running' && typeof data.currentIndex === 'number') {
-            const phases = ['观察', '提议', '行动', '反思']
-            return `进行中：第 ${data.currentIndex + 1} 阶段（${phases[data.currentIndex] ?? data.currentIndex}）`
+          const data = JSON.parse(fs.readFileSync(stateFile, 'utf8')) as {
+            current?: { currentIndex?: number; status?: string } | null
           }
-          if (data.status === 'done') return '无进行中回合（上一轮已完成）'
+          const current = data.current
+          if (current?.status === 'running' && typeof current.currentIndex === 'number') {
+            const phases = ['观察', '提议', '行动', '反思']
+            return `进行中：第 ${current.currentIndex + 1} 阶段（${phases[current.currentIndex] ?? current.currentIndex}）`
+          }
+          if (current?.status === 'done') return '无进行中回合（上一轮已完成）'
         } catch { /* ignore */ }
       }
       // 兜底：列出 rounds 数量

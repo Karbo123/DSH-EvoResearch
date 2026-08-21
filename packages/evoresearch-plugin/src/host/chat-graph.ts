@@ -23,6 +23,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { readSessionEvents, isSystemText } from './rewind.js'
+import { resolveDshHomePath } from './core/paths.js'
 import type { ScienceMemoryLink } from './science/memory.js'
 
 /** memory node 引用真实资料（GRAPH-04：节点只保存显示名与位置，不复制资料）。 */
@@ -351,7 +352,7 @@ export function sessionHistoryText(sessionId: string, maxChars = 8000): string {
 function findSessionDirCached(sessionId: string): string | null {
   try {
     // 轻量扫描（会话目录按 cwd 编码组织，数量有限）
-    const root = path.join(process.env.DSH_HOME ?? process.cwd(), 'sessions')
+    const root = path.join(resolveDshHomePath(), 'sessions')
     let entries: string[] = []
     try { entries = fs.readdirSync(root) } catch { return null }
     for (const name of entries) {

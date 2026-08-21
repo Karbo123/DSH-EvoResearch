@@ -65,14 +65,21 @@ export function clientStateFlush(key?: string): void {
 /** 写穿：localStorage + 后端文件（value 为要写入 localStorage 的原始字符串）。 */
 export function clientStateSet(key: string, value: string): void {
   try { localStorage.setItem(key, value) } catch { /* 本地缓存失败不影响功能 */ }
+  locallyDirty.add(key)
   syncSet(key, value)
 }
 
 /** 删除一个键：localStorage + 后端文件。 */
 export function clientStateDelete(key: string): void {
   try { localStorage.removeItem(key) } catch { /* 忽略 */ }
+  locallyDirty.delete(key)
   syncSet(key, null)
 }
+
+/** 本会话内被本地写过的键：hydrate 时这些键保留本地值（本地比后端新），
+ * 其余键一律以后端文件为准回填，保证换浏览器/设备后状态能真正恢复。
+ * 之前对所有 evoresearch-* 键无条件保留本地，后端永不覆盖 → 跨设备同步失效。 */
+const locallyDirty = new Set<string>()
 
 /** 从 localStorage 同步返回键值（不触发后端写穿）。 */
 export function clientStateGet(key: string): string | null {
@@ -89,12 +96,13 @@ export async function clientStateHydrate(): Promise<Record<string, string>> {
       : {}
     for (const [key, value] of Object.entries(state)) {
       if (typeof value === 'string') {
-        // 若本地已有值（用户刚切换语言但后端尚未持久化，或本地更新更近），保留本地，避免 reload 后被旧后端值覆盖导致切换失效
+        // 本会话刚写过的键（如用户切了语言但 reload 前写穿还在途）保留本地，
+        // 避免被旧后端值覆盖导致切换失效；其余以后端文件为准。
         let local: string | null = null
-        try { local = localStorage.getItem(key) } catch { /* 忽略 */ }
-        if (local !== null && (key === 'evoresearch-lang' || key === 'evoresearch-theme' || key.startsWith('evoresearch-'))) {
-          continue
+        if (locallyDirty.has(key)) {
+          try { local = localStorage.getItem(key) } catch { /* 忽略 */ }
         }
+        if (local !== null && local !== value) continue
         try { localStorage.setItem(key, value) } catch { /* 忽略 */ }
       }
     }
