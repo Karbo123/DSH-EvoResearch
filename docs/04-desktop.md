@@ -152,3 +152,14 @@ cargo tauri build --bundles nsis
 - 仅 Windows x64（目标机需 Windows 10 1803+，自带 WebView2 Runtime；旧系统需装 Evergreen Bootstrapper）；
 - Linux/WSL2 不在本期范围；sidecar 打包脚本已按平台参数化，未来可扩展；
 - sidecar 目录不可写问题：安装到 `%LOCALAPPDATA%\<AppName>`（不装 Program Files 写保护目录）。
+
+## rc.8 升级注意（SQLite 存储格式变更）
+
+DSH `0.1.0-rc.8` 变更了会话存储的 SQLite 格式（不兼容旧格式）。桌面版**覆盖安装升级**
+时，sidecar 使用的平台会话库不会自动迁移旧数据：
+
+- **升级前请备份 `%DSH_HOME%` 数据目录**（含 `sessions/` 与平台会话库）；旧数据不向后兼容；
+- 科研记忆数据不受影响：`research_memory.db`、笔记、实验账本等均存放在
+  `<dataRoot>/projects/*/.evoresearch-data/`，与平台会话库相互独立；
+- 验证路径：覆盖安装后启动 sidecar boot 冒烟（`desktop/sidecar` 启动日志出现
+  `[evoresearch] host 插件激活`），再确认 Recents 列表可读新格式会话。
