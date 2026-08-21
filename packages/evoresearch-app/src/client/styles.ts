@@ -1046,6 +1046,22 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-team-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .evo-team-name { font-size: 13px; font-weight: 600; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; }
 .evo-team-desc { font-size: 12px; color: var(--color-text-tertiary); line-height: 1.5; }
+/* ── 科研团队职责层（RA/EA/EMA → 六类角色）── */
+.evo-duty-stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.evo-duty-stage { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--color-border); border-radius: 999px; font-size: 12px; }
+.evo-duty-stage-label { color: var(--color-text-secondary); }
+.evo-duty-stage-role { color: var(--brand); font-family: ui-monospace, Consolas, monospace; }
+.evo-duty-header { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; border: none; background: none; cursor: pointer; text-align: left; border-radius: 8px; color: inherit; }
+.evo-duty-header:hover { background: var(--color-fill-quaternary); }
+.evo-duty-header[aria-expanded="true"] { background: var(--color-fill-tertiary); }
+.evo-duty-badge { flex-shrink: 0; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--brand) 16%, transparent); color: var(--brand); font-size: 11px; font-weight: 700; font-family: ui-monospace, Consolas, monospace; }
+.evo-duty-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.evo-duty-name { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+.evo-duty-desc { font-size: 12px; color: var(--color-text-tertiary); line-height: 1.45; }
+.evo-duty-roles { flex-shrink: 0; font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; }
+.evo-duty-detail { display: flex; flex-direction: column; gap: 6px; padding: 4px 10px 10px 14px; }
+.evo-duty-line { display: flex; gap: 8px; font-size: 12px; line-height: 1.55; color: var(--color-text-secondary); }
+.evo-duty-key { flex-shrink: 0; width: 58px; color: var(--color-text-tertiary); }
 /* ── Markdown 排版（移植规范 §31.5；聊天内容紧凑排版：行高 1.3、段距 2px）── */
 .evo-md { font-size: 14px; line-height: 1.3; white-space: normal; word-break: break-word; }
 .evo-md > :first-child { margin-top: 0 !important; }

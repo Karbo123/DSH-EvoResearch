@@ -56,7 +56,7 @@ import { EvoResearchApiService, type HostServices, type PlatformServices } from 
 import { registerCommands } from './commands.js'
 import { projectNameFromWorkspace } from './core/paths.js'
 import { registerVisionTool } from './vision.js'
-import { defaultApprovalPolicy } from './platform/approval-policy.js'
+import { defaultApprovalPolicy, decideApproval } from './platform/approval-policy.js'
 import {
   emptyFallbackState,
   recordFailure,
@@ -480,6 +480,31 @@ function apply(ctx: Context): void {
     const tools = assembled.tools.filter((tool) => selectedNames.has(tool.name))
     return { ...assembled, tools }
   }, { prepend: true })
+
+  // PLAT-15 审批管线接入：危险工具（bash/删除/覆盖/凭据等）在执行前经策略判定。
+  // allow → 放行；deny → 拒绝；ask → 返回 {kind:'ask'} 交给 dsh 官方审批链
+  // （serviceAsk → approval.request → apiproxy 应答者 → 客户端 /api/respond），
+  // 审计事件（approval/asked、approval/decided）由官方服务落账。
+  // 另加纯规则兜底（与官方零 LLM 风格一致）：即使策略放行 shell，灾难性命令
+  // （全盘删除/格式化/磁盘直写）仍拒绝——danger-full-access 下 approval='never'
+  // 且沙箱不设限，这一层是仅存的破坏面控制。
+  const disposeApprovalGate = ctx.on('tools/pre-execute', async (
+    exec: { name?: string; arguments?: unknown },
+    _next: () => Promise<{ kind: 'allow' } | { kind: 'deny'; reason: string } | { kind: 'ask'; reason?: string }>,
+  ): Promise<{ kind: 'allow' } | { kind: 'deny'; reason: string } | { kind: 'ask'; reason?: string }> => {
+    const toolName = String(exec?.name ?? '')
+    if (CATASTROPHIC_SHELL_TOOLS.has(toolName)) {
+      const command = extractShellCommand(exec?.arguments)
+      if (command !== null && isCatastrophicCommand(command)) {
+        return { kind: 'deny', reason: `命令被安全策略拦截（不可逆破坏性操作）: ${command.slice(0, 120)}` }
+      }
+    }
+    const decision = decideApproval(approvalPolicy, toolName)
+    if (decision.decision === 'allow') return { kind: 'allow' }
+    if (decision.decision === 'deny') return { kind: 'deny', reason: decision.reason }
+    return { kind: 'ask', reason: decision.reason }
+  })
+
   const disposeContextAssemblerPrompt = systemPrompt
     ? systemPrompt.context({
         name: 'evoresearch:context-assembler-first-call',
@@ -643,6 +668,7 @@ function apply(ctx: Context): void {
       disposeAutoskills()
       disposeContextAssemblerPrompt?.()
       disposeAdaptiveToolAssembly()
+      disposeApprovalGate()
       disposeContextAssemblerEvents()
       disposeAgentGuidance?.()
       disposeCommands()
@@ -677,4 +703,33 @@ function decisionFromPolicy(approvalPolicy: ReturnType<typeof defaultApprovalPol
   if (mode === 'allow') return { decision: 'allow' as const, reason: `工具 ${toolName} 被策略放行`, dangerous: true }
   if (mode === 'deny') return { decision: 'deny' as const, reason: `工具 ${toolName} 被策略拒绝`, dangerous: true }
   return { decision: 'ask' as const, reason: `工具 ${toolName} 需要审批`, dangerous: true }
+}
+
+/** 执行 shell 类命令的工具名（灾难命令兜底检查范围）。 */
+const CATASTROPHIC_SHELL_TOOLS: ReadonlySet<string> = new Set(['bash', 'shell', 'pwsh', 'powershell', 'run_command'])
+
+/** 从工具参数中提取 shell 命令文本（常见参数名兼容；非字符串返回 null）。 */
+function extractShellCommand(args: unknown): string | null {
+  if (typeof args !== 'object' || args === null) return null
+  const record = args as Record<string, unknown>
+  for (const key of ['command', 'cmd', 'script']) {
+    const value = record[key]
+    if (typeof value === 'string') return value
+  }
+  return null
+}
+
+/** 灾难性命令模式（不可逆全盘破坏：递归删除根/格式化/磁盘直写/Windows 全盘 rd）。 */
+const CATASTROPHIC_COMMAND_PATTERNS: readonly RegExp[] = [
+  /\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+(\/|~|\*)(\s|$)/,
+  /\bformat\b/i,
+  /\bmkfs(\.\w+)?\b/,
+  /\bdd\s+[^\n]*\bof=\/dev\/(sd|hd|nvme)/,
+  /\brd\s+\/s\b/i,
+  /\bdel\s+\/[sf]\b/i,
+]
+
+/** 命中任一灾难模式 → true（纯规则、可解释、零 token 成本）。 */
+function isCatastrophicCommand(command: string): boolean {
+  return CATASTROPHIC_COMMAND_PATTERNS.some((pattern) => pattern.test(command))
 }

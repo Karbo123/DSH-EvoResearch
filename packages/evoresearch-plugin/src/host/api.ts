@@ -25,6 +25,8 @@ import type { ExperimentWorkspaceService, ExperimentWorkspaceInfo, ExperimentWor
 import type { ExperimentProcessService, RunRecord, ExperimentGraphRef, ExperimentGraphRefResolution } from './experiment-process.js'
 import type { ExperimentLedgerService } from './experiment-ledger.js'
 import type { ExperimentRoundsService } from './experiment-rounds.js'
+import { PHASE_ORDER } from './experiment-rounds.js'
+import { SCIENCE_DUTIES } from './science/roles.js'
 import type { DailyReportService } from './daily-report.js'
 import type { WorktreeService } from './worktrees.js'
 import type { LibraryIndexer, LibrarySearch } from './library/index.js'
@@ -2440,6 +2442,27 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   // ── 科学自演化循环（SCI-08/09）───────────────────────────────────────────
+
+  /** 科研团队职责层（RA/EA/EMA → 六类角色映射 + 回合阶段默认角色），供团队面板展示。 */
+  @Remote('scienceDuties')
+  scienceDuties(): {
+    duties: Array<{ duty: string; name: string; description: string; scope: string; forbidden: string; mapsToRoles: string[] }>
+    stages: Array<{ id: string; label: string; role: string }>
+  } {
+    const duties = SCIENCE_DUTIES.map((d) => ({
+      duty: d.duty,
+      name: d.name,
+      description: d.description,
+      scope: d.scope,
+      forbidden: d.forbidden,
+      mapsToRoles: [...d.mapsToRoles],
+    }))
+    // 回合阶段 → 默认角色（对齐 EvoScientist 的 Intake→Plan→Execute→Evaluate 流程路由）
+    const stageRoles: Record<string, string> = { observe: 'research', propose: 'planner', act: 'code', reflect: 'data_analysis' }
+    const stageLabels: Record<string, string> = { observe: '观察', propose: '提案', act: '执行', reflect: '复盘' }
+    const stages = PHASE_ORDER.map((id) => ({ id, label: stageLabels[id] ?? id, role: stageRoles[id] ?? 'planner' }))
+    return { duties, stages }
+  }
 
   @Remote('scienceLoopCreate')
   scienceLoopCreate(args: {

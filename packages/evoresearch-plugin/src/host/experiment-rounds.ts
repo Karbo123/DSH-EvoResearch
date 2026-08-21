@@ -40,7 +40,7 @@ interface RoundsState {
   history: ExperimentRound[]
 }
 
-const PHASE_ORDER: readonly RoundPhaseId[] = ['observe', 'propose', 'act', 'reflect'] as const
+export const PHASE_ORDER: readonly RoundPhaseId[] = ['observe', 'propose', 'act', 'reflect'] as const
 
 const PHASE_PROMPTS: Record<RoundPhaseId, string> = {
   observe: '观察现状：总结当前实验的已完成工作、数据与现象，记录关键观察。',

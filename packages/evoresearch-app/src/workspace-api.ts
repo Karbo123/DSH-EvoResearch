@@ -1926,6 +1926,15 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── 科研团队职责层（RA/EA/EMA → 六类角色 + 回合阶段默认角色）──
+        if (method === 'science-duties') {
+          const fn = evoresearch?.scienceDuties as (() => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          try { writeOk(res, fn.call(evoresearch)) }
+          catch (error) { writeError(res, error) }
+          return
+        }
+
         // ── ContextAssembler（本轮参考与 Context Trace）──
         if (method === 'context-preview' || method === 'context-assemble' || method === 'context-assemble-deep' || method === 'context-effects') {
           const serviceMethod = method === 'context-preview' ? 'contextPreview'

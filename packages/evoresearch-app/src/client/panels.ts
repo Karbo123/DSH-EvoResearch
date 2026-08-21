@@ -1509,15 +1509,35 @@ interface ExpertRow {
   invitedAt: number
 }
 
-/** Team 面板：科研角色团队 + 邀请/清空。 */
+interface ScienceDutyInfo {
+  duty: string
+  name: string
+  description: string
+  scope: string
+  forbidden: string
+  mapsToRoles: string[]
+}
+
+interface ScienceStageInfo {
+  id: string
+  label: string
+  role: string
+}
+
+/** Team 面板：科研角色团队 + 邀请/清空 + RA/EA/EMA 职责层展示。 */
 export function TeamPanel() {
   const [experts, setExperts] = useState<ExpertRow[] | null>(null)
+  const [duties, setDuties] = useState<{ duties: ScienceDutyInfo[]; stages: ScienceStageInfo[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [expandedDuty, setExpandedDuty] = useState<string | null>(null)
 
   const load = () => {
     setExperts(null)
     void api<ExpertRow[]>('experts').then(setExperts).catch((e: any) => setError(String(e?.message ?? e)))
+    void api<{ duties: ScienceDutyInfo[]; stages: ScienceStageInfo[] }>('science-duties')
+      .then(setDuties)
+      .catch(() => { /* 职责层加载失败不阻塞专家列表，仅隐藏分组区 */ })
   }
 
   useEffect(() => { load() }, [])
@@ -1594,6 +1614,50 @@ export function TeamPanel() {
                 ],
               }, e.name)),
             }),
+        duties !== null && duties.duties.length > 0 && jsxs(Fragment, {
+          children: [
+            jsxs('div', {
+              className: 'evo-panel-row',
+              style: { marginTop: 8 },
+              children: [
+                jsx('span', { className: 'evo-panel-row-label', children: t('stageDefaults') }),
+              ],
+            }),
+            jsx('div', {
+              className: 'evo-duty-stages',
+              children: duties.stages.map((s) => jsxs('span', {
+                className: 'evo-duty-stage',
+                title: s.role,
+                children: [jsx('span', { className: 'evo-duty-stage-label', children: s.label }), jsx('span', { className: 'evo-duty-stage-role', children: s.role })],
+              }, s.id)),
+            }),
+            duties.duties.map((d) => jsxs(Fragment, {
+              children: [
+                jsxs('button', {
+                  type: 'button',
+                  className: 'evo-duty-header',
+                  onClick: () => setExpandedDuty(expandedDuty === d.duty ? null : d.duty),
+                  'aria-expanded': expandedDuty === d.duty,
+                  children: [
+                    jsx('span', { className: 'evo-duty-badge', children: d.duty }),
+                    jsxs('span', { className: 'evo-duty-info', children: [
+                      jsx('span', { className: 'evo-duty-name', children: d.name }),
+                      jsx('span', { className: 'evo-duty-desc', children: d.description }),
+                    ] }),
+                    jsx('span', { className: 'evo-duty-roles', children: d.mapsToRoles.join(' · ') }),
+                  ],
+                }, `header-${d.duty}`),
+                expandedDuty === d.duty && jsxs('div', {
+                  className: 'evo-duty-detail',
+                  children: [
+                    jsxs('div', { className: 'evo-duty-line', children: [jsx('span', { className: 'evo-duty-key', children: t('dutyScope') }), jsx('span', { children: d.scope })] }),
+                    jsxs('div', { className: 'evo-duty-line', children: [jsx('span', { className: 'evo-duty-key', children: t('dutyForbidden') }), jsx('span', { children: d.forbidden })] }),
+                  ],
+                }, `detail-${d.duty}`),
+              ],
+            }, d.duty)),
+          ],
+        }),
       ],
     }),
   })
