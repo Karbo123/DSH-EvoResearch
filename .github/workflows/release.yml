@@ -122,6 +122,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
 
+      # linuxdeploy 本身是 AppImage：runner 无 libfuse2 时无法自挂载，
+      # 让它自解压运行（tauri-apps/tauri#14796 的 CI 标准解法）
+      - name: AppImage 工具免 FUSE 运行
+        if: runner.os == 'Linux'
+        run: echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+
       # Tauri CLI：优先用 npm 版（免编译，~30s）；cargo install 要 6 分钟+
       - name: 安装 Tauri CLI
         run: npm i -g @tauri-apps/cli@'^2'
