@@ -47,6 +47,7 @@ import type {
   DraftDiff,
   CompileResult,
   LatexTool,
+  LatexEnvReport,
 } from './manuscript.js'
 import type { SignalStore } from './evolution/signals.js'
 import { aggregateWeaknesses, weaknessMarkdown } from './evolution/signals.js'
@@ -61,7 +62,7 @@ import type { ContextAssembler, AssembleInput, EffectQuery, AssemblyResult, Refe
 import type { CompactionQuery, GraphConnectionInfo, PressureReport, CompactionRecord, ContextSourceReport, SurfaceEventInfo } from './context/types.js'
 import { readSessionEvents } from './rewind.js'
 import { isLowInformationInput } from './core/title.js'
-import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
+import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary, ObservationEdgeType } from '../shared/types.js'
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 import type { ApprovalPolicy, ApprovalDecision } from './platform/approval-policy.js'
 import { decideApproval, defaultApprovalPolicy, validateApprovalPolicy } from './platform/approval-policy.js'
@@ -990,6 +991,19 @@ export class EvoResearchApiService extends TypertRemoteService {
       }))
   }
 
+  /** P1-2：Observation 类型化关联边列表（可按观测 id / 边类型过滤）。 */
+  @Remote('memoryObservationEdges')
+  memoryObservationEdges(args: { observationId?: string; edgeType?: string }): unknown {
+    try {
+      return this.services.memory.storeFor('').listObservationLinks({
+        ...(args?.observationId ? { observationId: String(args.observationId) } : {}),
+        ...(args?.edgeType ? { edgeType: args.edgeType as ObservationEdgeType } : {}),
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
   @Remote('memoryPacket')
   memoryPacket(args: { sessionId: string }): unknown {
     const packet = this.services.memory.packetFor(args.sessionId)
@@ -1801,6 +1815,18 @@ export class EvoResearchApiService extends TypertRemoteService {
         tool: args?.tool,
         timeoutMs: args?.timeoutMs,
       })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** P2-3：LaTeX 环境检测（引擎 + 宏包就绪状态与中文写作建议）。 */
+  @Remote('manuscriptLatexEnv')
+  manuscriptLatexEnv(): LatexEnvReport | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.detectLatexEnv()
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
