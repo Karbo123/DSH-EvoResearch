@@ -84,9 +84,12 @@ step(`解压 ${NODE_BINARY}`, () => {
   const extractDir = join(CACHE, 'extracted')
   rmSync(extractDir, { recursive: true, force: true })
   mkdirSync(extractDir, { recursive: true })
-  // zip → tar.exe（Win10+ 自带 bsdtar，可解 zip）；tar.gz → 三平台通用 tar -z
+  // Windows 用系统自带 bsdtar（C:\Windows\System32\tar.exe，可解 zip）——
+  // 不能裸调 `tar`：PATH 上 Git 的 GNU tar 会把 D:\... 当远程主机（"Cannot connect to D"）；
+  // POSIX 用通用 tar -z
+  const tarExe = IS_WINDOWS ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
   const extractArgs = IS_WINDOWS ? ['-xf', archive, '-C', extractDir] : ['-xzf', archive, '-C', extractDir]
-  const result = spawnSync('tar', extractArgs, { stdio: 'inherit' })
+  const result = spawnSync(tarExe, extractArgs, { stdio: 'inherit' })
   if (result.status !== 0) throw new Error('解压失败')
   if (IS_WINDOWS) {
     // win zip：根目录即 node.exe
@@ -122,15 +125,18 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   writeFileSync(join(profileDir, 'cordis.patch.yml'), readFileUtf8(join(ROOT, 'profiles', 'evoresearch', 'cordis.patch.yml')), 'utf8')
   // 3) 安装依赖（--install-links：file: 依赖复制为真实目录而非 junction，
   //    保证打包后 app/node_modules/@evoresearch/* 是自包含目录）
+  // NODE_OPTIONS=--max-old-space-size=4096：macOS runner 上 npm reify 阶段
+  // 曾触发 V8 OOM（崩溃栈被 stdout 截断只剩帧 51+）；放宽堆上限兜底
   const result = spawnSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--production', '--prefer-online', '--install-links'], {
     cwd: appDir,
     encoding: 'utf8',
     shell: true, // Windows 下 npm 是 npm.cmd，spawnSync 需要 shell 解析
+    env: { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=4096`.trim() },
   })
   if (result.status !== 0) {
     console.error('[bundle-sidecar] npm install 失败，输出:')
-    console.error(result.stdout?.slice(-2000))
-    console.error(result.stderr?.slice(-2000))
+    console.error(result.stdout?.slice(-4000))
+    console.error(result.stderr?.slice(-4000))
     throw new Error('npm install 失败')
   }
   // 4) 清理 npm 嵌套安装生成的 profiles/node_modules（dsh 的 healProfilesModuleFallback
