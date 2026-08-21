@@ -184,7 +184,11 @@ jobs:
       # Android SDK 由 ubuntu-latest 预装（ANDROID_HOME 已设置）；补 NDK
       - name: 安装 Android SDK 组件
         run: |
-          sdkmanager --install "ndk;26.3.11579264" >/dev/null
+          # ubuntu-latest 预装 cmdline-tools 不在 PATH 上，用绝对路径调用 sdkmanager
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKM" ] || SDKM=$(find "$ANDROID_HOME" -name sdkmanager -type f | head -1)
+          yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+          "$SDKM" --install "ndk;26.3.11579264" > /dev/null
           echo "NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
 
       - name: 安装 Tauri CLI
