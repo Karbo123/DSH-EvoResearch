@@ -40,12 +40,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          # 删除旧 Release（若存在）——保留其资产之外的讨论等由 GitHub 自动清理
+          # 删除旧 Release（若存在）——404 输出非数字，视为无旧 Release
           RELEASE_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.id' 2>/dev/null || true)
-          if [ -n "$RELEASE_ID" ]; then
-            echo "删除旧 Release id=$RELEASE_ID"
-            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID"
-          fi
+          case "$RELEASE_ID" in
+            ''|*[!0-9]*) echo "无旧 Release，跳过删除" ;;
+            *)
+              echo "删除旧 Release id=$RELEASE_ID"
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID"
+              ;;
+          esac
           # 删除旧 Tag（remote 与 local）
           git push origin ":refs/tags/${TAG}" 2>/dev/null || echo "远端无旧 tag"
 
