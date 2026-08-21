@@ -329,14 +329,6 @@ export class DailyReportService {
       const p = path.join(root, '.evoresearch-data', 'reports', 'daily', `${reportId}.md`)
       if (fs.existsSync(p)) return p
     }
-    // 兜底扫描
-    for (const root of roots) {
-      const dir = path.join(root, '.evoresearch-data', 'reports', 'daily')
-      let entries: string[] = []
-      try { entries = fs.readdirSync(dir) } catch { continue }
-      const hit = entries.find((n) => n === `${reportId}.md`)
-      if (hit) return path.join(dir, hit)
-    }
     return null
   }
 

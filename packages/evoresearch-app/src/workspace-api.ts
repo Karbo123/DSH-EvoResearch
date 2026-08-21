@@ -1867,19 +1867,14 @@ export function registerWorkspaceApi(ctx: any): void {
         }
 
         // ── Chat Graph（节点/连线图，按项目存储）──
-        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-update-node' || method === 'graph-remove-node' || method === 'graph-update-edge' || method === 'graph-remove-edge' || method === 'graph-move-nodes' || method === 'graph-add-group' || method === 'graph-update-group' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write') {
+        // 注：update-node/remove-node/update-edge/remove-edge/move-nodes/add-group/update-group
+        // 七个粒度端点已随宿主一并移除（客户端编辑走 graph-save 全量写，仅 remove-group 在用）。
+        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write') {
           const serviceMethod = method === 'graph-get' ? 'graphGet'
             : method === 'graph-save' ? 'graphSave'
               : method === 'graph-add-node' ? 'graphAddNode'
                 : method === 'graph-add-edge' ? 'graphAddEdge'
-                  : method === 'graph-update-node' ? 'graphUpdateNode'
-                    : method === 'graph-remove-node' ? 'graphRemoveNode'
-                      : method === 'graph-update-edge' ? 'graphUpdateEdge'
-                        : method === 'graph-remove-edge' ? 'graphRemoveEdge'
-                          : method === 'graph-move-nodes' ? 'graphMoveNodes'
-                            : method === 'graph-add-group' ? 'graphAddGroup'
-                              : method === 'graph-update-group' ? 'graphUpdateGroup'
-                                : method === 'graph-remove-group' ? 'graphRemoveGroup'
+                  : method === 'graph-remove-group' ? 'graphRemoveGroup'
                   : method === 'graph-inherit' ? 'graphInherit'
                     : method === 'graph-fork-from-message' ? 'graphForkFromMessage'
                     : method === 'graph-preview' ? 'graphPreview'

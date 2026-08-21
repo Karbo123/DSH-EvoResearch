@@ -207,7 +207,10 @@ function copyTree(source: string, target: string, skip: ReadonlySet<string>): vo
       copyTree(src, dst, skip)
     } else if (entry.isSymbolicLink()) {
       try {
-        fs.symlinkSync(fs.readlinkSync(src), dst)
+        let link = fs.readlinkSync(src)
+        // 相对符号链接按原位置解析为绝对目标后再重建，否则在新目录下指向断裂路径。
+        if (!path.isAbsolute(link)) link = path.resolve(path.dirname(src), link)
+        fs.symlinkSync(link, dst)
       } catch {
         // 符号链接失败（如权限）时跳过
       }

@@ -2521,100 +2521,12 @@ export class EvoResearchApiService extends TypertRemoteService {
     } catch (error) { return { error: this.errMessage(error) } }
   }
 
-  @Remote('graphUpdateNode')
-  graphUpdateNode(args: { workspaceDir?: string; nodeId: string; patch: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.updateNode(name, String(args.nodeId ?? ''), (args.patch ?? {}) as Partial<Omit<GraphNode, 'id'>>),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphRemoveNode')
-  graphRemoveNode(args: { workspaceDir?: string; nodeId: string; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.removeNode(name, String(args.nodeId ?? '')),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphUpdateEdge')
-  graphUpdateEdge(args: { workspaceDir?: string; edgeId: string; patch: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.updateEdge(name, String(args.edgeId ?? ''), (args.patch ?? {}) as Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>>),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphRemoveEdge')
-  graphRemoveEdge(args: { workspaceDir?: string; edgeId: string; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.removeEdge(name, String(args.edgeId ?? '')),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphMoveNodes')
-  graphMoveNodes(args: { workspaceDir?: string; positions: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      const positions = Array.isArray(args.positions) ? args.positions.filter((item): item is { id: string; x: number; y: number; pinned?: boolean } => {
-        const value = item as Record<string, unknown>
-        return typeof value.id === 'string' && typeof value.x === 'number' && typeof value.y === 'number'
-      }) : []
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.moveNodes(name, positions),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphAddGroup')
-  graphAddGroup(args: { workspaceDir?: string; group: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.addGroup(name, args.group as GraphGroup),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphUpdateGroup')
-  graphUpdateGroup(args: { workspaceDir?: string; groupId: string; patch: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.updateGroup(name, String(args.groupId ?? ''), args.patch as Partial<Omit<GraphGroup, 'id'>>),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
   @Remote('graphRemoveGroup')
   graphRemoveGroup(args: { workspaceDir?: string; groupId: string; operationId?: string }): unknown {

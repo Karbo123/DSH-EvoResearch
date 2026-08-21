@@ -54,7 +54,7 @@ import { ProjectEnvService } from './project-env.js'
 import { RewindService } from './rewind.js'
 import { EvoResearchApiService, type HostServices, type PlatformServices } from './api.js'
 import { registerCommands } from './commands.js'
-import { listProjects, projectNameFromWorkspace } from './core/paths.js'
+import { projectNameFromWorkspace } from './core/paths.js'
 import { registerVisionTool } from './vision.js'
 import { defaultApprovalPolicy } from './platform/approval-policy.js'
 import {
@@ -149,11 +149,9 @@ function apply(ctx: Context): void {
   // 4) 通道
   const channels = new ChannelManager(builtinAdapters())
   channels.setDeliver(async (message: ChannelMessage) => {
-    const projectName = listProjects(dataRoot)[0]
-    const cwd = projectName
-      ? path.join(dataRoot, 'projects', projectName)
-      : dataRoot
-    return deliverToAgent(ctx, `[${message.senderName ?? message.senderId} 经 ${message.chatId} 通道] ${message.text}`, cwd, 'evoresearch:channel')
+    // 通道是部署级入口：投递到部署根工作区会话，而不是任意取 projects[0]
+    //（按字母序第一个项目）——多项目时消息会被错误路由到无关项目。
+    return deliverToAgent(ctx, `[${message.senderName ?? message.senderId} 经 ${message.chatId} 通道] ${message.text}`, dataRoot, 'evoresearch:channel')
   })
 
   // 5) AutoSkills / 专家
