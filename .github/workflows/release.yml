@@ -126,7 +126,12 @@ jobs:
       # 兜底（部分 linuxdeploy 构建即使自解压也需要 /dev/fuse 存在）
       - name: AppImage 工具免 FUSE 运行
         if: runner.os == 'Linux'
-        run: echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+        run: |
+          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+          # tauri-bundler 在 Error 日志级别下会吞掉 linuxdeploy 的 stderr，
+          # 只回 "failed to run linuxdeploy"；调到 debug 级别让真实错误透出
+          echo "TAURI_BUNDLER_LOG_LEVEL=debug" >> "$GITHUB_ENV"
+          echo "RUST_LOG=debug" >> "$GITHUB_ENV"
 
       # Tauri CLI：优先用 npm 版（免编译，~30s）；cargo install 要 6 分钟+
       - name: 安装 Tauri CLI
