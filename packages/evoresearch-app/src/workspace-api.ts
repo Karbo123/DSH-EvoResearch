@@ -1954,6 +1954,20 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // ── P0-2 工具结果图片：资产探测 + 读取（直连插件 Remote 方法）──
+        if (method === 'artifact-image-detect' || method === 'artifact-image') {
+          const serviceName = method === 'artifact-image-detect' ? 'artifactImageDetect' : 'artifactImage'
+          const fn = evoresearch?.[serviceName] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = { ...payload }
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
         // ── P1 模块路由（§整合 §4：实验工作区/进程、文献、稿件、自进化）──
         if (method.startsWith('experiment-workspace-') || method.startsWith('experiment-run-') || method.startsWith('experiment-log-')
           || method === 'experiment-recover' || method === 'experiment-retrospective-draft' || method === 'experiment-workspace-append-note'

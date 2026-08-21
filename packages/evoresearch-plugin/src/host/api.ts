@@ -190,6 +190,72 @@ function isSameOrInside(target: string, base: string): boolean {
   return t === b || t.startsWith(`${b}/`)
 }
 
+/* ------------------------------------------------------------------ */
+/* P0-2 工具结果图片资产探测                                              */
+/* ------------------------------------------------------------------ */
+
+/** 工具结果中登记的图片资产（wire JSON）。 */
+export interface ToolImageAsset {
+  /** 图片绝对路径（workspace 内）。 */
+  path: string
+  mime: string
+  /** 文件名字段（客户端展示用）。 */
+  name: string
+}
+
+/** 可识别为图片资产的扩展名 → MIME。 */
+const IMAGE_MIME_BY_EXT: Readonly<Record<string, string>> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+}
+
+/** 单次工具结果最多登记的图片资产数（防大结果刷屏）。 */
+export const MAX_TOOL_IMAGE_ASSETS = 6
+
+/**
+ * 从工具结果文本中探测项目内图片路径（P0-2）。
+ * 只登记 workspace 内存在的文件（防穿越/防伪造）；PDF 不算图片资产
+ * （第一版只列文件 chip，不做首页预览）。
+ */
+export function detectToolImageAssets(resultText: string, workspaceDir: string, max = MAX_TOOL_IMAGE_ASSETS): ToolImageAsset[] {
+  if (!resultText || !workspaceDir) return []
+  // 匹配 Windows / POSIX 风格路径，扩展名限定图片集合
+  const pattern = /(?:[A-Za-z]:)?(?:[\\/][^\s"'`<>()，。；、]{1,240}?\.(?:png|jpe?g|gif|webp|svg))/gi
+  const found = new Map<string, ToolImageAsset>()
+  for (const match of resultText.matchAll(pattern)) {
+    if (found.size >= max) break
+    const raw = match[0]
+    let resolved: string
+    try {
+      resolved = path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(workspaceDir, raw)
+    } catch {
+      continue
+    }
+    if (!isSameOrInside(resolved, workspaceDir)) continue
+    let stat: import('node:fs').Stats
+    try {
+      stat = statSync(resolved)
+      if (!stat.isFile() || stat.size > 5 * 1024 * 1024) continue
+    } catch {
+      continue
+    }
+    const ext = path.extname(resolved).toLowerCase()
+    const mime = IMAGE_MIME_BY_EXT[ext]
+    if (!mime) continue
+    const key = normPathKey(resolved)
+    if (found.has(key)) continue
+    found.set(key, { path: resolved, mime, name: path.basename(resolved) })
+  }
+  return [...found.values()]
+}
+
+/** artifact-image 单图上限（与用户贴图上限一致）。 */
+export const ARTIFACT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
 /** 会话存储根（与客户端 session-delete 同源）。 */
 function sessionStoreRoot(): string {
   return path.join(process.env.DSH_HOME ?? process.cwd(), 'sessions')
@@ -3406,5 +3472,62 @@ export class EvoResearchApiService extends TypertRemoteService {
     const svc = this.services.dailyReport
     if (!svc) return { error: 'dailyReport 服务不可用' }
     try { return svc.toggle(typeof args?.force === 'boolean' ? args.force : undefined) } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  // ── P0-2 工具结果图片渲染 ─────────────────────────────────────────────────
+
+  /**
+   * 从工具结果文本探测项目内图片资产（P0-2）。
+   * 客户端在工具卡片上对命中的资产渲染缩略图；文件本体仍在 workspace 内
+   * （原文唯一权威，聊天里只是投影）。
+   */
+  @Remote('artifactImageDetect')
+  artifactImageDetect(args: { sessionId?: string; text?: string }): { assets: ToolImageAsset[] } | { error: string } {
+    try {
+      const text = String(args?.text ?? '')
+      if (text.trim() === '') return { assets: [] }
+      // 以会话 cwd 为边界；无会话时退回 dataRoot（仍受 isSameOrInside 保护）
+      const sessions = this.hostCtx.get('sessions') as { get?(id: string): { header?: { cwd?: string } } | undefined } | undefined
+      const session = args?.sessionId ? sessions?.get?.(String(args.sessionId)) : undefined
+      const cwd = typeof session?.header?.cwd === 'string' && session.header.cwd !== ''
+        ? session.header.cwd
+        : this.services.memory.config.dataRoot
+      return { assets: detectToolImageAssets(text, cwd) }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * 读取一张工具产物图片（P0-2）：base64 直出，≤5MB（与用户贴图上限一致）。
+   * 路径必须位于 dataRoot 或任一已注册项目内（isSameOrInside 校验）。
+   */
+  @Remote('artifactImage')
+  artifactImage(args: { path: string }): { ok: true; mime: string; name: string; base64: string; bytes: number } | { ok: false; error: string; tooLarge?: boolean } {
+    try {
+      const raw = String(args?.path ?? '')
+      if (raw === '') return { ok: false, error: '缺少 path' }
+      const resolved = path.resolve(raw)
+      const ext = path.extname(resolved).toLowerCase()
+      const mime = IMAGE_MIME_BY_EXT[ext]
+      if (!mime) return { ok: false, error: `不支持的图片类型: ${ext}` }
+      let stat: import('node:fs').Stats
+      try {
+        stat = statSync(resolved)
+        if (!stat.isFile()) return { ok: false, error: '不是文件' }
+      } catch {
+        return { ok: false, error: '文件不存在' }
+      }
+      if (stat.size > ARTIFACT_IMAGE_MAX_BYTES) {
+        return { ok: false, error: `图片过大（>${Math.round(ARTIFACT_IMAGE_MAX_BYTES / 1024 / 1024)}MB），仅支持缩略占位`, tooLarge: true }
+      }
+      // 边界：dataRoot 本身或其下任意路径（projects/ 由 dataRoot 覆盖）
+      const root = this.services.memory.config.dataRoot
+      if (!isSameOrInside(resolved, root)) return { ok: false, error: '图片不在部署数据根内' }
+      const base64 = readFileSync(resolved).toString('base64')
+      return { ok: true, mime, name: path.basename(resolved), base64, bytes: stat.size }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
   }
 }

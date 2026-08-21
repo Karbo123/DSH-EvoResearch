@@ -448,6 +448,11 @@ body { margin: 0; }
 .evo-tool-result-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; margin-top: 2px; color: var(--color-text-tertiary); }
 .evo-tool-card.error .evo-tool-result-label { color: var(--color-error); }
 .evo-tool-card.success .evo-tool-result-label { color: var(--color-success); }
+/* ── P0-2 工具结果图片缩略图 ── */
+.evo-tool-imgs { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
+.evo-tool-img { width: 96px; height: 72px; border-radius: 7px; border: 1px solid var(--color-border); background: var(--color-surface); overflow: hidden; cursor: zoom-in; padding: 0; display: flex; align-items: center; justify-content: center; }
+.evo-tool-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evo-tool-img-loading { font-size: 11px; color: var(--color-text-tertiary); }
 /* ── 桌面自绘标题栏 ── */
 /* 桌面模式：#root 与 body 锁死为 100vh 且禁止文档级滚动——避免 margin 撑高 body
    造成 36px 底部黑边 + 右侧滚动条。标题栏 fixed 覆盖顶部 36px，.evo-app 全高

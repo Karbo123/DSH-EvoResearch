@@ -996,6 +996,29 @@ const DICT: Record<string, [string, string]> = {
   catReproduction: ['Reproduction', '复现'],
   catProject: ['Project', '项目'],
   catGeneral: ['General', '通用'],
+  // P0-2 工具结果图片
+  imageLoadRetry: ['Load failed · click to retry', '加载失败·点击重试'],
+  // P0-1 会话引用
+  mentionSession: ['Sessions', '会话'],
+  sessionMentionHint: ['Reference a past conversation', '引用一段过去的对话'],
+  // P0-4 上下文占用条
+  ctxUsageLabel: ['Context', '上下文'],
+  ctxUsageDetail: ['About {used} / {total} tokens ({percent}%)', '约 {used} / {total} tokens（{percent}%）'],
+  ctxCompactNow: ['Compact now', '立即压缩'],
+  // P0-3 后台任务面板
+  jobHubTitle: ['Background tasks', '后台任务'],
+  jobHubEmpty: ['No background tasks running', '当前没有后台任务'],
+  jobKindSubagent: ['Subagent', '子代理'],
+  jobKindScheduled: ['Scheduled', '定时任务'],
+  jobKindExperiment: ['Experiment', '实验进程'],
+  jobKindChannel: ['Channel', '消息通道'],
+  jobKindCustom: ['Task', '任务'],
+  jobCancelConfirm: ['Cancel this task?', '确认取消该任务？'],
+  jobOpenThread: ['Open thread', '打开会话'],
+  // P3-4 继续上次
+  resumeLast: ['Resume last', '继续上次'],
+  // P3-1 删除级联
+  deleteWillCancelJobs: ['Deleting will cancel {n} running task(s)', '删除将取消 {n} 个正在运行的任务'],
 }
 
 export function t(key: string): string {
