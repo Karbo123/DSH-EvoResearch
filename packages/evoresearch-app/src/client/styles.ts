@@ -655,6 +655,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-status-goal { color: var(--brand); }
 .evo-status-ro { color: var(--color-warning); }
 .evo-status-full { color: var(--color-error); }
+/* P0-4 上下文占用条：绿/黄/红三档 + 内嵌比例小条 */
+.evo-ctx-meter-bar { display: inline-block; width: 34px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--color-text-tertiary) 25%, transparent); position: relative; overflow: hidden; }
+.evo-ctx-ok { color: var(--color-success); }
+.evo-ctx-watch { color: var(--color-warning); }
+.evo-ctx-high { color: var(--color-error); }
 .evo-stats-line { display: flex; align-items: center; gap: 8px; padding: 6px 14px 9px; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 会话统计行：与输入框同宽，位于圆角框外部正下方、水平居中、紧贴。 */
 .evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: 75%; margin: 8px auto 0; display: flex; align-items: center; gap: 10px; }
