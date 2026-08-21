@@ -72,12 +72,13 @@ describe('extractPreview', () => {
       userEvent(7, 'newest', 70),
     ]
     const preview = extractPreview('s-4', events)
-    // 从尾向头收集：newest(7) → t…(6) 停；参与 6 条？——注意第 6 条触发截停不参与，
-    // 但第 7 条已先参与，所以共 6 条（1..5 + 7）。
+    // 从尾向头收集：newest(7,6字) → t/u/v/w/z 各 300（累计 1506）→ y 再加会超 1600 → 停。
+    // 共参与 6 条；摘录老→新以第 2 条开头、最新一条结尾。
     assert.equal(preview.messageCount, 6)
-    assert.ok(preview.excerpt.startsWith('y'))
+    assert.ok(preview.excerpt.startsWith('z'))
     assert.ok(preview.excerpt.endsWith('newest'))
     assert.ok(preview.excerpt.length <= 1600)
+    assert.ok(!preview.excerpt.includes('y'.repeat(100)))
   })
 
   it('超过 tailCount 条时只保留最近的若干条', () => {
