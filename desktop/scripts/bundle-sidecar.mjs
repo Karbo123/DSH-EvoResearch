@@ -92,8 +92,10 @@ step(`解压 ${NODE_BINARY}`, () => {
   const result = spawnSync(tarExe, extractArgs, { stdio: 'inherit' })
   if (result.status !== 0) throw new Error('解压失败')
   if (IS_WINDOWS) {
-    // win zip：根目录即 node.exe
-    copyFileSync(join(extractDir, 'node.exe'), join(DIST, 'node.exe'))
+    // win zip：node.exe 在版本目录内 node-vX.Y.Z-win-x64/node.exe（原 PowerShell
+    // 方案靠"取首个子目录"定位；bsdtar 解包后同样按版本目录兜底）
+    const versionDir = `node-${NODE_VERSION}-win-x64`
+    copyFileSync(join(extractDir, versionDir, 'node.exe'), join(DIST, 'node.exe'))
   } else {
     // tar.gz：<pkg>/bin/node
     copyFileSync(join(extractDir, NODE_DIST.sub, 'node'), join(DIST, 'node'))
@@ -175,9 +177,20 @@ function readFileUtf8(p) {
 }
 
 function pruneDir(dir, suffixes) {
-  for (const name of readdirSync(dir)) {
+  let entries = []
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return // 目录消失（符号链接目标已被裁剪等），跳过
+  }
+  for (const name of entries) {
     const full = join(dir, name)
-    const stat = statSync(full)
+    let stat
+    try {
+      stat = statSync(full)
+    } catch {
+      continue // .bin 下指向已删除包的悬空符号链接：stat 失败即跳过
+    }
     if (stat.isDirectory()) {
       pruneDir(full, suffixes)
     } else if (suffixes.some((s) => name.endsWith(s))) {
