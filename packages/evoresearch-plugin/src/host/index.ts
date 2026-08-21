@@ -73,6 +73,11 @@ import { McpSupervisor } from './mcp/supervisor.js'
 import { LayeredSkillRegistry } from './skills/registry.js'
 import { ScienceLoopService, experimentAppender } from './science/loops.js'
 import { ScienceChatGraphBridge } from './science/chat-graph-bridge.js'
+import { JobHubService } from './jobs.js'
+import { registerAskResearcherTool } from './tools/ask.js'
+import { OverflowWatch } from './context/overflow-watch.js'
+import { registerLibraryTools, type LibraryToolsDeps } from './library/tools.js'
+import { FigureService, registerFigureTools } from './figures.js'
 
 /** 插件配置（settings 的 evoresearch 段合并环境变量）。 */
 export interface EvoResearchPluginConfig {
@@ -86,6 +91,8 @@ export interface EvoResearchPluginConfig {
   readonly memoryEnabled?: boolean
   /** 是否注册 vision_check 视觉检查工具（默认 true；模型未配置时自动跳过）。 */
   readonly visionEnabled?: boolean
+  /** P1-1 AutoSkills 定时挖掘 cron（默认 '7 3 * * 1' 每周一凌晨；'off' 关闭）。 */
+  readonly autoskillsSchedule?: string
 }
 
 /** 从 settings/env 解析配置。 */
@@ -163,6 +170,9 @@ function apply(ctx: Context): void {
   const autoskills = new AutoSkillsService(autoskillsConfig)
   const expertConfig: ExpertConfig = { dataRoot }
   const experts = new ExpertService(expertConfig)
+
+  // 5.2) 后台任务注册表（P0-3）：纯登记，不接管执行；P3-1 删除级联取消的查询入口
+  const jobHub = new JobHubService()
 
   // 5.5) 实验管理（§5.1 Git 式分支/回退/checkpoint）
   const experiments = new ExperimentService(dataRoot)
@@ -436,6 +446,84 @@ function apply(ctx: Context): void {
   // 7) 斜杠命令
   const disposeCommands = registerCommands(ctx, { workspace, memory, scheduler, channels, autoskills, experts })
 
+  // 7.5) NF 批次工具接线（P0-3/P1-3/P1-4/P2-1/P2-2）：
+  const disposersNf: Array<() => void> = []
+  // P1-3 ask_researcher（平台 userQuestions 可用时注册；缺失时告警降级为文本提问）
+  const disposeAskTool = registerAskResearcherTool(ctx)
+  if (disposeAskTool) disposersNf.push(disposeAskTool)
+  // P1-4 超限自动重试监视：turn/end 错误特征 → guard.overflowRetry（压缩→重试一次）
+  const overflowWatch = new OverflowWatch({
+    guard: {
+      status: () => contextRuntime.guard.status(),
+      overflowRetry: (session, options) => contextRuntime.guard.overflowRetry(session as never, options as never),
+    },
+    getSession: (sessionId) => {
+      const sessions = ctx.get('sessions') as { get?(id: string): unknown } | undefined
+      return sessions?.get?.(sessionId)
+    },
+  })
+  disposersNf.push(overflowWatch.attach(ctx))
+  // P2-2 文献检索三工具：本地库 + 平台 web_search 探测合并
+  const libraryToolsDeps: LibraryToolsDeps = {
+    dataRoot,
+    librarySearch,
+    libraryIndexer,
+    hasWebSearch: () => {
+      try { return (ctx.get('tools') as { get?(name: string): unknown } | undefined)?.get?.('web_search') !== undefined } catch { return false }
+    },
+    invokeWebSearch: async (query) => {
+      const result = await (ctx.get('tools') as NonNullable<ReturnType<typeof ctx.get>> & { execute(input: { callId: string; name: string; arguments: unknown; signal?: AbortSignal }): Promise<{ content: readonly unknown[]; isError: boolean }> }).execute({
+        callId: `evoresearch-web-${Date.now()}`,
+        name: 'web_search',
+        arguments: { query },
+      })
+      if (result.isError) throw new Error('web_search 执行失败')
+      return result.content
+        .map((block: unknown) => {
+          const b = block as { type?: unknown; text?: unknown }
+          return typeof b?.type === 'string' && b.type === 'text' && typeof b.text === 'string' ? b.text : ''
+        })
+        .join('\n')
+    },
+  }
+  disposersNf.push(registerLibraryTools(ctx, libraryToolsDeps))
+  // P2-1 论文图片工作流三工具：项目 venv 渲染脚本 + critique 复用 vision
+  const figureService = new FigureService({
+    dataRoot,
+    resolvePython: (projectDirPath) => {
+      const envDir = projectEnv.envDirOf(projectDirPath)
+      const python = projectEnv.pythonOf(envDir)
+      return fs.existsSync(python) ? python : null
+    },
+  })
+  disposersNf.push(registerFigureTools(ctx, {
+    service: figureService,
+    dataRoot,
+    critiqueImage: undefined, // 视觉模型配置就绪时由 vision.ts 的 analyzeImage 接入；此处保守缺省
+  }))
+  // P0-3 四挂接点之一：实验进程启动登记（其余挂接点见下）
+  const origExpRun = experimentProcess.run.bind(experimentProcess)
+  ;(experimentProcess as { run: typeof experimentProcess.run }).run = (workspaceDir: string, slug: string, spec: Parameters<typeof experimentProcess.run>[2]) => {
+    const record = origExpRun(workspaceDir, slug, spec)
+    const job = jobHub.register({ kind: 'experiment', label: `${slug}: ${record.command.slice(0, 60)}`, sessionId: undefined, detail: record.runId })
+    void (async () => {
+      // 轮询等待该 run 结束（账本状态翻转），随后注销任务行
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 5000))
+        try {
+          const current = experimentProcess.get(workspaceDir, slug, record.runId)
+          if (current.status === 'running') continue
+          if (current.status === 'success') jobHub.complete(job.jobId, `exit ${current.exitCode}`)
+          else jobHub.fail(job.jobId, `status ${current.status}`)
+        } catch {
+          jobHub.unregister(job.jobId)
+        }
+        break
+      }
+    })()
+    return record
+  }
+
   // 8) 视觉检查工具（vision_check，配置就绪时注册）
   const disposeVision = registerVisionTool(ctx, config.visionEnabled ?? true)
 
@@ -628,6 +716,29 @@ function apply(ctx: Context): void {
   // §整合 P0c：上下文窗口保护层 + AutoSkills 真实执行（runSkill 依赖 attach 探测 DSH skills）
   const disposeContextRuntime = contextRuntime.attach(ctx)
   const disposeAutoskills = autoskills.attach(ctx)
+
+  // P1-1 AutoSkills 定时挖掘：经 SchedulerService 注册内置任务（每周一凌晨 3:07，
+  // settings.yaml evoresearch.autoskills.schedule 可覆盖 cron 或设 off 关闭）。
+  // 结果经 deliverToAgent 回报主对话（通知也走对话，F1）。
+  let disposeAutoskillsMining: (() => void) | undefined
+  {
+    const scheduleSetting = (config as { autoskillsSchedule?: string }).autoskillsSchedule
+    if (scheduleSetting !== 'off') {
+      const cron = typeof scheduleSetting === 'string' && scheduleSetting !== '' ? scheduleSetting : '7 3 * * 1'
+      try {
+        const task = scheduler.add({
+          name: 'AutoSkills 定时挖掘',
+          cron,
+          prompt: `执行一次全项目技能挖掘（mineAllWorkspaces）：汇总各项目观测聚类与笔记重复做法，生成待审技能提案。完成后汇报新增提案数与名称列表。`,
+          workspaceDir: dataRoot,
+        })
+        void task
+        console.log(`[evoresearch] P1-1 AutoSkills 定时挖掘已注册（cron: ${cron}）`)
+      } catch (error) {
+        console.warn(`[evoresearch] AutoSkills 定时挖掘注册失败（不影响其余功能）: ${String(error)}`)
+      }
+    }
+  }
   if (config.autoStartChannels) {
     void channels.startAll().catch((error) => {
       console.error('[evoresearch] 自动启动通道失败:', error)
@@ -643,6 +754,8 @@ function apply(ctx: Context): void {
       disposeDailyReport()
       disposeContextRuntime()
       disposeAutoskills()
+      for (const dispose of disposersNf) dispose()
+      jobHub.dispose()
       disposeContextAssemblerPrompt?.()
       disposeAdaptiveToolAssembly()
       disposeContextAssemblerEvents()
@@ -664,6 +777,7 @@ function apply(ctx: Context): void {
       disposeLayeredSkills()
       subagentProviders.disposeAll()
       disposeDshProvider?.()
+      void disposeAutoskillsMining
     }
   })
 }
