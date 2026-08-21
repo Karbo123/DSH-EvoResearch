@@ -6,14 +6,9 @@
 //!   直接由 Tauri 移动壳加载打包进二进制的占位页
 //!   （tauri.android.conf.json 清空 resources：sidecar 资源不进移动包）。
 
-#[cfg(mobile)]
-fn mobile_main() {
-    let app = tauri::Builder::default()
-        .build(tauri::generate_context!())
-        .expect("Tauri 应用初始化失败");
-    app.run(|_app_handle, _event| {});
-}
-
+// 移动端入口点：tauri::mobile_entry_point 必须标注在 pub fn run() 上
+// （展开为 Android JNI 加载 .so 时寻找的运行时符号；标在私有函数上不生效，
+// 会报 "Library does not include required runtime symbols"）。
 #[cfg(desktop)]
 fn desktop_main() {
     log(&format!("[shell] 启动，PID={}", std::process::id()));
@@ -79,7 +74,21 @@ fn desktop_main() {
     app.run(|_app_handle, _event| {});
 }
 
+// 移动端入口（Android/iOS）：无 Node sidecar —— DSH 后端依赖 Node 运行时，
+// 移动端暂不提供完整后端；加载打包进二进制的占位页说明现状。
+#[cfg(mobile)]
+fn mobile_main() {
+    let app = tauri::Builder::default()
+        .build(tauri::generate_context!())
+        .expect("Tauri 应用初始化失败");
+    app.run(|_app_handle, _event| {});
+}
+
 /// 平台分发入口（main.rs 与 Android cdylib 共用）。
+/// tauri::mobile_entry_point 必须直接标注在 pub fn 上：展开为 Android JNI
+/// 加载 .so 时寻找的运行时符号，标注私有函数或间接函数都不生效（会报
+/// "Library does not include required runtime symbols"）。
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(desktop)]
     desktop_main();
