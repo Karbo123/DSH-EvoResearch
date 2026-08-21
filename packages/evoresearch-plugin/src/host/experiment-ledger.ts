@@ -3,7 +3,7 @@
  *
  * 每个实验一个 bare git repo，记录"每次尝试"的提交链：
  * - 可回溯：git log 就是实验史
- * - 无副作用：回退用 restore + clean，不用 reset --hard
+ * - 无副作用：回退用 restore + clean，不用硬重置
  * - 可审计：每次尝试恰好一个 commit（--allow-empty）
  * - 可导出：git clone bare → 普通仓库
  *
@@ -153,10 +153,16 @@ export class ExperimentLedgerService {
       } catch { /* ignore */ }
     }
     let dshVersion = 'unknown'
-    try {
-      const dshPkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8')) as { version?: string }
-      if (typeof dshPkg.version === 'string') dshVersion = dshPkg.version
-    } catch { /* ignore */ }
+    for (const cand of [
+      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-agent', 'package.json'),
+      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-session', 'package.json'),
+    ]) {
+      try {
+        const dshPkg = JSON.parse(fs.readFileSync(cand, 'utf8')) as { version?: string }
+        if (typeof dshPkg.version === 'string' && dshPkg.version !== '') { dshVersion = dshPkg.version; break }
+      } catch { /* try next */ }
+    }
     return {
       app: { name: 'EvoResearch', version: appVersion },
       dsh: { version: dshVersion },
@@ -256,7 +262,7 @@ export class ExperimentLedgerService {
       } catch {
         return { ok: false, error: `commit 不存在: ${sha}` }
       }
-      // 纪律 3：非破坏性回退（禁用 reset --hard）
+      // 纪律 3：非破坏性回退（禁用硬重置）
       runGit(['restore', '--source', target, '--staged', '--worktree', '--', '.'], { gitDir: repo, workTree: exp })
       runGit(['clean', '-fdx'], { gitDir: repo, workTree: exp })
       const restoredFiles = countFilesRecursive(exp)

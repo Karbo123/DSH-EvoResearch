@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { parseCron, nextRun } from './core/cron.js'
 import { ExperimentWorkspaceService } from './experiment-workspace.js'
-import { listProjects } from './core/paths.js'
+import { listProjects, slugifyProjectName } from './core/paths.js'
 
 /** 日报生成选项。 */
 export interface DailyReportOptions {
@@ -218,15 +218,22 @@ export class DailyReportService {
   private tryGetLedgerLog(projectDir: string, slug: string, limit: number): string[] {
     try {
       // 账本路径：<dataRoot>/.evoresearch-data/ledgers/<sanitized>/<slug>.git
-      const sanitized = slugifyProjectName(path.basename(projectDir))
+      const sanitized = slugifyProjectName(path.basename(path.resolve(projectDir)))
       const repoDir = path.join(this.dataRoot, '.evoresearch-data', 'ledgers', sanitized, `${slug}.git`)
       if (!fs.existsSync(repoDir)) return []
-      // 用 --git-dir 指定裸仓库读取 log
-      const result = spawnSync('git.exe', ['--git-dir', repoDir, 'log', `--pretty=format:%h %s`, '-n', String(limit)], {
+      // 用 --git-dir 指定裸仓库读取 log（优先 git.exe，兼容 git）
+      let result = spawnSync('git.exe', ['--git-dir', repoDir, 'log', `--pretty=format:%h %s`, '-n', String(limit)], {
         encoding: 'utf8',
         windowsHide: true,
         timeout: 5000,
       })
+      if (result.error && (result.error as NodeJS.ErrnoException).code === 'ENOENT') {
+        result = spawnSync('git', ['--git-dir', repoDir, 'log', `--pretty=format:%h %s`, '-n', String(limit)], {
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 5000,
+        })
+      }
       if (result.status !== 0) return []
       const out = (result.stdout ?? '').trim()
       if (out === '') return []
@@ -410,11 +417,6 @@ export class DailyReportService {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
-
-function slugifyProjectName(input: string): string {
-  const slug = input.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '')
-  return /[a-z0-9]/.test(slug) ? slug : 'project'
-}
 
 function formatDate(ts: number): string {
   const d = new Date(ts)

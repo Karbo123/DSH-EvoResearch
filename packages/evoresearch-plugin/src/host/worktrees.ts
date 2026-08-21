@@ -5,7 +5,7 @@
  * - 创建时记录明确的起始 commit（worktree 分支就建立在起始 commit 上）；
  * - worktree 统一放在 <dataRoot>/.evoresearch-data/worktrees/<name>/；
  * - 删除 worktree 不删除 Git 分支（分支保留，随时可从 Chat Graph 打开）；
- * - 不使用 git reset --hard；本文件没有任何对主工作区文件的写操作，
+ * - 不使用 git 硬重置；本文件没有任何对主工作区文件的写操作，
  *   git worktree add/remove 只作用于新建/移除的 worktree 路径本身。
  *
  * 安全护栏（ENV-02）：

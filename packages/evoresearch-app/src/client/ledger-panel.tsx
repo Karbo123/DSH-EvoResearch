@@ -91,6 +91,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
   const [provError, setProvError] = useState<string | null>(null)
   const [recent, setRecent] = useState<Record<string, unknown> | null>(null)
   const [recentLoading, setRecentLoading] = useState(false)
+  const [resumeGuide, setResumeGuide] = useState<{ path: string; markdown: string } | null>(null)
 
   const loadExists = () => {
     setExists(null)
@@ -125,13 +126,14 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
   }
 
   useEffect(() => {
+    setResumeGuide(null)
     loadExists()
     loadLog()
     loadProvenance()
     loadRecent()
   }, [slug, workspaceDir])
 
-  const refreshAll = () => { loadExists(); loadLog(); loadProvenance(); loadRecent() }
+  const refreshAll = () => { setResumeGuide(null); loadExists(); loadLog(); loadProvenance(); loadRecent() }
 
   const doInit = (overwrite: boolean) => {
     setBusy(true)
@@ -215,7 +217,10 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
     void api<{ ok: boolean; path?: string; error?: string }>('experiment-ledger-write-resume', { projectDir: workspaceDir, slug, state: recent })
       .then((r) => {
         if ((r as { ok: boolean }).ok === false) throw new Error((r as { error: string }).error ?? t('ledgerResumeWriteFailed'))
-        onNotice(`${t('ledgerResumeOk')}: ${(r as { path: string }).path}`)
+        const p = (r as { path: string }).path
+        const md = `# 恢复指引 · ${slug}\n\n> 由实验账本 recentState 生成\n\n## 上次状态摘要\n\n\`\`\`json\n${JSON.stringify(recent, null, 2)}\n\`\`\`\n\n## 下一步\n- 检查上方状态中的 phase / lastConclusion / nextStep\n- 在 LAB_NOTE.md 记录恢复计划\n- 必要时用账本回退到对应提交\n`
+        setResumeGuide({ path: p, markdown: md })
+        onNotice(`${t('ledgerResumeOk')}: ${p}`)
       })
       .catch((e: unknown) => onError(String((e as Error)?.message ?? e)))
       .finally(() => setBusy(false))
@@ -342,6 +347,14 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
                     children: [
                       jsx('pre', { className: 'evo-ledger-json', children: JSON.stringify(recent, null, 2) }),
                       jsx('div', { className: 'evo-panel-hint', children: t('ledgerResumeHint') }),
+                      resumeGuide !== null && jsxs('div', {
+                        className: 'evo-ledger-resume-guide',
+                        children: [
+                          jsxs('div', { className: 'evo-panel-hint', style: { fontWeight: 600 }, children: [`✓ ${t('ledgerResumeOk')}: `, jsx('span', { style: { fontFamily: 'ui-monospace, Consolas, monospace', fontSize: '12px' }, children: resumeGuide.path })] }),
+                          jsx('pre', { className: 'evo-ledger-json', children: resumeGuide.markdown }),
+                          jsx('div', { className: 'evo-panel-hint', children: t('ledgerResumeGuideHint') }),
+                        ],
+                      }),
                     ],
                   }),
             ],

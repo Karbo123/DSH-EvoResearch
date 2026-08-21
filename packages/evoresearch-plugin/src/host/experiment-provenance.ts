@@ -35,23 +35,37 @@ export function captureProvenance(opts: {
   }
 
   let appVersion = '0.1.0'
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')) as { version?: string }
-    if (typeof pkg.version === 'string') appVersion = pkg.version
-  } catch { /* ignore */ }
-
-  let dshVersion = 'unknown'
-  try {
-    const dshPkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8')) as { version?: string }
-    if (typeof dshPkg.version === 'string') dshVersion = dshPkg.version
-  } catch {
+  const versionCandidates = [
+    path.join(process.cwd(), 'package.json'),
+    path.join(path.resolve(opts.dataRoot), 'package.json'),
+    path.join(process.cwd(), 'packages', 'evoresearch-plugin', 'package.json'),
+    path.join(path.join(path.resolve(opts.projectDir), 'package.json')),
+  ]
+  for (const cand of versionCandidates) {
     try {
-      const dshPkg2 = JSON.parse(fs.readFileSync(path.join(path.resolve(opts.dataRoot, '..'), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8')) as { version?: string }
-      if (typeof dshPkg2.version === 'string') dshVersion = dshPkg2.version
-    } catch { /* ignore */ }
+      const pkg = JSON.parse(fs.readFileSync(cand, 'utf8')) as { version?: string }
+      if (typeof pkg.version === 'string' && pkg.version !== '') { appVersion = pkg.version; break }
+    } catch { /* try next */ }
   }
 
-  // 尝试读取 model-settings.json 的当前选择
+  let dshVersion = 'unknown'
+  const dshCandidates = [
+    path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+    path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-agent', 'package.json'),
+    path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-session', 'package.json'),
+    path.join(path.resolve(opts.dataRoot, '..'), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+    path.join(path.resolve(opts.dataRoot, '..'), 'node_modules', '@deepseek-ai', 'dsh-agent', 'package.json'),
+    path.join(path.resolve(opts.dataRoot), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
+    path.join(path.resolve(opts.dataRoot), 'node_modules', '@deepseek-ai', 'dsh-agent', 'package.json'),
+  ]
+  for (const cand of dshCandidates) {
+    try {
+      const dshPkg = JSON.parse(fs.readFileSync(cand, 'utf8')) as { version?: string }
+      if (typeof dshPkg.version === 'string' && dshPkg.version !== '') { dshVersion = dshPkg.version; break }
+    } catch { /* try next */ }
+  }
+
+  // 尝试读取 model-settings.json 的当前选择与配置钉住信息
   let model: { provider: string; model: string } | undefined
   let config: Record<string, unknown> = {}
   try {
@@ -63,10 +77,24 @@ export function captureProvenance(opts: {
       const selected = code[tier as keyof typeof code]
       if (selected?.provider && selected?.model) model = { provider: selected.provider, model: selected.model }
     }
+    // 同时尝试读取 evoresearch 段的 memoryTokenBudget / auxiliaryModel（若存在）
+    let memoryTokenBudget = (raw as { memoryTokenBudget?: unknown }).memoryTokenBudget
+    let auxiliaryModel = (raw as { auxiliaryModel?: unknown }).auxiliaryModel
+    try {
+      const evoresearchSettings = path.join(opts.dataRoot, '.evoresearch-data', 'settings.yaml')
+      if (memoryTokenBudget === undefined || auxiliaryModel === undefined) {
+        const yaml = fs.readFileSync(evoresearchSettings, 'utf8')
+        const m = yaml.match(/memoryTokenBudget:\s*(\d+)/)
+        if (m !== null && memoryTokenBudget === undefined) memoryTokenBudget = Number(m[1])
+      }
+    } catch { /* ignore yaml */ }
     config = {
-      memoryTokenBudget: (raw as { memoryTokenBudget?: unknown }).memoryTokenBudget,
-      code: code ?? undefined,
+      ...(memoryTokenBudget !== undefined ? { memoryTokenBudget } : {}),
+      ...(auxiliaryModel !== undefined ? { auxiliaryModel } : {}),
+      ...(code !== undefined ? { code } : {}),
     }
+    // 若 config 仍为空，保留至少一个空对象以满足 schema
+    if (Object.keys(config).length === 0) config = { memoryTokenBudget: undefined, code: code ?? undefined }
   } catch { /* 无配置 */ }
 
   const provenance: Provenance = {
@@ -85,6 +113,9 @@ export function captureProvenance(opts: {
   fs.renameSync(tmp, file)
   return provenance
 }
+
+/** 别名：capture() 供任务/文档描述使用的短名，行为同 captureProvenance。 */
+export const capture = captureProvenance
 
 /** 读取已有的 provenance.json（不存在返回 null）。 */
 export function readProvenance(projectDir: string, slug: string): Provenance | null {

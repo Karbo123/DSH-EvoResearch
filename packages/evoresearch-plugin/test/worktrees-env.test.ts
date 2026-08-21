@@ -4,7 +4,7 @@
  * 覆盖：
  * - ENV-01/02：createWorktree/listWorktrees/removeWorktree（起始 commit 记录、
  *   Windows 路径含空格、碰撞后缀、托管根外拒绝、移除不删分支、主工作区不动、
- *   无 git reset --hard——代码内根本没有该命令，测试断言主仓库 HEAD/status 不变）；
+ *   无 git 硬重置——代码内根本没有该命令，测试断言主仓库 HEAD/status 不变）；
  * - ENV-03/04/05：环境指纹（OS+Python 版本+依赖文件哈希）、池目录、同指纹复用
  *   同一环境、依赖变化 → 新指纹 → 新环境（隔离）；
  * - ENV-06：legacy .venv 逻辑不动（pythonOf/envDirOf 原样返回）；

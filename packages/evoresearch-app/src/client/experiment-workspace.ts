@@ -91,15 +91,19 @@ interface LogSlice {
   size: number
 }
 
-/** 简单 POST JSON 封装（与 experiments.ts / panels.ts 同款）。 */
+/** 简单 POST JSON 封装（与 experiments.ts / panels.ts 同款；兼容 { error } 载荷）。 */
 async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
   const res = await fetch(`/evoresearch/fs/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const json = await res.json()
+  const json = await res.json() as { ok: boolean; value?: unknown; error?: { message?: string } }
   if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
+  const v = json.value as T & { error?: string; ok?: boolean }
+  if (v !== null && typeof v === 'object' && 'error' in (v as Record<string, unknown>) && typeof (v as { error?: unknown }).error === 'string') {
+    if (!('ok' in (v as Record<string, unknown>))) throw new Error((v as { error: string }).error)
+  }
   return json.value as T
 }
 
@@ -600,6 +604,7 @@ export function ExperimentWorkspacePanel({ cwd, onOpenSession }: {
   const [copyMode, setCopyMode] = useState(false)
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
+  const [duplicate, setDuplicate] = useState<{ slug: string; name: string } | null>(null)
   const workspaceDir = cwd ?? ''
 
   const load = (fresh = false) => {
@@ -613,20 +618,38 @@ export function ExperimentWorkspacePanel({ cwd, onOpenSession }: {
 
   const workspaceUnbound = error !== null && (error.includes('超出部署根目录') || error.includes('工作区必须是部署根目录'))
 
-  const doCreate = () => {
-    if (newName.trim() === '') return
+  const parseDupSlug = (msg: string): string | null => {
+    const m = String(msg).match(/实验已存在:\s*(.+)/)
+    return m !== null && m[1] !== undefined ? m[1].trim() : null
+  }
+
+  const doCreate = (opts?: { overwrite?: boolean }) => {
+    const name = newName.trim()
+    if (name === '') return
     setCreating(true)
     setError(null)
-    void api<ExperimentWorkspaceInfo>('experiment-workspace-create', { project: workspaceDir, name: newName.trim() })
+    if (opts?.overwrite !== true) setDuplicate(null)
+    void api<ExperimentWorkspaceInfo>('experiment-workspace-create', { project: workspaceDir, name, ...(opts?.overwrite === true ? { overwrite: true } : {}) })
       .then((created) => {
-        setNewName(''); setCreating(false)
+        setNewName(''); setCreating(false); setDuplicate(null)
         setExpandedSlug(created.slug)
-        setNotice(t('expWsCreated'))
+        setNotice(opts?.overwrite === true ? t('expWsOverwriteOk') : t('expWsCreated'))
         setTimeout(() => setNotice(null), 4000)
         load()
       })
-      .catch((e: any) => { setCreating(false); setError(String(e?.message ?? e)) })
+      .catch((e: any) => {
+        setCreating(false)
+        const msg = String(e?.message ?? e)
+        const dup = parseDupSlug(msg)
+        if (dup !== null) {
+          setDuplicate({ slug: dup, name })
+          setError(msg)
+        } else {
+          setError(msg)
+        }
+      })
   }
+  const doOverwrite = () => doCreate({ overwrite: true })
   const doImport = () => {
     if (srcDir.trim() === '') return
     setImporting(true)
@@ -669,7 +692,7 @@ export function ExperimentWorkspacePanel({ cwd, onOpenSession }: {
         workspaceUnbound && jsx('div', { className: 'evo-panel-hint', children: t('expWsNoWorkspace') }),
         error !== null && !workspaceUnbound && jsx('div', { className: 'evo-panel-error', children: error }),
         notice !== null && jsx('div', { className: 'evo-exp-notice', children: notice }),
-        // 新建实验工作区
+        // 新建实验工作区（A.5 防污染：同名默认拒绝，提供换名/覆盖）
         jsxs('div', {
           className: 'evo-panel-form',
           children: [
@@ -680,13 +703,28 @@ export function ExperimentWorkspacePanel({ cwd, onOpenSession }: {
               value: newName,
               disabled: creating,
               onInput: (e) => setNewName(e.currentTarget.value),
+              onKeyDown: (e) => { if (e.key === 'Enter') doCreate() },
             }),
             jsx('button', {
               type: 'button',
               className: 'evo-panel-add',
               disabled: creating || newName.trim() === '',
-              onClick: doCreate,
+              onClick: () => doCreate(),
               children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: creating ? t('creating') : t('newExperiment') })] }),
+            }),
+          ],
+        }),
+        duplicate !== null && jsxs('div', {
+          className: 'evo-ews-dup',
+          children: [
+            jsxs('div', { className: 'evo-panel-hint', children: [jsx('strong', { children: `${t('expWsExists').replace('{slug}', duplicate.slug)} ` }), t('expWsExistsHint')] }),
+            jsx('div', { className: 'evo-panel-hint', style: { fontSize: '11.5px', opacity: 0.85 }, children: t('expWsOverwriteHint') }),
+            jsxs('div', {
+              className: 'evo-panel-form',
+              children: [
+                jsx('button', { type: 'button', className: 'evo-panel-act', disabled: creating, onClick: () => { setDuplicate(null); setError(null) }, children: t('expWsRename') }),
+                jsx('button', { type: 'button', className: 'evo-tl-del-confirm', disabled: creating, onClick: doOverwrite, children: t('expWsOverwrite') }),
+              ],
             }),
           ],
         }),

@@ -1674,6 +1674,7 @@ html.dark .evo-composer-editor-host .milkdown .ProseMirror pre { background: col
 .evo-rounds-view-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--color-border-light); font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
 .evo-rounds-view-body { margin: 0; padding: 8px 10px; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto; color: var(--color-text-secondary); font-family: ui-monospace, Consolas, monospace; }
 /* ── 日报卡片（Part C：手动 + 定时）── */
+.evo-ews-dup { border: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--color-border-light)); border-radius: 8px; background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface)); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .evo-ews-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .evo-report-drawer { position: fixed; inset: 0; z-index: 400; display: flex; justify-content: flex-end; }
 .evo-report-mask { flex: 1; background: rgba(0,0,0,0.28); }
@@ -1731,4 +1732,5 @@ html.dark .evo-composer-editor-host .milkdown .ProseMirror pre { background: col
 .evo-ledger-prov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
 .evo-ledger-k { display: inline-block; min-width: 48px; font-weight: 600; color: var(--color-text-tertiary); margin-right: 6px; }
 .evo-ledger-recent { display: flex; flex-direction: column; gap: 6px; }
+.evo-ledger-resume-guide { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px dashed color-mix(in srgb, var(--brand) 30%, var(--color-border-light)); border-radius: 8px; background: color-mix(in srgb, var(--brand) 6%, var(--color-surface)); }
 `

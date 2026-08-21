@@ -307,6 +307,16 @@ export class ExperimentRoundsService {
     }
   }
 
+  /** 别名：advance ≡ completePhase（满足任务描述 start/advance/log/list 命名）。 */
+  advance(projectDir: string, slug: string, phaseId: string, outputText: string): { ok: true; round: ExperimentRound } {
+    return this.completePhase(projectDir, slug, phaseId, outputText)
+  }
+
+  /** 别名：log ≡ list（返回全部回合历史，含进行中）。 */
+  log(projectDir: string, slug: string): ExperimentRound[] {
+    return this.list(projectDir, slug)
+  }
+
   /** 取消当前回合（清空 pending 阶段目录）。 */
   cancel(projectDir: string, slug: string): { ok: true } {
     const expDir = this.expDirOf(projectDir, slug)

@@ -165,7 +165,7 @@ export class RewindService {
     })
   }
 
-  /** 恢复工作区到某提交：先安全提交当前状态（rewind-safety），再非破坏性 restore + clean（禁用 reset --hard，纪律 3）。 */
+  /** 恢复工作区到某提交：先安全提交当前状态（rewind-safety），再非破坏性 restore + clean（禁用硬重置，纪律 3）。 */
   restoreWorkspace(projectDir: string, targetSha: string): { safety: string | null; target: string } {
     const dir = this.assertProjectDir(projectDir)
     const safety = this.commitWorkspace(dir, `rewind-safety ${new Date().toISOString()}`)
