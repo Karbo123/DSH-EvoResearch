@@ -1572,8 +1572,16 @@ export function registerWorkspaceApi(ctx: any): void {
           const line = requireString(payload, 'line')
           const agent = ctx.get('agents')?.get?.(sessionId)
           if (agent === undefined) throw httpError(400, 'bad-request', `会话不存在: ${sessionId}`)
+          // P2-4：可选图片附件透传（EncodedImageAttachment 形状；仅声明 input.images
+          // 的命令会被 executor 接收，其余命令由 executor 拒绝并保留原图）
+          const rawImages = Array.isArray(payload.images) ? payload.images : []
+          const images = rawImages
+            .filter((img: any) => img !== null && typeof img === 'object' && typeof img.mediaType === 'string' && typeof img.data === 'string')
+            .map((img: any) => ({ mediaType: String(img.mediaType), data: String(img.data), ...(typeof img.name === 'string' ? { name: img.name } : {}) }))
           const signal = new AbortController().signal
-          const result = await commands.execute(agent, line, signal)
+          const result = images.length > 0
+            ? await (commands.execute as (agent2: unknown, line2: string, imgs: typeof images, signal2: AbortSignal) => Promise<unknown>)(agent, line, images, signal)
+            : await commands.execute(agent, line, signal as never)
           writeOk(res, { matched: result !== undefined, result: result ?? null })
           return
         }

@@ -1161,6 +1161,35 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     }
   }
 
+  // P2-4：带图片附件的命令执行——附件以 EncodedImageAttachment 形状透传给
+  // commands.execute（声明 input.images 的命令才接收；拒绝则返回 false 降级为普通消息）。
+  const executeCommandWithImages = async (line: string): Promise<boolean> => {
+    if (sessionId === null) return false
+    setCmdRunning(true)
+    try {
+      const images = pendingImages
+        .filter((img) => img.dataUrl !== '')
+        .map((img) => ({ data: img.dataUrl.slice(img.dataUrl.indexOf(',') + 1), mediaType: img.mediaType, ...(img.name ? { name: img.name } : {}) }))
+      const res = await fetch('/evoresearch/fs/commands-execute', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, line, images }),
+      })
+      const json = await res.json()
+      if (json.ok && json.value?.matched === true && json.value?.result !== null) {
+        const outer = json.value.result
+        const inner = outer?.result ?? outer
+        setCmdResult({ line, text: inner?.text ?? '', kind: inner?.kind ?? 'success' })
+        return true
+      }
+      return false
+    } catch {
+      return false
+    } finally {
+      setCmdRunning(false)
+    }
+  }
+
   const submit = async () => {
     const rawInput = composerMarkdownRef.current || input
     const text = trimPromptEdges(rawInput)
@@ -1168,9 +1197,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (!text || pendingApprovals.length > 0) return
     // 附件未就绪（仍在读取）时禁用发送
     if (pendingImages.some((img) => img.dataUrl === '')) return
-    // 斜杠命令：单行且以 / 开头 → 直接执行（未知命令降级为普通聊天，§23.3）
-    if (text.startsWith('/') && !text.includes('\n') && pendingImages.length === 0) {
-      const matched = await executeCommand(text)
+    // 斜杠命令：单行且以 / 开头 → 直接执行（未知命令降级为普通聊天，§23.3）。
+    // P2-4：带附件时也尝试执行——executor 会拒绝未声明 input.images 的命令，
+    // 此时把附件还原为普通消息发送（原图不丢）。
+    if (text.startsWith('/') && !text.includes('\n')) {
+      const matched = pendingImages.length === 0
+        ? await executeCommand(text)
+        : await executeCommandWithImages(text)
       if (matched) {
         pushHistory(cwd, text)
         setHistory(readHistory(cwd))
@@ -1182,6 +1215,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         setHistoryIndex(-1)
         return
       }
+      // 命令带附件但 executor 拒绝 → 降级为普通消息（附件随消息走）
     }
     // @引用解析（§23.4）：小型文本文件注入内容，其余保留路径
     const resolved = trimPromptEdges(await resolveMentions(text, cwd))
