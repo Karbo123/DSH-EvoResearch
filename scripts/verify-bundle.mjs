@@ -15,7 +15,42 @@ const BUNDLES = [
 ]
 
 // 模拟浏览器全局（ModuleLoader 的 load 语义：factory 自声明 module/exports 并返回）
+// 轻量 DOM mock：app bundle 顶层会触及 document（图标/样式初始化），此处提供最小可用替身
+const mockDocument = {
+  compatMode: 'CSS1Compat',
+  createElement: () => ({
+    style: {},
+    dataset: {},
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false } },
+    setAttribute() {},
+    getAttribute() { return null },
+    appendChild() { return this },
+    removeChild() {},
+    addEventListener() {},
+    removeEventListener() {},
+    querySelector() { return null },
+    querySelectorAll() { return [] },
+    innerHTML: '',
+    textContent: '',
+  }),
+  createElementNS: () => ({
+    style: {},
+    setAttribute() {},
+    appendChild() {},
+    classList: { add() {}, remove() {} },
+  }),
+  head: { appendChild() {}, querySelector() { return null } },
+  body: { appendChild() {}, querySelector() { return null } },
+  documentElement: { style: {} },
+  querySelector() { return null },
+  querySelectorAll() { return [] },
+  getElementById() { return null },
+  addEventListener() {},
+}
+globalThis.document = mockDocument
+try { globalThis.navigator = { userAgent: 'node-verify' } } catch { try { Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'node-verify' }, configurable: true }) } catch {} }
 globalThis.window = {
+  document: mockDocument,
   __ModuleLoader__: {
     load(entry) {
       const { id, factory } = entry
