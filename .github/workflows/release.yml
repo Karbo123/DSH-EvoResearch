@@ -165,12 +165,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS Ad-hoc 签名（未配置证书时保证产物本地可用）
           APPLE_SIGNING_IDENTITY: '-'
+          # -v：bundler 在 Error 级别会吞掉 linuxdeploy 的 stderr，verbose 让其透出
+          TAURI_CLI_VERBOSE: 2
         with:
           projectPath: desktop
           tagName: ${{ env.TAG }}
           releaseName: ${{ env.RELEASE_NAME }}
           releaseId: ${{ needs.prepare-release.outputs.release_id }}
-          args: --target ${{ matrix.targets }} --bundles ${{ matrix.bundles }}
+          args: --verbose --target ${{ matrix.targets }} --bundles ${{ matrix.bundles }}
 
   # ── Android：交叉编译 APK（unsigned；有签名密钥则自动签名）───────────────
   android:
