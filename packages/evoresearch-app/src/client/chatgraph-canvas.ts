@@ -1,6 +1,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
+import { MessageSquare, Database, FileText, Map as MapIcon } from 'lucide-react'
 import {
   Background,
   BaseEdge,
@@ -10,7 +11,9 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  ReactFlowProvider,
   useNodesState,
+  useReactFlow,
   getBezierPath,
   type Connection,
   type EdgeProps,
@@ -36,9 +39,6 @@ interface GraphNodeData extends Record<string, unknown> {
   onOpen: (node: GraphNode) => void
   onEdit: (node: GraphNode) => void
   onContextMenu: (event: MouseEvent, node: GraphNode) => void
-  onNaturalBranch: (node: GraphNode) => void
-  onNaturalReference: (node: GraphNode) => void
-  onNaturalRelation: (node: GraphNode) => void
 }
 
 interface GraphGroupData extends Record<string, unknown> {
@@ -69,12 +69,11 @@ export interface ChatGraphCanvasProps {
   onNodeContextMenu: (event: MouseEvent, node: GraphNode) => void
   onEdgeContextMenu: (event: MouseEvent, edge: GraphEdge) => void
   onConnect: (connection: Connection) => void
-  onNaturalBranch: (node: GraphNode) => void
-  onNaturalReference: (node: GraphNode) => void
-  onNaturalRelation: (node: GraphNode) => void
   onToggleGroup: (groupId: string) => void
   onNodePositionsChange: (positions: Array<{ id: string; x: number; y: number }>) => void
   onNarrowOpen: (node: GraphNode) => void
+  /** 整理布局确认保存后置 true 一帧，用于触发视野重新适配。 */
+  refitSignal?: number
 }
 
 const nodeTypes = { graph: GraphNodeView, graphGroup: GraphGroupView }
@@ -86,7 +85,7 @@ function refDisplayName(refPath: string): string {
 }
 
 function nodeHeight(node: GraphNode): number {
-  return node.type === 'chat' ? 76 : node.ref !== undefined ? 76 : 58
+  return node.type === 'chat' ? 84 : node.ref !== undefined ? 84 : 66
 }
 
 function nodeKind(node: GraphNode): 'chat' | 'memory' | 'resource' {
@@ -115,12 +114,17 @@ function GraphGroupView({ data }: NodeProps<XYNode<GraphGroupData>>) {
   })
 }
 
+function kindIcon(kind: 'chat' | 'memory' | 'resource') {
+  return kind === 'chat' ? MessageSquare : kind === 'memory' ? Database : FileText
+}
+
 function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
   const node = data.graphNode
   const kind = nodeKind(node)
   const isChat = node.type === 'chat'
   const isMemory = kind === 'memory'
   const preview = data.preview
+  const Icon = kindIcon(kind)
   const socket = (id: string, type: 'source' | 'target', className: string, top: number) => jsx(Handle, {
     id,
     type,
@@ -133,17 +137,9 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
   const shortPreview = node.ref !== undefined
     ? preview === undefined ? t('graphReading') : preview.ok ? (preview.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 24) : (preview.error ?? t('graphRefUnavailable')).slice(0, 24)
     : (node.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 24)
-  const action = (label: string, onClick: () => void, className = '') => jsx('button', {
-    type: 'button',
-    className: `evo-graph-node-action ${className}`,
-    onClick: (event: MouseEvent) => { event.stopPropagation(); onClick() },
-    onKeyDown: (event: KeyboardEvent) => event.stopPropagation(),
-    'aria-label': t('graphActionAria').replace('{action}', label).replace('{title}', node.title),
-    children: label,
-  })
   return jsxs('div', {
     className: `evo-graph-node evo-graph-node-${kind}${selected || data.focused ? ' evo-graph-node-sel' : ''}${data.highlighted ? ' evo-graph-node-trace' : ''}${node.origin === 'agent' ? ' evo-graph-node-candidate' : ''}`,
-    style: { width: 176, height: nodeHeight(node) },
+    style: { width: 200, height: nodeHeight(node) },
     'data-node-id': node.id,
     'data-global': node.scope === 'global' || undefined,
     'data-status': node.status,
@@ -159,36 +155,27 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
       else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); data.onContextMenu(event as unknown as MouseEvent, node) }
     },
     children: [
-      jsx('div', { className: 'evo-graph-node-titlebar', children: jsxs(Fragment, { children: [
-        jsx('span', { className: 'evo-graph-node-dot', 'aria-hidden': true }),
+      jsxs('div', { className: 'evo-graph-node-titlebar', children: [
+        jsx('span', { className: 'evo-graph-node-icon', 'aria-hidden': true, children: jsx(Icon, {}) }),
         jsx('span', { className: 'evo-graph-node-title', title: node.title, children: node.title }),
         node.origin === 'agent' && jsx('span', { className: 'evo-graph-node-candidate-badge', children: t('graphCandidateBadge') }),
-      ] }) }),
+      ] }),
       isChat
         ? jsxs('div', { className: 'evo-graph-node-body', children: [
-          socket('context', 'target', 'evo-graph-socket-in evo-graph-socket-ctx', 37),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-ctx', children: t('graphBranch') }),
-          socket('memory', 'target', 'evo-graph-socket-in evo-graph-socket-mem', 55),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-mem', children: t('graphRef') }),
+          socket('context', 'target', 'evo-graph-socket-in evo-graph-socket-ctx', 44),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-ctx', style: { position: 'absolute', left: 16, top: 37 }, children: t('graphBranch') }),
+          socket('memory', 'target', 'evo-graph-socket-in evo-graph-socket-mem', 62),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-mem', style: { position: 'absolute', left: 16, top: 55 }, children: t('graphRef') }),
           jsx('span', { className: 'evo-graph-node-sid', title: node.sessionId, children: (node.sessionId ?? '').slice(0, 8) }),
-          socket('output', 'source', 'evo-graph-socket-out', 46),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', children: t('graphConnect') }),
-          !data.advancedMode && jsxs('div', { className: 'evo-graph-node-actions', children: [
-            action(t('graphBranch'), () => data.onNaturalBranch(node)),
-            action(t('graphRef'), () => data.onNaturalReference(node)),
-            action(t('graphNaturalRelation'), () => data.onNaturalRelation(node)),
-          ] }),
+          socket('output', 'source', 'evo-graph-socket-out', 53),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', style: { position: 'absolute', right: 16, top: 46 }, children: t('graphConnect') }),
         ] })
         : jsxs('div', { className: 'evo-graph-node-body', children: [
           jsx('span', { className: 'evo-graph-node-tag', children: node.scope === 'global' ? t('graphGlobal') : (isMemory ? t('graphMemory') : t('graphProject')) }),
           jsx('span', { className: node.ref === undefined && isMemory ? 'evo-graph-node-preview' : 'evo-graph-node-ref-name', title: node.ref?.path ?? node.content, children: node.ref === undefined ? shortPreview : refDisplayName(node.ref.path) }),
-          socket('output', 'source', 'evo-graph-socket-out', 32),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', children: t('graphConnect') }),
+          socket('output', 'source', 'evo-graph-socket-out', 38),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', style: { position: 'absolute', right: 16, top: 31 }, children: t('graphConnect') }),
           node.ref !== undefined && jsx('span', { className: `evo-graph-node-preview${preview?.ok === false ? ' evo-graph-node-preview-err' : ''}`, title: preview?.text ?? preview?.error, children: shortPreview }),
-          !data.advancedMode && jsxs('div', { className: 'evo-graph-node-actions', children: [
-            action(t('graphRef'), () => data.onNaturalReference(node)),
-            action(t('graphNaturalRelation'), () => data.onNaturalRelation(node)),
-          ] }),
         ] }),
     ],
   })
@@ -196,7 +183,27 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
 
 function routePath(points: readonly { x: number; y: number }[]): string {
   if (points.length < 2) return ''
-  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${Math.round(point.x)} ${Math.round(point.y)}`).join(' ')
+  const fmt = (point: { x: number; y: number }) => `${Math.round(point.x)} ${Math.round(point.y)}`
+  // 直连或用户只给了起终点：保持直线
+  if (points.length === 2) return `M ${fmt(points[0]!)} L ${fmt(points[1]!)}`
+  // 折线转平滑曲线：每个拐点用二次贝塞尔圆角，保留路由避障形状
+  const radius = 16
+  let d = `M ${fmt(points[0]!)}`
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const prev = points[i - 1]!
+    const cur = points[i]!
+    const next = points[i + 1]!
+    const inLen = Math.hypot(cur.x - prev.x, cur.y - prev.y)
+    const outLen = Math.hypot(next.x - cur.x, next.y - cur.y)
+    const r = Math.min(radius, inLen / 2, outLen / 2)
+    const inX = cur.x - ((cur.x - prev.x) / (inLen || 1)) * r
+    const inY = cur.y - ((cur.y - prev.y) / (inLen || 1)) * r
+    const outX = cur.x + ((next.x - cur.x) / (outLen || 1)) * r
+    const outY = cur.y + ((next.y - cur.y) / (outLen || 1)) * r
+    d += ` L ${fmt({ x: inX, y: inY })} Q ${fmt(cur)} ${fmt({ x: outX, y: outY })}`
+  }
+  d += ` L ${fmt(points[points.length - 1]!)}`
+  return d
 }
 
 function midpoint(points: readonly { x: number; y: number }[]): { x: number; y: number } | undefined {
@@ -301,7 +308,7 @@ function groupBounds(graph: ChatGraph, group: GraphGroup, ancestry = new Set<str
     return false
   })
   if (group.collapsed === true) return { x: group.x ?? 40, y: group.y ?? 40, width: group.width ?? 208, height: group.height ?? 86 }
-  const rects = members.map((node) => ({ x: node.x, y: node.y, width: 176, height: node.type === 'chat' ? 76 : node.ref !== undefined ? 76 : 58 }))
+  const rects = members.map((node) => ({ x: node.x, y: node.y, width: 200, height: node.type === 'chat' ? 84 : node.ref !== undefined ? 84 : 66 }))
   for (const child of childGroups) {
     const bounds = groupBounds(graph, child, nextAncestry)
     rects.push({ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height })
@@ -322,7 +329,7 @@ function toXYNodes(props: ChatGraphCanvasProps): CanvasNode[] {
       id: node.id,
       type: 'graph',
       position: { x: node.x, y: node.y },
-      width: 176,
+      width: 200,
       height: nodeHeight(node),
       selected: props.selectedId === node.id,
       data: {
@@ -334,9 +341,6 @@ function toXYNodes(props: ChatGraphCanvasProps): CanvasNode[] {
         onOpen: props.onOpen,
         onEdit: props.onEdit,
         onContextMenu: props.onNodeContextMenu,
-        onNaturalBranch: props.onNaturalBranch,
-        onNaturalReference: props.onNaturalReference,
-        onNaturalRelation: props.onNaturalRelation,
       },
     }))
   for (const group of props.graph.groups ?? []) {
@@ -400,10 +404,27 @@ function toXYEdges(props: ChatGraphCanvasProps, xyNodes: readonly CanvasNode[]):
 }
 
 export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
+  return jsx(ReactFlowProvider, { children: jsx(ChatGraphCanvasInner, { ...props }) })
+}
+
+function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
   const initialNodes = toXYNodes(props)
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>(initialNodes)
   const edges = toXYEdges(props, initialNodes)
-  useEffect(() => { setNodes(initialNodes) }, [props.graph, props.visibleIds, props.matchedIds, props.selectedId, props.focusedNodeId, props.advancedMode, props.traceHighlightedIds, props.refPreviews, setNodes])
+  const [minimapOpen, setMinimapOpen] = useState(false)
+  const { fitView } = useReactFlow()
+  // Async prop updates (file previews, trace highlights, selection) must not
+  // teleport cards back to their stored positions in the middle of a drag,
+  // so while the user interacts we keep whatever position the canvas shows;
+  // otherwise incoming graph positions (e.g. 整理布局 preview) must apply.
+  const interactingRef = useRef(false)
+  useEffect(() => {
+    setNodes((current) => {
+      if (!interactingRef.current) return initialNodes
+      const positions = new Map(current.filter((node) => node.type === 'graph').map((node) => [node.id, node.position]))
+      return initialNodes.map((node) => (node.type === 'graph' && positions.has(node.id) ? { ...node, position: positions.get(node.id)! } : node))
+    })
+  }, [props.graph, props.visibleIds, props.matchedIds, props.selectedId, props.focusedNodeId, props.advancedMode, props.traceHighlightedIds, props.refPreviews, setNodes])
   // XYFlow's MiniMap component does not forward arbitrary aria attributes.
   useEffect(() => {
     const minimap = document.querySelector<HTMLElement>('.evo-graph-canvas .react-flow__minimap')
@@ -411,13 +432,19 @@ export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
     minimap?.setAttribute('aria-label', t('graphMiniMap'))
   })
 
+  // 整理布局确认保存后重新适配视野，避免新排布落在视口外。
+  const refitSignal = props.refitSignal ?? 0
+  useEffect(() => {
+    if (refitSignal > 0) { void fitView({ padding: 0.18, duration: 240 }) }
+  }, [refitSignal, fitView])
+
   const handleDragStop = (_event: unknown, _node: CanvasNode, draggedNodes?: CanvasNode[]) => {
+    interactingRef.current = false
     const changed = (draggedNodes ?? nodes)
       .filter((node) => node.type === 'graph' && 'graphNode' in node.data)
       .map((node) => ({ id: (node.data as GraphNodeData).graphNode.id, x: Math.round(node.position.x), y: Math.round(node.position.y) }))
     props.onNodePositionsChange(changed)
   }
-
   const narrowNodes = props.graph.nodes.filter((node) => props.visibleIds.has(node.id) && collapsedGroupOf(props.graph, node) === undefined)
   return jsxs('div', {
     className: 'evo-graph-canvas',
@@ -450,6 +477,7 @@ export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
         elementsSelectable: true,
         deleteKeyCode: null,
         onNodesChange,
+        onNodeDragStart: () => { interactingRef.current = true },
         onNodeDragStop: handleDragStop,
         onNodeClick: (_event: MouseEvent, node: CanvasNode) => { if (node.type === 'graph') props.onSelect((node.data as GraphNodeData).graphNode.id) },
         onPaneClick: () => { props.onSelect(null); props.onContextMenu(null) },
@@ -459,9 +487,19 @@ export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
         'aria-label': t('graphCanvasAria'),
         proOptions: { hideAttribution: true },
         children: [
-          jsx(Background, { gap: 20, size: 1.2, color: 'var(--graph-grid)' }),
-          jsx(Controls, { showInteractive: true, 'aria-label': t('graphControlsAria') }),
-          jsx(MiniMap, { pannable: true, zoomable: true, 'aria-label': t('graphMiniMap'), nodeColor: (node: CanvasNode) => node.type === 'graphGroup' ? 'var(--graph-minimap-group)' : (node.data as GraphNodeData).graphNode.type === 'chat' ? 'var(--graph-minimap-chat)' : 'var(--graph-minimap-resource)' }),
+          jsx(Background, { gap: 22, size: 1.1, color: 'var(--graph-grid)' }),
+          jsx(Controls, { showInteractive: true, position: 'bottom-right' as const, 'aria-label': t('graphControlsAria') }),
+          minimapOpen && jsx(MiniMap, { pannable: true, zoomable: true, position: 'bottom-left' as const, 'aria-label': t('graphMiniMap'), nodeColor: (node: CanvasNode) => node.type === 'graphGroup' ? 'var(--graph-minimap-group)' : (node.data as GraphNodeData).graphNode.type === 'chat' ? 'var(--graph-minimap-chat)' : 'var(--graph-minimap-resource)' }),
+          jsx('button', {
+            type: 'button',
+            className: 'evo-graph-minimap-toggle',
+            'aria-pressed': minimapOpen,
+            'aria-label': minimapOpen ? t('graphMinimapHide') : t('graphMinimapShow'),
+            title: minimapOpen ? t('graphMinimapHide') : t('graphMinimapShow'),
+            onClick: (event: MouseEvent) => { event.stopPropagation(); setMinimapOpen((value) => !value) },
+            style: minimapOpen ? { left: 'auto', right: 12 } : undefined,
+            children: jsxs(Fragment, { children: [jsx(MapIcon, {}), jsx('span', { children: minimapOpen ? t('graphMinimapHide') : t('graphMinimapShow') })] }),
+          }),
         ],
       }),
       props.menuElement,

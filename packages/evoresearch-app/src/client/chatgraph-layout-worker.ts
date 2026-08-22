@@ -623,6 +623,23 @@ function graphForElk(input: ChatGraphLayoutRequest): { graph: ElkGraph; collapse
         layoutOptions: { 'org.eclipse.elk.layered.priority': weight },
       }
     })
+  // Disconnected nodes are laid out by ELK as independent components packed into a
+  // tight grid (20px default gap), which both looks scattered and trips the overlap
+  // guard into the single-column fallback. A zero-priority virtual backbone keeps the
+  // whole graph connected so layered produces one coherent multi-column flow.
+  const connected = new Set<string>()
+  for (const edge of edges) { connected.add(edge.sources[0]!); connected.add(edge.targets[0]!) }
+  const orphans = children.filter((node) => !connected.has(node.id))
+  const CHUNK = 4
+  for (let index = 0; index < orphans.length; index += CHUNK) {
+    const head = orphans[index]!
+    if (index > 0) {
+      edges.push({ id: `virtual:chain:${head.id}`, sources: [orphans[index - CHUNK]!.id], targets: [head.id], layoutOptions: { 'org.eclipse.elk.layered.priority': '0' } })
+    }
+    for (let member = index + 1; member < Math.min(index + CHUNK, orphans.length); member += 1) {
+      edges.push({ id: `virtual:member:${orphans[member]!.id}`, sources: [head.id], targets: [orphans[member]!.id], layoutOptions: { 'org.eclipse.elk.layered.priority': '0' } })
+    }
+  }
   return {
     graph: {
       id: 'chat-graph',
