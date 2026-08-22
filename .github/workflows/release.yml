@@ -4,17 +4,18 @@
 # tag 已存在时：删除远端旧 tag 与旧 Release 后重建，tauri-action / gh release
 # 以 `clobber` 语义覆盖同名资产 —— 即"自动覆盖更新资产"。
 #
-# 触发：push 到 main，或 Actions 页手动 workflow_dispatch。
+# 触发：仅手动（Actions 页 → Release EvoResearch → Run workflow）。
+# push 不触发：编译耗时长（约 40 分钟），避免每次推送都白跑。
 # 说明：
 # - Desktop 矩阵三平台并行，产物统一上传到上述 Release；
 # - Android 任务生成 unsigned APK（无签名密钥时），同样挂到 Release；
-# - macOS 使用 Ad-hoc 签名（本地可启动）；如需分发签名见 docs/05-release-ci.md。
+# - macOS 使用 Ad-hoc 签名（本地可启动）；如需分发签名见 docs/05-release-ci.md；
+# - Release Notes 由 generate-notes 步骤按固定模板生成（平台下载表 +
+#   卖点简介 + 自动提取的 commit 摘要），非 draft 直接正式发布。
 
 name: Release EvoResearch
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -58,7 +59,7 @@ jobs:
           # 删除旧 Tag（remote 与 local）
           git push origin ":refs/tags/${TAG}" 2>/dev/null || echo "远端无旧 tag"
 
-      - name: 创建 Release（EvoResearch v0.1.0-rc.1）
+      - name: 创建 Release（EvoResearch v0.1.0-rc.1，非 draft）
         id: create_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,7 +73,11 @@ jobs:
             -f target_commitish="${GITHUB_SHA}" \
             -f name="${RELEASE_NAME}" \
             -F draft=false \
-            -F prerelease=true)
+            -F prerelease=true \
+            -f body="$(cat <<'NOTES'
+          Release notes 生成中——构建完成后由 publish-notes 步骤写入完整模板。
+          NOTES
+          )")
           RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
           echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
 
@@ -268,3 +273,68 @@ jobs:
             echo "上传 $f → ${TAG}"
             gh release upload "${TAG}" "$f" --repo "${GITHUB_REPOSITORY}" --clobber
           done
+
+  # ── 发布说明：全部产物上传完成后，按固定模板写入 Release body ──────────────
+  # 模板：平台下载表（首推 Windows）+ 卖点简介 + 自动提取的 commit 变更摘要。
+  publish-notes:
+    needs: [desktop, android]
+    if: ${{ !cancelled() && needs.desktop.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout（取 commit 历史生成变更摘要）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 生成并写入 Release Notes（固定模板）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # ── 变更摘要：相对上一个 tag 的 commit 首行（过滤 CI 调试噪音）──
+          PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)
+          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "${TAG}" ]; then
+            RANGE="${PREV_TAG}..${GITHUB_SHA}"
+          else
+            RANGE="-30 ${GITHUB_SHA}"
+          fi
+          CHANGES=$(git log --no-merges --format='- %s' ${RANGE} \
+            | grep -vE '^- (ci\(debug\)|chore: 数据目录)' || true)
+          CHANGES=$(echo "$CHANGES" | head -20)
+
+          {
+            cat <<'HEAD'
+          ## 📦 下载哪个文件？
+
+          | 平台 | 文件 | 说明 |
+          |---|---|---|
+          | **Windows 10/11（推荐）** | `EvoResearch_0.1.0_x64-setup.exe` | 安装包，下载后双击安装。**大多数用户选这个** |
+          | macOS (Apple Silicon) | `EvoResearch_0.1.0_aarch64.dmg` | M1/M2/M3/M4 芯片的 Mac |
+          | Linux x86_64（免安装） | `EvoResearch_0.1.0_amd64.AppImage` | `chmod +x` 后直接运行 |
+          | Linux x86_64 (Debian/Ubuntu) | `EvoResearch_0.1.0_amd64.deb` | `sudo dpkg -i <文件>` 安装 |
+          | Android arm64 | `app-arm64-release.apk` | 大多数现代安卓手机；当前为预览壳（无完整后端） |
+          | Android 其它架构 | `app-arm / app-x86 / app-x86_64-release.apk` | 按设备架构选择 |
+
+          > 💡 不确定选哪个？Windows 用户选第一个；Mac 选 aarch64.dmg；
+          > Android 安装 unsigned 包需在系统设置中允许"未知来源应用"。
+
+          ## ✨ 本版本亮点
+
+          EvoResearch 是面向科研的自主智能体工作台（基于 deepseek-harness）。
+          本构建包含：科研记忆与项目工作区、多智能体团队协作、实验控制台
+          （账本/回合/日报）、定时任务、多通道接入、自定义工作台界面，
+          以及 **Windows / Linux / macOS 三平台桌面版**。
+
+          ## 📝 近期变更
+
+          HEAD
+            if [ -n "$CHANGES" ]; then echo "$CHANGES"; else echo "（本次为首次发布，无历史变更可列）"; fi
+            echo ""
+            echo "---"
+            echo "完整文档见仓库 README · 反馈请提 Issue"
+          } > release-notes.md
+
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+            -F body=@release-notes.md --jq '.html_url'
+          echo "===== Release Notes 预览 ====="
+          cat release-notes.md
