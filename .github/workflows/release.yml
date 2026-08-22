@@ -1,21 +1,24 @@
-# EvoResearch 三平台云端构建（Linux / macOS / Windows 桌面 + Android APK）。
+# EvoResearch 云端构建（Windows / Linux / macOS 桌面 + Android APK + iOS）。
 #
 # 版本固定策略：Release 始终为「EvoResearch v0.1.0-rc.1」（tag v0.1.0-rc.1）。
 # tag 已存在时：删除远端旧 tag 与旧 Release 后重建，tauri-action / gh release
 # 以 `clobber` 语义覆盖同名资产 —— 即"自动覆盖更新资产"。
 #
-# 触发：仅手动（Actions 页 → Release EvoResearch → Run workflow）。
-# push 不触发：编译耗时长（约 40 分钟），避免每次推送都白跑。
+# 触发模式（联调开关）：
+#   iOS 联调期：push 到 main 自动触发，且只跑 ios job（desktop/android 临时
+#   禁用——它们已验证通过，跳过可把单轮反馈周期从 ~40min 压到 ~15min）。
+#   联调完成后：恢复 workflow_dispatch 手动触发并重新启用 desktop/android。
+#
 # 说明：
-# - Desktop 矩阵三平台并行，产物统一上传到上述 Release；
-# - Android 任务生成 unsigned APK（无签名密钥时），同样挂到 Release；
 # - macOS 使用 Ad-hoc 签名（本地可启动）；如需分发签名见 docs/05-release-ci.md；
-# - Release Notes 由 generate-notes 步骤按固定模板生成（平台下载表 +
+# - Release Notes 由 publish-notes 步骤按固定模板生成（平台下载表 +
 #   卖点简介 + 自动提取的 commit 摘要），非 draft 直接正式发布。
 
 name: Release EvoResearch
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -34,15 +37,28 @@ env:
 
 jobs:
   # ── 固定版本号：确保 tag/Release 存在；已存在则删除重建（覆盖资产）──────────
+  # iOS 联调期（IOS_ONLY=true）跳过 Release 删除重建，只验证 iOS 编译本身
   prepare-release:
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create_release.outputs.release_id }}
+      ios_only: ${{ steps.mode.outputs.ios_only }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: 判定运行模式（iOS 联调开关 IOS_ONLY）
+        id: mode
+        run: |
+          # 联调开关：改这一行即可。true = 只跑 iOS job；false = 全平台完整发布
+          echo "ios_only=true" >> "$GITHUB_OUTPUT"
+
+      - name: 跳过 Release 管理（iOS 联调模式）
+        if: steps.mode.outputs.ios_only == 'true'
+        run: echo "iOS 联调模式：不创建/删除 Release，仅验证 iOS 编译"
+
       - name: 删除已存在的同名 Tag 与 Release（覆盖更新）
+        if: steps.mode.outputs.ios_only != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -61,6 +77,7 @@ jobs:
 
       - name: 创建 Release（EvoResearch v0.1.0-rc.1，非 draft）
         id: create_release
+        if: steps.mode.outputs.ios_only != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -84,6 +101,8 @@ jobs:
   # ── Desktop：Windows / Linux / macOS 并行编译 ────────────────────────────
   desktop:
     needs: [prepare-release]
+    # iOS 联调期跳过（desktop 三平台已验证通过）；联调完成删掉此 if 即恢复
+    if: needs.prepare-release.outputs.ios_only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -182,6 +201,8 @@ jobs:
   # ── Android：交叉编译 APK（unsigned；有签名密钥则自动签名）───────────────
   android:
     needs: [prepare-release]
+    # iOS 联调期跳过（Android 已验证通过）；联调完成删掉此 if 即恢复
+    if: needs.prepare-release.outputs.ios_only != 'true'
     runs-on: ubuntu-latest
     env:
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -274,11 +295,79 @@ jobs:
             gh release upload "${TAG}" "$f" --repo "${GITHUB_REPOSITORY}" --clobber
           done
 
+  # ── iOS：Xcode 云端编译（.app 产物 + 可选 IPA）────────────────────────────
+  # 无 Apple 开发者账号/证书时：Xcode 默认对模拟器/本机签名（CODE_SIGNING_ALLOWED
+  # 对模拟器不强制），产物用于验证编译链路；真机分发需后续配证书。
+  ios:
+    needs: [prepare-release]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装 Rust 与 iOS targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Rust 编译缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: 安装 Tauri CLI
+        run: npm i -g @tauri-apps/cli@'^2'
+
+      - name: 构建工作区（插件 + Web 资源）
+        run: |
+          npm ci
+          npm run build
+
+      # frontendDist ../dist 占位页（iOS 同 Android：不跑 Node sidecar，壳加载内置页）
+      - name: 生成 frontendDist 占位页
+        run: mkdir -p desktop/dist && cp desktop/dist.placeholder/index.html desktop/dist/index.html
+
+      # gen/apple 不入库：在 runner 上现场生成（tauri.conf.json 的 bundle.targets
+      # 由 --target aarch64-apple-ios 隐含，iOS 构建走 xcodebuild）
+      - name: 初始化 iOS 工程
+        working-directory: desktop/src-tauri
+        run: cargo tauri ios init
+
+      - name: Tauri iOS 构建（iOS 模拟器 + 真机架构）
+        working-directory: desktop/src-tauri
+        run: |
+          # 模拟器构建（xcodebuild 模拟器目标不要求签名）
+          cargo tauri ios build --target aarch64-apple-ios-sim
+          # 真机构建（无证书时 Xcode 自动降级为不签名/开发签名，验证编译链路）
+          cargo tauri ios build --target aarch64-apple-ios || \
+            echo "::warning::真机 target 构建失败（无签名证书时常见）；模拟器产物已验证编译链路"
+
+      - name: 收集 iOS 产物
+        run: |
+          mkdir -p ios-artifacts
+          find desktop/src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | while read -r app; do
+            zip -r -q "ios-artifacts/$(basename "$app").zip" "$app"
+          done
+          ls -la ios-artifacts/
+
+      - name: 上传 iOS 产物（workflow artifact，联调期不进 Release）
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: ios-artifacts/*.zip
+          if-no-files-found: warn
+
   # ── 发布说明：全部产物上传完成后，按固定模板写入 Release body ──────────────
   # 模板：平台下载表（首推 Windows）+ 卖点简介 + 自动提取的 commit 变更摘要。
   publish-notes:
     needs: [desktop, android]
-    if: ${{ !cancelled() && needs.desktop.result == 'success' }}
+    if: ${{ !cancelled() && needs.desktop.result == 'success' && needs.prepare-release.outputs.ios_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout（取 commit 历史生成变更摘要）
