@@ -424,7 +424,13 @@ jobs:
             echo "完整文档见仓库 README · 反馈请提 Issue"
           } > release-notes.md
 
-          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+          # PATCH 只支持 /releases/{id}（by-tag 路由会 404）；用 prepare-release
+          # 传下来的 release_id，缺失时现场查询兜底
+          RELEASE_ID=${{ needs.prepare-release.outputs.release_id }}
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            RELEASE_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.id')
+          fi
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
             -F body=@release-notes.md --jq '.html_url'
           echo "===== Release Notes 预览 ====="
           cat release-notes.md
