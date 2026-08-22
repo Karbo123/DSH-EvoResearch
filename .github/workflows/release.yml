@@ -333,19 +333,19 @@ jobs:
       - name: 生成 frontendDist 占位页
         run: mkdir -p desktop/dist && cp desktop/dist.placeholder/index.html desktop/dist/index.html
 
-      # gen/apple 不入库：在 runner 上现场生成（tauri.conf.json 的 bundle.targets
-      # 由 --target aarch64-apple-ios 隐含，iOS 构建走 xcodebuild）
+      # gen/apple 不入库：在 runner 上现场生成。npm 版 CLI 经 npx 调用
+      # （cargo tauri 子命令需要 cargo-tauri 二进制，npm 版用 `npx tauri` 入口）
       - name: 初始化 iOS 工程
         working-directory: desktop/src-tauri
-        run: cargo tauri ios init
+        run: npx tauri ios init
 
       - name: Tauri iOS 构建（iOS 模拟器 + 真机架构）
         working-directory: desktop/src-tauri
         run: |
           # 模拟器构建（xcodebuild 模拟器目标不要求签名）
-          cargo tauri ios build --target aarch64-apple-ios-sim
+          npx tauri ios build --target aarch64-apple-ios-sim
           # 真机构建（无证书时 Xcode 自动降级为不签名/开发签名，验证编译链路）
-          cargo tauri ios build --target aarch64-apple-ios || \
+          npx tauri ios build --target aarch64-apple-ios || \
             echo "::warning::真机 target 构建失败（无签名证书时常见）；模拟器产物已验证编译链路"
 
       - name: 收集 iOS 产物
