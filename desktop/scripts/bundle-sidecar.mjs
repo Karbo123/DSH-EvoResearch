@@ -159,6 +159,15 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   pruneNativePrebuilds(nodeModules)
   // 裁剪体积：删除源码映射与文档
   pruneDir(appDir, ['.map', 'README.md', 'LICENSE', '.md', '.d.ts', 'debug.log'])
+  // koffi musl 变体（@koromix/koffi 的 musl_x64/koffi.node 链接 musl libc）：
+  // glibc 系统上用不到；且 AppImage 打包时 linuxdeploy 解析它的依赖
+  // libc.musl-x86_64.so.1 会直接失败（tauri resources 打包整个 sidecar 目录）。
+  // glibc 变体保留（Linux 桌面运行时用）。
+  const koffiMusl = join(nodeModules, '@koromix', 'koffi-linux-x64', 'musl_x64')
+  if (existsSync(koffiMusl)) {
+    rmSync(koffiMusl, { recursive: true, force: true })
+    console.log('[bundle-sidecar] 裁剪 koffi musl 变体（glibc 环境无用且阻断 AppImage 打包）')
+  }
 })
 
 step('复制 launch.js', () => {
