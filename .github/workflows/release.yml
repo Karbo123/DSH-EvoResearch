@@ -51,7 +51,7 @@ jobs:
         id: mode
         run: |
           # 联调开关：改这一行即可。true = 只跑 iOS job；false = 全平台完整发布
-          echo "ios_only=true" >> "$GITHUB_OUTPUT"
+          echo "ios_only=false" >> "$GITHUB_OUTPUT"
 
       - name: 跳过 Release 管理（iOS 联调模式）
         if: steps.mode.outputs.ios_only == 'true'
