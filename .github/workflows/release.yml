@@ -342,10 +342,11 @@ jobs:
       - name: Tauri iOS 构建（iOS 模拟器 + 真机架构）
         working-directory: desktop/src-tauri
         run: |
-          # 模拟器构建（xcodebuild 模拟器目标不要求签名）
-          npx tauri ios build --target aarch64-apple-ios-sim
+          # 模拟器构建（xcodebuild 模拟器目标不要求签名）；
+          # tauri ios build 的 --target 用短名（aarch64/aarch64-sim/x86_64）
+          npx tauri ios build --target aarch64-sim
           # 真机构建（无证书时 Xcode 自动降级为不签名/开发签名，验证编译链路）
-          npx tauri ios build --target aarch64-apple-ios || \
+          npx tauri ios build --target aarch64 || \
             echo "::warning::真机 target 构建失败（无签名证书时常见）；模拟器产物已验证编译链路"
 
       - name: 收集 iOS 产物
