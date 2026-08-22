@@ -17,7 +17,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
 import { toast } from './toast'
-import { MessageSquare, Database, GitBranch, Trash2, Pencil, Globe, FolderGit2, X, FileText, Check, Unlink, File, Search, BookOpen, FlaskConical, Code2, FileCode2 } from 'lucide-react'
+import { GitBranch, X, FileText, Check, Search } from 'lucide-react'
 import { ChatGraphCanvas } from './chatgraph-canvas'
 import type { GraphCanvasMenu } from './chatgraph-canvas'
 import type { Connection } from '@xyflow/react'
@@ -128,6 +128,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [layoutUndo, setLayoutUndo] = useState<ChatGraph | null>(null)
   const [layoutPreview, setLayoutPreview] = useState<{ previous: ChatGraph; next: ChatGraph; warning?: string } | null>(null)
+  const [refitSignal, setRefitSignal] = useState(0)
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [advancedMode, setAdvancedMode] = useState(false)
   const [contextDrawerOpen, setContextDrawerOpen] = useState(false)
@@ -288,6 +289,17 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     return { x: fallbackX + 40, y: fallbackY + 40 }
   }
 
+  /** 顺序自动命名：聊天 N / 记忆 N / 集合 N（跳过已占用的编号）。 */
+  const autoTitle = (kind: 'chat' | 'memory' | 'collection'): string => {
+    const pattern = kind === 'chat' ? /^(?:聊天|新建聊天节点)\s*(\d+)?$/ : kind === 'memory' ? /^(?:记忆|新建记忆节点)\s*(\d+)?$/ : /^集合\s*(\d+)?$/
+    const taken = new Set(graph.nodes
+      .map((node) => { const m = pattern.exec(node.title.trim()); return m === null ? null : (m[1] === undefined ? 1 : Number(m[1])) })
+      .filter((n): n is number => n !== null))
+    let n = 1
+    while (taken.has(n)) n += 1
+    return t(kind === 'chat' ? 'graphChatN' : kind === 'collection' ? 'graphCollN' : 'graphMemN').replace('{n}', String(n))
+  }
+
   const createChatNode = async () => {
     setMenu(null)
     if (cwd === null) { setError(t('graphNeedProject')); return }
@@ -298,7 +310,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
       const node: Omit<GraphNode, 'id'> = {
         type: 'chat',
-        title: t('graphNewChat'),
+        title: autoTitle('chat'),
         x: spot.x,
         y: spot.y,
         sessionId,
@@ -326,7 +338,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
     void api<{ node: GraphNode; rev?: number }>('graph-memory-create', {
       workspaceDir: cwd,
-      title: scope === 'global' ? t('graphGlobalMemory') : t('graphProjectMemory'),
+      title: scope === 'global' ? t('graphGlobalMemory') : autoTitle('memory'),
       scope, x: spot.x, y: spot.y,
     })
       .then(appendCreatedNode)
@@ -339,7 +351,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
     void api<{ node: GraphNode; rev?: number }>('graph-memory-collection', {
       workspaceDir: cwd,
-      title: scope === 'global' ? t('graphGlobalCollection') : t('graphProjectCollection'),
+      title: scope === 'global' ? t('graphGlobalCollection') : autoTitle('collection'),
       scope, x: spot.x, y: spot.y,
     })
       .then(appendCreatedNode)
@@ -483,7 +495,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       // 新节点放在源节点右侧（避开已有节点）
       const spot = freeSpot(source.x + NODE_W + 48, source.y)
       const node: Omit<GraphNode, 'id'> = {
-        type: 'chat', title: t('graphNewBranch'), x: spot.x, y: spot.y, sessionId, workspaceDir: cwd,
+        type: 'chat', title: t('graphBranchOf').replace('{title}', source.title), x: spot.x, y: spot.y, sessionId, workspaceDir: cwd,
       }
       created = await api<{ node: GraphNode; rev?: number }>('graph-add-node', { workspaceDir: cwd, node })
       if (typeof created.rev === 'number') revRef.current = created.rev
@@ -682,6 +694,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       }
       setLayoutUndo(preview.previous)
       setLayoutPreview(null)
+      setRefitSignal((value) => value + 1)
     })
   }
 
@@ -689,6 +702,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     if (layoutPreview === null) return
     setGraph(layoutPreview.previous)
     setLayoutPreview(null)
+    setRefitSignal((value) => value + 1)
   }
 
   /** 可选人工固定资料入口；自动 Memory 链接发现不依赖此操作。 */
@@ -885,14 +899,22 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     children: [
       menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy || cwd === null, onClick: () => { void createChatNode() }, children: t('graphNewChat') }),
       menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryNode('project'), children: t('graphNewMemory') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryNode('global'), children: t('graphNewGlobal') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryCollection(), children: t('graphNewCollectionShort') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: useExistingMemory, children: t('graphUseExistingMemory') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: addResourceNode, children: t('graphPinResource') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: layoutVisible, children: layoutPreview === null ? t('graphLayoutBtn') : t('graphRelayoutBtn') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', title: t('graphFocusNeighbors'), onClick: () => setViewMode((mode) => mode === 'neighbors' ? 'all' : 'neighbors'), children: t('graphFocusNeighbors') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', title: t('graphFocusBranch'), onClick: () => setViewMode((mode) => mode === 'branch' ? 'all' : 'branch'), children: t('graphFocusBranch') }),
+      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => editEdgeLabel(menu.edgeId as string), children: t('graphEditLabel') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => toggleEdgeMode(menu.edgeId as string), children: t('graphToggleEdge') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteEdge(menu.edgeId as string), children: t('graphDeleteEdge') }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
       menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => togglePinned(menu.nodeId as string), children: nodeById(menu.nodeId)?.pinned === true ? t('graphUnpinNode') : t('graphPinNode') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: () => forkDirection(menu.nodeId as string), children: t('graphBranchFromHere') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const node = nodeById(menu.nodeId as string); if (node !== undefined) startEditMemory(node) }, children: t('graphEditMemory') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => useExistingMemory(), children: t('graphUseExistingMemory') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const target = currentChatNode; const source = nodeById(menu.nodeId as string); if (source !== undefined) connectReferenceFromNode(source) }, children: t('graphRefToChat') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const source = nodeById(menu.nodeId as string); if (source !== undefined) createNaturalRelation(source) }, children: t('graphRelateToChat') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && (nodeById(menu.nodeId)?.displayKind === 'memory' || nodeById(menu.nodeId)?.displayKind === 'memory-collection' || nodeById(menu.nodeId)?.type === 'memory') && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => copyMemoryNode(menu.nodeId as string), children: t('graphCopyMemory') }),
       menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: t('graphDeleteNode') }),
     ],
@@ -916,83 +938,33 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           }),
         ]}),
         jsx('button', {
-          type: 'button', className: 'evo-graph-btn', disabled: busy || cwd === null,
-          title: t('graphNewChat'), onClick: () => { setMenu({ x: 40, y: 40 }); void createChatNode() },
-          children: jsxs(Fragment, { children: [jsx(MessageSquare, {}), jsx('span', { children: t('graphNewChat') })] }),
-        }),
-        jsx('button', {
-          type: 'button', className: 'evo-graph-btn', disabled: cwd === null,
-          title: t('graphNewMemory'), onClick: () => createMemoryNode('project'),
-          children: jsxs(Fragment, { children: [jsx(Database, {}), jsx('span', { children: t('graphNewMemory') })] }),
-        }),
-        jsx('button', {
-          type: 'button', className: 'evo-graph-btn', disabled: cwd === null,
-          title: t('graphNewGlobal'), onClick: () => createMemoryNode('global'),
-          children: jsxs(Fragment, { children: [jsx(Globe, {}), jsx('span', { children: t('graphNewGlobal') })] }),
-        }),
-        jsx('button', {
-          type: 'button', className: 'evo-graph-btn', disabled: cwd === null,
-          title: t('graphUseExistingMemory'), onClick: useExistingMemory,
-          children: jsxs(Fragment, { children: [jsx(Database, {}), jsx('span', { children: t('graphUseExisting') })] }),
-        }),
-        jsx('button', {
-          type: 'button', className: 'evo-graph-btn', disabled: cwd === null,
-          title: t('graphNewCollection'), onClick: () => createMemoryCollection(),
-          children: jsxs(Fragment, { children: [jsx(FolderGit2, {}), jsx('span', { children: t('graphNewCollectionShort') })] }),
-        }),
-        jsx('button', {
-          type: 'button', className: 'evo-graph-btn', disabled: cwd === null,
-          title: t('graphPinResource'), onClick: addResourceNode,
-          children: jsxs(Fragment, { children: [jsx(File, {}), jsx('span', { children: t('graphPinResource') })] }),
-        }),
-        jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: t('graphFocusNeighbors'),
-          onClick: () => setViewMode((mode) => mode === 'neighbors' ? 'all' : 'neighbors'),
-          children: t('graphFocusNeighbors'),
-        }),
-        jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: t('graphFocusBranch'),
-          onClick: () => setViewMode((mode) => mode === 'branch' ? 'all' : 'branch'),
-          children: t('graphFocusBranch'),
-        }),
-        jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: t('graphLayout'), disabled: busy,
-          onClick: layoutVisible,
-          children: layoutPreview === null ? t('graphLayoutBtn') : t('graphRelayoutBtn'),
-        }),
-        layoutPreview !== null && jsx('button', {
-          type: 'button', className: 'evo-graph-btn evo-graph-btn-primary', title: t('graphConfirmLayoutTitle'), onClick: confirmLayout,
-          children: t('graphConfirmSave'),
-        }),
-        layoutPreview !== null && jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: t('graphCancelLayoutTitle'), onClick: cancelLayout,
-          children: t('graphCancelPreview'),
-        }),
-        layoutUndo !== null && jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: t('graphUndoLayout'), onClick: undoLayout,
-          children: t('graphUndoLayout'),
-        }),
-        jsx('button', {
           type: 'button', className: `evo-graph-btn${advancedMode ? ' active' : ''}`, title: advancedMode ? t('graphHidePortsTitle') : t('graphShowPortsTitle'),
           'aria-pressed': advancedMode,
           onClick: () => setAdvancedMode((value) => !value),
           children: advancedMode ? t('graphAdvancedPorts') : t('graphNormalOps'),
         }),
         jsx('button', {
-          type: 'button', className: 'evo-graph-btn', title: t('graphViewTurnRefsTitle'),
-          onClick: () => setContextDrawerOpen(true),
-          children: t('contextTraceTitle'),
+          type: 'button', className: 'evo-graph-btn has-label', title: layoutPreview === null ? t('graphLayout') : t('graphRelayoutBtn'), disabled: busy,
+          onClick: layoutVisible,
+          children: layoutPreview === null ? t('graphLayoutBtn') : t('graphRelayoutBtn'),
+        }),
+        layoutPreview !== null && jsx('button', {
+          type: 'button', className: 'evo-graph-btn evo-graph-btn-primary has-label', title: t('graphConfirmLayoutTitle'), onClick: confirmLayout,
+          children: t('graphConfirmSave'),
+        }),
+        layoutPreview !== null && jsx('button', {
+          type: 'button', className: 'evo-graph-btn has-label', title: t('graphCancelLayoutTitle'), onClick: cancelLayout,
+          children: t('graphCancelPreview'),
+        }),
+        layoutUndo !== null && jsx('button', {
+          type: 'button', className: 'evo-graph-btn has-label', title: t('graphUndoLayout'), onClick: undoLayout,
+          children: t('graphUndoLayout'),
         }),
         ...(graph.groups ?? []).map((group) => jsx('button', {
           type: 'button', className: 'evo-graph-btn', title: group.collapsed || collapsedGroups.has(group.id) ? t('graphExpandGroupTitle') : t('graphCollapseGroupTitle'),
           onClick: () => toggleGroup(group.id),
           children: `${group.collapsed || collapsedGroups.has(group.id) ? t('graphExpand') : t('graphCollapse')} ${group.title}`,
         }, `group-${group.id}`)),
-        ...(graph.groups ?? []).map((group) => jsx('button', {
-          type: 'button', className: 'evo-graph-btn evo-graph-btn-danger', title: t('graphDeleteGroupTitle').replace('{title}', group.title),
-          onClick: () => removeGroup(group.id),
-          children: t('graphDeleteGroup').replace('{title}', group.title),
-        }, `remove-group-${group.id}`)),
       ]}),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
       jsx(ChatGraphCanvas, {
@@ -1015,12 +987,10 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         onNodeContextMenu: onCanvasNodeContextMenu,
         onEdgeContextMenu: onCanvasEdgeContextMenu,
         onConnect: onCanvasConnect,
-        onNaturalBranch: (node: GraphNode) => { void forkDirection(node.id) },
-        onNaturalReference: connectReferenceFromNode,
-        onNaturalRelation: createNaturalRelation,
         onToggleGroup: toggleGroup,
         onNodePositionsChange: onCanvasPositionsChange,
         onNarrowOpen: (node: GraphNode) => { setSelectedId(node.id); if (node.type === 'chat') openChatNode(node); else if (node.displayKind === 'memory' || node.displayKind === 'memory-collection' || node.type === 'memory') startEditMemory(node); else if (node.ref !== undefined) openRefViewer(node); else startEditMemory(node) },
+        refitSignal,
       }),
       contextDrawerOpen && jsx(ContextTraceDrawer, {
         sessionId: currentSessionId ?? '',
@@ -1154,16 +1124,6 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       }),
     ],
   })
-}
-
-/** 引用类型图标（GRAPH-04 节点展示）。 */
-function refKindIcon(kind: GraphNodeRef['kind']): typeof File {
-  if (kind === 'dir') return FolderGit2
-  if (kind === 'pdf' || kind === 'paper') return BookOpen
-  if (kind === 'experiment' || kind === 'run' || kind === 'log') return FlaskConical
-  if (kind === 'code') return Code2
-  if (kind === 'latex' || kind === 'manuscript') return FileCode2
-  return File
 }
 
 /** 引用显示名：路径 basename（截断）。 */

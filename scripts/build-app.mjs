@@ -48,6 +48,21 @@ function generateKatexCss() {
   console.log(`[build-app] katex css → src/client/katex-css.ts（${Math.round(inlined.length / 1024)} KB，字体内联）`)
 }
 
+/**
+ * 生成 src/client/xyflow-css.ts：@xyflow/react 的 style.css（React Flow
+ * 必需的画布/连线/控件基础样式）。纯 CSS 无 url() 资源，直接内联。
+ */
+function generateXyflowCss() {
+  const xyflowDist = join(ROOT, 'node_modules', '@xyflow', 'react', 'dist')
+  const css = readFileSync(join(xyflowDist, 'style.css'), 'utf8')
+  writeFileSync(
+    join(PKG, 'src', 'client', 'xyflow-css.ts'),
+    `// 由 scripts/build-app.mjs 构建期生成（@xyflow/react/dist/style.css），勿手改、勿入库。\nexport const XYFLOW_CSS = ${JSON.stringify(css)}\n`,
+    'utf8',
+  )
+  console.log(`[build-app] xyflow css → src/client/xyflow-css.ts（${Math.round(css.length / 1024)} KB）`)
+}
+
 async function buildNodeHalf() {
   // 包根：空 apply（官方 ui-* node half 同构）；真实运行时在 ./runtime 子路径
   await build({
@@ -86,6 +101,8 @@ async function buildNodeHalf() {
 async function buildClient() {
   // 生成 KaTeX CSS（字体内联为 data URL），供客户端注入
   generateKatexCss()
+  // 生成 React Flow（@xyflow/react）必需样式，供客户端注入
+  generateXyflowCss()
   // Chat Graph 的 ELK 布局独立打包为 Worker payload，再以内联字符串注入
   // client bundle。这样插件仍只需要 DSH 的单一 client.js 端点，布局不会
   // 回退到主线程，也不会依赖 WebView2 对额外静态资源路由的支持。
@@ -155,6 +172,11 @@ async function buildFrontend() {
       'process.versions.node': '"0.0.0"',
       'process.execArgv': '[]',
       'process.env.CORDIS_SHARED': 'undefined',
+      // 生产构建：esbuild 缺省把 NODE_ENV 折叠为 development，会内联 React 的
+      // dev 版 jsx-runtime 并经 staticModules 表分发给所有插件，导致每个
+      // jsxs 静态数组子元素都告警缺 key（生产运行时 jsx==jsxs 不做该校验）。
+      // 显式指定 production 与官方 vite build 行为一致。
+      'process.env.NODE_ENV': '"production"',
     },
     // 传递依赖（katex 等）的 CSS 引用了字体/图片资源：直接内联为 dataurl，
     // 避免 esbuild 需要文件 loader 且运行时额外请求。
