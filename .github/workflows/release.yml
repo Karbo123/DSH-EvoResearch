@@ -37,28 +37,15 @@ env:
 
 jobs:
   # ── 固定版本号：确保 tag/Release 存在；已存在则删除重建（覆盖资产）──────────
-  # iOS 联调期（IOS_ONLY=true）跳过 Release 删除重建，只验证 iOS 编译本身
   prepare-release:
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.create_release.outputs.release_id }}
-      ios_only: ${{ steps.mode.outputs.ios_only }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 判定运行模式（iOS 联调开关 IOS_ONLY）
-        id: mode
-        run: |
-          # 联调开关：改这一行即可。true = 只跑 iOS job；false = 全平台完整发布
-          echo "ios_only=false" >> "$GITHUB_OUTPUT"
-
-      - name: 跳过 Release 管理（iOS 联调模式）
-        if: steps.mode.outputs.ios_only == 'true'
-        run: echo "iOS 联调模式：不创建/删除 Release，仅验证 iOS 编译"
-
       - name: 删除已存在的同名 Tag 与 Release（覆盖更新）
-        if: steps.mode.outputs.ios_only != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -77,7 +64,6 @@ jobs:
 
       - name: 创建 Release（EvoResearch v0.1.0-rc.1，非 draft）
         id: create_release
-        if: steps.mode.outputs.ios_only != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -101,8 +87,6 @@ jobs:
   # ── Desktop：Windows / Linux / macOS 并行编译 ────────────────────────────
   desktop:
     needs: [prepare-release]
-    # iOS 联调期跳过（desktop 三平台已验证通过）；联调完成删掉此 if 即恢复
-    if: needs.prepare-release.outputs.ios_only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -201,8 +185,6 @@ jobs:
   # ── Android：交叉编译 APK（unsigned；有签名密钥则自动签名）───────────────
   android:
     needs: [prepare-release]
-    # iOS 联调期跳过（Android 已验证通过）；联调完成删掉此 if 即恢复
-    if: needs.prepare-release.outputs.ios_only != 'true'
     runs-on: ubuntu-latest
     env:
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -365,10 +347,10 @@ jobs:
           if-no-files-found: warn
 
   # ── 发布说明：全部产物上传完成后，按固定模板写入 Release body ──────────────
-  # 模板：平台下载表（首推 Windows）+ 卖点简介 + 自动提取的 commit 变更摘要。
+  # 模板：平台下载表（含 iOS）+ 卖点简介 + 自动提取的 commit 变更摘要。
   publish-notes:
     needs: [desktop, android]
-    if: ${{ !cancelled() && needs.desktop.result == 'success' && needs.prepare-release.outputs.ios_only != 'true' }}
+    if: ${{ !cancelled() && needs.desktop.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout（取 commit 历史生成变更摘要）
@@ -394,34 +376,44 @@ jobs:
 
           {
             cat <<'HEAD'
+          > 🎉 **EvoResearch v0.1.0-rc.1 来了！** 一个为科研而生的智能体工作台：
+          > 对话、文献、实验、记忆全流程打通。首次使用？看下面的表格选对你的设备就行。
+
           ## 📦 下载哪个文件？
 
-          | 平台 | 文件 | 说明 |
+          | 你的设备 | 下载这个 | 怎么用 |
           |---|---|---|
-          | **Windows 10/11（推荐）** | `EvoResearch_0.1.0_x64-setup.exe` | 安装包，下载后双击安装。**大多数用户选这个** |
-          | macOS (Apple Silicon) | `EvoResearch_0.1.0_aarch64.dmg` | M1/M2/M3/M4 芯片的 Mac |
-          | Linux x86_64（免安装） | `EvoResearch_0.1.0_amd64.AppImage` | `chmod +x` 后直接运行 |
-          | Linux x86_64 (Debian/Ubuntu) | `EvoResearch_0.1.0_amd64.deb` | `sudo dpkg -i <文件>` 安装 |
-          | Android arm64 | `app-arm64-release.apk` | 大多数现代安卓手机；当前为预览壳（无完整后端） |
-          | Android 其它架构 | `app-arm / app-x86 / app-x86_64-release.apk` | 按设备架构选择 |
+          | 🪟 **Windows 10/11** | `EvoResearch_0.1.0_x64-setup.exe` | 双击安装，打开即用。**大多数用户选这个** ⭐ |
+          | 🍎 Mac (M1/M2/M3/M4) | `EvoResearch_0.1.0_aarch64.dmg` | 打开后拖进「应用程序」 |
+          | 🐧 Linux（免安装） | `EvoResearch_0.1.0_amd64.AppImage` | `chmod +x` 后直接双击运行 |
+          | 🐧 Linux (Debian/Ubuntu) | `EvoResearch_0.1.0_amd64.deb` | `sudo dpkg -i <文件>` 安装 |
+          | 🤖 Android 手机 (arm64) | `app-arm64-release.apk` | 下载安装即可（预览版） |
+          | 🤖 Android 其它架构 | `app-arm / app-x86 / app-x86_64-release.apk` | 按手机架构选择 |
+          | 📱 iPhone / iPad | `ios-build.zip`（见本页 Assets 或 Actions 产物） | 解压出 .app；正式 IPA 需签名后提供 |
 
-          > 💡 不确定选哪个？Windows 用户选第一个；Mac 选 aarch64.dmg；
-          > Android 安装 unsigned 包需在系统设置中允许"未知来源应用"。
+          > 💡 不确定选哪个？Windows 用户无脑选第一个；Mac 选 aarch64.dmg；
+          > Android/iOS 未签名包首次打开需允许「未知来源 / 开发者信任」。
 
-          ## ✨ 本版本亮点
+          ## ✨ 这个版本有什么？
 
-          EvoResearch 是面向科研的自主智能体工作台（基于 deepseek-harness）。
-          本构建包含：科研记忆与项目工作区、多智能体团队协作、实验控制台
-          （账本/回合/日报）、定时任务、多通道接入、自定义工作台界面，
-          以及 **Windows / Linux / macOS 三平台桌面版**。
+          EvoResearch 是一个懂科研的本地智能体工作台——你的对话、文献、
+          项目文件、实验记录和长期记忆全部连成一体：
 
-          ## 📝 近期变更
+          - 🧠 **科研记忆**：重要结论自动沉淀，下次对话随取随用
+          - 🕸️ **Chat Graph**：从任意消息分叉探索不同假设，并行推进
+          - 🧪 **实验控制台**：账本 + 回合 + 日报，每轮实验全程留痕
+          - 👥 **多智能体协作**：规划、调研、编码、分析、写作组队干活
+          - 📱 **全平台覆盖**：Windows / macOS / Linux 桌面 + Android + iOS
+
+          完整功能介绍见仓库 README。
+
+          ## 📝 相比上一版的更新
 
           HEAD
-            if [ -n "$CHANGES" ]; then echo "$CHANGES"; else echo "（本次为首次发布，无历史变更可列）"; fi
+            if [ -n "$CHANGES" ]; then echo "$CHANGES"; else echo "（首次发布）"; fi
             echo ""
             echo "---"
-            echo "完整文档见仓库 README · 反馈请提 Issue"
+            echo "💬 有问题或建议？欢迎提 [Issue](https://github.com/${GITHUB_REPOSITORY}/issues) · 如果对你有帮助，给仓库点个 Star ⭐"
           } > release-notes.md
 
           # PATCH 只支持 /releases/{id}（by-tag 路由会 404）；用 prepare-release

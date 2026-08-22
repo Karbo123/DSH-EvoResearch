@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="docs/screenshots/hero-dark.png" alt="EvoResearch" width="720">
+<img src="docs/screenshots/logo.svg" alt="EvoResearch" width="96">
 
-# ✨ EvoResearch
+# EvoResearch
 
-### 你的科研，从此有了记忆、脉络和团队。
+### 为科研而生的智能体工作台 —— 覆盖科研全流程
 
-**一次提问 · 持续研究 · 从想法到论文**
+**选题调研 · 文献阅读 · 实验设计 · 论文写作，一个平台全搞定**
 
 [![Release](https://img.shields.io/github/v/release/Karbo123/DSH-EvoResearch?style=flat-square&color=2f6bff)](https://github.com/Karbo123/DSH-EvoResearch/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows_|_macOS_|_Linux-0078d6?style=flat-square)](https://github.com/Karbo123/DSH-EvoResearch/releases)
 [![Android](https://img.shields.io/badge/Android-APK-3ddc84?style=flat-square)](https://github.com/Karbo123/DSH-EvoResearch/releases)
-[![iOS](https://img.shields.io/badge/iOS-Beta-000000?style=flat-square)](https://github.com/Karbo123/DSH-EvoResearch/actions)
+[![iOS](https://img.shields.io/badge/iOS-Beta-000000?style=flat-square)](https://github.com/Karbo123/DSH-EvoResearch/releases)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/Karbo123/DSH-EvoResearch?style=flat-square&color=f1c40f)](https://github.com/Karbo123/DSH-EvoResearch/stargazers)
 
@@ -71,7 +71,7 @@
 | 🍎 Mac (M 系列芯片) | `EvoResearch_0.1.0_aarch64.dmg` | 打开拖入 Applications |
 | 🐧 Linux | `EvoResearch_0.1.0_amd64.AppImage` | `chmod +x` 后直接运行 |
 | 🤖 Android 手机 | `app-arm64-release.apk` | 安装（预览版） |
-| 📱 iPhone / iPad | — | 🚧 编译验证中，敬请期待 |
+| 📱 iPhone / iPad | `ios-build.zip`（Release 资产） | 解压出 .app 侧载（Beta） |
 
 ### 2️⃣ 打开就能用
 
