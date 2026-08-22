@@ -47,6 +47,7 @@ import type {
   DraftDiff,
   CompileResult,
   LatexTool,
+  LatexEnvReport,
 } from './manuscript.js'
 import type { SignalStore } from './evolution/signals.js'
 import { aggregateWeaknesses, weaknessMarkdown } from './evolution/signals.js'
@@ -61,10 +62,11 @@ import type { ContextAssembler, AssembleInput, EffectQuery, AssemblyResult, Refe
 import type { CompactionQuery, GraphConnectionInfo, PressureReport, CompactionRecord, ContextSourceReport, SurfaceEventInfo } from './context/types.js'
 import { readSessionEvents } from './rewind.js'
 import { isLowInformationInput } from './core/title.js'
-import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary } from '../shared/types.js'
+import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary, ObservationEdgeType } from '../shared/types.js'
 import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
 import type { ApprovalPolicy, ApprovalDecision } from './platform/approval-policy.js'
 import { decideApproval, defaultApprovalPolicy, validateApprovalPolicy } from './platform/approval-policy.js'
+import { unmarkUnattendedSession } from './platform/unattended-registry.js'
 import type { FallbackState, ModelRoute, SelectModelOptions } from './platform/models-selector.js'
 import { emptyFallbackState, routeKey, selectModel, recordFailure, recordSuccess } from './platform/models-selector.js'
 import type { ToolDef } from './platform/tools-selector.js'
@@ -77,6 +79,7 @@ import type { McpServerConfig, McpServerStatus } from './mcp/supervisor.js'
 import type { LayeredSkillRegistry, SkillLayer, SkillEntry } from './skills/registry.js'
 import type { ScienceLoopService, ScienceLoop, ScienceLoopAction } from './science/loops.js'
 import type { ScienceChatGraphBridge } from './science/chat-graph-bridge.js'
+import type { JobHubService } from './jobs.js'
 import { callJson } from './core/llm.js'
 
 /** 各服务集合（host 入口注入）。 */
@@ -128,6 +131,10 @@ export interface HostServices {
   readonly contextAssembler?: ContextAssembler
   /** 平台能力层（PLAT-13..20；t19 交付，按需接线）。 */
   readonly platform?: PlatformServices
+  /** P0-3 后台任务注册表（JobHub；删除级联取消 P3-1 的查询入口）。 */
+  readonly jobHub?: JobHubService
+  /** P2-1 论文图纸服务（figures/<id>/v<N>/ 版本历史；面板图纸分区数据源）。 */
+  readonly figureService?: import('./figures.js').FigureService
 }
 
 /** 平台能力服务集合（PLAT-13..20；可选接线）。 */
@@ -189,6 +196,72 @@ function isSameOrInside(target: string, base: string): boolean {
   const b = normPathKey(base)
   return t === b || t.startsWith(`${b}/`)
 }
+
+/* ------------------------------------------------------------------ */
+/* P0-2 工具结果图片资产探测                                              */
+/* ------------------------------------------------------------------ */
+
+/** 工具结果中登记的图片资产（wire JSON）。 */
+export interface ToolImageAsset {
+  /** 图片绝对路径（workspace 内）。 */
+  path: string
+  mime: string
+  /** 文件名字段（客户端展示用）。 */
+  name: string
+}
+
+/** 可识别为图片资产的扩展名 → MIME。 */
+const IMAGE_MIME_BY_EXT: Readonly<Record<string, string>> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+}
+
+/** 单次工具结果最多登记的图片资产数（防大结果刷屏）。 */
+export const MAX_TOOL_IMAGE_ASSETS = 6
+
+/**
+ * 从工具结果文本中探测项目内图片路径（P0-2）。
+ * 只登记 workspace 内存在的文件（防穿越/防伪造）；PDF 不算图片资产
+ * （第一版只列文件 chip，不做首页预览）。
+ */
+export function detectToolImageAssets(resultText: string, workspaceDir: string, max = MAX_TOOL_IMAGE_ASSETS): ToolImageAsset[] {
+  if (!resultText || !workspaceDir) return []
+  // 匹配 Windows / POSIX 风格路径，扩展名限定图片集合
+  const pattern = /(?:[A-Za-z]:)?(?:[\\/][^\s"'`<>()，。；、]{1,240}?\.(?:png|jpe?g|gif|webp|svg))/gi
+  const found = new Map<string, ToolImageAsset>()
+  for (const match of resultText.matchAll(pattern)) {
+    if (found.size >= max) break
+    const raw = match[0]
+    let resolved: string
+    try {
+      resolved = path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(workspaceDir, raw)
+    } catch {
+      continue
+    }
+    if (!isSameOrInside(resolved, workspaceDir)) continue
+    let stat: import('node:fs').Stats
+    try {
+      stat = statSync(resolved)
+      if (!stat.isFile() || stat.size > 5 * 1024 * 1024) continue
+    } catch {
+      continue
+    }
+    const ext = path.extname(resolved).toLowerCase()
+    const mime = IMAGE_MIME_BY_EXT[ext]
+    if (!mime) continue
+    const key = normPathKey(resolved)
+    if (found.has(key)) continue
+    found.set(key, { path: resolved, mime, name: path.basename(resolved) })
+  }
+  return [...found.values()]
+}
+
+/** artifact-image 单图上限（与用户贴图上限一致）。 */
+export const ARTIFACT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
 /** 会话存储根（与客户端 session-delete 同源）。 */
 function sessionStoreRoot(): string {
@@ -924,6 +997,19 @@ export class EvoResearchApiService extends TypertRemoteService {
       }))
   }
 
+  /** P1-2：Observation 类型化关联边列表（可按观测 id / 边类型过滤）。 */
+  @Remote('memoryObservationEdges')
+  memoryObservationEdges(args: { observationId?: string; edgeType?: string }): unknown {
+    try {
+      return this.services.memory.storeFor('').listObservationLinks({
+        ...(args?.observationId ? { observationId: String(args.observationId) } : {}),
+        ...(args?.edgeType ? { edgeType: args.edgeType as ObservationEdgeType } : {}),
+      })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
   @Remote('memoryPacket')
   memoryPacket(args: { sessionId: string }): unknown {
     const packet = this.services.memory.packetFor(args.sessionId)
@@ -1516,6 +1602,45 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
   }
 
+  /**
+   * P2-2 面板侧网络检索（仅网络部分，供 Library 面板「网络检索」入口使用）。
+   * 平台 web_search 不可用时明确降级（degraded: true），不伪造在线结果。
+   */
+  @Remote('libraryLiteratureWeb')
+  async libraryLiteratureWeb(args: { queries: string[] }): Promise<{ results: Array<{ kind: string; query: string; excerpt?: string; error?: string }>; degraded: boolean }> {
+    const queries = (Array.isArray(args?.queries) ? args.queries : [])
+      .map((q) => String(q ?? '').trim())
+      .filter((q) => q !== '')
+      .slice(0, 4)
+    if (queries.length === 0) return { results: [], degraded: true }
+    let toolsRuntime: { get?(name: string): unknown; execute?(input: { callId: string; name: string; arguments: unknown }): Promise<{ content: readonly unknown[]; isError: boolean }> } | undefined
+    try {
+      toolsRuntime = this.hostCtx.get('tools') as typeof toolsRuntime
+    } catch {
+      toolsRuntime = undefined
+    }
+    if (toolsRuntime?.get?.('web_search') === undefined || toolsRuntime.execute === undefined) {
+      return { results: [], degraded: true }
+    }
+    const results: Array<{ kind: string; query: string; excerpt?: string; error?: string }> = []
+    for (const q of queries) {
+      try {
+        const result = await toolsRuntime.execute({ callId: `evoresearch-web-panel-${Date.now()}`, name: 'web_search', arguments: { query: q } })
+        if (result.isError) throw new Error('web_search 执行失败')
+        const text = result.content
+          .map((block) => {
+            const b = block as { type?: unknown; text?: unknown }
+            return typeof b?.type === 'string' && b.type === 'text' && typeof b.text === 'string' ? b.text : ''
+          })
+          .join('\n')
+        results.push({ kind: 'web', query: q, excerpt: String(text ?? '').slice(0, 400) })
+      } catch (error) {
+        results.push({ kind: 'web_error', query: q, error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    return { results, degraded: false }
+  }
+
   @Remote('libraryGetTextRange')
   libraryGetTextRange(args: { project: string; paperId: string; page: number; offset: number; length: number }): TextRange | { error: string } {
     try {
@@ -1735,6 +1860,18 @@ export class EvoResearchApiService extends TypertRemoteService {
         tool: args?.tool,
         timeoutMs: args?.timeoutMs,
       })
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** P2-3：LaTeX 环境检测（引擎 + 宏包就绪状态与中文写作建议）。 */
+  @Remote('manuscriptLatexEnv')
+  manuscriptLatexEnv(): LatexEnvReport | { error: string } {
+    try {
+      const svc = this.services.manuscript
+      if (svc === undefined) return { error: 'manuscript 服务不可用' }
+      return svc.detectLatexEnv()
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -3406,5 +3543,153 @@ export class EvoResearchApiService extends TypertRemoteService {
     const svc = this.services.dailyReport
     if (!svc) return { error: 'dailyReport 服务不可用' }
     try { return svc.toggle(typeof args?.force === 'boolean' ? args.force : undefined) } catch (error) { return { error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  // ── P0-3 后台任务面板（JobHub）────────────────────────────────────────────
+
+  /** 列出后台任务（可选按会话过滤；running 在前）。 */
+  @Remote('jobsList')
+  jobsList(args: { sessionId?: string; activeOnly?: boolean } = {}): unknown {
+    const hub = this.services.jobHub
+    if (hub === undefined) return { error: 'jobHub 服务不可用' }
+    return {
+      jobs: hub.list({
+        ...(args?.sessionId ? { sessionId: String(args.sessionId) } : {}),
+        ...(args?.activeOnly === true ? { activeOnly: true } : {}),
+      }),
+      countActive: hub.countActive(),
+    }
+  }
+
+  /** 取消一条后台任务（两段式确认由客户端负责）。 */
+  @Remote('jobsCancel')
+  async jobsCancel(args: { jobId: string }): Promise<{ ok: boolean; error?: string }> {
+    const hub = this.services.jobHub
+    if (hub === undefined) return { ok: false, error: 'jobHub 服务不可用' }
+    const job = hub.get(String(args?.jobId ?? ''))
+    if (job === undefined) return { ok: false, error: `任务不存在: ${String(args?.jobId ?? '')}` }
+    // cancel 实现挂在注册表内部；这里经 markCancelled 走完结流转
+    const cancelled = hub.markCancelled(String(args.jobId))
+    return { ok: cancelled, ...(cancelled ? {} : { error: '任务已不在运行中' }) }
+  }
+
+  /** P3-1 前置查询：某会话有多少 active 任务（删除确认框展示用）。 */
+  @Remote('jobsCountForSession')
+  jobsCountForSession(args: { sessionId: string }): { count: number } {
+    const hub = this.services.jobHub
+    if (hub === undefined) return { count: 0 }
+    return { count: hub.countActive(String(args?.sessionId ?? '')) }
+  }
+
+  /**
+   * P3-1 会话删除级联取消：先查 JobHub 该会话的 active 任务，逐个取消后再删。
+   * 返回被取消的任务数（0 = 无需级联）。
+   */
+  @Remote('sessionDeleteCascade')
+  async sessionDeleteCascade(args: { sessionId: string }): Promise<{ ok: boolean; cancelled: number } | { error: string }> {
+    try {
+      const hub = this.services.jobHub
+      const sessionId = String(args?.sessionId ?? '')
+      if (sessionId === '') return { error: '缺少 sessionId' }
+      const cancelled = hub !== undefined ? await hub.cancelBySession(sessionId) : 0
+      // 复用既有持久化数据删除路径（与客户端 session-delete 同源）
+      const sessionsRoot = sessionStoreRoot()
+      let removed = 0
+      try {
+        const entries = readdirSync(sessionsRoot)
+        for (const name of entries) {
+          if (name !== sessionId) continue
+          rmSync(path.join(sessionsRoot, name), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+          removed += 1
+        }
+      } catch { /* 会话目录不存在 */ }
+      unmarkUnattendedSession(sessionId)
+      return { ok: removed > 0 || cancelled > 0, cancelled }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // ── P0-2 工具结果图片渲染 ─────────────────────────────────────────────────
+
+  /**
+   * 从工具结果文本探测项目内图片资产（P0-2）。
+   * 客户端在工具卡片上对命中的资产渲染缩略图；文件本体仍在 workspace 内
+   * （原文唯一权威，聊天里只是投影）。
+   */
+  @Remote('artifactImageDetect')
+  artifactImageDetect(args: { sessionId?: string; text?: string }): { assets: ToolImageAsset[] } | { error: string } {
+    try {
+      const text = String(args?.text ?? '')
+      if (text.trim() === '') return { assets: [] }
+      // 以会话 cwd 为边界；无会话时退回 dataRoot（仍受 isSameOrInside 保护）
+      const sessions = this.hostCtx.get('sessions') as { get?(id: string): { header?: { cwd?: string } } | undefined } | undefined
+      const session = args?.sessionId ? sessions?.get?.(String(args.sessionId)) : undefined
+      const cwd = typeof session?.header?.cwd === 'string' && session.header.cwd !== ''
+        ? session.header.cwd
+        : this.services.memory.config.dataRoot
+      return { assets: detectToolImageAssets(text, cwd) }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * 读取一张工具产物图片（P0-2）：base64 直出，≤5MB（与用户贴图上限一致）。
+   * 路径必须位于 dataRoot 或任一已注册项目内（isSameOrInside 校验）。
+   */
+  @Remote('artifactImage')
+  artifactImage(args: { path: string }): { ok: true; mime: string; name: string; base64: string; bytes: number } | { ok: false; error: string; tooLarge?: boolean } {
+    try {
+      const raw = String(args?.path ?? '')
+      if (raw === '') return { ok: false, error: '缺少 path' }
+      const resolved = path.resolve(raw)
+      const ext = path.extname(resolved).toLowerCase()
+      const mime = IMAGE_MIME_BY_EXT[ext]
+      if (!mime) return { ok: false, error: `不支持的图片类型: ${ext}` }
+      let stat: import('node:fs').Stats
+      try {
+        stat = statSync(resolved)
+        if (!stat.isFile()) return { ok: false, error: '不是文件' }
+      } catch {
+        return { ok: false, error: '文件不存在' }
+      }
+      if (stat.size > ARTIFACT_IMAGE_MAX_BYTES) {
+        return { ok: false, error: `图片过大（>${Math.round(ARTIFACT_IMAGE_MAX_BYTES / 1024 / 1024)}MB），仅支持缩略占位`, tooLarge: true }
+      }
+      // 边界：dataRoot 本身或其下任意路径（projects/ 由 dataRoot 覆盖）
+      const root = this.services.memory.config.dataRoot
+      if (!isSameOrInside(resolved, root)) return { ok: false, error: '图片不在部署数据根内' }
+      const base64 = readFileSync(resolved).toString('base64')
+      return { ok: true, mime, name: path.basename(resolved), base64, bytes: stat.size }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** P2-1 面板图纸分区：列出某工作区的全部图纸（manifest + 版本历史）。 */
+  @Remote('figuresList')
+  figuresList(args: { workspaceDir?: string }): Array<import('./figures.js').FigureInfo> | { error: string } {
+    try {
+      const svc = this.services.figureService
+      if (svc === undefined) return { error: 'figureService 服务不可用' }
+      const dir = String(args?.workspaceDir ?? '') || this.services.memory.config.dataRoot
+      return svc.listFigures(dir)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** P2-1 单个图纸（含全部版本）；非法 id 返回 null。 */
+  @Remote('figuresGet')
+  figuresGet(args: { figureId: string; workspaceDir?: string }): import('./figures.js').FigureInfo | null | { error: string } {
+    try {
+      const svc = this.services.figureService
+      if (svc === undefined) return { error: 'figureService 服务不可用' }
+      const dir = String(args?.workspaceDir ?? '') || this.services.memory.config.dataRoot
+      return svc.getFigure(dir, String(args?.figureId ?? '')) ?? null
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
   }
 }

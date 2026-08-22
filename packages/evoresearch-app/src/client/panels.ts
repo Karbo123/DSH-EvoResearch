@@ -81,6 +81,8 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   // Knowledge（§26.5 轻量版）
   const [observations, setObservations] = useState<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; relatedObservationIds?: readonly string[]; updatedAt: number }> | null>(null)
   const [obsFilter, setObsFilter] = useState<'all' | 'active' | 'superseded'>('all')
+  // P1-2：observationId → [{otherId, edgeType}]（互补=青 / 矛盾=橙红 / 取代=灰删除线）
+  const [edgeTypes, setEdgeTypes] = useState<Map<string, Array<{ otherId: string; edgeType: string }>> | null>(null)
 
   const loadTurns = (offset: number) => {
     void api<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }>>('memory-turns', { limit: TURN_PAGE, offset })
@@ -161,9 +163,28 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   useEffect(() => {
     if (tab !== 'knowledge') return
     setObservations(null)
+    setEdgeTypes(null)
     void api<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; updatedAt: number }>>('memory-observations', obsFilter === 'all' ? { limit: 100 } : { status: obsFilter, limit: 100 })
       .then(setObservations)
       .catch((e: any) => setError(String(e?.message ?? e)))
+    // P1-2：类型化关联边（互补/矛盾/取代）→ 卡片徽标着色
+    void api<Array<{ fromId: string; toId: string; edgeType: string; createdAt: number }>>('memory-observation-edges', {})
+      .then((edges) => {
+        const byObs = new Map<string, Array<{ otherId: string; edgeType: string }>>()
+        for (const e of edges ?? []) {
+          const list = (id: string, other: string) => {
+            const arr = byObs.get(id) ?? []
+            arr.push({ otherId: other, edgeType: e.edgeType })
+            byObs.set(id, arr)
+          }
+          if (typeof e.fromId === 'string' && typeof e.toId === 'string') {
+            list(e.fromId, e.toId)
+            list(e.toId, e.fromId)
+          }
+        }
+        setEdgeTypes(byObs)
+      })
+      .catch(() => { /* 边数据缺失时徽标退化为普通 related 样式 */ })
   }, [tab, obsFilter])
 
   useEffect(() => {
@@ -412,7 +433,12 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                             o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: `superseded by ${o.supersededBy.slice(0, 18)}` }),
                             o.content !== '' && jsx('div', { className: 'evo-skill-desc', children: o.content.slice(0, 220) }),
                             (o.categories ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: categoryLabel(c) }, c)) }),
-                            (o.relatedObservationIds ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.relatedObservationIds ?? []).map((rid) => jsx('span', { className: 'evo-panel-tag evo-panel-tag-link', title: rid, children: `${t('relatedTo')} ${rid.slice(0, 10)}` }, rid)) }),
+                            (o.relatedObservationIds ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.relatedObservationIds ?? []).map((rid) => {
+                              const edge = edgeTypes?.get(o.observationId)?.find((x) => x.otherId === rid)
+                              const cls = edge?.edgeType === 'contradicts' ? 'evo-panel-tag evo-edge-contradicts' : edge?.edgeType === 'supersedes' ? 'evo-panel-tag evo-edge-supersedes' : 'evo-panel-tag evo-panel-tag-link'
+                              const label = edge?.edgeType === 'contradicts' ? t('edgeContradicts') : edge?.edgeType === 'supersedes' ? t('edgeSupersedes') : `${t('relatedTo')} ${rid.slice(0, 10)}`
+                              return jsx('span', { className: cls, title: rid, children: label }, rid)
+                            }) }),
                           ],
                         }, o.observationId)),
                       }),

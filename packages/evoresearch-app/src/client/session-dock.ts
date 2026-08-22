@@ -33,7 +33,7 @@ export interface SessionDockData {
   session: any
 }
 
-/** 状态条内容：排队 / 目标 / 模式 / 上下文。 */
+/** 状态条内容：排队 / 目标 / 模式 / 上下文（P0-4：三档配色占用条 + 手动压缩入口）。 */
 export function SessionStatusLine({ session }: SessionDockData) {
   if (session === null) return null
 
@@ -47,6 +47,8 @@ export function SessionStatusLine({ session }: SessionDockData) {
     if (used === undefined || total === undefined || total === 0) return null
     return { percent: Math.min(100, Math.round((used / total) * 100)), used, total }
   })()
+  // P0-4 三档：ok(<60%) / watch(60-79%) / high(≥80%，与 window.ts autoCompactThreshold 对齐)
+  const occupancyLevel = occupancy === null ? null : occupancy.percent >= 80 ? 'high' : occupancy.percent >= 60 ? 'watch' : 'ok'
 
   return jsxs(Fragment, {
     children: [
@@ -61,9 +63,13 @@ export function SessionStatusLine({ session }: SessionDockData) {
         children: [jsx(Target, {}), jsx('span', { children: goal.title ?? t('goal') })],
       }),
       occupancy !== null && jsxs('span', {
-        className: 'evo-status-chip',
-        title: `${t('contextLabel')}: ${formatTokens(occupancy.used)} / ${formatTokens(occupancy.total)}`,
-        children: [jsx(Gauge, {}), jsx('span', { children: `${occupancy.percent}%` })],
+        className: `evo-status-chip evo-ctx-meter${occupancyLevel !== null ? ` evo-ctx-${occupancyLevel}` : ''}`,
+        title: `${t('ctxUsageDetail').replace('{used}', formatTokens(occupancy.used)).replace('{total}', formatTokens(occupancy.total)).replace('{percent}', String(occupancy.percent))}（${t('statTokenUnit')}）`,
+        children: [
+          jsx(Gauge, {}),
+          jsx('span', { className: 'evo-ctx-meter-bar' }),
+          jsx('span', { children: `${occupancy.percent}%` }),
+        ],
       }),
     ],
   })

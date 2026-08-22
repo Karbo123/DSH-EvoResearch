@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
+import { XYFLOW_CSS } from './xyflow-css'
 import { applyTheme, resolvedTheme, toggleTheme } from './theme'
 import { ThreadList, normalizeSessionsSnapshot, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
@@ -135,6 +136,7 @@ function installCss() {
   const sheets: Array<[string, string]> = [
     ['@evoresearch/dsh-app/workspace.css', CSS],
     ['@evoresearch/dsh-app/katex.css', KATEX_CSS],
+    ['@evoresearch/dsh-app/xyflow.css', XYFLOW_CSS],
   ]
   for (const [tagId, css] of sheets) {
     if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) {
@@ -897,7 +899,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const deleteSessionById = async (id: string): Promise<{ ok: boolean; error?: string }> => {
     try {
-      const res = await fetch('/evoresearch/fs/session-delete', {
+      // P3-1 删除级联：先经 session-delete-cascade 取消该会话的后台任务再删持久化数据
+      const res = await fetch('/evoresearch/fs/session-delete-cascade', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ sessionId: id }),
@@ -906,7 +909,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       if (json.ok !== true) return { ok: false, error: (json.error as { message?: string } | undefined)?.message ?? '删除失败' }
       const cwd = sessions.byId[id]?.cwd ?? null
       markDeleted(id, cwd)
-      toast('会话已删除', 'success')
+      const cancelled = typeof json.value?.cancelled === 'number' ? json.value.cancelled : 0
+      toast(cancelled > 0 ? `会话已删除（已取消 ${cancelled} 个后台任务）` : '会话已删除', 'success')
       // 删除的是当前会话 → 跳到新会话
       if (sessions.current === id) startNewChat()
       window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))

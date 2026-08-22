@@ -136,7 +136,18 @@ evoresearch:
     model: deepseek v4 flash
   autoStartChannels: false         # 启动时自动启动已配置通道
   memoryEnabled: true
+  visionEnabled: true              # 注册 vision_check 工具（模型未配置时自动跳过）
+  autoskillsSchedule: '7 3 * * 1'  # P1-1 定时挖掘 cron（默认每周一凌晨 3:07；'off' 关闭）
+  unattended:                      # P3-2 无人值守（scheduler/channel/science 触发的会话）shell 门控
+    allowCommands:                 # 危险段之外还须命中这些前缀才放行（不配置则只按 deny 清单）
+      - python
+      - uv pip install
 ```
+
+> P3-2 门控运行时行为：scheduler/通道/科学候选会话创建时自动登记；其 bash/pwsh
+> 命令在执行前经 `decideUnattendedShell` 判定——任一命令段命中危险清单即拒绝
+> （fail-closed），配置了 allowCommands 时还须命中允许前缀。拒绝原因回传给模型，
+> 建议其改为安全等价命令或等待有人在会话中确认。
 
 ## 如何新增一个通道适配器
 

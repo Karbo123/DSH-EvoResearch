@@ -35,33 +35,33 @@ export const CSS = `
   --chat-max-width: 900px;
   --input-bg: #ffffff;
   --hover-bg: #f0ebe1;
-  /* Chat Graph tokens: deliberately separate from the general surface scale
-     so a light canvas remains readable without hard-coded dark-only colors. */
-  --graph-canvas: #f3f0ea;
-  --graph-grid: #d4cec2;
-  --graph-node-surface: #fffdf8;
-  --graph-node-surface-alt: #f4f0e8;
-  --graph-node-border: #b9b1a4;
-  --graph-node-title: #2f2b25;
-  --graph-chat: #2e6f95;
-  --graph-memory: #2d8158;
-  --graph-global: #7653a0;
-  --graph-resource: #94652b;
-  --graph-fork: #2e72a0;
-  --graph-reference: #2d8158;
-  --graph-relation: #77736c;
-  --graph-disabled: #8e887f;
-  --graph-edge-label: #3c3933;
-  --graph-control: #fffdf8;
-  --graph-control-border: #b9b1a4;
-  --graph-minimap: rgb(255 253 248 / 92%);
-  --graph-minimap-group: #7653a0;
-  --graph-minimap-chat: #2e6f95;
-  --graph-minimap-resource: #2d8158;
-  --graph-trace: #b66f16;
-  --graph-candidate: #7653a0;
-  --graph-status-missing: #a33e34;
-  --graph-status-running: #94652b;
+  /* Chat Graph tokens: reactflow.dev 风格——浅色画布、纯白圆角卡片、柔和阴影。 */
+  --graph-canvas: #f7f8fa;
+  --graph-grid: #dde3ec;
+  --graph-node-surface: #ffffff;
+  --graph-node-surface-alt: #f8fafc;
+  --graph-node-border: #e2e8f0;
+  --graph-node-title: #1e293b;
+  --graph-chat: #3b82f6;
+  --graph-memory: #10b981;
+  --graph-global: #8b5cf6;
+  --graph-resource: #f59e0b;
+  --graph-fork: #3b82f6;
+  --graph-reference: #10b981;
+  --graph-relation: #94a3b8;
+  --graph-disabled: #cbd5e1;
+  --graph-edge-label: #334155;
+  --graph-control: #ffffff;
+  --graph-control-border: #e2e8f0;
+  --graph-minimap: rgb(255 255 255 / 94%);
+  --graph-minimap-group: #8b5cf6;
+  --graph-minimap-chat: #3b82f6;
+  --graph-minimap-resource: #10b981;
+  --graph-trace: #d97706;
+  --graph-candidate: #8b5cf6;
+  --graph-status-missing: #ef4444;
+  --graph-status-running: #f59e0b;
+  --graph-node-shadow: rgba(15, 23, 42, 0.08);
 }
 html.dark {
   color-scheme: dark;
@@ -88,31 +88,32 @@ html.dark {
   --brand-foreground: #ffffff;
   --input-bg: #1c1a17;
   --hover-bg: #332f2a;
-  --graph-canvas: #1b1b1e;
-  --graph-grid: #3a3a42;
-  --graph-node-surface: #2e2e33;
-  --graph-node-surface-alt: #29292d;
-  --graph-node-border: #19191d;
-  --graph-node-title: #f2f2f2;
-  --graph-chat: #4a90d9;
-  --graph-memory: #5dbe85;
-  --graph-global: #c39bf0;
-  --graph-resource: #c98b3d;
-  --graph-fork: #4a90d9;
-  --graph-reference: #5dbe85;
-  --graph-relation: #8a8a94;
-  --graph-disabled: #777780;
-  --graph-edge-label: #b8b8bd;
-  --graph-control: #28282d;
-  --graph-control-border: #53535c;
-  --graph-minimap: rgb(22 22 25 / 82%);
-  --graph-minimap-group: #8a789e;
-  --graph-minimap-chat: #4a90d9;
-  --graph-minimap-resource: #5dbe85;
-  --graph-trace: #e8a33d;
-  --graph-candidate: #c39bf0;
-  --graph-status-missing: #c96d6d;
-  --graph-status-running: #d6a455;
+  --graph-canvas: #16181d;
+  --graph-grid: #262a33;
+  --graph-node-surface: #1f232b;
+  --graph-node-surface-alt: #1a1e25;
+  --graph-node-border: #2e3440;
+  --graph-node-title: #e8edf4;
+  --graph-chat: #60a5fa;
+  --graph-memory: #34d399;
+  --graph-global: #a78bfa;
+  --graph-resource: #fbbf24;
+  --graph-fork: #60a5fa;
+  --graph-reference: #34d399;
+  --graph-relation: #64748b;
+  --graph-disabled: #3d4557;
+  --graph-edge-label: #b9c2d0;
+  --graph-control: #1f232b;
+  --graph-control-border: #333a47;
+  --graph-minimap: rgb(24 27 33 / 88%);
+  --graph-minimap-group: #a78bfa;
+  --graph-minimap-chat: #60a5fa;
+  --graph-minimap-resource: #34d399;
+  --graph-trace: #fbbf24;
+  --graph-candidate: #a78bfa;
+  --graph-status-missing: #f87171;
+  --graph-status-running: #fbbf24;
+  --graph-node-shadow: rgba(0, 0, 0, 0.42);
 }
 * { box-sizing: border-box; }
 button, input, textarea, select, [role='button'], [role='group'] { touch-action: manipulation; }
@@ -175,7 +176,7 @@ body { margin: 0; }
   .evo-graph-toolbar .evo-graph-search { order: 5; flex: 1 1 100%; }
   .evo-graph-search input { width: 100%; }
   .evo-graph-canvas { overflow: auto; }
-  .evo-graph-minimap, .evo-graph-inspector { display: none; }
+  .evo-graph-inspector { display: none; }
   .evo-composer-wrap { padding-inline: 8px; }
   .evo-composer { width: 100%; max-width: none; }
   .evo-composer-stats { max-width: 100%; }
@@ -448,6 +449,11 @@ body { margin: 0; }
 .evo-tool-result-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; margin-top: 2px; color: var(--color-text-tertiary); }
 .evo-tool-card.error .evo-tool-result-label { color: var(--color-error); }
 .evo-tool-card.success .evo-tool-result-label { color: var(--color-success); }
+/* ── P0-2 工具结果图片缩略图 ── */
+.evo-tool-imgs { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
+.evo-tool-img { width: 96px; height: 72px; border-radius: 7px; border: 1px solid var(--color-border); background: var(--color-surface); overflow: hidden; cursor: zoom-in; padding: 0; display: flex; align-items: center; justify-content: center; }
+.evo-tool-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evo-tool-img-loading { font-size: 11px; color: var(--color-text-tertiary); }
 /* ── 桌面自绘标题栏 ── */
 /* 桌面模式：#root 与 body 锁死为 100vh 且禁止文档级滚动——避免 margin 撑高 body
    造成 36px 底部黑边 + 右侧滚动条。标题栏 fixed 覆盖顶部 36px，.evo-app 全高
@@ -533,6 +539,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .evo-panel-tag { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: 999px; font-size: 12.5px; color: var(--color-text-secondary); background: var(--color-surface); }
 .evo-panel-tag-link { border-color: color-mix(in srgb, var(--brand) 40%, transparent); color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+/* P1-2 边类型徽标：互补=青（默认 link 色）/ 矛盾=橙红 / 取代=灰+删除线暗示 */
+.evo-edge-contradicts { border-color: color-mix(in srgb, var(--color-error) 45%, transparent); color: var(--color-error); background: color-mix(in srgb, var(--color-error) 8%, transparent); }
+.evo-edge-supersedes { border-color: var(--color-border); color: var(--color-text-tertiary); background: var(--color-surface); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--color-text-tertiary) 55%, transparent); }
+/* P2-1 图纸缩略图 */
+.evo-figure-thumb { max-width: 100%; max-height: 180px; border: 1px solid var(--color-border-light); border-radius: 8px; cursor: zoom-in; object-fit: contain; background: var(--color-surface); }
 .evo-panel-stats { display: flex; gap: 10px; flex-wrap: wrap; }
 .evo-panel-stat { flex: 1; min-width: 88px; padding: 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); text-align: center; }
 .evo-panel-stat-num { font-size: 20px; font-weight: 700; color: var(--color-text-primary); }
@@ -650,6 +661,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-status-goal { color: var(--brand); }
 .evo-status-ro { color: var(--color-warning); }
 .evo-status-full { color: var(--color-error); }
+/* P0-4 上下文占用条：绿/黄/红三档 + 内嵌比例小条 */
+.evo-ctx-meter-bar { display: inline-block; width: 34px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--color-text-tertiary) 25%, transparent); position: relative; overflow: hidden; }
+.evo-ctx-ok { color: var(--color-success); }
+.evo-ctx-watch { color: var(--color-warning); }
+.evo-ctx-high { color: var(--color-error); }
 .evo-stats-line { display: flex; align-items: center; gap: 8px; padding: 6px 14px 9px; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 会话统计行：与输入框同宽，位于圆角框外部正下方、水平居中、紧贴。 */
 .evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: 75%; margin: 8px auto 0; display: flex; align-items: center; gap: 10px; }
@@ -839,13 +855,15 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .evo-graph-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
 .evo-graph-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
-.evo-graph-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12px; cursor: pointer; font: inherit; transition: border-color 0.15s, color 0.15s; }
+.evo-graph-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12px; cursor: pointer; font: inherit; transition: border-color 0.15s, color 0.15s; white-space: nowrap; flex-shrink: 0; }
 .evo-graph-btn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
 .evo-graph-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-graph-btn svg { width: 13px; height: 13px; }
-/* 画布：Blender 节点编辑器风格深色底 + 点阵网格 */
+.evo-graph-btn .evo-graph-btn-label { display: none; }
+.evo-graph-btn.has-label .evo-graph-btn-label { display: inline; }
+/* 画布：reactflow.dev 风格浅色底 + 细点阵网格 */
 .evo-graph-canvas { position: relative; flex: 1; min-height: 300px; overflow: auto; background:
-  radial-gradient(circle, var(--graph-grid) 1.2px, transparent 1.2px) 0 0 / 20px 20px,
+  radial-gradient(circle, var(--graph-grid) 1px, transparent 1px) 0 0 / 22px 22px,
   var(--graph-canvas); }
 .evo-graph-canvas .react-flow { position: absolute; inset: 0; direction: ltr; background: transparent; }
 .evo-graph-canvas .react-flow__container, .evo-graph-canvas .react-flow__renderer, .evo-graph-canvas .react-flow__pane { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -860,62 +878,72 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-canvas .react-flow__panel { position: absolute; z-index: 5; margin: 15px; }
 .evo-graph-canvas .react-flow__node { cursor: grab; }
 .evo-graph-canvas .react-flow__node.dragging { cursor: grabbing; }
-.evo-graph-canvas .react-flow__handle { width: 9px; height: 9px; min-width: 9px; min-height: 9px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.75); box-shadow: 0 0 3px rgba(0,0,0,.5); }
+.evo-graph-canvas .react-flow__handle { width: 10px; height: 10px; min-width: 10px; min-height: 10px; border-radius: 999px; border: 2px solid #ffffff; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25); }
 .evo-graph-canvas .react-flow__handle-left { left: -5px; }
 .evo-graph-canvas .react-flow__handle-right { right: -5px; }
 .evo-graph-canvas .react-flow__handle.evo-graph-socket-ctx { background: var(--graph-fork); }
-.evo-graph-canvas .react-flow__handle.evo-graph-socket-mem { background: var(--graph-reference); }
-.evo-graph-canvas .react-flow__handle.evo-graph-socket-out { background: var(--graph-resource); }
+.evo-graph-canvas .react-flow__handle.evo-graph-socket-mem { background: var(--graph-memory); }
+.evo-graph-canvas .react-flow__handle.evo-graph-socket-out { background: var(--graph-chat); }
 .evo-graph-canvas .react-flow__handle:hover { transform: translateY(-50%) scale(1.45) !important; }
-.evo-graph-canvas .react-flow__controls { overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 7px; box-shadow: 0 4px 14px rgb(0 0 0 / 24%); }
+.evo-graph-canvas .react-flow__controls { overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 8px; box-shadow: 0 2px 8px var(--graph-node-shadow); }
 .evo-graph-canvas .react-flow__controls-button { width: 26px; height: 26px; border: 0; border-bottom: 1px solid var(--graph-control-border); background: var(--graph-control); color: var(--color-text-primary); fill: var(--color-text-primary); }
 .evo-graph-canvas .react-flow__controls-button:last-child { border-bottom: 0; }
-.evo-graph-canvas .react-flow__minimap { right: 12px; bottom: 12px; overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 6px; background: var(--graph-minimap); }
+/* MiniMap：左下角，默认隐藏，弹出按钮切换 */
+.evo-graph-canvas .react-flow__minimap { left: 12px; right: auto; bottom: 12px; transform: none; overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-minimap); box-shadow: 0 2px 10px var(--graph-node-shadow); }
+.evo-graph-minimap-toggle { position: absolute; z-index: 6; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-control); color: var(--color-text-secondary); font-size: 11.5px; cursor: pointer; font: inherit; white-space: nowrap; box-shadow: 0 2px 8px var(--graph-node-shadow); transition: color 0.15s, border-color 0.15s; }
+.evo-graph-minimap-toggle:hover { color: var(--brand); border-color: var(--brand); }
+.evo-graph-minimap-toggle svg { width: 13px; height: 13px; }
+.evo-graph-minimap-toggle[aria-pressed='true'] { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--graph-control)); }
 .evo-graph-canvas .react-flow__edge-path { stroke: var(--graph-disabled); stroke-width: 2px; }
 .evo-graph-canvas .react-flow__edge.selected .react-flow__edge-path { stroke: var(--graph-trace); }
 .evo-graph-canvas .react-flow__node .evo-graph-node { position: relative; left: auto; top: auto; }
-.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-ctx { position: absolute; left: 14px; top: 29px; }
-.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-mem { position: absolute; left: 14px; top: 47px; }
-.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-out { position: absolute; right: 14px; top: 38px; }
+.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-ctx { position: absolute; left: 16px; top: 29px; }
+.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-mem { position: absolute; left: 16px; top: 47px; }
+.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-out { position: absolute; right: 16px; top: 38px; }
 .evo-graph-canvas .evo-graph-node .evo-graph-node-sid { position: absolute; right: 8px; top: 47px; max-width: 58px; }
 .evo-graph-canvas .evo-graph-node > .evo-graph-node-body { position: static; }
 .evo-graph-canvas .react-flow__edge-textbg { fill: var(--graph-node-surface-alt); }
 .evo-graph-canvas .react-flow__edge-text { fill: var(--graph-edge-label); font-size: 10px; }
-/* 节点卡片：Blender 节点编辑器风格——类型色标题栏 + 深灰主体 + socket 行（顶部内高光增强浮起感） */
-.evo-graph-node { position: absolute; background: linear-gradient(180deg, var(--graph-node-surface), var(--graph-node-surface-alt)); border: 1px solid var(--graph-node-border); border-radius: 7px; padding: 0; cursor: grab; user-select: none; box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), 0 3px 12px rgb(0 0 0 / 24%); transition: border-color 0.15s, box-shadow 0.15s; display: flex; flex-direction: column; }
-.evo-graph-node:hover { border-color: color-mix(in srgb, var(--brand) 55%, var(--graph-node-border)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), 0 5px 18px rgb(0 0 0 / 30%); }
-.evo-graph-node-sel { border-color: var(--graph-trace); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--graph-trace) 55%, transparent), 0 5px 18px rgb(0 0 0 / 28%); }
-.evo-graph-node[data-pinned] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-trace) 42%, transparent), inset 0 1px 0 rgb(255 255 255 / 10%), 0 3px 12px rgb(0 0 0 / 24%); }
-.evo-graph-node-dragging { z-index: 30; cursor: grabbing; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--graph-trace) 40%, transparent), 0 10px 28px rgb(0 0 0 / 34%); }
-/* 标题栏：类型色渐变（Blender 节点 header 风格） */
-.evo-graph-node-titlebar { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 4px 4px 0 0; flex-shrink: 0; }
-.evo-graph-node-chat .evo-graph-node-titlebar { background: color-mix(in srgb, var(--graph-chat) 28%, var(--graph-node-surface-alt)); }
-.evo-graph-node-memory .evo-graph-node-titlebar { background: color-mix(in srgb, var(--graph-memory) 28%, var(--graph-node-surface-alt)); }
-.evo-graph-node-memory[data-global] .evo-graph-node-titlebar { background: color-mix(in srgb, var(--graph-global) 30%, var(--graph-node-surface-alt)); }
-.evo-graph-node-resource { border-style: dashed; }
-.evo-graph-node-resource .evo-graph-node-titlebar { background: color-mix(in srgb, var(--graph-resource) 28%, var(--graph-node-surface-alt)); }
+/* 节点卡片：reactflow.dev 风格——纯白圆角卡片、柔和阴影、类型色图标徽章 */
+.evo-graph-node { position: absolute; background: var(--graph-node-surface); border: 1px solid var(--graph-node-border); border-radius: 10px; padding: 0; cursor: grab; user-select: none; box-shadow: 0 2px 8px var(--graph-node-shadow); transition: border-color 0.15s, box-shadow 0.15s; display: flex; flex-direction: column; }
+.evo-graph-node:hover { border-color: color-mix(in srgb, var(--graph-chat) 40%, var(--graph-node-border)); box-shadow: 0 4px 14px var(--graph-node-shadow); }
+.evo-graph-node-sel { border-color: var(--graph-chat); box-shadow: 0 0 0 2px color-mix(in srgb, var(--graph-chat) 28%, transparent), 0 4px 14px var(--graph-node-shadow); }
+.evo-graph-node[data-pinned] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-trace) 42%, transparent), 0 2px 8px var(--graph-node-shadow); }
+.evo-graph-node-dragging { z-index: 30; cursor: grabbing; box-shadow: 0 0 0 2px color-mix(in srgb, var(--graph-chat) 30%, transparent), 0 8px 22px var(--graph-node-shadow); }
+/* 标题栏：白底 + 类型色图标徽章（reactflow.dev 卡片头风格） */
+.evo-graph-node-titlebar { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; flex-shrink: 0; }
+.evo-graph-node-chat .evo-graph-node-titlebar { border-bottom: 1px solid color-mix(in srgb, var(--graph-chat) 14%, transparent); }
+.evo-graph-node-memory .evo-graph-node-titlebar { border-bottom: 1px solid color-mix(in srgb, var(--graph-memory) 14%, transparent); }
+.evo-graph-node-resource .evo-graph-node-titlebar { border-bottom: 1px solid color-mix(in srgb, var(--graph-resource) 14%, transparent); }
+.evo-graph-node-resource { border-style: solid; }
 .evo-graph-node[data-status='missing'], .evo-graph-node[data-status='failed'] { border-color: var(--graph-status-missing); }
 .evo-graph-node[data-status='running'], .evo-graph-node[data-status='indexing'] { border-color: var(--graph-status-running); }
 .evo-graph-node-candidate { border-style: dashed; border-color: var(--graph-candidate); }
 .evo-graph-node-trace::after { content: '本轮已读取'; position: absolute; right: 6px; bottom: 4px; padding: 1px 4px; border-radius: 3px; background: color-mix(in srgb, var(--graph-trace) 16%, var(--graph-node-surface)); color: var(--graph-trace); font-size: 8px; line-height: 1.2; }
-.evo-graph-node-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--color-text-secondary); flex-shrink: 0; }
-.evo-graph-node-chat .evo-graph-node-dot { background: color-mix(in srgb, var(--graph-chat) 68%, white); }
-.evo-graph-node-memory .evo-graph-node-dot { background: color-mix(in srgb, var(--graph-memory) 68%, white); }
-.evo-graph-node-memory[data-global] .evo-graph-node-dot { background: var(--graph-global); }
-.evo-graph-node-title { font-size: 12px; font-weight: 650; color: var(--graph-node-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.evo-graph-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 6px; color: #ffffff; flex-shrink: 0; }
+.evo-graph-node-chat .evo-graph-node-icon { background: var(--graph-chat); }
+.evo-graph-node-memory .evo-graph-node-icon { background: var(--graph-memory); }
+.evo-graph-node-memory[data-global] .evo-graph-node-icon { background: var(--graph-global); }
+.evo-graph-node-resource .evo-graph-node-icon { background: var(--graph-resource); }
+.evo-graph-node-icon svg { width: 11px; height: 11px; }
+.evo-graph-node-title { font-size: 12px; font-weight: 600; color: var(--graph-node-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 /* 主体：socket 行 */
-.evo-graph-node-body { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 5px 7px 6px; min-width: 0; }
+.evo-graph-node-body { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 8px; min-width: 0; }
 .evo-graph-socket-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .evo-graph-socket-row-out { margin-top: 1px; }
-/* Blender socket：8px 实心圆 + 亮描边 */
-.evo-graph-socket { width: 9px; height: 9px; border-radius: 999px; border: 1.5px solid rgba(255, 255, 255, 0.75); cursor: crosshair; flex-shrink: 0; transition: transform 0.12s, box-shadow 0.12s; box-shadow: 0 0 3px rgba(0, 0, 0, 0.5); }
+/* socket：reactflow.dev 风格——白描边实心圆点 */
+.evo-graph-socket { width: 10px; height: 10px; border-radius: 999px; border: 2px solid #ffffff; cursor: crosshair; flex-shrink: 0; transition: transform 0.12s, box-shadow 0.12s; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25); }
 .evo-graph-socket-ctx { background: var(--graph-fork); }
-.evo-graph-socket-mem { background: var(--graph-reference); }
-.evo-graph-socket-out { background: var(--graph-resource); }
+.evo-graph-socket-mem { background: var(--graph-memory); }
+.evo-graph-socket-out { background: var(--graph-chat); }
 .evo-graph-socket-hidden { visibility: hidden; pointer-events: none; }
-.evo-graph-socket:hover { transform: scale(1.45); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18); }
+.evo-graph-socket:hover { transform: scale(1.45); box-shadow: 0 0 0 3px color-mix(in srgb, var(--graph-chat) 18%, transparent); }
 .evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--color-text-secondary); white-space: nowrap; }
 .evo-graph-node-tag { font-size: 9.5px; color: var(--color-text-secondary); background: color-mix(in srgb, var(--color-text-primary) 8%, transparent); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; }
+/* 普通模式自然语言操作按钮（分支/参考/关系）：不依赖技术端口 */
+.evo-graph-node-actions { position: absolute; right: 5px; bottom: 3px; display: flex; gap: 3px; }
+.evo-graph-node-action { padding: 1px 6px; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--color-text-primary) 10%, transparent); color: var(--color-text-secondary); font-size: 9px; line-height: 1.4; cursor: pointer; font: inherit; transition: background 0.12s, color 0.12s; white-space: nowrap; flex-shrink: 0; }
+.evo-graph-node-action:hover { background: color-mix(in srgb, var(--brand) 18%, transparent); color: var(--brand); }
 .evo-graph-node-sid { font-size: 9.5px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-graph-node-preview { font-size: 10px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* 连线：粗贝塞尔 + 类型色（Blender 风格：线在 socket 处衔接） */
@@ -928,6 +956,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-canvas .react-flow__edge-path.evo-graph-edge-relation { stroke: var(--graph-relation) !important; stroke-width: 1.6px; stroke-dasharray: 5 4; }
 .evo-graph-edge-disabled { opacity: 0.35; }
 .evo-graph-edge-label-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.evo-graph-edge-linking { stroke: var(--graph-trace); stroke-dasharray: 6 4; stroke-width: 2.2px; }
 .evo-graph-edge-linking { stroke: var(--graph-trace); stroke-dasharray: 6 4; stroke-width: 2.2px; }
 /* 右键菜单：与面板同语言 */
 .evo-graph-menu { position: absolute; z-index: 50; min-width: 176px; padding: 5px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); display: flex; flex-direction: column; gap: 2px; }
@@ -973,7 +1002,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* GRAPH-07/09：连线可右键（编辑说明/删除）；svg 层 pointer-events:none，仅 path 命中 stroke */
 .evo-graph-edge-hit { pointer-events: stroke; cursor: pointer; }
 .evo-graph-edge-hit:hover { filter: brightness(1.35); }
-.evo-graph-canvas .react-flow__minimap { left: 50%; right: auto; transform: translateX(-50%); }
 /* GRAPH-04/08：引用只读预览弹窗 */
 .evo-graph-viewer { width: min(640px, calc(100vw - 48px)); }
 .evo-graph-viewer-path { font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; margin-left: 8px; }
@@ -982,7 +1010,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-narrow-list { display: none; }
 @media (max-width: 767px) {
   .evo-graph-narrow-list { display: block; min-height: 100%; background: var(--color-surface); }
-  .evo-graph-canvas > .react-flow { display: none; }
 }
 .evo-graph-narrow-item { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 10px; border: 0; border-bottom: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-primary); text-align: left; font: inherit; }
 .evo-graph-narrow-item.active { background: color-mix(in srgb, var(--brand) 10%, var(--color-surface)); }

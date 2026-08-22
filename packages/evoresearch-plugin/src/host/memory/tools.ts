@@ -19,7 +19,7 @@ import * as path from 'node:path'
 import type { ResearchMemoryStore } from './store.js'
 import { parseObservationFile } from './store.js'
 import { turnDetail, readConversationRange, readMemoryFilePaged, expandFragmentHit } from './read.js'
-import type { ResearchCategory, GoalProposal } from '../../shared/types.js'
+import type { ResearchCategory, GoalProposal, ObservationEdgeType } from '../../shared/types.js'
 
 /** 工具上下文：MemoryRuntime 提供的存储门面。 */
 export interface MemoryToolHost {
@@ -444,24 +444,40 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
     },
   })
 
-  // ── link_observations（§21.5）：Observation 关联关系（双向） ──────────────
+  // ── link_observations（§21.5 + P1-2）：Observation 关联关系（双向，可带边类型） ──
   register({
     name: 'link_observations',
     description:
       '建立/更新 Observation 之间的关联关系（双向）。适合表达"实验 X 相关于方法 Y"等' +
-      '结构化联系；重复调用会合并去重，不会覆盖已有关联。',
+      '结构化联系；重复调用会合并去重，不会覆盖已有关联。P1-2：可用 edge_type 声明' +
+      '关联类型（relates 相关 / complements 互补 / contradicts 矛盾 / supersedes 取代）；' +
+      '新实验与旧结论冲突时必须显式声明 contradicts。',
     parameters: paramsSchema(
       {
         observation_id: { type: 'string', description: '主观测 id' },
         related_ids: { type: 'array', items: { type: 'string' }, description: '要关联的观测 id 列表' },
+        edge_type: {
+          type: 'string',
+          enum: ['relates', 'complements', 'contradicts', 'supersedes'],
+          description: '关联类型：relates 相关（默认）/ complements 互补 / contradicts 矛盾 / supersedes 取代。新实验与旧结论冲突时必须显式声明 contradicts',
+        },
       },
       ['observation_id', 'related_ids'],
     ),
     output: { schema: { type: 'object', properties: { ok: { type: 'boolean' }, related: { type: 'array', items: { type: 'string' } } } }, render: textRender },
     execute: async (args, exec) => {
-      const input = args as { observation_id: string; related_ids: string[] }
+      const input = args as { observation_id: string; related_ids: string[]; edge_type?: string }
       const workspace = workspaceOf(exec)
       const store = host.storeFor(workspace)
+      // P1-2：显式给出非 relates 的边类型时走类型化关联边（有向边 + frontmatter 同步）；
+      // 缺省或 relates 时保持原 linkObservations 路径（兼容旧调用）。
+      if (input.edge_type !== undefined && input.edge_type !== 'relates') {
+        const edgeType = input.edge_type as ObservationEdgeType
+        for (const relatedId of input.related_ids) {
+          store.setObservationLink(host.observationsDirFor(workspace), input.observation_id, relatedId, edgeType)
+        }
+        return { ok: true, related: input.related_ids, edge_type: edgeType }
+      }
       const result = store.linkObservations(host.observationsDirFor(workspace), input.observation_id, input.related_ids)
       return result
     },

@@ -1371,6 +1371,15 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.memoryObservations as (a: typeof args) => Promise<unknown>)(args))
           return
         }
+        // P1-2：Observation 类型化关联边（Knowledge 卡片徽标着色数据源）
+        if (method === 'memory-observation-edges') {
+          if (evoresearch?.memoryObservationEdges === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: { observationId?: string; edgeType?: string } = {}
+          if (typeof payload.observationId === 'string') args.observationId = payload.observationId
+          if (typeof payload.edgeType === 'string') args.edgeType = payload.edgeType
+          writeOk(res, await (evoresearch.memoryObservationEdges as (a: typeof args) => unknown)(args))
+          return
+        }
         if (method === 'memory-goals') {
           if (evoresearch?.memoryGoals === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.memoryGoals as (a: { workspaceDir?: string }) => Promise<unknown>)({ workspaceDir: payload.workspaceDir as string | undefined }))
@@ -1576,8 +1585,16 @@ export function registerWorkspaceApi(ctx: any): void {
           const line = requireString(payload, 'line')
           const agent = ctx.get('agents')?.get?.(sessionId)
           if (agent === undefined) throw httpError(400, 'bad-request', `会话不存在: ${sessionId}`)
+          // P2-4：可选图片附件透传（EncodedImageAttachment 形状；仅声明 input.images
+          // 的命令会被 executor 接收，其余命令由 executor 拒绝并保留原图）
+          const rawImages = Array.isArray(payload.images) ? payload.images : []
+          const images = rawImages
+            .filter((img: any) => img !== null && typeof img === 'object' && typeof img.mediaType === 'string' && typeof img.data === 'string')
+            .map((img: any) => ({ mediaType: String(img.mediaType), data: String(img.data), ...(typeof img.name === 'string' ? { name: img.name } : {}) }))
           const signal = new AbortController().signal
-          const result = await commands.execute(agent, line, signal)
+          const result = images.length > 0
+            ? await (commands.execute as (agent2: unknown, line2: string, imgs: typeof images, signal2: AbortSignal) => Promise<unknown>)(agent, line, images, signal)
+            : await commands.execute(agent, line, signal as never)
           writeOk(res, { matched: result !== undefined, result: result ?? null })
           return
         }
@@ -1948,6 +1965,50 @@ export function registerWorkspaceApi(ctx: any): void {
           || method === 'notes-draft-apply' || method === 'notes-draft-discard') {
           const serviceMethod = method.split('-').map((part, i) => i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)).join('') as string
           const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = { ...payload }
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
+        // ── P0-3/P3-1 后台任务：列表 / 取消 / 会话删除级联 ──
+        if (method === 'jobs-list' || method === 'jobs-cancel' || method === 'jobs-count-for-session' || method === 'session-delete-cascade') {
+          const serviceName = method === 'jobs-list' ? 'jobsList'
+            : method === 'jobs-cancel' ? 'jobsCancel'
+              : method === 'jobs-count-for-session' ? 'jobsCountForSession'
+                : 'sessionDeleteCascade'
+          const fn = evoresearch?.[serviceName] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          try {
+            writeOk(res, await fn.call(evoresearch, { ...payload }))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
+        // ── P0-2 工具结果图片：资产探测 + 读取（直连插件 Remote 方法）──
+        if (method === 'artifact-image-detect' || method === 'artifact-image') {
+          const serviceName = method === 'artifact-image-detect' ? 'artifactImageDetect' : 'artifactImage'
+          const fn = evoresearch?.[serviceName] as ((a: Record<string, unknown>) => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const args: Record<string, unknown> = { ...payload }
+          try {
+            writeOk(res, await fn.call(evoresearch, args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+
+        // ── P2-1 图纸面板：列表 / 单个（直连插件 Remote 方法）──
+        if (method === 'figures-list' || method === 'figures-get') {
+          const serviceName = method === 'figures-list' ? 'figuresList' : 'figuresGet'
+          const fn = evoresearch?.[serviceName] as ((a: Record<string, unknown>) => unknown) | undefined
           if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const args: Record<string, unknown> = { ...payload }
           try {

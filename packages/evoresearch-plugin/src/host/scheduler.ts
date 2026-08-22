@@ -13,6 +13,7 @@ import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { parseCron, nextRun } from './core/cron.js'
+import { markUnattendedSession } from './platform/unattended-registry.js'
 import type { ScheduledTask } from '../shared/types.js'
 
 /** 调度服务配置。 */
@@ -307,6 +308,8 @@ export class SchedulerService {
     })
     const agent = (handle as { agent?: { followup(message: unknown): void } }).agent
     if (!agent?.followup) return Promise.reject(new Error('创建 agent 失败'))
+    // P3-2：定时任务会话无人值守 → 登记 shell 门控（tools.guard 据此判定）
+    markUnattendedSession(sessionId)
     const message = createUserMessage({
       content: [{ type: 'text', text: `【定时任务 ${task.name}】\n${task.prompt}\n\n完成后请汇报关键结果。` }],
       source: { kind: 'user' },

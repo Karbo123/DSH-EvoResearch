@@ -37,6 +37,7 @@ import {
   type ResearchCategory,
   type TopicState,
   type ObservationMeta,
+  type ObservationEdgeType,
   type GoalContract,
   type GoalProposal,
   RESEARCH_CATEGORIES,
@@ -317,6 +318,24 @@ export const RESEARCH_MEMORY_MIGRATIONS: readonly Migration[] = [
       `)
     },
   },
+  {
+    // P1-2：类型化关联边。observation_links 存 (from, to, edge_type) 有向边；
+    // 双向语义由 setObservationLink 同时写两条（反向边一律写 'relates' 保持简单，
+    // 展示层按方向渲染）。旧行为（related_observation_ids 列）保留兼容。
+    version: 7,
+    up(db) {
+      db.exec(`
+        CREATE TABLE observation_links (
+          from_id TEXT NOT NULL,
+          to_id TEXT NOT NULL,
+          edge_type TEXT NOT NULL DEFAULT 'relates',
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (from_id, to_id)
+        );
+        CREATE INDEX idx_obs_links_to ON observation_links(to_id);
+      `)
+    },
+  },
 ]
 
 /** 数据库行（宽松类型，读取后立即转换为领域对象）。 */
@@ -490,6 +509,8 @@ interface ObservationFrontmatter {
   entities?: string[]
   source_turn_ids?: string[]
   related_observation_ids?: string[]
+  /** P1-2：与 related_observation_ids 同序对齐的边类型（JSON 数组字符串）。 */
+  edge_types?: string[]
   status?: 'active' | 'superseded'
   superseded_by?: string
   project_id?: string
@@ -508,12 +529,13 @@ export function parseObservationFile(content: string): { frontmatter: Observatio
     const key = line.slice(0, colon).trim()
     const raw = line.slice(colon + 1).trim()
     const value: string | string[] = raw.startsWith('[') ? JSON.parse(raw) : raw.replace(/^["']|["']$/g, '')
-    if (key === 'categories' || key === 'topic_keys' || key === 'entities' || key === 'source_turn_ids' || key === 'related_observation_ids') {
+    if (key === 'categories' || key === 'topic_keys' || key === 'entities' || key === 'source_turn_ids' || key === 'related_observation_ids' || key === 'edge_types') {
       const list = Array.isArray(value) ? value : [value]
       if (key === 'categories') frontmatter.categories = list
       else if (key === 'topic_keys') frontmatter.topic_keys = list
       else if (key === 'entities') frontmatter.entities = list
       else if (key === 'source_turn_ids') frontmatter.source_turn_ids = list
+      else if (key === 'edge_types') frontmatter.edge_types = list.map((v) => String(v))
       else frontmatter.related_observation_ids = list
     } else if (key === 'status') {
       frontmatter.status = value === 'superseded' ? 'superseded' : 'active'
@@ -536,6 +558,8 @@ export function renderObservationFile(meta: {
   entities: readonly string[]
   sourceTurnIds: readonly string[]
   relatedObservationIds?: readonly string[]
+  /** P1-2：与 relatedObservationIds 同序对齐的边类型；仅在有关联时随 edge_types 输出。 */
+  edgeTypes?: readonly string[]
   status: 'active' | 'superseded'
   supersededBy?: string
   projectId?: string
@@ -551,6 +575,7 @@ export function renderObservationFile(meta: {
     `entities: ${JSON.stringify(meta.entities)}`,
     `source_turn_ids: ${JSON.stringify(meta.sourceTurnIds)}`,
     meta.relatedObservationIds && meta.relatedObservationIds.length > 0 ? `related_observation_ids: ${JSON.stringify(meta.relatedObservationIds)}` : null,
+    meta.relatedObservationIds && meta.relatedObservationIds.length > 0 && meta.edgeTypes && meta.edgeTypes.length > 0 ? `edge_types: ${JSON.stringify(meta.edgeTypes)}` : null,
     `status: ${meta.status}`,
     meta.supersededBy ? `superseded_by: ${meta.supersededBy}` : null,
     meta.projectId ? `project_id: ${meta.projectId}` : null,
@@ -1191,6 +1216,8 @@ export class ResearchMemoryStore {
     entities: readonly string[]
     sourceTurnIds: readonly string[]
     relatedObservationIds?: readonly string[]
+    /** P1-2：与 relatedObservationIds 同序对齐的边类型（缺省 relates）。 */
+    edgeTypes?: readonly ObservationEdgeType[]
     projectId?: string
   }): ObservationMeta {
     const fileName = `${input.observationId}.md`
@@ -1208,6 +1235,7 @@ export class ResearchMemoryStore {
       entities: input.entities,
       sourceTurnIds: input.sourceTurnIds,
       relatedObservationIds: input.relatedObservationIds,
+      edgeTypes: input.edgeTypes,
       status: 'active',
       projectId: input.projectId,
       createdAt: now,
@@ -1229,6 +1257,7 @@ export class ResearchMemoryStore {
       entities: input.entities,
       sourceTurnIds: input.sourceTurnIds,
       relatedObservationIds: input.relatedObservationIds ?? [],
+      ...(input.edgeTypes === undefined ? {} : { edgeTypes: input.edgeTypes }),
       status: 'active',
       projectId: input.projectId,
       createdAt: now,
@@ -1242,6 +1271,8 @@ export class ResearchMemoryStore {
   supersedeObservation(observationsDir: string, observationId: string, supersededBy: string): void {
     const meta = this.getObservation(observationId)
     if (!meta) return
+    // P1-2：把被取代指向的新观测并入 related 列表（edgeTypes 由边表派生为 'supersedes'）
+    const mergedRelated = Array.from(new Set([...(meta.relatedObservationIds ?? []), supersededBy]))
     fs.writeFileSync(
       path.join(observationsDir, meta.projectId ? 'projects' : 'global', meta.projectId ?? '', meta.fileName),
       renderObservationFile({
@@ -1252,7 +1283,8 @@ export class ResearchMemoryStore {
         topicKeys: meta.topicKeys,
         entities: meta.entities,
         sourceTurnIds: meta.sourceTurnIds,
-        relatedObservationIds: meta.relatedObservationIds,
+        relatedObservationIds: mergedRelated,
+        edgeTypes: meta.edgeTypes,
         status: 'superseded',
         supersededBy,
         projectId: meta.projectId,
@@ -1262,8 +1294,17 @@ export class ResearchMemoryStore {
       'utf8',
     )
     this.db.db
-      .prepare('UPDATE observation_search_index SET status = ?, superseded_by = ?, updated_at = ? WHERE observation_id = ?')
-      .run('superseded', supersededBy, Date.now(), observationId)
+      .prepare('UPDATE observation_search_index SET status = ?, superseded_by = ?, related_observation_ids = ?, updated_at = ? WHERE observation_id = ?')
+      .run('superseded', supersededBy, JSON.stringify(mergedRelated), Date.now(), observationId)
+    // P1-2：自动写一条 supersedes 有向边（observationId → supersededBy）。
+    // try 包住：极端情况下（库未跑 v7 迁移）表不存在时不阻塞取代流程。
+    try {
+      this.db.db
+        .prepare('INSERT OR REPLACE INTO observation_links (from_id, to_id, edge_type, created_at) VALUES (?, ?, ?, ?)')
+        .run(observationId, supersededBy, 'supersedes', Date.now())
+    } catch {
+      /* 表可能尚未迁移（v7 前），忽略 */
+    }
   }
 
   /**
@@ -1286,6 +1327,93 @@ export class ResearchMemoryStore {
     return { ok: true, related: merged }
   }
 
+  /**
+   * P1-2：类型化关联边——写一条 (from → to) 有向边并同步 frontmatter。
+   * - observation_links 表 upsert（同边重复调用换类型即 UPDATE 生效）；
+   * - from 端 relatedObservationIds 合并去重加入 to，edgeTypes 同序更新
+   *   （旧位置替换类型，否则 push）；to 端反向合并加入 from（类型 'relates'，
+   *   保持双向可发现性；有向边记录不回写 to 方向）。
+   * 任一端不存在或 from === to 时返回 { ok: false }。
+   */
+  setObservationLink(observationsDir: string, fromId: string, toId: string, edgeType: ObservationEdgeType): { ok: boolean } {
+    if (fromId === toId) return { ok: false }
+    const fromMeta = this.getObservation(fromId)
+    const toMeta = this.getObservation(toId)
+    if (!fromMeta || !toMeta) return { ok: false }
+    const now = Date.now()
+    // 有向边 upsert：同 (from, to) 再次设置时更新类型与时间戳
+    this.db.db
+      .prepare(
+        `INSERT INTO observation_links (from_id, to_id, edge_type, created_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(from_id, to_id) DO UPDATE SET
+           edge_type = excluded.edge_type, created_at = excluded.created_at`,
+      )
+      .run(fromId, toId, edgeType, now)
+    // from 端 frontmatter/索引：合并 toId 并同步 edgeTypes（同序对齐）
+    const fromRelated = [...(fromMeta.relatedObservationIds ?? [])]
+    const fromTypes = [...(fromMeta.edgeTypes ?? [])]
+    const existingIndex = fromRelated.indexOf(toId)
+    if (existingIndex >= 0) {
+      fromTypes[existingIndex] = edgeType
+    } else {
+      fromRelated.push(toId)
+      fromTypes.push(edgeType)
+    }
+    this.rewriteObservationFile(observationsDir, fromMeta, {
+      relatedObservationIds: fromRelated,
+      edgeTypes: fromTypes,
+      updatedAt: now,
+    })
+    // to 端反向可发现性：relatedObservationIds 合并加入 fromId，对应类型固定 'relates'
+    const toRelated = [...(toMeta.relatedObservationIds ?? [])]
+    const toTypes = [...(toMeta.edgeTypes ?? [])]
+    const reverseIndex = toRelated.indexOf(fromId)
+    if (reverseIndex >= 0) {
+      toTypes[reverseIndex] = 'relates'
+    } else {
+      toRelated.push(fromId)
+      toTypes.push('relates')
+    }
+    this.rewriteObservationFile(observationsDir, toMeta, {
+      relatedObservationIds: toRelated,
+      edgeTypes: toTypes,
+      updatedAt: now,
+    })
+    return { ok: true }
+  }
+
+  /**
+   * P1-2：列出关联边（可按观测 id / 边类型过滤，WHERE 动态拼接）。
+   * 表不存在（v7 前旧库未迁移的极端情况）时返回空数组。
+   */
+  listObservationLinks(filter: { observationId?: string; edgeType?: ObservationEdgeType } = {}): Array<{ fromId: string; toId: string; edgeType: string; createdAt: number }> {
+    const clauses: string[] = []
+    const params: unknown[] = []
+    if (filter.observationId !== undefined) {
+      clauses.push('(from_id = ? OR to_id = ?)')
+      params.push(filter.observationId, filter.observationId)
+    }
+    if (filter.edgeType !== undefined) {
+      clauses.push('edge_type = ?')
+      params.push(filter.edgeType)
+    }
+    const where = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : ''
+    try {
+      const rows = this.db.db
+        .prepare(`SELECT from_id, to_id, edge_type, created_at FROM observation_links${where} ORDER BY created_at DESC`)
+        .all(...(params as Array<string | number | null>)) as Row[]
+      return rows.map((row) => ({
+        fromId: asString(row.from_id),
+        toId: asString(row.to_id),
+        edgeType: asString(row.edge_type, 'relates'),
+        createdAt: asNumber(row.created_at),
+      }))
+    } catch {
+      return []
+    }
+  }
+
   /** 重写观测文件 + 索引（链接/更新共用）。 */
   private rewriteObservationFile(observationsDir: string, meta: ObservationMeta, patch: Partial<ObservationMeta>): void {
     const next: ObservationMeta = { ...meta, ...patch }
@@ -1301,6 +1429,7 @@ export class ResearchMemoryStore {
         entities: next.entities,
         sourceTurnIds: next.sourceTurnIds,
         relatedObservationIds: next.relatedObservationIds,
+        edgeTypes: next.edgeTypes,
         status: next.status,
         supersededBy: next.supersededBy,
         projectId: next.projectId,
@@ -1348,13 +1477,34 @@ export class ResearchMemoryStore {
       )
   }
 
+  /**
+   * P1-2：把以该观测为 from 的边类型按 relatedObservationIds 顺序合成 edgeTypes
+   * （无边记录的关联补 'relates'）。edgeTypes 不落主索引列（v7 不 ALTER 主表），
+   * 统一从 observation_links 派生，避免列同步问题。表不可用时返回 undefined（不附加字段）。
+   */
+  private mergeEdgeTypes(meta: ObservationMeta): ObservationMeta {
+    const related = meta.relatedObservationIds ?? []
+    if (related.length === 0) return meta
+    let fromLinks: Map<string, string>
+    try {
+      const rows = this.db.db
+        .prepare('SELECT to_id, edge_type FROM observation_links WHERE from_id = ?')
+        .all(meta.observationId) as Row[]
+      fromLinks = new Map(rows.map((row) => [asString(row.to_id), asString(row.edge_type, 'relates')]))
+    } catch {
+      return meta
+    }
+    const edgeTypes = related.map((id) => (fromLinks.get(id) ?? 'relates') as ObservationEdgeType)
+    return { ...meta, edgeTypes }
+  }
+
   /** 按 id 读取 Observation 索引。 */
   getObservation(observationId: string): ObservationMeta | undefined {
     const row = this.db.db
       .prepare('SELECT * FROM observation_search_index WHERE observation_id = ?')
       .get(observationId) as Row | undefined
     if (!row) return undefined
-    return {
+    const meta: ObservationMeta = {
       observationId: asString(row.observation_id),
       fileName: asString(row.file_name),
       title: asString(row.title),
@@ -1371,6 +1521,7 @@ export class ResearchMemoryStore {
       createdAt: asNumber(row.created_at),
       updatedAt: asNumber(row.updated_at),
     }
+    return this.mergeEdgeTypes(meta)
   }
 
   /** 列出 Observation（默认只出 ACTIVE，支持项目过滤）。 */

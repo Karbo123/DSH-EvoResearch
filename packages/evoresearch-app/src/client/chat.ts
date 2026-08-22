@@ -254,7 +254,95 @@ function toolResultsOf(session: any): Record<string, { text: string; isError: bo
   return map
 }
 
-/** 工具卡片（§21.1）：名称/状态/参数折叠/结果（success·error·running）。 */
+/** 工具结果中登记的图片资产（P0-2，host artifactImageDetect 返回形状）。 */
+interface ToolImageAsset { path: string; mime: string; name: string }
+
+/** 工具结果 → 图片资产缓存（按 callId；会话切换时整体失效）。 */
+const toolImageCache = new Map<string, ToolImageAsset[]>()
+/** 已取过的 base64 图（data URL 缓存，避免重复拉取）。 */
+const toolImageDataUrl = new Map<string, string>()
+
+/**
+ * 探测一批工具结果的图片资产（P0-2）：把结果文本发给 host 做路径探测
+ * （workspace 边界校验在 host 侧），命中则缓存并在工具卡片上渲染缩略图。
+ */
+function useToolImages(sessionId: string | null, toolResults: Record<string, { text: string; isError: boolean }>): void {
+  useEffect(() => {
+    if (sessionId === null) return
+    const pending: Array<{ callId: string; text: string }> = []
+    for (const [callId, r] of Object.entries(toolResults)) {
+      if (toolImageCache.has(callId)) continue
+      // 只对可能含路径的结果做一次探测（含图片扩展名才发请求）
+      if (!/\.(png|jpe?g|gif|webp|svg)/i.test(r.text)) {
+        toolImageCache.set(callId, [])
+        continue
+      }
+      pending.push({ callId, text: r.text.slice(0, 8000) })
+    }
+    if (pending.length === 0) return
+    let cancelled = false
+    for (const item of pending) {
+      void fetch('/evoresearch/fs/artifact-image-detect', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, text: item.text }),
+      }).then((res) => res.json()).then((json) => {
+        if (cancelled) return
+        const assets: ToolImageAsset[] = json.ok && Array.isArray(json.value?.assets) ? json.value.assets : []
+        toolImageCache.set(item.callId, assets)
+        setToolImagesTick((v) => v + 1)
+      }).catch(() => {
+        if (!cancelled) toolImageCache.set(item.callId, [])
+      })
+    }
+    return () => { cancelled = true }
+  }, [sessionId, toolResults])
+}
+
+// useToolImages 的重渲染信号（模块级 setter 由 hook 内赋值）
+let setToolImagesTick: ((fn: (v: number) => number) => void) | null = null
+
+/** 单张工具产物缩略图（懒加载 base64；失败显示占位 + 重试）。 */
+function ToolImageThumb({ asset }: { asset: ToolImageAsset }) {
+  const cacheKey = asset.path
+  const [src, setSrc] = useState<string | null>(toolImageDataUrl.get(cacheKey) ?? null)
+  const [failed, setFailed] = useState(false)
+  const load = () => {
+    setFailed(false)
+    void fetch('/evoresearch/fs/artifact-image', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: asset.path }),
+    }).then((res) => res.json()).then((json) => {
+      if (json.ok === true && typeof json.value?.base64 === 'string') {
+        const url = `data:${json.value.mime};base64,${json.value.base64}`
+        toolImageDataUrl.set(cacheKey, url)
+        setSrc(url)
+      } else {
+        setFailed(true)
+      }
+    }).catch(() => setFailed(true))
+  }
+  useEffect(() => { if (src === null) load() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
+  return jsxs('button', {
+    type: 'button',
+    className: 'evo-tool-img',
+    title: `${asset.name}（点击放大）`,
+    onClick: () => {
+      if (src === null) { load(); return }
+      const win = typeof window !== 'undefined' ? window.open('') : null
+      if (win !== null && win.document !== undefined) {
+        win.document.write(`<img src="${src}" style="max-width:100%;background:#fff" alt="${asset.name}">`)
+        win.document.title = asset.name
+      }
+    },
+    children: src !== null
+      ? jsx('img', { src, alt: asset.name })
+      : jsx('span', { className: 'evo-tool-img-loading', children: failed ? t('imageLoadRetry') : '…' }),
+  })
+}
+
+/** 工具卡片（§21.1）：名称/状态/参数折叠/结果（success·error·running）+ 图片资产缩略图（P0-2）。 */
 function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; args: string; result?: string; isError?: boolean }; running: boolean; defaultExpanded: boolean }) {
   const [argsOpen, setArgsOpen] = useState(defaultExpanded)
   const [resultOpen, setResultOpen] = useState(false)
@@ -299,6 +387,20 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
             jsx('span', { className: 'evo-tool-result-text', children: resultOpen || !resultTruncated ? tool.result : `${(tool.result ?? '').slice(0, 160)}…` }),
           ],
         }),
+      }),
+    ],
+  })
+}
+
+/** 带图片资产的工具卡片包装（P0-2）：在原 ToolCard 下方渲染缩略图网格。 */
+function ToolCardWithImages({ callId, tool, running, defaultExpanded }: { callId: string; tool: { name: string; args: string; result?: string; isError?: boolean }; running: boolean; defaultExpanded: boolean }) {
+  const assets = toolImageCache.get(callId)
+  return jsxs(Fragment, {
+    children: [
+      jsx(ToolCard, { tool, running, defaultExpanded }),
+      assets !== undefined && assets.length > 0 && jsx('div', {
+        className: 'evo-tool-imgs',
+        children: assets.map((asset) => jsx(ToolImageThumb, { asset }, asset.path)),
       }),
     ],
   })
@@ -493,7 +595,11 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId }: {
               }),
               toolsOpen && jsx('div', {
                 className: 'evo-tool-group-body',
-                children: tools.map((tool, i) => jsx(ToolCard, { tool, running: running || tool.result === undefined, defaultExpanded: anyRunning }, `${node.key}-tool-${i}`)),
+                children: tools.map((tool, i) => {
+                  // P0-2：按 callId 关联图片资产（assistantTools 保留 blocks 顺序，callId 从原块取）
+                  const callId = (node.data.blocks ?? []).filter((b) => b.kind === 'tool-call')[i]?.callId ?? ''
+                  return jsx(ToolCardWithImages, { callId, tool, running: running || tool.result === undefined, defaultExpanded: anyRunning }, `${node.key}-tool-${i}`)
+                }),
               }),
             ],
           }),
@@ -1055,6 +1161,35 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     }
   }
 
+  // P2-4：带图片附件的命令执行——附件以 EncodedImageAttachment 形状透传给
+  // commands.execute（声明 input.images 的命令才接收；拒绝则返回 false 降级为普通消息）。
+  const executeCommandWithImages = async (line: string): Promise<boolean> => {
+    if (sessionId === null) return false
+    setCmdRunning(true)
+    try {
+      const images = pendingImages
+        .filter((img) => img.dataUrl !== '')
+        .map((img) => ({ data: img.dataUrl.slice(img.dataUrl.indexOf(',') + 1), mediaType: img.mediaType, ...(img.name ? { name: img.name } : {}) }))
+      const res = await fetch('/evoresearch/fs/commands-execute', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, line, images }),
+      })
+      const json = await res.json()
+      if (json.ok && json.value?.matched === true && json.value?.result !== null) {
+        const outer = json.value.result
+        const inner = outer?.result ?? outer
+        setCmdResult({ line, text: inner?.text ?? '', kind: inner?.kind ?? 'success' })
+        return true
+      }
+      return false
+    } catch {
+      return false
+    } finally {
+      setCmdRunning(false)
+    }
+  }
+
   const submit = async () => {
     const rawInput = composerMarkdownRef.current || input
     const text = trimPromptEdges(rawInput)
@@ -1062,9 +1197,13 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (!text || pendingApprovals.length > 0) return
     // 附件未就绪（仍在读取）时禁用发送
     if (pendingImages.some((img) => img.dataUrl === '')) return
-    // 斜杠命令：单行且以 / 开头 → 直接执行（未知命令降级为普通聊天，§23.3）
-    if (text.startsWith('/') && !text.includes('\n') && pendingImages.length === 0) {
-      const matched = await executeCommand(text)
+    // 斜杠命令：单行且以 / 开头 → 直接执行（未知命令降级为普通聊天，§23.3）。
+    // P2-4：带附件时也尝试执行——executor 会拒绝未声明 input.images 的命令，
+    // 此时把附件还原为普通消息发送（原图不丢）。
+    if (text.startsWith('/') && !text.includes('\n')) {
+      const matched = pendingImages.length === 0
+        ? await executeCommand(text)
+        : await executeCommandWithImages(text)
       if (matched) {
         pushHistory(cwd, text)
         setHistory(readHistory(cwd))
@@ -1076,6 +1215,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         setHistoryIndex(-1)
         return
       }
+      // 命令带附件但 executor 拒绝 → 降级为普通消息（附件随消息走）
     }
     // @引用解析（§23.4）：小型文本文件注入内容，其余保留路径
     const resolved = trimPromptEdges(await resolveMentions(text, cwd))
@@ -1382,6 +1522,10 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const hasMore = viewNodes.length > visibleCount
   const showMessages = hasMessages && !clearView
   const toolResults = toolResultsOf(session)
+  // P0-2：探测工具结果中的图片资产（命中后触发一次重渲染）
+  const [, setToolImagesState] = useState(0)
+  setToolImagesTick = setToolImagesState as unknown as (fn: (v: number) => number) => void
+  useToolImages(sessionId, toolResults)
   const [wfCleared, setWfCleared] = useState<string[]>(() => {
     const raw = clientStateGet(`evoresearch-dynamic-workflows:${sessionId ?? ''}`)
     try { return JSON.parse(raw ?? '[]') } catch { return [] }
