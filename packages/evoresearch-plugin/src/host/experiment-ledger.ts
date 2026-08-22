@@ -13,7 +13,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { slugifyProjectName } from './core/paths.js'
+import { projectNameFromWorkspace, slugifyProjectName } from './core/paths.js'
 import { captureProvenance } from './experiment-provenance.js'
 
 const GIT_NAME = 'EvoResearch'
@@ -74,8 +74,13 @@ export class ExperimentLedgerService {
   constructor(readonly dataRoot: string) {}
 
   private repoDir(projectDir: string, slug: string): string {
-    const sanitized = slugifyProjectName(path.basename(path.resolve(projectDir)))
-    return path.join(this.dataRoot, '.evoresearch-data', 'ledgers', sanitized, `${slug}.git`)
+    // projectDir 必须是 dataRoot/projects/<name> 项目目录：账本按项目名归档，
+    // 不校验则任意路径的 basename 都会写入共享命名空间（跨项目串账本）。
+    const name = projectNameFromWorkspace(this.dataRoot, projectDir)
+    if (name === undefined) {
+      throw new Error(`实验账本需要项目目录（dataRoot/projects/<name>）: ${projectDir}`)
+    }
+    return path.join(this.dataRoot, '.evoresearch-data', 'ledgers', slugifyProjectName(name), `${slug}.git`)
   }
 
   private expDir(projectDir: string, slug: string): string {

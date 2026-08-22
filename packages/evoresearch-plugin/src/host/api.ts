@@ -10,6 +10,7 @@ import * as path from 'node:path'
 import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, renameSync, existsSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { WorkspaceService } from './workspace.js'
+import { resolveDshHomePath } from './core/paths.js'
 import type { MemoryRuntime } from './memory/index.js'
 import type { SchedulerService } from './scheduler.js'
 import type { ChannelManager } from './channels/index.js'
@@ -24,6 +25,8 @@ import type { ExperimentWorkspaceService, ExperimentWorkspaceInfo, ExperimentWor
 import type { ExperimentProcessService, RunRecord, ExperimentGraphRef, ExperimentGraphRefResolution } from './experiment-process.js'
 import type { ExperimentLedgerService } from './experiment-ledger.js'
 import type { ExperimentRoundsService } from './experiment-rounds.js'
+import { PHASE_ORDER } from './experiment-rounds.js'
+import { SCIENCE_DUTIES } from './science/roles.js'
 import type { DailyReportService } from './daily-report.js'
 import type { WorktreeService } from './worktrees.js'
 import type { LibraryIndexer, LibrarySearch } from './library/index.js'
@@ -263,9 +266,9 @@ export function detectToolImageAssets(resultText: string, workspaceDir: string, 
 /** artifact-image 单图上限（与用户贴图上限一致）。 */
 export const ARTIFACT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
-/** 会话存储根（与客户端 session-delete 同源）。 */
+/** 会话存储根（与客户端 session-delete 同源；DSH_HOME 未设时回退 ~/.dsh 而非 cwd）。 */
 function sessionStoreRoot(): string {
-  return path.join(process.env.DSH_HOME ?? process.cwd(), 'sessions')
+  return path.join(resolveDshHomePath(), 'sessions')
 }
 
 /**
@@ -1163,10 +1166,15 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   @Remote('experimentWorkspaceList')
-  experimentWorkspaceList(args: { workspaceDir?: string }): ExperimentWorkspaceInfo[] {
-    const svc = this.services.experimentWorkspace
-    if (svc === undefined) return []
-    return svc.list(String(args?.workspaceDir ?? ''))
+  experimentWorkspaceList(args: { workspaceDir?: string }): ExperimentWorkspaceInfo[] | { error: string } {
+    try {
+      const svc = this.services.experimentWorkspace
+      if (svc === undefined) return []
+      return svc.list(String(args?.workspaceDir ?? ''))
+    } catch (error) {
+      // 未绑定工作区等校验失败按 { error } 返回，避免整包 500；客户端已有对应降级提示。
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   @Remote('experimentWorkspaceDetail')
@@ -2488,17 +2496,6 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
   }
 
-  @Remote('graphMigrate')
-  graphMigrate(args: { workspaceDir?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      const result = this.services.chatGraph.migrate(name)
-      return { ok: true, graph: result.graph, report: result.report, rev: this.services.chatGraph.rev(name) }
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-
   /** 新建空白 Markdown Memory，不复用图中已有 locator。 */
   @Remote('graphMemoryCreate')
   graphMemoryCreate(args: { workspaceDir?: string; title?: string; scope?: 'project' | 'global'; x?: number; y?: number }): unknown {
@@ -2583,6 +2580,27 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   // ── 科学自演化循环（SCI-08/09）───────────────────────────────────────────
 
+  /** 科研团队职责层（RA/EA/EMA → 六类角色映射 + 回合阶段默认角色），供团队面板展示。 */
+  @Remote('scienceDuties')
+  scienceDuties(): {
+    duties: Array<{ duty: string; name: string; description: string; scope: string; forbidden: string; mapsToRoles: string[] }>
+    stages: Array<{ id: string; label: string; role: string }>
+  } {
+    const duties = SCIENCE_DUTIES.map((d) => ({
+      duty: d.duty,
+      name: d.name,
+      description: d.description,
+      scope: d.scope,
+      forbidden: d.forbidden,
+      mapsToRoles: [...d.mapsToRoles],
+    }))
+    // 回合阶段 → 默认角色（对齐 EvoScientist 的 Intake→Plan→Execute→Evaluate 流程路由）
+    const stageRoles: Record<string, string> = { observe: 'research', propose: 'planner', act: 'code', reflect: 'data_analysis' }
+    const stageLabels: Record<string, string> = { observe: '观察', propose: '提案', act: '执行', reflect: '复盘' }
+    const stages = PHASE_ORDER.map((id) => ({ id, label: stageLabels[id] ?? id, role: stageRoles[id] ?? 'planner' }))
+    return { duties, stages }
+  }
+
   @Remote('scienceLoopCreate')
   scienceLoopCreate(args: {
     kind: 'idea-explore' | 'experiment-try'
@@ -2663,100 +2681,12 @@ export class EvoResearchApiService extends TypertRemoteService {
     } catch (error) { return { error: this.errMessage(error) } }
   }
 
-  @Remote('graphUpdateNode')
-  graphUpdateNode(args: { workspaceDir?: string; nodeId: string; patch: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.updateNode(name, String(args.nodeId ?? ''), (args.patch ?? {}) as Partial<Omit<GraphNode, 'id'>>),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphRemoveNode')
-  graphRemoveNode(args: { workspaceDir?: string; nodeId: string; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.removeNode(name, String(args.nodeId ?? '')),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphUpdateEdge')
-  graphUpdateEdge(args: { workspaceDir?: string; edgeId: string; patch: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.updateEdge(name, String(args.edgeId ?? ''), (args.patch ?? {}) as Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>>),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphRemoveEdge')
-  graphRemoveEdge(args: { workspaceDir?: string; edgeId: string; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.removeEdge(name, String(args.edgeId ?? '')),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphMoveNodes')
-  graphMoveNodes(args: { workspaceDir?: string; positions: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      const positions = Array.isArray(args.positions) ? args.positions.filter((item): item is { id: string; x: number; y: number; pinned?: boolean } => {
-        const value = item as Record<string, unknown>
-        return typeof value.id === 'string' && typeof value.x === 'number' && typeof value.y === 'number'
-      }) : []
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.moveNodes(name, positions),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphAddGroup')
-  graphAddGroup(args: { workspaceDir?: string; group: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.addGroup(name, args.group as GraphGroup),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
-  @Remote('graphUpdateGroup')
-  graphUpdateGroup(args: { workspaceDir?: string; groupId: string; patch: unknown; operationId?: string }): unknown {
-    try {
-      const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({
-        ...this.services.chatGraph.updateGroup(name, String(args.groupId ?? ''), args.patch as Partial<Omit<GraphGroup, 'id'>>),
-        rev: this.services.chatGraph.rev(name),
-      }))
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
 
   @Remote('graphRemoveGroup')
   graphRemoveGroup(args: { workspaceDir?: string; groupId: string; operationId?: string }): unknown {

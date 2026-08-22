@@ -83,25 +83,15 @@ export function pushHistory(cwd: string | null, text: string): void {
 interface CommandEntry { name: string; description: string; hint?: string }
 interface FileEntry { path: string; isDir: boolean }
 
-/** 平台/常见命令补充（§23.3 目录；agent 作用域命令不在全局注册表，静态镜像）。 */
+/**
+ * 平台命令静态补充（§23.3）。仅收录宿主 commands 注册表【不】包含、但
+ * DSH 命令管线真实支持的两条；其余此前镜像的 help/model/threads/... 等
+ * 宿主并不存在，选中后会把字面文本发给模型（幽灵命令），已移除。
+ * 项目/记忆/定时任务等 6 条由后端注册表动态返回，无需在此重复。
+ */
 const PLATFORM_COMMANDS: CommandEntry[] = [
-  { name: 'help', description: 'List all commands, args, aliases and descriptions', _i18nKey: 'cmdHelpDesc' },
-  { name: 'model', description: 'Switch current model; --save also writes config', _i18nKey: 'cmdModelDesc', hint: '[name] [--save]' },
-  { name: 'model-fallback', description: 'Manage ordered fallback model chain', _i18nKey: 'cmdModelFallbackDesc', hint: 'list|add|remove|clear|save|help' },
   { name: 'compact', description: 'Generate a summary projection of earlier active context (keeps history)', _i18nKey: 'cmdCompactDesc' },
-  { name: 'new', description: 'Start a new Thread', _i18nKey: 'cmdNewDesc' },
-  { name: 'clear', description: 'Clear current UI/session view (keeps persisted data)', _i18nKey: 'cmdClearDesc' },
-  { name: 'threads', description: 'List recent persisted sessions', _i18nKey: 'cmdThreadsDesc' },
-  { name: 'resume', description: 'Resume a session by unique Thread ID or prefix', _i18nKey: 'cmdResumeDesc', hint: '<id-or-prefix>' },
-  { name: 'delete', description: 'Permanently delete a session (requires confirmation)', _i18nKey: 'cmdDeleteDesc', hint: '<id-or-prefix>' },
-  { name: 'current', description: 'Show current Thread, workspace, model and status', _i18nKey: 'cmdCurrentDesc' },
-  { name: 'skills', description: 'List skills by workspace/global/built-in layers', _i18nKey: 'cmdSkillsDesc' },
-  { name: 'install-skill', description: 'Install a skill from a local directory or remote repo', _i18nKey: 'cmdInstallSkillDesc', hint: '<source> [--local]' },
-  { name: 'uninstall-skill', description: 'Remove a removable skill', _i18nKey: 'cmdUninstallSkillDesc', hint: '<name>' },
-  { name: 'experts', description: 'List installed Experts and current invitation status', _i18nKey: 'cmdExpertsDesc' },
-  { name: 'mcp', description: 'Manage MCP server', _i18nKey: 'cmdMcpDesc', hint: 'list|config|add|edit|remove|install' },
   { name: 'plan', description: 'Enter plan mode', _i18nKey: 'cmdPlanDesc' },
-  { name: 'exit', description: 'Exit', _i18nKey: 'cmdExitDesc' },
 ] as Array<CommandEntry & { _i18nKey?: string }>
 
 /** 命令目录：后端注册表动态读取 + 平台命令补充（按名称去重）。 */

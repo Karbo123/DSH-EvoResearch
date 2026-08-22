@@ -1123,7 +1123,7 @@ export function LibraryPanel({ cwd }: { cwd: string | null }) {
   useEffect(() => {
     setProjects(null)
     setProject(null)
-    void api<ProjectInfo[]>('projects-list')
+    void api<ProjectInfo[]>('projects')
       .then((list) => {
         setProjects(list)
         const target = normForMatch(cwd ?? '')

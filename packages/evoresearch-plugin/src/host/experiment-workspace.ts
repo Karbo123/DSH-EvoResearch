@@ -51,8 +51,6 @@ const NOTE_NAME = 'LAB_NOTE.md'
 const ARTIFACTS_DIR_NAME = 'artifacts'
 /** 导入引用侧车文件名（位于实验目录内）。 */
 const SIDECAR_NAME = '.evoresearch-import.json'
-/** 回合状态文件名（与 ExperimentRoundsService 同名，B.2 集成点）。 */
-const ROUNDS_STATE_FILE = '.evoresearch-rounds.json'
 /** 树列表默认最大深度 / 最大条目数（防止外部大目录拖垮接口）。 */
 const TREE_MAX_DEPTH = 6
 const TREE_MAX_ITEMS = 2000
@@ -447,74 +445,6 @@ export class ExperimentWorkspaceService {
     }
   }
 
-  // ── 回合状态文件集成（B.2：与 experiment-rounds.ts 同源，供工作区直接读写）───
-
-  /** 回合状态文件名（与 rounds 服务一致）。 */
-  roundsStateFileName(): string {
-    return ROUNDS_STATE_FILE
-  }
-
-  private roundsStateFile(expDir: string): string {
-    return path.join(expDir, ROUNDS_STATE_FILE)
-  }
-
-  /** 读取实验的 rounds 状态（.evoresearch-rounds.json），不存在返回 null。 */
-  getRoundsState(workspaceDir: string, slug: string): unknown | null {
-    const detail = this.listDetail(workspaceDir, slug)
-    const file = this.roundsStateFile(detail.dir)
-    try {
-      return JSON.parse(fs.readFileSync(file, 'utf8')) as unknown
-    } catch {
-      return null
-    }
-  }
-
-  /** 写入实验的 rounds 状态（原子 tmp+rename）。 */
-  setRoundsState(workspaceDir: string, slug: string, state: unknown): { ok: true; path: string } {
-    const detail = this.listDetail(workspaceDir, slug)
-    const file = this.roundsStateFile(detail.dir)
-    const tmp = `${file}.tmp-${process.pid}-${Date.now().toString(36)}`
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8')
-    fs.renameSync(tmp, file)
-    return { ok: true, path: file }
-  }
-
-  /** 获取当前阶段 id（observe/propose/act/reflect），无进行中回合返回 null。 */
-  getRoundsPhase(workspaceDir: string, slug: string): string | null {
-    const state = this.getRoundsState(workspaceDir, slug) as { current?: { phases?: Array<{ id: string; status: string }>; currentIndex?: number } | null } | null
-    if (state?.current === null || state?.current === undefined) return null
-    const current = state.current as { phases: Array<{ id: string; status: string }>; currentIndex: number }
-    const phase = current.phases?.[current.currentIndex]
-    return typeof phase?.id === 'string' ? phase.id : null
-  }
-
-  /** 设置当前阶段（通过 currentIndex 指向阶段 id），阶段不存在抛错。 */
-  setRoundsPhase(workspaceDir: string, slug: string, phaseId: string): { ok: true; phase: string } {
-    const raw = this.getRoundsState(workspaceDir, slug) as { version?: number; nextSeq?: number; current?: { phases: Array<{ id: string; status: string }>; currentIndex: number; status: string } | null; history?: unknown[] } | null
-    if (raw?.current === null || raw?.current === undefined) throw new Error('当前没有进行中的回合')
-    const current = raw.current as { phases: Array<{ id: string; status: string }>; currentIndex: number; status: string }
-    const idx = current.phases.findIndex((p) => p.id === phaseId)
-    if (idx < 0) throw new Error(`非法的阶段: ${phaseId}`)
-    // 将之前的阶段标记 done，目标及之后 pending/running
-    for (let i = 0; i < current.phases.length; i += 1) {
-      const ph = current.phases[i]!
-      if (i < idx) ph.status = 'done'
-      else if (i === idx) ph.status = 'running'
-      else ph.status = 'pending'
-    }
-    current.currentIndex = idx
-    this.setRoundsState(workspaceDir, slug, raw)
-    return { ok: true, phase: phaseId }
-  }
-
-  /** 别名：get/set 阶段（满足任务描述命名）。 */
-  getStage(workspaceDir: string, slug: string): string | null {
-    return this.getRoundsPhase(workspaceDir, slug)
-  }
-
-  setStage(workspaceDir: string, slug: string, phaseId: string): { ok: true; phase: string } {
-    return this.setRoundsPhase(workspaceDir, slug, phaseId)
-  }
 }
 
 /** 规范化后判断 a 是否位于 b 内（含等于 b 本身）。 */

@@ -14,6 +14,7 @@
  */
 import * as path from 'node:path'
 import * as fs from 'node:fs'
+import * as os from 'node:os'
 
 /** 项目名合法字符：小写字母/数字/连字符，≤64 字符。 */
 export const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -131,4 +132,15 @@ export function listProjects(dataRoot: string): string[] {
     .filter((e) => e.isDirectory() && isValidProjectName(e.name))
     .map((e) => e.name)
     .sort()
+}
+
+/**
+ * DSH home 解析（与 @deepseek-ai/dsh-home-paths 的 resolveDshHome 链一致）：
+ * $DSH_HOME 环境变量 → ~/.dsh。此前散落的 `process.env.DSH_HOME ?? process.cwd()`
+ * 在 DSH_HOME 未设置时会错指进程 cwd，导致会话清理/回退读到错误的 sessions 根。
+ */
+export function resolveDshHomePath(): string {
+  const fromEnv = process.env.DSH_HOME
+  if (fromEnv !== undefined && fromEnv.trim().length > 0) return path.resolve(fromEnv)
+  return path.join(os.homedir(), '.dsh')
 }

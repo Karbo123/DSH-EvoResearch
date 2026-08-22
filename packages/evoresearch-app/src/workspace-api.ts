@@ -420,6 +420,22 @@ function trusted(req: IncomingMessage, trustedHosts: string[]): boolean {
   })
 }
 
+/**
+ * CSRF 栅栏：浏览器跨站请求必带 Origin；同源请求（或非浏览器客户端）
+ * 的 Origin 要么缺失要么与本站 Host 一致。仅校验 Host 时，恶意网页可以
+ * 用受害者浏览器向 /fs/read|write 发起跨站调用读取任意本机文件。
+ */
+function sameOrigin(req: IncomingMessage): boolean {
+  const origin = req.headers.origin
+  if (origin === undefined) return true // 非浏览器客户端 / 同源 GET 导航
+  const host = (req.headers.host ?? '').toLowerCase()
+  try {
+    return new URL(origin).host.toLowerCase() === host
+  } catch {
+    return false
+  }
+}
+
 /** 注册 /evoresearch/fs/* 路由。 */
 export function registerWorkspaceApi(ctx: any): void {
   const webServer = ctx.get('webServer')
@@ -430,7 +446,7 @@ export function registerWorkspaceApi(ctx: any): void {
     path: '/evoresearch/fs',
     handler: async (req: IncomingMessage, res: ServerResponse) => {
       const trustedHosts: string[] = ctx.get('webRuntime')?.trustedHosts ?? []
-      if (!trusted(req, trustedHosts)) {
+      if (!trusted(req, trustedHosts) || !sameOrigin(req)) {
         writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
         return
       }
@@ -1872,19 +1888,14 @@ export function registerWorkspaceApi(ctx: any): void {
         }
 
         // ── Chat Graph（节点/连线图，按项目存储）──
-        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-update-node' || method === 'graph-remove-node' || method === 'graph-update-edge' || method === 'graph-remove-edge' || method === 'graph-move-nodes' || method === 'graph-add-group' || method === 'graph-update-group' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write') {
+        // 注：update-node/remove-node/update-edge/remove-edge/move-nodes/add-group/update-group
+        // 七个粒度端点已随宿主一并移除（客户端编辑走 graph-save 全量写，仅 remove-group 在用）。
+        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write') {
           const serviceMethod = method === 'graph-get' ? 'graphGet'
             : method === 'graph-save' ? 'graphSave'
               : method === 'graph-add-node' ? 'graphAddNode'
                 : method === 'graph-add-edge' ? 'graphAddEdge'
-                  : method === 'graph-update-node' ? 'graphUpdateNode'
-                    : method === 'graph-remove-node' ? 'graphRemoveNode'
-                      : method === 'graph-update-edge' ? 'graphUpdateEdge'
-                        : method === 'graph-remove-edge' ? 'graphRemoveEdge'
-                          : method === 'graph-move-nodes' ? 'graphMoveNodes'
-                            : method === 'graph-add-group' ? 'graphAddGroup'
-                              : method === 'graph-update-group' ? 'graphUpdateGroup'
-                                : method === 'graph-remove-group' ? 'graphRemoveGroup'
+                  : method === 'graph-remove-group' ? 'graphRemoveGroup'
                   : method === 'graph-inherit' ? 'graphInherit'
                     : method === 'graph-fork-from-message' ? 'graphForkFromMessage'
                     : method === 'graph-preview' ? 'graphPreview'
@@ -1932,6 +1943,15 @@ export function registerWorkspaceApi(ctx: any): void {
           const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
           if (fn === undefined) throw httpError(400, 'method-error', '科学角色桥接服务不可用')
           try { writeOk(res, await fn.call(evoresearch, { ...payload })) }
+          catch (error) { writeError(res, error) }
+          return
+        }
+
+        // ── 科研团队职责层（RA/EA/EMA → 六类角色 + 回合阶段默认角色）──
+        if (method === 'science-duties') {
+          const fn = evoresearch?.scienceDuties as (() => unknown) | undefined
+          if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          try { writeOk(res, fn.call(evoresearch)) }
           catch (error) { writeError(res, error) }
           return
         }

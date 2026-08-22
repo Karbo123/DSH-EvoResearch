@@ -15,6 +15,7 @@ import { spawnSync } from 'node:child_process'
 import { zstdDecompressSync } from 'node:zlib'
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import { resolveDshHomePath } from './core/paths.js'
 
 const GIT_NAME = 'EvoResearch'
 const GIT_EMAIL = 'evoresearch@localhost'
@@ -35,12 +36,12 @@ function git(dir: string, args: string[], timeoutMs = 120000): string {
 
 /**
  * 会话持久化根（<DSH_HOME>/sessions/；子目录按会话 cwd 编码组织）。
- * 回退到进程 cwd（= 部署根）：绝不默认写入用户目录（~/.dsh），
- * 保证数据集中在程序/部署目录内、换机拷贝即迁移。
+ * 解析链与 @deepseek-ai/dsh-home-paths 的 resolveDshHome 一致（$DSH_HOME → ~/.dsh），
+ * 与 session-persistence-jsonl 行的 dshHomePath('sessions') 同源；此前回退 cwd 会与
+ * DSH 实际写入的 ~/.dsh/sessions 错位，导致会话读取/清理落空。
  */
 function sessionsRoot(): string {
-  const home = process.env.DSH_HOME ?? process.cwd()
-  return path.join(home, 'sessions')
+  return path.join(resolveDshHomePath(), 'sessions')
 }
 
 interface SessionEvent { [key: string]: unknown; type: string; seq?: number }
