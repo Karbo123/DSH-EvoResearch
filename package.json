@@ -14,12 +14,14 @@
     "verify:domain": "node --import tsx scripts/verify-domain-e2e.mjs",
     "verify:acceptance": "node --import tsx scripts/verify-acceptance.mjs --run-all",
     "verify": "npm run build && npm test && npm run test -w @evoresearch/dsh-app && npm run verify:domain && npm run verify:acceptance && node scripts/verify-chatgraph-xyflow.mjs && node scripts/verify-bundle.mjs && node scripts/check-docs.mjs",
-    "docs": "node scripts/check-docs.mjs"
+    "docs": "node scripts/check-docs.mjs",
+    "tauri": "tauri"
   },
   "engines": {
     "node": ">=22.5.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "typescript": "^5.8.0"
   },
   "license": "MIT",
