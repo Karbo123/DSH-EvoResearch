@@ -81,11 +81,5 @@ HANDOFF.md
 
 .venv/
 
-# 本地交接手册（仅本地留存，不入库）
-AGENTS.md
-
-# Claude Code 入口指引（仅本地留存，不入库）
-CLAUDE.md
-
 # 验收脚本运行产物（截图/调试脚本，不入库）
 scripts/.tmp-*
