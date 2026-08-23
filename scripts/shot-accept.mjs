@@ -48,7 +48,7 @@ async function evalJs(expr, timeoutMs = 8000) {
 const mouse = (type, x, y, extra = {}) => send('Input.dispatchMouseEvent', { type, x, y, button: 'left', ...extra })
 const shot = async (name) => {
   const s = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(`D:\\DSH-Research\\.tmp-port\\accept-${name}.png`, Buffer.from(s.data, 'base64'))
+  writeFileSync(`D:\\DSH-Research\\.tmp-dev\\images\\accept-${name}.png`, Buffer.from(s.data, 'base64'))
   console.log(`shot: accept-${name}.png`)
 }
 await send('Network.enable')

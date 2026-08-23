@@ -13,7 +13,7 @@ const url = process.argv[2]
 const selector = process.argv[3]
 const out = process.argv[4]
 const debugPort = 37000 + Math.floor(Math.random() * 1000)
-const userData = join(ROOT, '.tmp-port', `edge-clip-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-clip-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [

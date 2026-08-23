@@ -15,7 +15,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const port = process.argv[2]
 const url = `http://127.0.0.1:${port}/?sidebar=1`
 const debugPort = 44000 + Math.floor(Math.random() * 600)
-const userData = join(ROOT, '.tmp-port', `edge-df-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-df-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -88,7 +88,7 @@ async function main() {
   report.modal = await cdp.eval(`(function(){ const m = document.querySelector('.evo-modal'); const mask = document.querySelector('.evo-modal-mask'); if (!m || !mask) return null; const mr = m.getBoundingClientRect(); const maskR = mask.getBoundingClientRect(); return { w: Math.round(mr.width), h: Math.round(mr.height), vw: Math.round(maskR.width), vh: Math.round(maskR.height), centeredX: Math.abs((mr.left + mr.width / 2) - maskR.width / 2) < 2, centeredY: Math.abs((mr.top + mr.height / 2) - maskR.height / 2) < 2, ratioW: (mr.width / maskR.width).toFixed(3), ratioH: (mr.height / maskR.height).toFixed(3) } })()`)
 
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
-  const out = join(ROOT, '.tmp-port', `defaults-${port}.png`)
+  const out = join(ROOT, '.tmp-dev', `defaults-${port}.png`)
   writeFileSync(out, Buffer.from(shot.data, 'base64'))
   report.screenshot = out
 

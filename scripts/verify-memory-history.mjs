@@ -16,7 +16,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const port = process.argv[2]
 const url = `http://127.0.0.1:${port}/?sidebar=1`
 const debugPort = 37000 + Math.floor(Math.random() * 1000)
-const userData = join(ROOT, '.tmp-port', `edge-mh-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-mh-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -93,7 +93,7 @@ async function main() {
   report.sessionChanged = await cdp.eval(`(function(){ try { return window.__evoresearch.sessions.binding !== undefined && document.querySelector('.evo-composer-status')?.textContent.includes('科研记忆') === false } catch(e) { return String(e) } })()`)
 
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
-  const out = join(ROOT, '.tmp-port', `memhistory-${port}.png`)
+  const out = join(ROOT, '.tmp-dev', `memhistory-${port}.png`)
   writeFileSync(out, Buffer.from(shot.data, 'base64'))
   report.screenshot = out
 

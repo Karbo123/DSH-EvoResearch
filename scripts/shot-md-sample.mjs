@@ -63,7 +63,7 @@ body { background: #1c1a17; color: #e8e3d8; font-family: -apple-system, BlinkMac
 .evo-md hr { border: none; border-top: 1px solid #3a372f; margin: 12px 0; }
 `
 const page = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body><div class="evo-md">${html}</div></body></html>`
-const outFile = 'D:\\DSH-Research\\.tmp-port\\md-sample.html'
+const outFile = 'D:\\DSH-Research\\.tmp-dev\\images\\md-sample.html'
 writeFileSync(outFile, page, 'utf8')
 console.log('html written:', html.length, 'bytes')
 
@@ -105,10 +105,10 @@ ws.on('message', (m) => {
 })
 await new Promise((r) => ws.on('open', r))
 await send('Page.enable')
-await send('Page.navigate', { url: 'file:///D:/DSH-Research/.tmp-port/md-sample.html' })
+await send('Page.navigate', { url: 'file:///D:/DSH-Research/.tmp-dev/images/md-sample.html' })
 await sleep(3000)
 const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\visual-md-sample.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-md-sample.png', Buffer.from(shot.data, 'base64'))
 console.log('saved visual-md-sample.png')
 ws.close()
 edge.kill()

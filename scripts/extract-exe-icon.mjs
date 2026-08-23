@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const exe = process.argv[2]
-const out = process.argv[3] ?? join(ROOT, '.tmp-port', 'exe-icon.png')
+const out = process.argv[3] ?? join(ROOT, '.tmp-dev', 'exe-icon.png')
 if (!exe) {
   console.error('用法: node scripts/extract-exe-icon.mjs <exe路径> [输出png]')
   process.exit(1)

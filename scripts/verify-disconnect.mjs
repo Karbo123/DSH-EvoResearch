@@ -89,7 +89,7 @@ const after = await evalJs(`(() => ({
 console.log('AFTER DISCONNECT:', JSON.stringify(after))
 async function shot() {
   const s = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync('D:\\DSH-Research\\.tmp-port\\full-disconnect-menu.png', Buffer.from(s.data, 'base64'))
+  writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\full-disconnect-menu.png', Buffer.from(s.data, 'base64'))
 }
 ws.close()
 edge.kill()

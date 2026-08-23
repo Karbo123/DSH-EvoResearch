@@ -16,9 +16,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const port = process.argv[2]
 const url = `http://127.0.0.1:${port}/?sidebar=1`
 const debugPort = 49000 + Math.floor(Math.random() * 500)
-const userData = join(ROOT, '.tmp-port', `edge-up2-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-up2-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
-const srcFile = join(ROOT, '.tmp-port', 'up-src.txt')
+const srcFile = join(ROOT, '.tmp-dev', 'up-src.txt')
 writeFileSync(srcFile, `hello upload ${Date.now()}`, 'utf8')
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -106,7 +106,7 @@ async function main() {
   report.zip = await cdp.eval(`(function(){ return fetch('/evoresearch/fs/zip', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ root: ${JSON.stringify(root)} }) }).then(function(r){ return r.json() }).then(function(j){ return j.ok ? { count: j.value.count } : { error: j.error?.message } }) })()`)
 
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
-  const out = join(ROOT, '.tmp-port', `fsupload2-${port}.png`)
+  const out = join(ROOT, '.tmp-dev', `fsupload2-${port}.png`)
   writeFileSync(out, Buffer.from(shot.data, 'base64'))
   report.screenshot = out
 

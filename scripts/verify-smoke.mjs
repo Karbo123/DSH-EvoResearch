@@ -16,7 +16,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const port = process.argv[2]
 const url = `http://127.0.0.1:${port}/?sidebar=1`
 const debugPort = 38000 + Math.floor(Math.random() * 1000)
-const userData = join(ROOT, '.tmp-port', `edge-smoke-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-smoke-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -121,7 +121,7 @@ async function main() {
   report.rowsAfterDelete = await cdp.eval(`(function(){ return document.querySelectorAll('.evo-tl-row').length })()`)
 
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
-  const out = join(ROOT, '.tmp-port', `smoke-${port}.png`)
+  const out = join(ROOT, '.tmp-dev', `smoke-${port}.png`)
   writeFileSync(out, Buffer.from(shot.data, 'base64'))
   report.screenshot = out
 

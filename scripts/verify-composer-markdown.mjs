@@ -128,8 +128,8 @@ console.log('CTRL+I (no selection):', JSON.stringify(kbd4))
 
 // ── 6) 截图 ──
 const shot = await send('Page.captureScreenshot', { format: 'png' })
-mkdirSync('.tmp-port', { recursive: true })
-writeFileSync('.tmp-port/visual-composer.png', Buffer.from(shot.data, 'base64'))
-console.log('saved .tmp-port/visual-composer.png')
+mkdirSync('.tmp-dev', { recursive: true })
+writeFileSync('.tmp-dev/images/visual-composer.png', Buffer.from(shot.data, 'base64'))
+console.log('saved .tmp-dev/images/visual-composer.png')
 ws.close()
 process.exit(0)

@@ -58,12 +58,12 @@ for (let i = 0; i < 20; i++) {
 await sleep(1200)
 // 项目视图截图
 let shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\visual-projects.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-projects.png', Buffer.from(shot.data, 'base64'))
 // 进入项目
 await evalJs(`document.querySelector('.evo-tl-project-row')?.click()`)
 await sleep(800)
 shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\visual-subchats.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-subchats.png', Buffer.from(shot.data, 'base64'))
 console.log('screenshots saved')
 ws.close()
 edge.kill()

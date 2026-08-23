@@ -12,7 +12,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const url = process.argv[2]
 const js = process.argv[3]
 const debugPort = 35000 + Math.floor(Math.random() * 1000)
-const userData = join(ROOT, '.tmp-port', `edge-eval-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-eval-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [

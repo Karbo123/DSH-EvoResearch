@@ -49,7 +49,7 @@ try {
   check(env.fingerprint(project) === env.fingerprint(project), '环境指纹计算稳定')
 
   const result = { ok: true, root, project, checks, generatedAt: new Date().toISOString() }
-  const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.tmp-port')
+  const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.tmp-dev')
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(path.join(outDir, 'baseline-result.json'), JSON.stringify(result, null, 2), 'utf8')
   console.log(JSON.stringify(result, null, 2))

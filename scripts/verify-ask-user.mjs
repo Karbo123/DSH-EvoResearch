@@ -17,7 +17,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const port = process.argv[2]
 const url = `http://127.0.0.1:${port}/?sidebar=1`
 const debugPort = 47000 + Math.floor(Math.random() * 500)
-const userData = join(ROOT, '.tmp-port', `edge-ask-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-ask-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -101,7 +101,7 @@ async function main() {
 
   if (cardSeen) {
     const shot1 = await cdp.send('Page.captureScreenshot', { format: 'png' })
-    writeFileSync(join(ROOT, '.tmp-port', `ask-card-${port}.png`), Buffer.from(shot1.data, 'base64'))
+    writeFileSync(join(ROOT, '.tmp-dev', `ask-card-${port}.png`), Buffer.from(shot1.data, 'base64'))
     // 单选问题：点击第一个选项（RNA structure）→ 即答
     report.singleClick = await cdp.eval(`(function(){ const q = document.querySelector('.evo-question'); const btn = q?.querySelector('.evo-question-opt'); if (!btn) return 'no-opt'; btn.click(); return 'clicked' })()`)
     await sleep(800)
@@ -126,7 +126,7 @@ async function main() {
   report.askResult = askResult
 
   const shot2 = await cdp.send('Page.captureScreenshot', { format: 'png' })
-  const out = join(ROOT, '.tmp-port', `ask-done-${port}.png`)
+  const out = join(ROOT, '.tmp-dev', `ask-done-${port}.png`)
   writeFileSync(out, Buffer.from(shot2.data, 'base64'))
   report.screenshot = out
 

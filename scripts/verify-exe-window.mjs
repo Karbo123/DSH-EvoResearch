@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const exe = process.argv[2]
-const outPng = process.argv[3] ?? join(ROOT, '.tmp-port', 'exe-window.png')
+const outPng = process.argv[3] ?? join(ROOT, '.tmp-dev', 'exe-window.png')
 const portFile = join(process.env.LOCALAPPDATA ?? '', 'com.evoresearch.desktop', 'port.json')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

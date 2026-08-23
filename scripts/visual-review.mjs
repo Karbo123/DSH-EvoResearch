@@ -8,7 +8,7 @@ const CDP_PORT = process.argv[2] || '47510'
 const APP_PORT = process.argv[3] || '9500'
 const modeArg = process.argv.find((a) => a.startsWith('--shots='))
 const MODE = modeArg ? modeArg.split('=')[1] : 'all'
-const OUT = 'D:\\DSH-Research\\.tmp-port'
+const OUT = 'D:\\DSH-Research\\.tmp-dev'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const list = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json()

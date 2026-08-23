@@ -150,7 +150,7 @@ await sleep(1500)
 console.log('STEP8 open session:', JSON.stringify(await evalJs(`(() => ({ url: location.search.slice(0, 60), hasChat: !!document.querySelector('.evo-composer-textarea') }))()`)))
 
 const shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\visual-graph.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-graph.png', Buffer.from(shot.data, 'base64'))
 console.log('screenshot saved')
 ws.close()
 edge.kill()

@@ -39,9 +39,12 @@ projects/
 # IDE
 .vscode/
 .idea/
-.tmp-port/
 dsh-web-ui/
 awesome-dsh-plugin/
+
+# 统一临时开发目录（截图 images/、3081 开发数据、Playwright node_modules 等）
+# 见 AGENTS.md §3 —— 所有临时产物只允许放这里
+.tmp-dev/
 
 # 运行时科研记忆数据（不入库）
 .tmp-web-data/
@@ -53,8 +56,7 @@ awesome-dsh-plugin/
 sessions/
 storages/
 
-# 本机 DSH 配置（包含本地 provider 凭据引用）
-/settings.yaml
+# 本机 DSH 凭据（含密钥，不入库；生效位置在各 DSH_HOME 下）
 /.credentials.yaml
 
 # 构建期生成的客户端样式（katex 字体内联，勿入库）

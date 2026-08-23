@@ -15,7 +15,7 @@
  *   F. 稿件：ManuscriptService 最小骨架创建 + 编译缺工具可操作提示（确定性 PATH）；
  *   G. 清理（BASE-02）：finally rmSync 删除临时目录。
  *
- * 输出：.tmp-port/library-integration-report.md（场景矩阵 / 结果 / 发现）。
+ * 输出：.tmp-dev/images/library-integration-report.md（场景矩阵 / 结果 / 发现）。
  * 全部使用临时目录（mkdtemp），不读写任何真实资料；不修改 src 下任何文件。
  */
 import * as fs from 'node:fs'
@@ -34,7 +34,7 @@ import {
 } from '../packages/evoresearch-plugin/src/host/manuscript.ts'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const REPORT_PATH = path.join(REPO_ROOT, '.tmp-port', 'library-integration-report.md')
+const REPORT_PATH = path.join(REPO_ROOT, '.tmp-dev', 'library-integration-report.md')
 
 // ---------- 断言收集器（自动计数，BASE-02 约定） ----------
 let pass = 0

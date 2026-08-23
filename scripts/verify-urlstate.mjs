@@ -16,7 +16,7 @@ import { rmSync, mkdirSync, writeFileSync } from 'node:fs'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const port = process.argv[2]
 const debugPort = 36500 + Math.floor(Math.random() * 700)
-const userData = join(ROOT, '.tmp-port', `edge-url-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-url-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -116,7 +116,7 @@ async function main() {
   report.aboutStamp = await cdp.eval(`(function(){ const el = Array.from(document.querySelectorAll('.evo-setting-hint div')).find(function(d){ return d.textContent.startsWith('build ') }); return el ? el.textContent : null })()`)
 
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
-  const out = join(ROOT, '.tmp-port', `urlstate-${port}.png`)
+  const out = join(ROOT, '.tmp-dev', `urlstate-${port}.png`)
   writeFileSync(out, Buffer.from(shot.data, 'base64'))
   report.screenshot = out
 

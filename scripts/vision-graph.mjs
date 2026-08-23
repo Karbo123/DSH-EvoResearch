@@ -17,7 +17,7 @@ const res = await fetch('http://127.0.0.1:3000/v1/chat/completions', {
         },
         {
           type: 'image_url',
-          image_url: { url: `data:image/png;base64,${fs.readFileSync('D:\\DSH-Research\\.tmp-port\\visual-graph.png').toString('base64')}` },
+          image_url: { url: `data:image/png;base64,${fs.readFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-graph.png').toString('base64')}` },
         },
       ],
     }],

@@ -12,7 +12,7 @@ import { rmSync, mkdirSync, writeFileSync } from 'node:fs'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const url = process.argv[2]
 const debugPort = 40000 + Math.floor(Math.random() * 1000)
-const userData = join(ROOT, '.tmp-port', `edge-act-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-act-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -112,7 +112,7 @@ async function main() {
   // 截图（Current 弹窗）
   await new Promise((r) => setTimeout(r, 300))
   let shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-  writeFileSync(join(ROOT, '.tmp-port', 'actions-current.png'), Buffer.from(shot.data, 'base64'))
+  writeFileSync(join(ROOT, '.tmp-dev', 'actions-current.png'), Buffer.from(shot.data, 'base64'))
 
   // 2) Clear view + Restore
   res = await cdp.send('Runtime.evaluate', {
@@ -161,7 +161,7 @@ async function main() {
   // 截图（搜索后高亮）
   await new Promise((r) => setTimeout(r, 300))
   shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-  writeFileSync(join(ROOT, '.tmp-port', 'actions-search.png'), Buffer.from(shot.data, 'base64'))
+  writeFileSync(join(ROOT, '.tmp-dev', 'actions-search.png'), Buffer.from(shot.data, 'base64'))
 
   // 4) Shortcuts + Compact 确认弹窗
   res = await cdp.send('Runtime.evaluate', {

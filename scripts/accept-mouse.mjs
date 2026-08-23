@@ -50,7 +50,7 @@ const mouse = (type, x, y, extra = {}) => send('Input.dispatchMouseEvent', { typ
 const rmouse = (type, x, y) => send('Input.dispatchMouseEvent', { type, x, y, button: 'right', buttons: type === 'mouseReleased' ? 0 : 2 })
 const shot = async (name) => {
   const s = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(`D:\\DSH-Research\\.tmp-port\\accept-${name}.png`, Buffer.from(s.data, 'base64'))
+  writeFileSync(`D:\\DSH-Research\\.tmp-dev\\images\\accept-${name}.png`, Buffer.from(s.data, 'base64'))
   console.log(`shot: accept-${name}.png`)
 }
 

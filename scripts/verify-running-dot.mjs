@@ -15,7 +15,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const port = process.argv[2]
 const url = `http://127.0.0.1:${port}/?sidebar=1`
 const debugPort = 43000 + Math.floor(Math.random() * 700)
-const userData = join(ROOT, '.tmp-port', `edge-rd-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-rd-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -91,7 +91,7 @@ async function main() {
   report.dotSeen = dotSeen
   if (dotSeen) {
     const shot1 = await cdp.send('Page.captureScreenshot', { format: 'png' })
-    writeFileSync(join(ROOT, '.tmp-port', `rundot-${port}.png`), Buffer.from(shot1.data, 'base64'))
+    writeFileSync(join(ROOT, '.tmp-dev', `rundot-${port}.png`), Buffer.from(shot1.data, 'base64'))
   }
   // 等完成 → 状态点消失
   for (let i = 0; i < 180; i += 1) {

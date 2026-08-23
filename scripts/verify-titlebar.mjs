@@ -15,7 +15,7 @@ import { existsSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const exe = process.argv[2]
-const screenshotPath = process.argv[3] ?? join(ROOT, '.tmp-port', 'desktop-titlebar.png')
+const screenshotPath = process.argv[3] ?? join(ROOT, '.tmp-dev', 'desktop-titlebar.png')
 const cdpPort = 9300 + Math.floor(Math.random() * 60)
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

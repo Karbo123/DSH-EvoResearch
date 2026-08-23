@@ -65,7 +65,7 @@ const state = await evalJs(`(() => {
 console.log('FORK SESSION VIEW:', JSON.stringify(state, null, 1))
 console.log('HAS A HISTORY:', state.users.some((t) => t.includes('GRAPH-77') || t.includes('版本一') || t.includes('工作正常')))
 const shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\full-fork-session.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\full-fork-session.png', Buffer.from(shot.data, 'base64'))
 console.log('screenshot saved')
 ws.close()
 edge.kill()

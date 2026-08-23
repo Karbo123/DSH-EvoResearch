@@ -106,7 +106,7 @@ const sb = await evalJs(`(() => {
 console.log('SCROLLBAR:', JSON.stringify(sb))
 
 const shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\visual-scrollbar.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-scrollbar.png', Buffer.from(shot.data, 'base64'))
 console.log('screenshot saved')
 ws.close()
 edge.kill()

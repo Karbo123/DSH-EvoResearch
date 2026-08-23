@@ -11,7 +11,7 @@ import { rmSync, mkdirSync, writeFileSync } from 'node:fs'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const url = process.argv[2]
 const debugPort = 36000 + Math.floor(Math.random() * 1000)
-const userData = join(ROOT, '.tmp-port', `edge-md-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-md-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -133,7 +133,7 @@ async function main() {
   // 预览截图
   await new Promise((r) => setTimeout(r, 400))
   const shot1 = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-  writeFileSync(join(ROOT, '.tmp-port', 'md-preview.png'), Buffer.from(shot1.data, 'base64'))
+  writeFileSync(join(ROOT, '.tmp-dev', 'md-preview.png'), Buffer.from(shot1.data, 'base64'))
 
   // 2) 切回 Write 并发送
   res = await cdp.send('Runtime.evaluate', {
@@ -186,7 +186,7 @@ async function main() {
 
   await new Promise((r) => setTimeout(r, 500))
   const shot2 = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-  writeFileSync(join(ROOT, '.tmp-port', 'md-message.png'), Buffer.from(shot2.data, 'base64'))
+  writeFileSync(join(ROOT, '.tmp-dev', 'md-message.png'), Buffer.from(shot2.data, 'base64'))
 
   console.log(JSON.stringify(out, null, 2))
   cdp.close()

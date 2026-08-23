@@ -51,7 +51,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const previousDshHome = process.env.DSH_HOME
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-accept-'))
 process.env.DSH_HOME = root
-const resultDir = path.join(REPO_ROOT, '.tmp-port')
+const resultDir = path.join(REPO_ROOT, '.tmp-dev')
 const resultFile = path.join(resultDir, 'accept-results.json')
 const reportFile = path.join(resultDir, 'accept-results.md')
 

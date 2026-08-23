@@ -271,10 +271,10 @@ ${failed.length === 0 ? '**未发现生产代码缺陷。** 路径安全护栏�
 
 > 说明：超长路径行为取决于系统「长路径支持」设置，属记录型用例；若为「拒绝」，是 Windows 长路径未开启或路径超限，不属于代码缺陷。
 `
-  const reportPath = path.join(REPO_ROOT, '.tmp-port', 'paths-verification.md')
+  const reportPath = path.join(REPO_ROOT, '.tmp-dev', 'paths-verification.md')
   fs.mkdirSync(path.dirname(reportPath), { recursive: true })
   fs.writeFileSync(reportPath, report, 'utf8')
-  console.log(`报告已写入 .tmp-port/paths-verification.md`)
+  console.log(`报告已写入 .tmp-dev/images/paths-verification.md`)
 } finally {
   fs.rmSync(tmpBase, { recursive: true, force: true })
 }

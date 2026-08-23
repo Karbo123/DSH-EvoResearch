@@ -14,7 +14,7 @@ import { rmSync, mkdirSync, writeFileSync } from 'node:fs'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const url = process.argv[2]
 const debugPort = 41000 + Math.floor(Math.random() * 1000)
-const userData = join(ROOT, '.tmp-port', `edge-r5-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-r5-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
@@ -107,7 +107,7 @@ async function main() {
   // 截图（队列弹层）
   await new Promise((r) => setTimeout(r, 300))
   let shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-  writeFileSync(join(ROOT, '.tmp-port', 'round5-queue.png'), Buffer.from(shot.data, 'base64'))
+  writeFileSync(join(ROOT, '.tmp-dev', 'round5-queue.png'), Buffer.from(shot.data, 'base64'))
 
   // 2) 队列编辑/删除/清空
   res = await cdp.send('Runtime.evaluate', {
@@ -194,7 +194,7 @@ async function main() {
   // 截图（Side chats 页）
   await new Promise((r) => setTimeout(r, 300))
   shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-  writeFileSync(join(ROOT, '.tmp-port', 'round5-sidechats.png'), Buffer.from(shot.data, 'base64'))
+  writeFileSync(join(ROOT, '.tmp-dev', 'round5-sidechats.png'), Buffer.from(shot.data, 'base64'))
 
   // 4) Blank side chat 创建
   res = await cdp.send('Runtime.evaluate', {

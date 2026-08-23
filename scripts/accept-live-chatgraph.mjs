@@ -6,10 +6,10 @@ import WebSocket from 'ws'
 
 const APP_PORT = process.argv[2] ?? process.env.EVORESEARCH_APP_PORT ?? '3081'
 const APP = `http://127.0.0.1:${APP_PORT}`
-const ROOT = 'D:\\DSH-Research\\.tmp-port'
+const ROOT = 'D:\\DSH-Research\\.tmp-dev'
 const debugPort = 47501
 const profile = `${ROOT}\\edge-live-${Date.now()}`
-mkdirSync('/mnt/d/DSH-Research/.tmp-port', { recursive: true })
+mkdirSync('/mnt/d/DSH-Research/.tmp-dev', { recursive: true })
 const edge = spawn('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--disable-extensions', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`,

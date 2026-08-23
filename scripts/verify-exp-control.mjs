@@ -237,7 +237,7 @@ try {
   console.log('─'.repeat(60))
 
   // 落盘结果供 CI 读取
-  const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.tmp-port')
+  const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.tmp-dev')
   fs.mkdirSync(outDir, { recursive: true })
   const result = {
     ok: fails.length === 0,
@@ -259,7 +259,7 @@ try {
   console.error('\n\x1b[31m✘ 验收失败\x1b[0m', err?.stack ?? err)
   // 仍写失败结果
   try {
-    const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.tmp-port')
+    const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.tmp-dev')
     fs.mkdirSync(outDir, { recursive: true })
     fs.writeFileSync(path.join(outDir, 'verify-exp-control-result.json'), JSON.stringify({ ok: false, error: String(err?.stack ?? err), checks, fails, generatedAt: new Date().toISOString() }, null, 2), 'utf8')
   } catch {}

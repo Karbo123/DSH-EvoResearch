@@ -4,7 +4,7 @@
 #
 - id: evoresearch-host
   config:
-    dataRoot: D:\DSH-Research\.tmp-port\evoresearch-dev-data
+    dataRoot: D:\DSH-Research\.tmp-dev\evoresearch-dev-data
 
 # §21.3/§10.6：官方 dsh-base 默认不含 ask_user 工具行——补挂 tool-ask-user，
 # 使主 Agent 获得 ask_user_question 工具（模型主动提问 → 工作台问题卡片作答，

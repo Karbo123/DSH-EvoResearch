@@ -109,7 +109,7 @@ const menu = await evalJs(`(() => {
 })()`)
 console.log('step5 TAB-MENU:', JSON.stringify(menu))
 const shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\visual-tabmenu.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-tabmenu.png', Buffer.from(shot.data, 'base64'))
 console.log('step6 screenshot saved')
 ws.close()
 edge.kill()

@@ -95,7 +95,7 @@ console.log('AFTER DRAG 200px:', JSON.stringify(after))
 console.log('chat unchanged:', before.chatH === after.chatH)
 
 const shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\visual-sticky.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-sticky.png', Buffer.from(shot.data, 'base64'))
 console.log('screenshot saved')
 ws.close()
 edge.kill()

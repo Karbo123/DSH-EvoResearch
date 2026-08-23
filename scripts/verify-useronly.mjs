@@ -116,9 +116,9 @@ console.log('RESTORED:', JSON.stringify(restored))
 await evalJs(`[...document.querySelectorAll('.evo-composer-tool')].find(b => (b.getAttribute('aria-label') ?? '').includes('仅我的消息'))?.click()`)
 await sleep(800)
 const shot = await send('Page.captureScreenshot', { format: 'png' })
-mkdirSync('.tmp-port', { recursive: true })
-writeFileSync('.tmp-port/visual-useronly.png', Buffer.from(shot.data, 'base64'))
-console.log('screenshot saved: .tmp-port/visual-useronly.png')
+mkdirSync('.tmp-dev', { recursive: true })
+writeFileSync('.tmp-dev/images/visual-useronly.png', Buffer.from(shot.data, 'base64'))
+console.log('screenshot saved: .tmp-dev/images/visual-useronly.png')
 
 // 8) 恢复为全量视图
 await evalJs(`[...document.querySelectorAll('.evo-composer-tool')].find(b => (b.getAttribute('aria-label') ?? '').includes('仅我的消息'))?.click()`)

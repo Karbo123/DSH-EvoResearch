@@ -101,7 +101,7 @@ console.log('STEP5 graph regression:', JSON.stringify(await evalJs(`(() => ({
   edges: document.querySelectorAll('.evo-graph-edge').length,
 }))()`)))
 const shot = await send('Page.captureScreenshot', { format: 'png' })
-writeFileSync('D:\\DSH-Research\\.tmp-port\\visual-projects.png', Buffer.from(shot.data, 'base64'))
+writeFileSync('D:\\DSH-Research\\.tmp-dev\\images\\visual-projects.png', Buffer.from(shot.data, 'base64'))
 console.log('screenshot saved')
 ws.close()
 edge.kill()

@@ -32,7 +32,7 @@ function flag(name) {
 }
 
 const url = arg('url', '')
-const out = arg('out', join(ROOT, '.tmp-port', 'shot.png'))
+const out = arg('out', join(ROOT, '.tmp-dev', 'shot.png'))
 const scripts = []
 for (let i = 0; i < process.argv.length; i += 1) {
   if (process.argv[i] === '--script') scripts.push(process.argv[i + 1])
@@ -63,7 +63,7 @@ async function findEdge() {
   throw new Error('找不到 Edge')
 }
 
-const userData = join(ROOT, '.tmp-port', `edge-cdp-${randomBytes(4).toString('hex')}`)
+const userData = join(ROOT, '.tmp-dev', `edge-cdp-${randomBytes(4).toString('hex')}`)
 mkdirSync(dirname(userData), { recursive: true })
 
 const edge = spawn(edgePath, [
