@@ -4,21 +4,12 @@
 # tag 已存在时：删除远端旧 tag 与旧 Release 后重建，tauri-action / gh release
 # 以 `clobber` 语义覆盖同名资产 —— 即"自动覆盖更新资产"。
 #
-# 触发模式（联调开关）：
-#   iOS 联调期：push 到 main 自动触发，且只跑 ios job（desktop/android 临时
-#   禁用——它们已验证通过，跳过可把单轮反馈周期从 ~40min 压到 ~15min）。
-#   联调完成后：恢复 workflow_dispatch 手动触发并重新启用 desktop/android。
-#
-# 说明：
-# - macOS 使用 Ad-hoc 签名（本地可启动）；如需分发签名见 docs/05-release-ci.md；
-# - Release Notes 由 publish-notes 步骤按固定模板生成（平台下载表 +
-#   卖点简介 + 自动提取的 commit 摘要），非 draft 直接正式发布。
+# 触发模式：仅手动触发（workflow_dispatch）。push 到 main 不触发构建，
+# 避免日常提交浪费多平台编译资源；需要出新安装包时在 Actions 页手动 Run。
 
 name: Release EvoResearch
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
