@@ -124,7 +124,19 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   const profilePkg = JSON.parse(readFileUtf8(join(ROOT, 'profiles', 'evoresearch', 'package.json')))
   delete profilePkg.dependencies // 依赖由 app 根提供（profile 向上解析）
   writeFileSync(join(profileDir, 'package.json'), JSON.stringify(profilePkg, null, 2), 'utf8')
-  writeFileSync(join(profileDir, 'cordis.patch.yml'), readFileUtf8(join(ROOT, 'profiles', 'evoresearch', 'cordis.patch.yml')), 'utf8')
+  // 桌面版不能照搬仓库里的 cordis.patch.yml：其中 evoresearch-host.dataRoot 把
+  // 数据根写死为开发机绝对路径（.tmp-dev），而 dataRoot 解析优先级是
+  // config.dataRoot > EVORESEARCH_DATA_ROOT 环境变量，带上它会让用户机器的
+  // 数据写进不存在的开发路径。桌面版剥离该补丁，数据根完全交给 launch.js 注入的
+  // EVORESEARCH_DATA_ROOT（exe 同级 .evoresearch-data）。
+  const desktopPatchYml = `# EvoResearch 桌面版 profile 补丁层（构建脚本生成；开发版补丁见仓库 profiles/evoresearch/）。
+# 数据根不在此声明：由壳侧环境变量 EVORESEARCH_DATA_ROOT 决定（exe 同级 .evoresearch-data）。
+
+- insert:
+    - id: tool-ask-user
+      name: '@deepseek-ai/dsh-tool-ask-user'
+`
+  writeFileSync(join(profileDir, 'cordis.patch.yml'), desktopPatchYml, 'utf8')
   // 3) 安装依赖（--install-links：file: 依赖复制为真实目录而非 junction，
   //    保证打包后 app/node_modules/@evoresearch/* 是自包含目录）
   // NODE_OPTIONS=--max-old-space-size=4096：macOS runner 上 npm reify 阶段

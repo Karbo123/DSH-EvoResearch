@@ -197,9 +197,9 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
     let workdir = locate_sidecar(resource_dir, "app")
         .ok_or_else(|| std::io::Error::other("未找到 sidecar app 目录"))?;
     heal_profiles_modules(&workdir);
-    // 数据根：exe 同级目录下的 evoresearch-data（用户数据一目了然、随程序迁移；
+    // 数据根：exe 同级目录下的 .evoresearch-data（用户数据一目了然、随程序迁移；
     // 与程序文件（sidecar/dist/app）分离，打包重建不会触碰）
-    let data_home = resource_dir.join("evoresearch-data");
+    let data_home = resource_dir.join(".evoresearch-data");
     fs::create_dir_all(&data_home).ok();
     log(&format!("[shell] data_home={}", data_home.display()));
     // 端口文件路径经环境变量传给 launch.js（避免两侧路径约定漂移）

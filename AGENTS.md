@@ -29,7 +29,7 @@
 | **3081 开发数据根** | `D:\DSH-Research\.tmp-dev\evoresearch-dev-data\` | 插件 `dataRoot`：projects、ledgers、reports/daily、chat-graphs 等全部在此；**删此一处即清空全部开发测试数据** |
 | **3081 开发 DSH_HOME** | `D:\DSH-Research\.tmp-dev\evoresearch-dev-data\dsh-home\` | DSH 引擎状态：sessions、storages、settings.yaml、credentials、**profile（含 node_modules）** 都在此 |
 | **3080 生产数据根** | `D:\DSH-Research\.evoresearch-data\` + `C:\Users\Karbo\.dsh` | 用户重要对话（74+），**不可污染、不可删除** |
-| **桌面版** | `<安装目录>\evoresearch-data\`（exe 同级） | `desktop/sidecar/launch.js` 通过 `EVORESEARCH_DATA_HOME` 传入；随程序目录迁移，整体备份即迁移 |
+| **桌面版** | `<安装目录>\.evoresearch-data\`（exe 同级，开头有点） | `desktop/sidecar/launch.js` 通过 `EVORESEARCH_DATA_HOME` 传入；随程序目录迁移，整体备份即迁移 |
 | **临时产物（截图/调试输出）** | `D:\DSH-Research\.tmp-dev\images\` | 见 §3 |
 | **项目工作区（3081）** | `.tmp-dev\evoresearch-dev-data\projects\<name>\` | 每个科研项目独立目录，内部 `.evoresearch-data/` 为项目私有数据（见 `packages/evoresearch-plugin/src/host/core/paths.ts`） |
 

@@ -21,7 +21,7 @@ const portFile = process.env.EVORESEARCH_PORT_FILE || join(dataDir, 'port.json')
 
 mkdirSync(dataDir, { recursive: true })
 
-/** 数据根：壳传入的 exe 同级 evoresearch-data；未传入（直接运行本脚本）时用当前目录。 */
+/** 数据根：壳传入的 exe 同级 .evoresearch-data；未传入（直接运行本脚本）时用当前目录。 */
 const dataHome = process.env.EVORESEARCH_DATA_HOME || process.cwd()
 mkdirSync(dataHome, { recursive: true })
 

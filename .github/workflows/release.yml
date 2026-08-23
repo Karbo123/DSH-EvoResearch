@@ -50,6 +50,12 @@ jobs:
               gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$RELEASE_ID"
               ;;
           esac
+          # 孤儿 draft 清理：draft 尚未打 tag，上面的 by-tag 路由查不到，
+          # 会永久残留并让仓库首页 Releases 侧栏显示异常（如只剩「1 tag」）
+          for DID in $(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '.[] | select(.draft) | .id'); do
+            echo "删除残留 draft Release id=$DID"
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$DID"
+          done
           # 删除旧 Tag（remote 与 local）
           git push origin ":refs/tags/${TAG}" 2>/dev/null || echo "远端无旧 tag"
 
