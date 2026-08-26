@@ -740,7 +740,7 @@ const DICT: Record<string, [string, string]> = {
   trajActualTime: ['By duration', '按耗时'],
   trajEqualWidth: ['Equal-width view', '等宽视图'],
   trajActualTimeHint: ['Bar width proportional to the real duration of each operation.', '条宽按每项操作的真实耗时比例显示。'],
-  trajEqualWidthHint: ['Every operation gets the same bar width regardless of duration.', '所有操作等宽显示，便于逐项对比。'],
+  trajEqualWidthHint: ['Every operation shows an equal, fixed-size bar (duration stays in the label) for tidy row-by-row comparison.', '所有操作显示一条等长的小条（真实耗时仍见右侧文字），便于逐项对比，条长不再表示耗时。'],
   trajClickExpand: ['Click to expand / collapse', '点击展开 / 收起'],
   trajSearch: ['Search trajectory', '搜索轨迹'],
   trajEmpty: ['No trajectory yet — send a message to get started.', '暂无轨迹——发送一条消息开始。'],

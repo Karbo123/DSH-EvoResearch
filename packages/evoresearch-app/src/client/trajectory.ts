@@ -198,8 +198,11 @@ export function TrajectoryPanel({ session }: { session: any }) {
     return max
   }, [turns])
 
+  // 等宽视图：所有操作共用一根等长的小条，只用样式锚定行、不表达任何量，
+  // 避免每个条目都渲染成「占满轨道」的 100% 满条而误导成进度条。
+  const EQ_BAR_WIDTH = '34px'
   const barWidth = (start: number, end: number | null): string => {
-    if (!actualTime) return '100%'
+    if (!actualTime) return EQ_BAR_WIDTH
     const dur = Math.max(0, (end ?? Date.now()) - start)
     return `${Math.max(3, Math.round((dur / maxDuration) * 100))}%`
   }
