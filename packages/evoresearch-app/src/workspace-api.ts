@@ -1915,9 +1915,24 @@ export function registerWorkspaceApi(ctx: any): void {
         // ── 技能目录（§42.6 Marketplace 浏览：三层来源合并，官方 skills.list）──
         if (method === 'skills-catalog') {
           const skills = ctx.get('skills')
-          if (skills?.list === undefined) throw httpError(400, 'method-error', 'skills 服务不可用')
-          const list = await skills.list({})
-          writeOk(res, { skills: Array.isArray(list) ? list : [] })
+          const dynamic: Array<{ name: string; description?: string }> = []
+          if (skills?.list !== undefined) {
+            try { dynamic.push(...(await skills.list({}))) } catch { /* 动态技能列表不可用时忽略 */ }
+          }
+          // 内置科研技能目录（参照 EvoScientist 项目的 skills/ + EvoResearch 自身能力）：
+          // 即使部署环境未安装任何 DSH skills，科研技能面板也有可浏览的内容。
+          const builtin: Array<{ name: string; description: string; whenToUse: string; invocation: { modelInvocable: boolean; userInvocable: boolean } }> = [
+            { name: 'find-skills', description: '从开放式技能生态为用户发现代理技能：搜索 skills.sh 并给出通过 skill_manager 工具安装的选项。', whenToUse: '用户想为某项常见任务寻找现成的技能、工具、模板或工作流时。', invocation: { modelInvocable: true, userInvocable: true } },
+            { name: 'skill-creator', description: '创建新技能、改进既有技能并度量技能性能：起草 → 制定测试 → 运行评估 → 依反馈重写迭代。', whenToUse: '用户想从零创建技能、优化既有技能、运行 eval 或基准测试技能性能时。', invocation: { modelInvocable: true, userInvocable: true } },
+            { name: 'lit-review', description: '对给定主题做学术文献调研：检索论文、摘要并整理成研究综述与相关工作的结构化笔记。', whenToUse: '需要对某个研究方向做文献检索与综述、补齐 related work 或追踪最新论文时。', invocation: { modelInvocable: true, userInvocable: true } },
+            { name: 'experiment-design', description: '把开放研究问题转成可检验的实验设计：明确假设、变量、指标、阶段与检查点。', whenToUse: '需要把研究问题落地为可运行的实验计划、梳理阶段与回退点时。', invocation: { modelInvocable: true, userInvocable: true } },
+            { name: 'paper-reader', description: '精读一篇论文：解析结构、抽取方法/实验/结论，并写入项目笔记与记忆。', whenToUse: '需要精读一篇论文、做精读笔记或核对论文与代码/实验结果的一致性时。', invocation: { modelInvocable: true, userInvocable: true } },
+            { name: 'memory-search', description: '在全局科研记忆中检索既有发现：按目标、分类、观测与知识库定位相关条目。', whenToUse: '需要回顾以前的研究结论、跨项目检索记忆或避免重复研究时。', invocation: { modelInvocable: true, userInvocable: true } },
+          ]
+          const dedup = new Map<string, { name: string; description?: string }>()
+          for (const s of builtin) dedup.set(s.name, s)
+          for (const s of dynamic) if (typeof s?.name === 'string' && !dedup.has(s.name)) dedup.set(s.name, s)
+          writeOk(res, { skills: [...dedup.values()] })
           return
         }
 

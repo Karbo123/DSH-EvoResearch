@@ -35,6 +35,32 @@ const DICT: Record<string, [string, string]> = {
   searchResearch: ['Search title or content...', '搜索标题或内容...'],
   searchSort: ['Sort conversations', '排序方式'],
   workbench: ['Workbench', '科研工作台'],
+  // 左侧工作台导航：入口用途说明（tooltip / 面板底部小字）
+  menuNewChatHint: ['New chat is the EvoResearch logo in the top-left corner.', '新建对话请点左上角 EvoResearch logo。'],
+  menuImportHint: ['Import an existing folder as a project, or create a new project workspace.', '把已有文件夹导入为项目，或在工作区新建项目。'],
+  menuSkillsHint: ['Review auto-suggested research skills and browse the built-in skill catalog.', '审阅自动生成的科研技能提案，并浏览内置技能目录。'],
+  menuMemoryHint: ['Global research memory: goals, history, identity and knowledge across projects.', '全局科研记忆：跨项目的目标、历史、身份与知识。'],
+  menuScheduleHint: ['Automatically run research prompts on a schedule and report results.', '按计划自动运行科研提示词，并定时汇报结果。'],
+  menuNotesHint: ['Project-scoped research notes and background documents.', '当前项目的研究笔记与背景资料。'],
+  menuExperimentsHint: ['Design experiments, track phases and roll back checkpoints.', '设计实验、跟踪阶段、回退检查点。'],
+  menuLibraryHint: ['Papers and manuscript: register PDFs, search, read and take notes.', '文献与稿件：注册 PDF、搜索、阅读、精读笔记。'],
+  menuChannelsHint: ['Connect messaging channels to let the agent receive/send messages.', '接入消息通道，让智能体收发消息。'],
+  menuTeamHint: ['Research roles (RA/EA/EMA) — invite experts and inspect duties.', '科研角色团队：邀请专家、查看职责层。'],
+  // 导入项目 vs 新建项目
+  workspaceHelp: ['New Project creates an empty workspace here; Import Project copies an existing folder into it. Both register the project so it appears in the left list and EvoMemory.', '「新建项目」在工作区里创建一个空白项目；「导入项目」把已存在的文件夹复制进来。两者都会注册到项目注册表，立刻出现在左侧列表与科研记忆中。'],
+  newProjectFormHint: ['Creates a fresh empty project workspace (git initialized, README added).', '创建一个全新的空白项目工作区（初始化 git 并生成 README）。'],
+  importProjectFormHint: ['Pick the absolute folder path on this computer to copy into a project. The name is optional (uses the folder name by default).', '输入本机上的绝对文件夹路径，把它复制为一个项目。项目名可选（默认用文件夹名）。'],
+  // EvoMemory
+  memoryHelp: ['EvoMemory is your global long-term research memory: it aggregates goals, research-turn history, identity files and observations across all projects, searchable from History / Identity / Knowledge.', 'EvoMemory 是全局科研长期记忆：汇总所有项目的目标、科研轮次历史、身份档案与观测记录，可在「历史 / 身份 / 知识」中查看与搜索。'],
+  // 科研技能
+  skillsHelp: ['Proposals are auto-discovered reusable skills distilled from your research (review & approve to install); the Marketplace lists the built-in and installed skill catalog.', '「提案」从你的研究观测中自动蒸馏出可复用技能（审阅并批准后安装）；「市场」展示内置与已安装的技能目录。'],
+  scheduleHelp: ['Schedule runs a research prompt automatically at the chosen cron time, in its own thread. Use Run now to trigger immediately, or Report to main chat to bring the result back here.', '定时任务会按设定的 cron 时间在独立会话中自动执行研究提示词。可用「立即运行」手动触发，或用「汇报到主对话」把结果带回当前会话。'],
+  experimentsHelp: ['Design an experiment as named phases with rollback checkpoints; each can branch into new directions.', '把实验设计为具名阶段并支持回退检查点；每个阶段都可分出新的研究方向。'],
+  libraryHelp: ['Papers: register/open PDFs, run four-way search (filename/title/full-text/notes) and write reading notes. Manuscript: compile LaTeX and cross-check citations against papers.', '文献：注册/打开 PDF、四路搜索（文件名/标题/全文/笔记）并写精读笔记。稿件：编译 LaTeX 并核对引用与论文页/实验文件的对应。'],
+  channelsHelp: ['Connect external messaging channels so the agent can read incoming messages and reply through them. Turn each channel on/off here.', '接入外部消息通道，让智能体接收并回复消息；在此可单独启用/停用各通道。'],
+  teamHelp: ['Assemble a research team: invite experts and review each role’s duties, scope and forbidden actions, and the round-stage defaults.', '组建科研团队：邀请专家，查看每个角色的职责、范围与禁区，以及回合阶段的默认角色。'],
+  // 研究笔记
+  notesHelp: ['Research Notes are per-project: notes and background docs live under this project, so they travel with it when you migrate or share the project.', '研究笔记按项目隔离：笔记与背景资料存放在当前项目的工作区，随项目一起迁移/共享。'],
   sortRecent: ['Recently created', '最近创建'],
   sortTitle: ['Title A–Z', '标题顺序'],
   sortUpdated: ['Recently edited', '最近编辑'],
