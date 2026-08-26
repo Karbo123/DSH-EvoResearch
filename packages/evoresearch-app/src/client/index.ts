@@ -258,6 +258,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return t === 'agents' || t === 'chats' ? t : 'workspace'
   })
   const [view, setView] = useState<SideView>(null)
+  // 首次发送（欢迎页无会话时）：乐观渲染「用户消息 + AI 加载中」，让界面立即响应，
+  // 不等后台建会话/LLM 标题/建项目等串行链完成。真实快照出现后自动被覆盖。
+  const [pendingFirst, setPendingFirst] = useState<{ text: string; ts: number } | null>(null)
   // 左上角 EvoResearch 品牌右键菜单（工作台导航入口）
   const [brandMenuOpen, setBrandMenuOpen] = useState(false)
   const brandBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -1276,6 +1279,13 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const sendMessage = (text: string, images?: Array<{ data: string; mediaType: string; name?: string }>) => {
     const normalized = text.trim()
     if (normalized === '') return
+    // 首条消息（无活跃会话、无 justCreated 接力）：立即乐观渲染「我的消息 + AI 加载中」，
+    // 不等后台的标题 LLM / 建项目 / 建会话串行链。真实快照（nodes/partial）出现后自动覆盖。
+    const effectiveCurrentBefore = current ?? justCreatedSessionRef.current ?? undefined
+    if (effectiveCurrentBefore === undefined && pendingFirst === null) {
+      setPendingFirst({ text: normalized, ts: Date.now() })
+      setHomeMode(false)
+    }
     // content 是内容块数组（§23.7 附件：文本 + 图片块），mode 必填（queue = 追加到当前轮次之后）
     const content: Array<{ type: string; text?: string; data?: string; mediaType?: string; name?: string }> = [{ type: 'text', text: normalized }]
     for (const image of images ?? []) content.push({ type: 'image', data: image.data, mediaType: image.mediaType, ...(image.name !== undefined ? { name: image.name } : {}) })
@@ -1317,7 +1327,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         ? { workspaceId }
         : cwd === undefined ? {} : { cwd }
       const id = await sessionsService?.create(createOptions)
-      if (id === undefined || id === '') return
+      if (id === undefined || id === '') { setPendingFirst(null); return }
       justCreatedSessionRef.current = id
       const states = readAutoTitleStates()
       states[id] = {
@@ -1340,6 +1350,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             }
           }
           await created.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+          // 真实快照（nodes/partial）已接管流式渲染；清除乐观占位（若尚未被覆盖）
+          setPendingFirst(null)
           const manager = sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined
           try { await manager?.refreshList?.() } catch { /* 列表刷新失败不影响当前会话 */ }
           if (initialTitle.title !== null && initialTitle.title !== '') await applyAutoTitle(id, kind, workspaceId)
@@ -1347,6 +1359,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         }
         await new Promise((r) => setTimeout(r, 150))
       }
+      // 轮询 30 次（~4.5s）仍无 binding：放弃乐观占位，避免永久「加载中」
+      setPendingFirst(null)
     })()
   }
 
@@ -1750,6 +1764,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         nodes,
                         partial,
                         running,
+                        pendingFirst,
                         error: promptError,
                         currentTitle,
                         sessionId: current ?? null,

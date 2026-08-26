@@ -436,6 +436,13 @@ body { margin: 0; }
 .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 3px; text-align: right; }
 .evo-msg-cursor { display: inline-block; width: 7px; height: 15px; margin-left: 2px; background: var(--brand); vertical-align: -2px; animation: evo-blink 1s steps(2) infinite; }
 @keyframes evo-blink { 50% { opacity: 0; } }
+/* ── 首条消息乐观占位：AI「加载中」三点动画 ── */
+.evo-pending-loading .evo-msg-stack { max-width: 75%; }
+.evo-pending-bubbles { display: inline-flex; align-items: center; gap: 5px; padding: 4px 2px; min-width: 48px; }
+.evo-pending-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); opacity: .35; animation: evo-pending-bounce 1.2s ease-in-out infinite; }
+.evo-pending-dot:nth-child(2) { animation-delay: .18s; }
+.evo-pending-dot:nth-child(3) { animation-delay: .36s; }
+@keyframes evo-pending-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-4px); opacity: .9; } }
 /* 窄屏：消息列与审批/命令条占满可用宽度（放在主规则之后，避免被前面的媒体查询覆盖） */
 @media (max-width: 767px) {
   .evo-msg-list { width: 100%; min-width: 0; }

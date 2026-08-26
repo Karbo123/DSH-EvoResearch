@@ -142,6 +142,8 @@ export interface ChatAreaProps {
   nodes: ChatNode[]
   /** 流式中的 assistant 消息。 */
   partial: ChatNode | null
+  /** 首条消息乐观占位：会话尚未建立时立即显示「我的消息 + AI 加载中」。 */
+  pendingFirst: { text: string; ts: number } | null
   /** 会话是否正在运行。 */
   running: boolean
   /** 发送失败信息（promptError）。 */
@@ -606,7 +608,7 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
   })
 }
 
-export function ChatArea({ nodes, partial, running, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onBranchFromMessage, onSend }: ChatAreaProps) {
+export function ChatArea({ nodes, partial, running, pendingFirst, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onBranchFromMessage, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   // ── 会话权限（§25.x）：跟随当前会话，不是全局设置；在输入框工具行切换 ──
   const [permPreset, setPermPreset] = useState<string | null>(null)
@@ -1530,7 +1532,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   useEffect(() => () => { composerResizeCleanupRef.current?.() }, [])
 
-  const hasMessages = nodes.length > 0 || partial !== null
+  const hasMessages = nodes.length > 0 || partial !== null || pendingFirst !== null
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)
 
   // ── Dynamic Workflow（§24）：workflow-run 节点 → 输入区上方阶段条 ──
@@ -1611,6 +1613,42 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       rewindConfirming: rewindConfirm === node.data.seq,
                     }, node.key)
                   : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults, sessionId }, node.key)),
+                // 首条消息乐观占位：会话尚未建立、真实节点还没出现时，立即显示
+                // 「我的消息 + AI 加载中」（真实快照出现后此条件失效，占位自动消失）。
+                nodes.length === 0 && partial === null && pendingFirst !== null
+                  ? jsxs(Fragment, {
+                      children: [
+                        jsx(UserBubble, {
+                          text: pendingFirst.text,
+                          time: pendingFirst.ts,
+                          nodeKey: `pending-first-user-${pendingFirst.ts}`,
+                          seq: -1,
+                        }, `pending-first-user-${pendingFirst.ts}`),
+                        jsx('div', {
+                          className: 'evo-msg evo-msg-assistant evo-pending-loading',
+                          'aria-label': t('thinking'),
+                          children: jsxs('div', {
+                            className: 'evo-msg-stack',
+                            children: [
+                              jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsx(Atom, {}) }),
+                              jsx('div', {
+                                className: 'evo-msg-body',
+                                children: jsxs('span', {
+                                  className: 'evo-pending-bubbles',
+                                  'aria-hidden': true,
+                                  children: [
+                                    jsx('span', { className: 'evo-pending-dot', children: '' }),
+                                    jsx('span', { className: 'evo-pending-dot', children: '' }),
+                                    jsx('span', { className: 'evo-pending-dot', children: '' }),
+                                  ],
+                                })
+                              }),
+                            ],
+                          }),
+                        }, `pending-first-ai-${pendingFirst.ts}`),
+                      ],
+                    })
+                  : null,
                 partial !== null && !userOnly && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults, sessionId }, partial.key),
                 showJump && jsx('button', {
                   type: 'button',
