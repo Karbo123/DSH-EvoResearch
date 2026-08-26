@@ -164,9 +164,9 @@ cargo tauri build --bundles nsis
   配置见 `tauri.android.conf.json`（resources 清空）。
 - 三平台桌面 + Android APK 的云端编译发布流水线见 [05-release-ci.md](05-release-ci.md)。
 
-## rc.8 升级注意（SQLite 存储格式变更）
+## 0.1.1 系列升级注意（SQLite 会话存储格式，自 rc.8 起）
 
-DSH `0.1.0-rc.8` 变更了会话存储的 SQLite 格式（不兼容旧格式）。桌面版**覆盖安装升级**
+DSH 会话存储的 SQLite 格式自 `0.1.0-rc.8` 起保持不变（当前基线 **0.1.1-rc.2** 沿用该格式，旧格式会话不兼容）。桌面版**覆盖安装升级**
 时，sidecar 使用的平台会话库不会自动迁移旧数据：
 
 - **升级前请备份 `%DSH_HOME%` 数据目录**（含 `sessions/` 与平台会话库）；旧数据不向后兼容；

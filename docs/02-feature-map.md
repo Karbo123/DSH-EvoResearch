@@ -256,7 +256,7 @@
 | NF-14 无人值守 shell 门控（P3-2） | approval-policy.ts `decideUnattendedShell`（管道切段逐段 deny-list fail-closed + allow-list 前缀）+ `isUnattendedSource`；运行时接线：unattended-registry.ts 登记 scheduler/channel/science 会话 → host 挂载 `tools.guard`（bash/pwsh 命令执行前判定，拒绝返回原因），配置样例见 docs/03-development.md | ✅ |
 | NF-15 继续上次入口（P3-4） | threadlist New Chat 下方「继续上次」按钮：按 titleTime/updatedAt 打开最近活跃主线程 | ✅ |
 
-> P3-3（追问卡折叠保草稿）由官方 ask_user_question 问题卡语义吸收；rc.8 SQLite 存储格式变更的桌面 sidecar 升级注意见 docs/04-desktop.md 与提案书 §4。
+> P3-3（追问卡折叠保草稿）由官方 ask_user_question 问题卡语义吸收；DSH 0.1.1 系列（自 rc.8 起）SQLite 会话存储格式的桌面 sidecar 升级注意见 docs/04-desktop.md 与提案书 §4。
 
 ## 已知取舍（有意为之）
 

@@ -89,7 +89,7 @@ Fallback、调度、多通道）部分已由 DSH 提供、部分需要适配接�
 
 | 文件 | 职责 |
 |---|---|
-| `src/host/platform/capabilities.ts` | `PlatformCapability` 枚举（15 项：sessions/models/tools/approval/sandbox/events/plugins/compaction/toolPruning/sessionQuery/skills/mcp/subagents/scheduler/channels）；`DSH_CAPABILITY_MATRIX` 静态能力矩阵（能力 → rc.6 现状 available/partial/missing → 适配层策略 → 降级路径）；`probeCapabilities(ctx)` 运行时探测（`ctx.get` 对应服务是否存在，返回实际可用集） |
+| `src/host/platform/capabilities.ts` | `PlatformCapability` 枚举（15 项：sessions/models/tools/approval/sandbox/events/plugins/compaction/toolPruning/sessionQuery/skills/mcp/subagents/scheduler/channels）；`DSH_CAPABILITY_MATRIX` 静态能力矩阵（能力 → 现状 available/partial/missing → 适配层策略 → 降级路径，依据 rc.6 安装面持续维护）；`probeCapabilities(ctx)` 运行时探测（`ctx.get` 对应服务是否存在，返回实际可用集） |
 | `src/host/platform/adapters.ts` | `createPlatformAdapters(ctx)` 返回统一适配接口：`adapters.sessions`（get/create/fork/readLog/flush）、`adapters.models`（list/current/route）、`adapters.tools`（list/get/invoke/register）、`adapters.approval`、`adapters.sandbox`、`adapters.events`（on/once 统一返回 disposer）、`adapters.plugins`，外加 `has/require/summarize` |
 
 降级行为约定（每个适配器对缺失能力必须给出明确行为）：

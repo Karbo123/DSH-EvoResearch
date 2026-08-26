@@ -1,7 +1,7 @@
 # 00 · 技术选型决策（Tech Decisions）
 
 > 本项目基于 deepseek-harness（DSH）构建，TypeScript / Node.js 实现，运行于
-> [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）0.1.0-rc.x 平台。
+> [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）0.1.1-rc.2 平台。
 > 本文记录每项关键选型的**决策依据**与**否决项**，便于后续维护者复核。
 > 硬性约束：Node.js 后端、不使用 Python、不基于 deepagents、Windows 优先（Web + 桌面）、
 > 桌面打包体积最小、文档与注释使用中文。

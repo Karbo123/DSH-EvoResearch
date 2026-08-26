@@ -351,7 +351,7 @@ node scripts/check-docs.mjs
   （cargo 版与 npm 版子命令不同）。
 - **gh api 布尔值用 `-F` 不用 `-f`**（字符串 "false" 会 422）；PATCH release 只认
   `/releases/{id}`，by-tag 路由 404。
-- **`@deepseek-ai/dsh-client-schema-form` 等无对应 rc 版本的包保持其历史可用版本（如 rc.6）**（`ETARGET` 限制）。
+- **`@deepseek-ai/dsh-client-schema-form`（rc.7）、`@deepseek-ai/dsh-client-web-react`（rc.7）等无 `0.1.1-rc.2` 的包保持其历史可用版本**（`ETARGET` 限制；`dsh-client-web-react@rc.7` 自身锁定的 `dsh-client-ui-slots@rc.8` 传递依赖亦保留）。
 - **AGENTS.md**：项目交接与开发约定，纳入 Git 跟踪并推送到 GitHub。
 - **`.serena/`**：Serena MCP（LSP 代码检索工具）的项目级配置与缓存，由 Claude Code 的 serena MCP server 读写，与本应用运行无关；已 gitignore。
 
