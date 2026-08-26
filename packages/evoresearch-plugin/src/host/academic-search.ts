@@ -109,7 +109,7 @@ export interface AcademicSource {
 }
 
 export interface AcademicSearchResult {
-  provider: 'OpenAlex' | 'Crossref' | 'AutoRelatedWork'
+  provider: 'OpenAlex' | 'Crossref' | 'AutoRelatedWork' | 'PaperNavigator'
   query: string
   sources: AcademicSource[]
   totalAvailable?: number

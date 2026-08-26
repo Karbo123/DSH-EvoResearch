@@ -18,6 +18,7 @@ import {
   routeKey,
 } from '../src/host/platform/models-selector.js'
 import { selectToolsForTurn, BASE_TOOL_WHITELIST } from '../src/host/platform/tools-selector.js'
+import { isAcademicSearchQuery } from '../src/host/web-search.js'
 import { decideApproval, defaultApprovalPolicy, validateApprovalPolicy } from '../src/host/platform/approval-policy.js'
 import { SubagentRegistry, SubagentProviderRegistry, SubagentFacade } from '../src/host/platform/subagents.js'
 import type { SubagentProvider } from '../src/host/platform/subagents.js'
@@ -130,6 +131,24 @@ describe('PLAT-14 per-turn 工具选择', () => {
     const many = selectToolsForTurn(available, '搜索', { maxTools: 4 })
     assert.ok(many.length <= 4)
     assert.ok(many.map((t) => t.name).includes('search_research_history')) // 白名单优先
+  })
+
+  it('中文学术自然问句会强制保留文献发现链', () => {
+    const academicTools = [
+      { name: 'search_literature', description: '题录级检索' },
+      { name: 'search_related_literature', description: '引用关系' },
+      { name: 'recommend_literature', description: '语义推荐' },
+      { name: 'search_paper_snippets', description: '正文片段' },
+      { name: 'bash', description: '运行 shell 命令' },
+    ]
+    const question = '帮我找一下关于神经算子的论文'
+    assert.equal(isAcademicSearchQuery(question), true)
+    const selected = selectToolsForTurn(academicTools, question, {
+      required: academicTools.slice(0, 4).map((tool) => tool.name),
+    })
+    const names = selected.map((tool) => tool.name)
+    assert.deepEqual(names.slice(0, 4), academicTools.slice(0, 4).map((tool) => tool.name))
+    assert.ok(!names.includes('bash'))
   })
 })
 

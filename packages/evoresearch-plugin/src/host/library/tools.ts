@@ -31,6 +31,8 @@ export interface LibraryToolsDeps {
   libraryIndexer: LibraryIndexer
   /** 平台 web_search 可用性探测（组装层经 adapters.tools.get('web_search') 注入）。 */
   hasWebSearch(): boolean
+  /** 学术 Provider 是否可用；独立于通用 web_search 工具。 */
+  hasAcademicSearch?(): boolean
   /**
    * 调一次平台 web_search。content 为文本块拼接后的结果文本。
    * 平台工具入参形态以部署为准：默认 { query: string }。
@@ -40,6 +42,12 @@ export interface LibraryToolsDeps {
   fetchImpl?: typeof fetch
   /** 论文专用检索；优先使用 OpenAlex，Crossref 作为无 Key 兜底。 */
   invokeAcademicSearch?(query: string, limit: number): Promise<AcademicSearchResult>
+  /** Semantic Scholar 论文图扩展：前向引用、参考文献或共引。 */
+  invokeAcademicRelated?(input: { paperId: string; direction?: 'forward' | 'backward' | 'co-citation'; limit?: number; smart?: boolean; minCitations?: number }): Promise<AcademicSearchResult>
+  /** Semantic Scholar 个性化推荐。 */
+  invokeAcademicRecommendations?(input: { positiveIds: string[]; negativeIds?: string[]; limit?: number; perSeed?: boolean }): Promise<AcademicSearchResult>
+  /** Semantic Scholar 论文片段检索。 */
+  invokeAcademicSnippets?(input: { query: string; paperId?: string; limit?: number }): Promise<unknown>
 }
 
 /** ctx.tools 最小结构（避免直接依赖运行时类型）。 */
@@ -117,7 +125,7 @@ function hitToWire(hit: SearchHit): Record<string, unknown> {
 }
 
 /**
- * 注册文献工具组（search_library / search_literature / import_literature）。
+ * 注册文献工具组（本地/综合检索、引用图扩展、推荐、片段检索、导入）。
  * @returns 解除注册的 disposer（tools 服务缺失时为空函数）。
  */
 export function registerLibraryTools(ctx: Context, deps: LibraryToolsDeps): () => void {
@@ -175,6 +183,7 @@ export function registerLibraryTools(ctx: Context, deps: LibraryToolsDeps): () =
     description:
       '文献综合检索：本地文献库 + （启用联网时）优先使用 OpenAlex/Crossref 的学术题录检索，' +
       '避免通用网页搜索把词典和 SEO 页面混入论文结果；返回题录级候选。' +
+      '当用户要求查找论文、文献综述或某主题的相关研究时，应优先调用本工具；' +
       '用户说『把第 N 篇下进来』后用 import_literature 落库。',
     parameters: paramsSchema(
       {
@@ -235,13 +244,15 @@ export function registerLibraryTools(ctx: Context, deps: LibraryToolsDeps): () =
         { kind: 'web'; query: string; excerpt: string } |
         { kind: 'web_error' | 'academic_error'; query: string; error: string }
       > = []
-      if (!deps.hasWebSearch()) {
+      const academicSearch = deps.invokeAcademicSearch
+      const academicAvailable = academicSearch !== undefined && (deps.hasAcademicSearch?.() ?? deps.hasWebSearch())
+      if (!deps.hasWebSearch() && !academicAvailable) {
         notes.push('未配置网络检索（平台 web_search 工具不可用），仅返回本地文献库结果')
-      } else if (deps.invokeAcademicSearch !== undefined) {
+      } else if (academicAvailable) {
         for (const q of queries) {
           if (localHits.length + webResults.length >= LITERATURE_RESULT_CAP) break
           try {
-            const result = await deps.invokeAcademicSearch(q, perQuery)
+            const result = await academicSearch(q, perQuery)
             webResults.push({ kind: 'academic', query: q, provider: result.provider, results: result.sources })
           } catch (error) {
             webResults.push({
@@ -268,6 +279,109 @@ export function registerLibraryTools(ctx: Context, deps: LibraryToolsDeps): () =
       }
 
       return { local_hits: localHits, web_results: webResults, note: notes.join('；') }
+    },
+  })
+
+  // ── search_related_literature ───────────────────────────────────────────
+  register({
+    name: 'search_related_literature',
+    description:
+      '从一篇 Semantic Scholar 论文出发查找关联文献：forward=被引文献，' +
+      'backward=该论文引用的参考文献，co-citation=与该论文共同被引用的文献。' +
+      '优先返回有影响力、引用上下文更丰富的候选；paper_id 必须是 Semantic Scholar paperId 或可识别的外部论文 ID。',
+    parameters: paramsSchema(
+      {
+        paper_id: { type: 'string', description: 'Semantic Scholar paperId（也可使用 DOI:...、ARXIV:... 等 S2 支持的 ID）' },
+        direction: { type: 'string', enum: ['forward', 'backward', 'co-citation'], description: '关联方向，默认 forward' },
+        limit: { type: 'number', description: '返回条数上限，默认 15，最大 100' },
+        smart: { type: 'boolean', description: '是否按影响力与引用上下文排序，而不是单纯按引用量排序' },
+        min_citations: { type: 'number', description: '最低被引数过滤（可选）' },
+      },
+      ['paper_id'],
+    ),
+    output: {
+      schema: { type: 'object', properties: { provider: { type: 'string' }, query: { type: 'string' }, search_type: { type: 'string' }, sources: { type: 'array', items: { type: 'object' } } } },
+      render: textRender,
+    },
+    execute: async (args) => {
+      if (deps.invokeAcademicRelated === undefined) return { error: '当前未启用 Paper Navigator 学术检索 Provider' }
+      const input = args as { paper_id?: string; direction?: string; limit?: number; smart?: boolean; min_citations?: number }
+      const paperId = String(input.paper_id ?? '').trim()
+      if (paperId === '') return { error: 'paper_id 不能为空' }
+      const direction = input.direction === 'backward' || input.direction === 'co-citation' ? input.direction : 'forward'
+      try {
+        return await deps.invokeAcademicRelated({
+          paperId,
+          direction,
+          ...(input.limit !== undefined ? { limit: Math.min(Math.max(Math.floor(input.limit), 1), 100) } : {}),
+          ...(input.smart !== undefined ? { smart: input.smart } : {}),
+          ...(input.min_citations !== undefined ? { minCitations: Math.max(0, Math.floor(input.min_citations)) } : {}),
+        })
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
+    },
+  })
+
+  // ── recommend_literature ────────────────────────────────────────────────
+  register({
+    name: 'recommend_literature',
+    description: '根据一篇或多篇已选论文向量推荐语义相近的论文，可用 negative_ids 排除不相关方向。',
+    parameters: paramsSchema(
+      {
+        positive_ids: { type: 'array', items: { type: 'string' }, description: '正向论文 ID 列表' },
+        negative_ids: { type: 'array', items: { type: 'string' }, description: '负向论文 ID 列表（可选）' },
+        limit: { type: 'number', description: '返回条数上限，默认 10，最大 100' },
+        per_seed: { type: 'boolean', description: '多篇正向论文是否分别推荐后合并去重' },
+      },
+      ['positive_ids'],
+    ),
+    output: { schema: { type: 'object', properties: { provider: { type: 'string' }, query: { type: 'string' }, sources: { type: 'array', items: { type: 'object' } } } }, render: textRender },
+    execute: async (args) => {
+      if (deps.invokeAcademicRecommendations === undefined) return { error: '当前未启用 Paper Navigator 学术检索 Provider' }
+      const input = args as { positive_ids?: unknown; negative_ids?: unknown; limit?: number; per_seed?: boolean }
+      const positiveIds = (Array.isArray(input.positive_ids) ? input.positive_ids : []).map(String).map((id) => id.trim()).filter(Boolean).slice(0, 20)
+      if (positiveIds.length === 0) return { error: 'positive_ids 至少需要一个论文 ID' }
+      try {
+        return await deps.invokeAcademicRecommendations({
+          positiveIds,
+          ...(Array.isArray(input.negative_ids) ? { negativeIds: input.negative_ids.map(String).map((id) => id.trim()).filter(Boolean).slice(0, 20) } : {}),
+          ...(input.limit !== undefined ? { limit: Math.min(Math.max(Math.floor(input.limit), 1), 100) } : {}),
+          ...(input.per_seed !== undefined ? { perSeed: input.per_seed } : {}),
+        })
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
+    },
+  })
+
+  // ── search_paper_snippets ───────────────────────────────────────────────
+  register({
+    name: 'search_paper_snippets',
+    description: '检索 Semantic Scholar 论文正文片段；可限定 paper_id，用于判断候选论文是否真正讨论了目标概念。',
+    parameters: paramsSchema(
+      {
+        query: { type: 'string', description: '正文片段检索词' },
+        paper_id: { type: 'string', description: '可选，限定在一篇论文内检索' },
+        limit: { type: 'number', description: '片段数上限，默认 10，最大 100' },
+      },
+      ['query'],
+    ),
+    output: { schema: { type: 'array', items: { type: 'object' } }, render: textRender },
+    execute: async (args) => {
+      if (deps.invokeAcademicSnippets === undefined) return { error: '当前未启用 Paper Navigator 学术检索 Provider' }
+      const input = args as { query?: string; paper_id?: string; limit?: number }
+      const query = String(input.query ?? '').trim()
+      if (query === '') return { error: 'query 不能为空' }
+      try {
+        return await deps.invokeAcademicSnippets({
+          query,
+          ...(input.paper_id?.trim() ? { paperId: input.paper_id.trim() } : {}),
+          ...(input.limit !== undefined ? { limit: Math.min(Math.max(Math.floor(input.limit), 1), 100) } : {}),
+        })
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
     },
   })
 

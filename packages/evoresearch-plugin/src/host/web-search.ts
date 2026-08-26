@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { OPENWEBSEARCH_DEFAULT_URL, OpenWebSearchManager, type ManagedSearchBackendId, type ManagedSearchManager, type ManagedSearchBackendStatus } from './web-search-manager.js'
 import { CROSSREF_DEFAULT_URL, OPENALEX_DEFAULT_URL, searchAcademic as searchAcademicSources, searchCrossref, searchOpenAlex, type AcademicSearchResult, type AcademicAuthor, type AcademicAuthorProfile, type AcademicReference } from './academic-search.js'
 import { AUTORELATEDWORK_DEFAULT_SCHOLAR_URL, searchAutoRelatedWork, type AutoRelatedWorkConfig } from './autorelatedwork-search.js'
+import { PAPER_NAVIGATOR_S2_URL, PAPER_NAVIGATOR_RECOMMEND_URL, searchPaperNavigator, traversePaperNavigator, recommendPaperNavigator, searchPaperNavigatorSnippets, type PaperNavigatorPaper } from './paper-navigator.js'
 
 export const WEB_SEARCH_SETTINGS_NAMESPACE = 'evoresearch-web-search'
 export const WEB_SEARCH_PROVIDER_ID = 'evoresearch-configured'
@@ -20,7 +21,7 @@ export const WEB_SEARCH_PROVIDER_IDS = ['searxng', 'tavily', 'brave', 'serper', 
 export type WebSearchProviderId = typeof WEB_SEARCH_PROVIDER_IDS[number]
 export type ActiveWebSearchProvider = WebSearchProviderId | 'none'
 
-export const ACADEMIC_PROVIDER_IDS = ['openalex-crossref', 'autorelatedwork'] as const
+export const ACADEMIC_PROVIDER_IDS = ['openalex-crossref', 'autorelatedwork', 'paper-navigator'] as const
 export type AcademicSearchProviderId = typeof ACADEMIC_PROVIDER_IDS[number]
 export type ActiveAcademicSearchProvider = AcademicSearchProviderId | 'none'
 
@@ -32,6 +33,12 @@ export interface WebSearchProviderConfig {
 export interface AcademicSearchProviderConfig extends AutoRelatedWorkConfig {
   baseURL?: string
   crossrefURL?: string
+  s2URL?: string
+  recommendURL?: string
+  s2SortBy?: 'relevance' | 'citations' | 'year'
+  s2YearMin?: number
+  s2YearMax?: number
+  s2OpenAccessOnly?: boolean
 }
 
 export interface WebSearchSettings {
@@ -98,6 +105,12 @@ export interface AcademicSearchPublicProvider {
     deepseekEnrich?: boolean
     deepseekURL?: string
     deepseekModel?: string
+    semanticScholarURL?: string
+    recommendURL?: string
+    s2SortBy?: 'relevance' | 'citations' | 'year'
+    s2YearMin?: number
+    s2YearMax?: number
+    s2OpenAccessOnly?: boolean
     netScholar?: AutoRelatedWorkConfig['netScholar']
     netSemanticScholar?: AutoRelatedWorkConfig['netSemanticScholar']
     netSemSch?: AutoRelatedWorkConfig['netSemSch']
@@ -156,7 +169,7 @@ export const WEB_SEARCH_SETTINGS_SCHEMA = z.object({
     baseURL: z.string().default(''),
     model: z.string().default(''),
   })).default({}),
-  academicProvider: z.string().default('openalex-crossref'),
+  academicProvider: z.string().default('paper-navigator'),
   academicProviders: z.dict(z.object({
     baseURL: z.string().default(''),
     crossrefURL: z.string().default(''),
@@ -180,6 +193,12 @@ export const WEB_SEARCH_SETTINGS_SCHEMA = z.object({
     deepseekEnrich: z.boolean().default(false),
     deepseekURL: z.string().default(''),
     deepseekModel: z.string().default(''),
+    semanticScholarURL: z.string().default(''),
+    recommendURL: z.string().default(''),
+    s2SortBy: z.string().default('relevance'),
+    s2YearMin: z.number().default(0),
+    s2YearMax: z.number().default(0),
+    s2OpenAccessOnly: z.boolean().default(false),
     netScholar: z.string().default(''),
     netSemanticScholar: z.string().default(''),
     netSemSch: z.string().default(''),
@@ -325,6 +344,12 @@ const ACADEMIC_PROVIDER_META: Record<AcademicSearchProviderId, { name: string; d
     freeTier: '代码本身免费；Google Scholar 访问可能需要本地 HTTP 代理或 Nexip 等住宅代理，第三方 API 按其限额执行',
     baseURL: AUTORELATEDWORK_DEFAULT_SCHOLAR_URL,
   },
+  'paper-navigator': {
+    name: 'Paper Navigator (Semantic Scholar)',
+    description: 'Semantic Scholar 语义检索 + arXiv 回退 + 引用/共引遍历 + 论文推荐 + 片段检索；对应 EvoScientist 的 paper-navigator 学术发现链路。',
+    freeTier: 'Semantic Scholar 与 arXiv 提供公开额度；可选 API Key 提高限额，需遵守服务方速率限制',
+    baseURL: PAPER_NAVIGATOR_S2_URL,
+  },
 }
 
 const ACADEMIC_CREDENTIALS: Record<AcademicSearchProviderId, Array<{ id: string; label: string; env: string; optional: boolean }>> = {
@@ -336,16 +361,20 @@ const ACADEMIC_CREDENTIALS: Record<AcademicSearchProviderId, Array<{ id: string;
     { id: 'unpaywallEmail', label: 'Unpaywall email', env: 'UNPAYWALL_EMAIL', optional: true },
     { id: 'deepseekApiKey', label: 'DeepSeek API Key (AI enrichment)', env: 'DEEPSEEK_API_KEY', optional: true },
   ],
+  'paper-navigator': [
+    { id: 'semanticScholarApiKey', label: 'Semantic Scholar API Key', env: 'SEMANTIC_SCHOLAR_API_KEY', optional: true },
+  ],
 }
 
 const DEFAULT_SETTINGS: WebSearchSettings = {
   // Open-WebSearch 是本地 TypeScript/Node daemon，无 API Key；Parallel MCP 仍可作为远程备用项。
   activeProvider: 'openwebsearch',
   providers: Object.fromEntries(WEB_SEARCH_PROVIDER_IDS.map((id) => [id, { baseURL: PROVIDER_META[id].defaultURL }])) as WebSearchSettings['providers'],
-  academicProvider: 'openalex-crossref',
+  academicProvider: 'paper-navigator',
   academicProviders: {
     'openalex-crossref': { baseURL: OPENALEX_DEFAULT_URL, crossrefURL: CROSSREF_DEFAULT_URL },
     autorelatedwork: { scholarURL: AUTORELATEDWORK_DEFAULT_SCHOLAR_URL, enrich: true, delayMs: 1200, maxRetries: 3, maxEnrichmentRounds: 1, recursiveDepth: 0, recursiveWidth: 5, recursiveMaxTotal: 50, fetchBibtex: true, fetchArxiv: true, fetchArxivHTML: true, deepseekEnrich: false },
+    'paper-navigator': { baseURL: PAPER_NAVIGATOR_S2_URL, recommendURL: PAPER_NAVIGATOR_RECOMMEND_URL, s2SortBy: 'relevance', s2OpenAccessOnly: false },
   },
 }
 
@@ -396,6 +425,11 @@ export function isAcademicSearchQuery(query: string): boolean {
   const text = query.toLocaleLowerCase()
   if (/(论文|文献|学术|题录|期刊|会议论文|引用|学术搜索|doi|arxiv|pubmed|openalex|crossref|semantic scholar|google scholar|research paper|academic paper|journal article|literature review|preprint|\b(?:paper|papers|article|articles|study|studies|survey|journal|conference|citation|citations)\b)/i.test(text)) return true
 
+  // 中文用户也常说“查一下某领域最新研究/研究进展”，但不直接说论文。
+  // 只在检索动作与研究语境共同出现时命中，避免“研究按钮在哪里”这类 UI 问题误触发。
+  if (/(?:找|查|搜|检索|搜索|推荐|梳理|综述|总结|比较|追踪|查询).{0,24}(?:研究|科研|学术).{0,24}(?:进展|现状|方向|成果|方法|综述|相关|最新)?/.test(text)
+    || /(?:研究|科研|学术).{0,24}(?:进展|现状|方向|成果|方法|综述|相关|最新)/.test(text)) return true
+
   // 用户经常直接输入“主题 + 方法”，而不是再写一遍“论文”。这类
   // 技术查询同样应走题录索引；否则 Open-WebSearch 可能把首个缩写或
   // 普通词送进词典/百科垂直结果（例如 “NLOS imaging reconstruction”）。
@@ -440,6 +474,16 @@ function normalizeSettings(raw: unknown): WebSearchSettings {
           baseURL: cleanURL(value.baseURL) || cleanURL(legacyOpenAlex.baseURL) || OPENALEX_DEFAULT_URL,
           crossrefURL: cleanURL(value.crossrefURL) || cleanURL(legacyCrossref.baseURL) || CROSSREF_DEFAULT_URL,
         }
+      : id === 'paper-navigator'
+        ? {
+            baseURL: cleanURL(value.baseURL) || PAPER_NAVIGATOR_S2_URL,
+            recommendURL: cleanURL(value.recommendURL) || PAPER_NAVIGATOR_RECOMMEND_URL,
+            ...(cleanURL(value.semanticScholarURL) !== '' ? { semanticScholarURL: cleanURL(value.semanticScholarURL) } : {}),
+            s2SortBy: value.s2SortBy === 'citations' || value.s2SortBy === 'year' ? value.s2SortBy : 'relevance',
+            ...(typeof value.s2YearMin === 'number' && value.s2YearMin > 0 ? { s2YearMin: Math.round(value.s2YearMin) } : {}),
+            ...(typeof value.s2YearMax === 'number' && value.s2YearMax > 0 ? { s2YearMax: Math.round(value.s2YearMax) } : {}),
+            s2OpenAccessOnly: value.s2OpenAccessOnly === true,
+          }
       : {
           scholarURL: cleanURL(value.scholarURL) || AUTORELATEDWORK_DEFAULT_SCHOLAR_URL,
           ...(cleanURL(value.localProxy) !== '' ? { localProxy: cleanURL(value.localProxy) } : process.env.LOCAL_PROXY?.trim() ? { localProxy: process.env.LOCAL_PROXY.trim() } : {}),
@@ -551,6 +595,34 @@ function source(url: unknown, title?: unknown, snippet?: unknown, publishedAt?: 
     ...(typeof title === 'string' && title !== '' ? { title } : {}),
     ...(typeof snippet === 'string' && snippet !== '' ? { snippet } : {}),
     ...(typeof publishedAt === 'string' && publishedAt !== '' ? { publishedAt } : {}),
+  }
+}
+
+function paperNavigatorSource(paper: PaperNavigatorPaper): AcademicSearchResult['sources'][number] {
+  const details = [
+    paper.tldr,
+    paper.abstract,
+    paper.year === undefined ? undefined : String(paper.year),
+    paper.authors.length > 0 ? `作者：${paper.authors.join(', ')}` : undefined,
+    paper.venue,
+    paper.citationCount === undefined ? undefined : `被引：${paper.citationCount}`,
+  ].filter((item): item is string => item !== undefined && item !== '')
+  return {
+    url: paper.url ?? (paper.paperId !== undefined ? `https://www.semanticscholar.org/paper/${paper.paperId}` : 'https://www.semanticscholar.org/'),
+    title: paper.title,
+    ...(details.length > 0 ? { snippet: details.join(' · ') } : {}),
+    ...(paper.year !== undefined ? { publishedAt: String(paper.year) } : {}),
+    ...(paper.pdfUrl !== undefined ? { pdfUrls: [paper.pdfUrl] } : {}),
+    ...(paper.paperId !== undefined ? { paperId: paper.paperId } : {}),
+    ...(paper.externalIds?.DOI !== undefined ? { doi: paper.externalIds.DOI } : {}),
+    ...(paper.authors.length > 0 ? { authors: paper.authors } : {}),
+    ...(paper.venue !== undefined ? { venue: paper.venue } : {}),
+    ...(paper.year !== undefined ? { year: paper.year } : {}),
+    ...(paper.citationCount !== undefined ? { citedByCount: paper.citationCount } : {}),
+    ...(paper.influentialCitationCount !== undefined ? { citedBy: { count: paper.influentialCitationCount } } : {}),
+    ...(paper.openAccess !== undefined ? { openAccess: paper.openAccess } : {}),
+    ...(paper.abstract !== undefined ? { abstract: paper.abstract } : {}),
+    sourceType: 'academic',
   }
 }
 
@@ -878,6 +950,14 @@ export class ConfiguredWebSearchProvider {
         baseURL: cleanURL(id === 'autorelatedwork' ? current.scholarURL : current.baseURL) || meta.baseURL,
         settings: {
           ...(id === 'openalex-crossref' ? { crossrefURL: cleanURL(current.crossrefURL) || CROSSREF_DEFAULT_URL } : {}),
+          ...(id === 'paper-navigator' ? {
+            semanticScholarURL: cleanURL(current.semanticScholarURL) || cleanURL(current.baseURL) || PAPER_NAVIGATOR_S2_URL,
+            recommendURL: cleanURL(current.recommendURL) || PAPER_NAVIGATOR_RECOMMEND_URL,
+            s2SortBy: current.s2SortBy === 'citations' || current.s2SortBy === 'year' ? current.s2SortBy : 'relevance',
+            ...(current.s2YearMin !== undefined ? { s2YearMin: current.s2YearMin } : {}),
+            ...(current.s2YearMax !== undefined ? { s2YearMax: current.s2YearMax } : {}),
+            s2OpenAccessOnly: current.s2OpenAccessOnly === true,
+          } : {}),
           ...(id === 'autorelatedwork' ? {
             scholarURL: cleanURL(current.scholarURL) || AUTORELATEDWORK_DEFAULT_SCHOLAR_URL,
             ...(cleanURL(current.localProxy) !== '' ? { localProxy: current.localProxy } : {}),
@@ -910,7 +990,7 @@ export class ConfiguredWebSearchProvider {
             ...(current.netDeepSeek !== undefined ? { netDeepSeek: current.netDeepSeek } : {}),
           } : {}),
         },
-        configured: id === 'openalex-crossref' || cleanURL(current.scholarURL) !== '' || credentials.some((credential) => credential.configured),
+        configured: id === 'openalex-crossref' || id === 'paper-navigator' || cleanURL(current.scholarURL) !== '' || credentials.some((credential) => credential.configured),
         credentials,
       }
     }))
@@ -940,6 +1020,16 @@ export class ConfiguredWebSearchProvider {
             baseURL: cleanURL(raw.baseURL) || cleanURL(previous.baseURL) || OPENALEX_DEFAULT_URL,
             crossrefURL: cleanURL(raw.crossrefURL) || cleanURL(previous.crossrefURL) || CROSSREF_DEFAULT_URL,
           }
+        : id === 'paper-navigator'
+          ? {
+              baseURL: cleanURL(raw.baseURL) || cleanURL(previous.baseURL) || PAPER_NAVIGATOR_S2_URL,
+              recommendURL: cleanURL(raw.recommendURL) || cleanURL(previous.recommendURL) || PAPER_NAVIGATOR_RECOMMEND_URL,
+              ...(cleanURL(raw.semanticScholarURL) !== '' ? { semanticScholarURL: cleanURL(raw.semanticScholarURL) } : cleanURL(previous.semanticScholarURL) !== '' ? { semanticScholarURL: cleanURL(previous.semanticScholarURL) } : {}),
+              s2SortBy: raw.s2SortBy === 'citations' || raw.s2SortBy === 'year' ? raw.s2SortBy : previous.s2SortBy === 'citations' || previous.s2SortBy === 'year' ? previous.s2SortBy : 'relevance',
+              ...(typeof raw.s2YearMin === 'number' && raw.s2YearMin > 0 ? { s2YearMin: Math.round(raw.s2YearMin) } : previous.s2YearMin !== undefined ? { s2YearMin: previous.s2YearMin } : {}),
+              ...(typeof raw.s2YearMax === 'number' && raw.s2YearMax > 0 ? { s2YearMax: Math.round(raw.s2YearMax) } : previous.s2YearMax !== undefined ? { s2YearMax: previous.s2YearMax } : {}),
+              s2OpenAccessOnly: raw.s2OpenAccessOnly === true,
+            }
         : {
             scholarURL: cleanURL(raw.scholarURL) || cleanURL(previous.scholarURL) || AUTORELATEDWORK_DEFAULT_SCHOLAR_URL,
             ...(cleanURL(raw.localProxy) !== '' ? { localProxy: cleanURL(raw.localProxy) } : cleanURL(previous.localProxy) !== '' ? { localProxy: cleanURL(previous.localProxy) } : {}),
@@ -969,6 +1059,10 @@ export class ConfiguredWebSearchProvider {
         requireURL(academicProviders[id]?.crossrefURL ?? '', 'searxng')
       }
       if (academicProvider === id && id === 'autorelatedwork') requireURL(academicProviders[id]?.scholarURL ?? '', 'searxng')
+      if (academicProvider === id && id === 'paper-navigator') {
+        requireURL(academicProviders[id]?.baseURL ?? '', 'searxng')
+        requireURL(academicProviders[id]?.recommendURL ?? '', 'searxng')
+      }
     }
     const settings = this.ctx.get('settings') as { replace?(namespace: string, value: object): Promise<unknown> } | undefined
     if (settings?.replace === undefined) throw new Error('settings 服务不可用')
@@ -1138,6 +1232,28 @@ export class ConfiguredWebSearchProvider {
         signal,
       })
     }
+    if (config.academicProvider === 'paper-navigator') {
+      const academic = config.academicProviders['paper-navigator'] ?? {}
+      const result = await searchPaperNavigator({
+        query: text,
+        limit: maxResults,
+        s2URL: cleanURL(academic.semanticScholarURL) || cleanURL(academic.baseURL) || PAPER_NAVIGATOR_S2_URL,
+        apiKey: await resolveCredentialAliases(this.ctx, ['SEMANTIC_SCHOLAR_API_KEY', 'SEM_SCH_KEY']),
+        sortBy: academic.s2SortBy,
+        ...(academic.s2YearMin !== undefined ? { yearMin: academic.s2YearMin } : {}),
+        ...(academic.s2YearMax !== undefined ? { yearMax: academic.s2YearMax } : {}),
+        openAccessOnly: academic.s2OpenAccessOnly === true,
+        signal,
+      })
+      return {
+        provider: result.provider,
+        query: result.query,
+        sources: result.papers.map(paperNavigatorSource),
+        elapsedMs: result.elapsedMs,
+        ...(result.fallback === true ? { fallback: true } : {}),
+        ...(result.warning !== undefined ? { warning: result.warning } : {}),
+      }
+    }
     const academic = config.academicProviders.autorelatedwork ?? {}
     const credentials: Parameters<typeof searchAutoRelatedWork>[0]['credentials'] = {
       qgAuthKey: await resolveCredentialAliases(this.ctx, ['PROXY_AUTHKEY']),
@@ -1148,6 +1264,56 @@ export class ConfiguredWebSearchProvider {
       deepseekURL: environmentValue('DEEPSEEK_API_URL', 'DS_API_URL'),
     }
     return searchAutoRelatedWork({ query: text, limit: maxResults, config: academic, credentials, dataRoot: this.dataRoot(), signal })
+  }
+
+  async searchAcademicRelated(input: { paperId: string; direction?: 'forward' | 'backward' | 'co-citation'; limit?: number; smart?: boolean; minCitations?: number }, signal?: AbortSignal): Promise<AcademicSearchResult> {
+    const paperId = input.paperId.trim()
+    if (paperId === '') throw new Error('论文 ID 不能为空')
+    const config = this.settings()
+    if (config.academicProvider !== 'paper-navigator') throw new Error('关联文献扩展需要启用 Paper Navigator Provider')
+    const academic = config.academicProviders['paper-navigator'] ?? {}
+    const result = await traversePaperNavigator({
+      paperId,
+      direction: input.direction,
+      limit: input.limit,
+      smart: input.smart,
+      minCitations: input.minCitations,
+      s2URL: cleanURL(academic.semanticScholarURL) || cleanURL(academic.baseURL) || PAPER_NAVIGATOR_S2_URL,
+      apiKey: await resolveCredentialAliases(this.ctx, ['SEMANTIC_SCHOLAR_API_KEY', 'SEM_SCH_KEY']),
+      signal,
+    })
+    return { provider: 'PaperNavigator', query: `${input.direction ?? 'forward'}:${paperId}`, sources: result.papers.map(paperNavigatorSource), searchType: input.direction === 'forward' ? 'cites' : 'related' }
+  }
+
+  async searchAcademicRecommendations(input: { positiveIds: string[]; negativeIds?: string[]; limit?: number; perSeed?: boolean }, signal?: AbortSignal): Promise<AcademicSearchResult> {
+    const config = this.settings()
+    if (config.academicProvider !== 'paper-navigator') throw new Error('论文推荐需要启用 Paper Navigator Provider')
+    const academic = config.academicProviders['paper-navigator'] ?? {}
+    const papers = await recommendPaperNavigator({
+      positiveIds: input.positiveIds,
+      negativeIds: input.negativeIds,
+      limit: input.limit,
+      perSeed: input.perSeed,
+      s2URL: cleanURL(academic.semanticScholarURL) || cleanURL(academic.baseURL) || PAPER_NAVIGATOR_S2_URL,
+      recommendURL: cleanURL(academic.recommendURL) || PAPER_NAVIGATOR_RECOMMEND_URL,
+      apiKey: await resolveCredentialAliases(this.ctx, ['SEMANTIC_SCHOLAR_API_KEY', 'SEM_SCH_KEY']),
+      signal,
+    })
+    return { provider: 'PaperNavigator', query: `recommend:${input.positiveIds.join(',')}`, sources: papers.map(paperNavigatorSource), searchType: 'related' }
+  }
+
+  async searchAcademicSnippets(input: { query: string; paperId?: string; limit?: number }, signal?: AbortSignal): Promise<unknown> {
+    const config = this.settings()
+    if (config.academicProvider !== 'paper-navigator') throw new Error('论文片段检索需要启用 Paper Navigator Provider')
+    const academic = config.academicProviders['paper-navigator'] ?? {}
+    return searchPaperNavigatorSnippets({
+      query: input.query,
+      paperId: input.paperId,
+      limit: input.limit,
+      s2URL: cleanURL(academic.semanticScholarURL) || cleanURL(academic.baseURL) || PAPER_NAVIGATOR_S2_URL,
+      apiKey: await resolveCredentialAliases(this.ctx, ['SEMANTIC_SCHOLAR_API_KEY', 'SEM_SCH_KEY']),
+      signal,
+    })
   }
 
   /** 当前用户是否启用了联网搜索；web seam 本身仍保持稳定注册。 */

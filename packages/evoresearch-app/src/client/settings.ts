@@ -379,7 +379,7 @@ interface AcademicProviderRow {
   configured: boolean
   freeTier: string
   baseURL: string
-  settings?: { crossrefURL?: string; scholarURL?: string; localProxy?: string; qgServers?: string[]; qgPort?: number; qgChannel?: string; country?: string; delayMs?: number; enrich?: boolean; maxRetries?: number; maxEnrichmentRounds?: number; includeAuthorProfiles?: boolean; recursiveDepth?: number; recursiveWidth?: number; recursiveMaxTotal?: number; fetchBibtex?: boolean; fetchArxiv?: boolean; fetchArxivHTML?: boolean; deepseekEnrich?: boolean; deepseekURL?: string; deepseekModel?: string }
+  settings?: { crossrefURL?: string; scholarURL?: string; semanticScholarURL?: string; recommendURL?: string; s2SortBy?: 'relevance' | 'citations' | 'year'; s2YearMin?: number; s2YearMax?: number; s2OpenAccessOnly?: boolean; localProxy?: string; qgServers?: string[]; qgPort?: number; qgChannel?: string; country?: string; delayMs?: number; enrich?: boolean; maxRetries?: number; maxEnrichmentRounds?: number; includeAuthorProfiles?: boolean; recursiveDepth?: number; recursiveWidth?: number; recursiveMaxTotal?: number; fetchBibtex?: boolean; fetchArxiv?: boolean; fetchArxivHTML?: boolean; deepseekEnrich?: boolean; deepseekURL?: string; deepseekModel?: string }
   credentials: AcademicCredentialRow[]
 }
 
@@ -512,7 +512,7 @@ function WebSearchSection() {
 /** 学术论文专用搜索：与通用联网搜索使用不同的 Provider 配置和测试入口。 */
 function AcademicSearchSection() {
   const [settings, setSettings] = useState<WebSearchSettingsValue | null>(null)
-  const [active, setActive] = useState('openalex-crossref')
+  const [active, setActive] = useState('paper-navigator')
   const [drafts, setDrafts] = useState<Record<string, Record<string, unknown>>>({})
   const [keys, setKeys] = useState<Record<string, string>>({})
   const [query, setQuery] = useState('')
@@ -529,7 +529,7 @@ function AcademicSearchSection() {
         const value = json.value as WebSearchSettingsValue
         const rows = value.academicProviders ?? []
         setSettings(value)
-        setActive(typeof value.academicProvider === 'string' ? value.academicProvider : 'openalex-crossref')
+        setActive(typeof value.academicProvider === 'string' ? value.academicProvider : 'paper-navigator')
         setDrafts(Object.fromEntries(rows.map((row) => [row.id, {
           ...(row.settings ?? {}),
           baseURL: row.baseURL,
@@ -586,6 +586,17 @@ function AcademicSearchSection() {
           selected.id === 'openalex-crossref' && jsxs(Fragment, { children: [
             jsx(ModelField, { label: t('academicOpenAlexURLLabel'), value: String(draft.baseURL ?? selected.baseURL), onChange: (value) => update('baseURL', value) }),
             jsx(ModelField, { label: t('academicCrossrefURLLabel'), value: String(draft.crossrefURL ?? selected.settings?.crossrefURL ?? ''), onChange: (value) => update('crossrefURL', value) }),
+          ] }),
+          selected.id === 'paper-navigator' && jsxs(Fragment, { children: [
+            jsx(ModelField, { label: 'Semantic Scholar API URL', value: String(draft.baseURL ?? selected.baseURL), onChange: (value) => update('baseURL', value) }),
+            jsx(ModelField, { label: 'Semantic Scholar 推荐 API URL', value: String(draft.recommendURL ?? selected.settings?.recommendURL ?? ''), onChange: (value) => update('recommendURL', value) }),
+            jsxs('label', { className: 'evo-setting-field evo-web-search-select', children: [
+              jsx('span', { className: 'evo-setting-field-label', children: '检索排序' }),
+              jsx(Dropdown, { value: String(draft.s2SortBy ?? selected.settings?.s2SortBy ?? 'relevance'), onChange: (value: string) => update('s2SortBy', value), ariaLabel: '检索排序', options: [{ value: 'relevance', label: '语义相关性' }, { value: 'citations', label: '引用量' }, { value: 'year', label: '最新年份' }] }),
+            ] }),
+            jsx(ModelField, { label: '最早年份（可选）', value: String((draft.s2YearMin ?? selected.settings?.s2YearMin ?? 0) || ''), onChange: (value) => update('s2YearMin', value.trim() === '' ? undefined : Math.max(1900, Math.round(Number(value) || 1900))) }),
+            jsx(ModelField, { label: '最晚年份（可选）', value: String((draft.s2YearMax ?? selected.settings?.s2YearMax ?? 0) || ''), onChange: (value) => update('s2YearMax', value.trim() === '' ? undefined : Math.max(1900, Math.round(Number(value) || 1900))) }),
+            jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.s2OpenAccessOnly === true, onChange: (e: { currentTarget: HTMLInputElement }) => update('s2OpenAccessOnly', e.currentTarget.checked) }), jsx('span', { children: '仅返回开放获取论文' })] }),
           ] }),
           selected.id === 'autorelatedwork' && jsxs(Fragment, { children: [
             jsx(ModelField, { label: t('academicScholarURLLabel'), value: String(draft.scholarURL ?? selected.settings?.scholarURL ?? selected.baseURL), onChange: (value) => update('scholarURL', value) }),

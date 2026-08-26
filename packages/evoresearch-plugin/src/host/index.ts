@@ -79,7 +79,7 @@ import { registerAskResearcherTool } from './tools/ask.js'
 import { OverflowWatch } from './context/overflow-watch.js'
 import { registerLibraryTools, type LibraryToolsDeps } from './library/tools.js'
 import { FigureService, registerFigureTools } from './figures.js'
-import { ConfiguredWebSearchProvider, WEB_SEARCH_SETTINGS_NAMESPACE, WEB_SEARCH_SETTINGS_SCHEMA } from './web-search.js'
+import { ConfiguredWebSearchProvider, WEB_SEARCH_SETTINGS_NAMESPACE, WEB_SEARCH_SETTINGS_SCHEMA, isAcademicSearchQuery } from './web-search.js'
 import { ManagedMcpSearchManager, OpenWebSearchManager } from './web-search-manager.js'
 
 /** 插件配置（settings 的 evoresearch 段合并环境变量）。 */
@@ -547,7 +547,11 @@ function apply(ctx: Context): void {
       if (!webSearch.enabled() && !webSearch.academicEnabled()) return false
       try { return (ctx.get('tools') as { get?(name: string): unknown } | undefined)?.get?.('web_search') !== undefined } catch { return false }
     },
+    hasAcademicSearch: () => webSearch.academicEnabled(),
     invokeAcademicSearch: async (query, limit) => webSearch.searchAcademic(query, limit),
+    invokeAcademicRelated: async (input) => webSearch.searchAcademicRelated(input),
+    invokeAcademicRecommendations: async (input) => webSearch.searchAcademicRecommendations(input),
+    invokeAcademicSnippets: async (input) => webSearch.searchAcademicSnippets(input),
     invokeWebSearch: async (query) => {
       const result = await (ctx.get('tools') as NonNullable<ReturnType<typeof ctx.get>> & { execute(input: { callId: string; name: string; arguments: unknown; signal?: AbortSignal }): Promise<{ content: readonly unknown[]; isError: boolean }> }).execute({
         callId: `evoresearch-web-${Date.now()}`,
@@ -644,7 +648,13 @@ function apply(ctx: Context): void {
     // in the runtime registry (for example a deployment-local presentation
     // tool); it remains part of the known universe for this assembly.
     for (const tool of assembled.tools) if (!byName.has(tool.name)) byName.set(tool.name, tool)
-    const selected = selectToolsForTurn([...byName.values()], question)
+    // 中文自然问句通常不会与工具名逐词匹配（例如“帮我找一下这方面
+    // 的论文”），仅靠 selector 的普通字符串打分会把文献工具误裁掉。
+    // 学术意图明确时保留完整发现链；是否真正调用仍由模型按工具描述判断。
+    const academicTools = isAcademicSearchQuery(question)
+      ? ['search_literature', 'search_related_literature', 'recommend_literature', 'search_paper_snippets']
+      : []
+    const selected = selectToolsForTurn([...byName.values()], question, { required: academicTools })
     const selectedNames = new Set(selected.map((tool) => tool.name))
     const tools = assembled.tools.filter((tool) => selectedNames.has(tool.name))
     return { ...assembled, tools }

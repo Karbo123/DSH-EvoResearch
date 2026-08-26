@@ -1399,6 +1399,18 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
+        if (method === 'academic-search-related' || method === 'academic-search-recommendations' || method === 'academic-search-snippets') {
+          const serviceMethod = method === 'academic-search-related' ? 'academicSearchRelated'
+            : method === 'academic-search-recommendations' ? 'academicSearchRecommendations' : 'academicSearchSnippets'
+          if (evoresearch?.[serviceMethod] === undefined) throw httpError(400, 'method-error', '学术搜索服务不可用')
+          const args: Record<string, unknown> = { ...payload }
+          try {
+            writeOk(res, await (evoresearch[serviceMethod] as (a: Record<string, unknown>) => Promise<unknown>)(args))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         if (method === 'web-search-backend-status' || method === 'web-search-backend-install' || method === 'web-search-backend-start' || method === 'web-search-backend-stop') {
           const methodName = method === 'web-search-backend-status'
             ? 'webSearchBackendStatus'

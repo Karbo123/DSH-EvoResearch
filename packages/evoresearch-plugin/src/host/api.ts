@@ -645,6 +645,39 @@ export class EvoResearchApiService extends TypertRemoteService {
     return this.services.webSearch.searchAcademic(String(args?.query ?? ''), 8)
   }
 
+  @Remote('academicSearchRelated')
+  async academicSearchRelated(args: { paperId: string; direction?: 'forward' | 'backward' | 'co-citation'; limit?: number; smart?: boolean; minCitations?: number }): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('学术搜索服务不可用')
+    return this.services.webSearch.searchAcademicRelated({
+      paperId: String(args?.paperId ?? ''),
+      ...(args?.direction !== undefined ? { direction: args.direction } : {}),
+      ...(args?.limit !== undefined ? { limit: args.limit } : {}),
+      ...(args?.smart !== undefined ? { smart: args.smart } : {}),
+      ...(args?.minCitations !== undefined ? { minCitations: args.minCitations } : {}),
+    })
+  }
+
+  @Remote('academicSearchRecommendations')
+  async academicSearchRecommendations(args: { positiveIds: string[]; negativeIds?: string[]; limit?: number; perSeed?: boolean }): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('学术搜索服务不可用')
+    return this.services.webSearch.searchAcademicRecommendations({
+      positiveIds: Array.isArray(args?.positiveIds) ? args.positiveIds.map(String) : [],
+      ...(Array.isArray(args?.negativeIds) ? { negativeIds: args.negativeIds.map(String) } : {}),
+      ...(args?.limit !== undefined ? { limit: args.limit } : {}),
+      ...(args?.perSeed !== undefined ? { perSeed: args.perSeed } : {}),
+    })
+  }
+
+  @Remote('academicSearchSnippets')
+  async academicSearchSnippets(args: { query: string; paperId?: string; limit?: number }): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('学术搜索服务不可用')
+    return this.services.webSearch.searchAcademicSnippets({
+      query: String(args?.query ?? ''),
+      ...(args?.paperId !== undefined ? { paperId: String(args.paperId) } : {}),
+      ...(args?.limit !== undefined ? { limit: args.limit } : {}),
+    })
+  }
+
   /** AutoRelatedWork 原版 ai_providers.py 的 provider 预设/解析 API。 */
   @Remote('autoRelatedWorkAIProviders')
   autoRelatedWorkAIProviders(args?: { baseURL?: string }): unknown {
