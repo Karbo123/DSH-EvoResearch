@@ -215,6 +215,8 @@ body { margin: 0; }
 .evo-tl-item svg { width: 17px; height: 17px; flex-shrink: 0; }
 .evo-tl-item > span { min-width: 4em; }
 .evo-tl-newchat-item { color: var(--color-text-primary); font-weight: 600; }
+.evo-tl-menu-hint { display: flex; align-items: center; gap: 7px; padding: 7px 10px 9px; font-size: 11.5px; line-height: 1.5; }
+.evo-tl-menu-hint svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--color-text-tertiary); }
 .evo-tl-tools { display: flex; align-items: center; gap: 6px; padding: 6px 12px 2px; }
 .evo-tl-search { flex: 1; min-width: 0; padding: 6px 10px; display: flex; align-items: center; gap: 8px;
   border: 1px solid var(--color-border); border-radius: 6px; background: var(--input-bg); }
@@ -604,6 +606,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-row { display: flex; flex-direction: column; gap: 8px; }
 .evo-panel-row-label { font-size: 12px; font-weight: 600; color: var(--color-text-tertiary); letter-spacing: 0.4px; text-transform: uppercase; }
 .evo-panel-hint { font-size: 13px; color: var(--color-text-tertiary); }
+.evo-panel-help { font-size: 12.5px; line-height: 1.6; color: var(--color-text-tertiary);
+  padding: 9px 11px; border: 1px solid var(--color-border); border-left: 3px solid var(--brand);
+  border-radius: 8px; background: var(--color-surface); }
+.evo-panel-field-hint { margin-top: -10px; font-size: 11.5px; line-height: 1.5; }
 .evo-panel-error { padding: 8px 12px; border: 1px solid var(--color-error); border-radius: 8px; color: var(--color-error); font-size: 12.5px; }
 .evo-llm-probe-warn { padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--color-border)); border-radius: 8px; color: var(--color-warning); font-size: 12.5px; line-height: 1.6; }
 .evo-panel-tags { display: flex; gap: 6px; flex-wrap: wrap; }

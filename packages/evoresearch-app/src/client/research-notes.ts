@@ -747,25 +747,31 @@ export function ResearchNotesPanel({ cwd }: { cwd: string | null }) {
       jsx('div', {
         className: 'evo-panel-body',
         children: [
-          jsxs('div', {
-            className: 'evo-skill-tabs',
-            children: [
-              tabBtn('notes', t('notesList'), StickyNote),
-              tabBtn('map', t('researchMap'), MapIcon),
-              tabBtn('background', t('backgroundDocs'), FileText),
-              tabBtn('drafts', t('drafts'), FileClock),
-            ],
-          }),
-          error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+          jsx('div', { className: 'evo-panel-help', children: t('notesHelp') }),
           cwd === null
             ? jsx('div', { className: 'evo-panel-hint', children: t('notesNoWorkspace') })
-            : tab === 'notes'
-              ? jsx(NotesTab, { workspaceDir, onError: setError })
-              : tab === 'map'
-                ? jsx(DocBlock, { workspaceDir, kind: 'researchMap', onError: setError })
-                : tab === 'background'
-                  ? jsx(BackgroundTab, { workspaceDir, onError: setError })
-                  : jsx(DraftsTab, { workspaceDir, onError: setError }),
+            : jsxs('div', {
+                className: 'evo-panel-body',
+                children: [
+                  jsxs('div', {
+                    className: 'evo-skill-tabs',
+                    children: [
+                      tabBtn('notes', t('notesList'), StickyNote),
+                      tabBtn('map', t('researchMap'), MapIcon),
+                      tabBtn('background', t('backgroundDocs'), FileText),
+                      tabBtn('drafts', t('drafts'), FileClock),
+                    ],
+                  }),
+                  error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+                  tab === 'notes'
+                    ? jsx(NotesTab, { workspaceDir, onError: setError })
+                    : tab === 'map'
+                      ? jsx(DocBlock, { workspaceDir, kind: 'researchMap', onError: setError })
+                      : tab === 'background'
+                        ? jsx(BackgroundTab, { workspaceDir, onError: setError })
+                        : jsx(DraftsTab, { workspaceDir, onError: setError }),
+                ],
+              }),
         ],
       }),
     ],

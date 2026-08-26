@@ -611,6 +611,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
           : jsxs(Fragment, {
               children: [
                 error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+                jsx('div', { className: 'evo-panel-help', children: t('memoryHelp') }),
                 projectsRow,
                 catalogRow,
                 goalsRow,
@@ -722,6 +723,7 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
     children: jsxs(Fragment, {
       children: [
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        jsx('div', { className: 'evo-panel-help', children: t('scheduleHelp') }),
         jsx('div', {
           className: 'evo-panel-form',
           children: [
@@ -1117,6 +1119,7 @@ export function SkillsPanel() {
     title: t('researchSkills'),
     children: jsxs(Fragment, {
       children: [
+        jsx('div', { className: 'evo-panel-help', children: t('skillsHelp') }),
         jsxs('div', {
           className: 'evo-skill-tabs',
           children: [
@@ -1179,7 +1182,8 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
     setInfo(null)
     void api<ProjectEnvRow>('env-status', { projectDir }).then(setInfo).catch((e: any) => onError(String(e?.message ?? e)))
   }
-  useEffect(() => { if (expanded) load() }, [expanded, projectDir])
+  // 挂载即加载（而非仅展开时）：折叠态头部应显示真实环境状态（未创建/版本），而不是永远"加载中…"
+  useEffect(() => { load() }, [projectDir])
 
   // UV 缺失 → 自动安装（官方脚本；一次成功即刷新状态）
   useEffect(() => {
@@ -1370,6 +1374,7 @@ export function WorkspacePanel() {
     children: jsxs(Fragment, {
       children: [
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        jsx('div', { className: 'evo-panel-help', children: t('workspaceHelp') }),
         jsxs('div', {
           className: 'evo-panel-form',
           children: [
@@ -1390,6 +1395,7 @@ export function WorkspacePanel() {
             }),
           ],
         }),
+        jsx('div', { className: 'evo-panel-hint evo-panel-field-hint', children: t('newProjectFormHint') }),
         jsxs('div', {
           className: 'evo-panel-form',
           children: [
@@ -1416,6 +1422,7 @@ export function WorkspacePanel() {
             }),
           ],
         }),
+        jsx('div', { className: 'evo-panel-hint evo-panel-field-hint', children: t('importProjectFormHint') }),
         jsxs('div', {
           className: 'evo-panel-row',
           children: [
@@ -1489,6 +1496,7 @@ export function ChannelsPanel() {
     title: t('channels'),
     children: jsxs(Fragment, {
       children: [
+        jsx('div', { className: 'evo-panel-help', children: t('channelsHelp') }),
         jsxs('div', {
           className: 'evo-panel-row',
           children: [
@@ -1597,6 +1605,7 @@ export function TeamPanel() {
     title: t('team'),
     children: jsxs(Fragment, {
       children: [
+        jsx('div', { className: 'evo-panel-help', children: t('teamHelp') }),
         jsxs('div', {
           className: 'evo-panel-row',
           children: [

@@ -1184,6 +1184,7 @@ export function LibraryPanel({ cwd }: { cwd: string | null }) {
       jsx('div', {
         className: 'evo-panel-body',
         children: [
+          jsx('div', { className: 'evo-panel-help', children: t('libraryHelp') }),
           jsxs('div', {
             className: 'evo-skill-tabs',
             children: [

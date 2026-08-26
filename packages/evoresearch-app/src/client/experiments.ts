@@ -490,6 +490,7 @@ function LegacyExperimentsPanel({ cwd, sessionId, onOpenSession }: {
         children: [jsx(FlaskConical, {}), jsx('span', { children: t('experiments') })],
       }),
       jsx('div', { className: 'evo-panel-body', children: [
+        jsx('div', { className: 'evo-panel-help', children: t('experimentsHelp') }),
         workspaceUnbound && jsx('div', { className: 'evo-panel-hint', children: t('experimentNoWorkspace') }),
         error !== null && !workspaceUnbound && jsx('div', { className: 'evo-panel-error', children: error }),
         // 新建实验

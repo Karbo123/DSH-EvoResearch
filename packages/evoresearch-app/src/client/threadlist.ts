@@ -15,15 +15,15 @@ import { clientStateGet, clientStateSet } from './client-state'
 export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace' | 'channels' | 'team' | 'experiments' | 'notes' | 'library'
 
 const MENU = [
-  { key: 'import', label: t('importProject'), icon: FolderGit2 },
-  { key: 'skills', label: t('researchSkills'), icon: GraduationCap },
-  { key: 'memory', label: t('evomemory'), icon: BrainCircuit },
-  { key: 'schedule', label: t('scheduled'), icon: Clock },
-  { key: 'notes', label: t('notesPanel'), icon: StickyNote },
-  { key: 'experiments', label: t('experiments'), icon: FlaskConical },
-  { key: 'library', label: t('libraryPanel'), icon: BookOpen },
-  { key: 'channels', label: t('channels'), icon: Cable },
-  { key: 'team', label: t('team'), icon: Users },
+  { key: 'import', label: t('importProject'), icon: FolderGit2, desc: t('menuImportHint') },
+  { key: 'skills', label: t('researchSkills'), icon: GraduationCap, desc: t('menuSkillsHint') },
+  { key: 'memory', label: t('evomemory'), icon: BrainCircuit, desc: t('menuMemoryHint') },
+  { key: 'schedule', label: t('scheduled'), icon: Clock, desc: t('menuScheduleHint') },
+  { key: 'notes', label: t('notesPanel'), icon: StickyNote, desc: t('menuNotesHint') },
+  { key: 'experiments', label: t('experiments'), icon: FlaskConical, desc: t('menuExperimentsHint') },
+  { key: 'library', label: t('libraryPanel'), icon: BookOpen, desc: t('menuLibraryHint') },
+  { key: 'channels', label: t('channels'), icon: Cable, desc: t('menuChannelsHint') },
+  { key: 'team', label: t('team'), icon: Users, desc: t('menuTeamHint') },
 ] as const
 
 /**
@@ -337,6 +337,29 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
   const cwdBase = (cwd: unknown): string | null =>
     typeof cwd === 'string' && cwd !== '' ? cwd.replace(/[\\/]+$/, '') : null
 
+  // 项目注册表（host projects/ 目录，权威列表）：新建/导入的项目即使还没有任何会话
+  // 也应显示在工作台中，并与 EvoMemory 等面板保持一致（注册表为准）。
+  // 周期刷新（静默），使新建/导入的项目在几秒内出现在左侧列表。
+  const [registryProjects, setRegistryProjects] = useState<Array<{ name: string; path: string }>>([])
+  useEffect(() => {
+    let cancelled = false
+    const fetchRegistry = () => fetch('/evoresearch/fs/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    }).then((res) => res.json()).then((payload) => {
+      if (cancelled) return
+      const list = Array.isArray(payload?.value) ? payload.value : []
+      setRegistryProjects(list.map((p: { name?: string; path?: string }) => ({
+        name: typeof p?.name === 'string' ? p.name : '',
+        path: typeof p?.path === 'string' ? p.path.replace(/[\\/]+$/, '') : '',
+      })).filter((p: { name: string; path: string }) => p.name !== ''))
+    }).catch(() => { /* 注册表拉取失败时不阻塞，仅回退到会话派生列表 */ })
+    void fetchRegistry()
+    const timer = setInterval(fetchRegistry, 5000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [])
+
   const persistOrder = (next: ManualOrder) => {
     setManualOrder(next)
     clientStateSet(ORDER_KEY, JSON.stringify(next))
@@ -413,6 +436,14 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
       } else {
         map.set(name, { path: base, count: 1, updatedAt: s.updatedAt ?? 0 })
       }
+    }
+    // 注册表对齐：把「项目注册表里存在、但还没有任何会话」的项目也纳入左侧列表
+    // （新建/导入的项目立刻可见，与 EvoMemory 的 registry 列表保持一致）。
+    for (const reg of registryProjects) {
+      if (reg.path === '' || map.has(reg.name)) continue
+      if (archivedProjects.has(reg.path)) continue
+      if (reg.name.startsWith('.')) continue
+      map.set(reg.name, { path: reg.path, count: 0, updatedAt: 0 })
     }
     const list = [...map.entries()].map(([name, v]) => {
       const workspace = (workspaces.items ?? []).find((item: any) => typeof item?.path === 'string' && cwdBase(item.path) === v.path)
@@ -580,33 +611,17 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
       jsx('nav', {
         className: 'evo-tl-menu',
         children: [
-          jsx('button', {
-            type: 'button',
-            className: 'evo-tl-item evo-tl-newchat-item',
-            onClick: () => onNewChat(projectMode?.path),
-            children: jsxs(Fragment, { children: [jsx(SquarePen, {}, 'icon'), jsx('span', { children: t('newChat') }, 'label')] }),
-          }, 'new-chat'),
-          // P3-4 继续上次：打开最近活跃会话（按 titleTime/updatedAt 降序取第一条非 blank 主线程）
-          (() => {
-            const sessionIds: string[] = Array.isArray(sessions.ids) ? sessions.ids : Object.keys(sessions.byId ?? {})
-            const last = sessionIds
-              .map((id) => sessions.byId[id])
-              .filter((s) => s !== undefined && s.blank !== true && !deletedIds.has(s.id) && (s.parentSessionId === undefined || promotedIds.has(s.id)))
-              .sort((a, b) => (b.titleTime ?? b.updatedAt ?? 0) - (a.titleTime ?? a.updatedAt ?? 0))[0]
-            if (last === undefined) return null
-            return jsx('button', {
-              type: 'button',
-              className: 'evo-tl-item evo-tl-resume-item',
-              title: String(last.displayTitle ?? last.id.slice(0, 12)),
-              onClick: () => onOpen(last.id),
-              children: jsxs(Fragment, { children: [jsx(History, {}, 'icon'), jsx('span', { children: t('resumeLast') }, 'label')] }),
-            }, 'resume-last')
-          })(),
+          // 说明提示：新建对话入口已在左上角 EvoResearch logo；这里保留工作台导航 + 简短用途说明
+          jsxs('div', {
+            className: 'evo-tl-menu-hint evo-panel-hint',
+            children: [jsx(SquarePen, {}), jsx('span', { children: t('menuNewChatHint') })],
+          }),
           ...MENU.map((item) => {
             const Icon = item.icon
             return jsx('button', {
               type: 'button',
               className: 'evo-tl-item',
+              title: item.desc,
               'data-active': isActive(item.key) || undefined,
               onClick: () => onView(item.key === 'import' ? 'workspace' : (item.key as SideView)),
               children: jsxs(Fragment, { children: [jsx(Icon, {}, 'icon'), jsx('span', { children: item.label }, 'label')] }),
