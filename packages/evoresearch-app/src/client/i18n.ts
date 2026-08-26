@@ -82,7 +82,7 @@ const DICT: Record<string, [string, string]> = {
   system: ['System', '跟随系统'],
   close: ['Close', '关闭'],
   version: ['Version', '版本'],
-  basedOn: ['Based on deepseek-harness 0.1.0-rc.8', '基于 deepseek-harness 0.1.0-rc.8'],
+  basedOn: ['Based on deepseek-harness 0.1.1-rc.2', '基于 deepseek-harness 0.1.1-rc.2'],
   noSession: ['Open a conversation to choose a model', '打开会话后可选择模型'],
   current: ['Current', '当前'],
   // 顶栏 / 标题栏常用操作

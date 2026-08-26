@@ -2,7 +2,7 @@
   "name": "dsh-EvoResearch",
   "version": "0.1.0-rc.1",
   "private": true,
-  "description": "面向科研的自主智能体（基于 deepseek-harness 0.1.0-rc.8）：科研记忆 / 项目工作区 / 多智能体团队 / 定时任务 / 多通道接入 / 自定义工作台界面 / Windows 桌面版",
+  "description": "面向科研的自主智能体（基于 deepseek-harness 0.1.1-rc.2）：科研记忆 / 项目工作区 / 多智能体团队 / 定时任务 / 多通道接入 / 自定义工作台界面 / Windows 桌面版",
   "type": "module",
   "workspaces": [
     "packages/*"

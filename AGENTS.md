@@ -7,7 +7,7 @@
 ## 1. 项目全貌
 
 - **名称**：EvoResearch — 面向科研的自主智能体工作台（对话、文献、项目文件、实验记录与长期记忆联动）。
-- **基座**：`@deepseek-ai/dsh` **0.1.0-rc.8**（务必用此版本或兼容更新版，见 `README.md` 与 `profiles/evoresearch/package.json`）。
+- **基座**：`@deepseek-ai/dsh` **0.1.1-rc.2**（务必用此版本或兼容更新版，见 `README.md` 与 `profiles/evoresearch/package.json`）。
 - **结构**：monorepo（`packages/*` workspaces）
   - `packages/evoresearch-plugin` — 后端插件（Host 侧，Cordis 服务）
   - `packages/evoresearch-app` — 前端应用（Client 侧，React + Cordis slots）
@@ -209,7 +209,7 @@ npm run start:web
 
 ```powershell
 # 带显式环境变量启动（PowerShell；Start-Process 必须加 -Environment）
-Start-Process npx.cmd "@deepseek-ai/dsh@0.1.0-rc.8 --profile evoresearch --port 3081" -WindowStyle Hidden `
+Start-Process npx.cmd "@deepseek-ai/dsh@0.1.1-rc.2 --profile evoresearch --port 3081" -WindowStyle Hidden `
   -Environment @{
     EVORESEARCH_ROOT="D:\DSH-Research\.tmp-dev\.evoresearch-data";
     DSH_HOME="D:\DSH-Research\.tmp-dev\.evoresearch-data";
@@ -225,7 +225,7 @@ bash 等价形式（Claude Code 后台任务常用）：
 EVORESEARCH_ROOT="D:\\DSH-Research\\.tmp-dev\\.evoresearch-data" \
 DSH_HOME="D:\\DSH-Research\\.tmp-dev\\.evoresearch-data" \
 EVORESEARCH_DATA_ROOT="D:\\DSH-Research\\.tmp-dev\\.evoresearch-data" \
-npx @deepseek-ai/dsh@0.1.0-rc.8 --profile evoresearch --port 3081
+npx @deepseek-ai/dsh@0.1.1-rc.2 --profile evoresearch --port 3081
 ```
 
 **验证启动成功**：
@@ -252,14 +252,14 @@ if (-not (Test-Path D:\DSH-Research\.tmp-dev\.evoresearch-data\profiles)) {
 
 > profile 的 `package.json` 以 `file:` 引用主仓库 `packages\evoresearch-app` / `packages\evoresearch-plugin`。直接使用仓库 profile 的 junction 可以保持这些相对路径有效；主仓库 `npm run build` 更新 `lib/` 后无需重装 profile。不要把 profile 复制到数据目录后再 `pnpm install`，否则 `file:../../packages/...` 会解析到错误位置。
 
-**注意**：`--profile evoresearch` 只认裸名（profile 必须位于 `$DSH_HOME/profiles/` 下），**不能**传 `--profile profiles/evoresearch` 路径形式（rc.8 会报 invalid profile name）。
+**注意**：`--profile evoresearch` 只认裸名（profile 必须位于 `$DSH_HOME/profiles/` 下），**不能**传 `--profile profiles/evoresearch` 路径形式（rc.2 会报 invalid profile name）。
 
 #### 4.2.2 EvoResearch 正式网页版（3081 首选）
 
 正式 Web 与开发 Web 使用同一套 `evoresearch` profile，端口从 `3081` 开始自动选择，只切换 `EVORESEARCH_ROOT`。正式 Web 的 `EVORESEARCH_ROOT` 是 `D:\DSH-Research\.evoresearch-data`，`DSH_HOME` 和 `EVORESEARCH_DATA_ROOT` 自动与其相同；其 `profiles` 也应通过 junction 指向仓库 `profiles`：
 
 ```powershell
-Start-Process npx.cmd "@deepseek-ai/dsh@0.1.0-rc.8 --profile evoresearch --port 3081" -WindowStyle Hidden `
+Start-Process npx.cmd "@deepseek-ai/dsh@0.1.1-rc.2 --profile evoresearch --port 3081" -WindowStyle Hidden `
   -Environment @{
     EVORESEARCH_ROOT="D:\DSH-Research\.evoresearch-data";
     DSH_HOME="D:\DSH-Research\.evoresearch-data";
@@ -319,10 +319,10 @@ node scripts/check-docs.mjs
 
 ## 6. 通用项目规则
 
-1. **0 warnings / 0 errors**：适配新 DSH 版本（如 rc.8）后，端到端无 warnings/errors 为验收标准。
+1. **0 warnings / 0 errors**：适配新 DSH 版本（如 rc.2）后，端到端无 warnings/errors 为验收标准。
 2. **前端样式**：`packages/evoresearch-app/src/client/styles.ts` 为主样式；桌面自绘标题栏相关样式在 `html.evo-desktop` 分支，`z-index` 需谨慎（标题栏 `2147483647` 为顶层，需让 modal 等让位）。
 3. **React key**：所有 `.map()` 必须传 key（第三参数）；`index.ts` 有 `suppressKeyWarning` 兜底（仅压制误报）。
-4. **Cordis 插件**：profile 为 `@deepseek-ai/dsh-base` + `@evoresearch/dsh-app` + `@evoresearch/dsh-plugin`；rc.8 需 `ui-renderer` 提供 `uiRenderer` 服务（`cordis.patch.yml`）。
+4. **Cordis 插件**：profile 为 `@deepseek-ai/dsh-base` + `@evoresearch/dsh-app` + `@evoresearch/dsh-plugin`；rc.2 起需 `ui-renderer` 提供 `uiRenderer` 服务（`cordis.patch.yml`）。
 5. **截图/临时脚本产物**：一律 `.tmp-dev/images/`；一次性调试脚本可放 `scripts/.tmp-*`（gitignore）或直接 `.tmp-dev/`。不得污染项目根、用户目录或数据目录。
 6. **数据目录**：EvoResearch 开发 Web 数据只进 `.tmp-dev/.evoresearch-data/`；正式 Web 数据只进仓库根 `.evoresearch-data/`；官方 DSH 数据只在 `C:\Users\Karbo\.dsh`（勿写勿删）；桌面版数据只在 exe 同级 `.evoresearch-data/`。
 
@@ -351,7 +351,7 @@ node scripts/check-docs.mjs
   （cargo 版与 npm 版子命令不同）。
 - **gh api 布尔值用 `-F` 不用 `-f`**（字符串 "false" 会 422）；PATCH release 只认
   `/releases/{id}`，by-tag 路由 404。
-- **`@deepseek-ai/dsh-client-schema-form` 等无 rc.8 的包保持 rc.6**（`ETARGET` 限制）。
+- **`@deepseek-ai/dsh-client-schema-form` 等无对应 rc 版本的包保持其历史可用版本（如 rc.6）**（`ETARGET` 限制）。
 - **AGENTS.md**：项目交接与开发约定，纳入 Git 跟踪并推送到 GitHub。
 - **`.serena/`**：Serena MCP（LSP 代码检索工具）的项目级配置与缓存，由 Claude Code 的 serena MCP server 读写，与本应用运行无关；已 gitignore。
 
