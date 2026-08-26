@@ -163,7 +163,7 @@ export interface WebSearchResult {
  * DSH settings namespaces must be registered before get/replace can be used.
  * API keys deliberately do not appear here: they belong to ctx.credentials.
  */
-export const WEB_SEARCH_SETTINGS_SCHEMA = z.object({
+export const WEB_SEARCH_SETTINGS_SCHEMA: Schemastery = z.object({
   activeProvider: z.string().default('openwebsearch'),
   providers: z.dict(z.object({
     baseURL: z.string().default(''),

@@ -25,6 +25,10 @@ import { join } from 'node:path'
 import { autoRelatedWorkAuthorPapersEvents, autoRelatedWorkPipelineEvents, enrichAutoRelatedWorkCompat, searchAutoRelatedWorkCompat } from '../src/host/autorelatedwork-compat.js'
 import { autoRelatedWorkPaperFromRecord, cleanAutoRelatedWorkPaper } from '../src/host/autorelatedwork-search.js'
 
+// AGENTS.md：临时产物统一放 .tmp-dev/。测试以相对 cwd 的 .tmp-dev 作为缓存目录，
+// 在无此目录的干净 worktree 中运行前需先建立（与主仓库 .tmp-dev 约定一致）。
+mkdirSync('.tmp-dev', { recursive: true })
+
 function response(body: string, ok = true, status = 200): Response {
   return { ok, status, text: async () => body } as Response
 }
