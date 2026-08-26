@@ -36,7 +36,6 @@ const DICT: Record<string, [string, string]> = {
   searchSort: ['Sort conversations', '排序方式'],
   workbench: ['Workbench', '科研工作台'],
   // 左侧工作台导航：入口用途说明（tooltip / 面板底部小字）
-  menuNewChatHint: ['New chat is the EvoResearch logo in the top-left corner.', '新建对话请点左上角 EvoResearch logo。'],
   menuImportHint: ['Import an existing folder as a project, or create a new project workspace.', '把已有文件夹导入为项目，或在工作区新建项目。'],
   menuSkillsHint: ['Review auto-suggested research skills and browse the built-in skill catalog.', '审阅自动生成的科研技能提案，并浏览内置技能目录。'],
   menuMemoryHint: ['Global research memory: goals, history, identity and knowledge across projects.', '全局科研记忆：跨项目的目标、历史、身份与知识。'],

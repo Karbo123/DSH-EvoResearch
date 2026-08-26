@@ -6,7 +6,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, SquarePen, Search, MessageSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical, History } from 'lucide-react'
+import { FolderGit2, GraduationCap, BrainCircuit, Clock, Cable, Users, Search, MessageSquare, Pencil, Check, FileJson, FileText, Pin, Palette, Trash2, Archive, ArchiveRestore, ChevronRight, FlaskConical, Copy, MoreHorizontal, ArrowLeft, StickyNote, BookOpen, ListFilter, GripVertical, History } from 'lucide-react'
 import { t } from './i18n'
 import { ConfirmDialog } from './session-actions'
 import { clientStateGet, clientStateSet } from './client-state'
@@ -611,11 +611,6 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
       jsx('nav', {
         className: 'evo-tl-menu',
         children: [
-          // 说明提示：新建对话入口已在左上角 EvoResearch logo；这里保留工作台导航 + 简短用途说明
-          jsxs('div', {
-            className: 'evo-tl-menu-hint evo-panel-hint',
-            children: [jsx(SquarePen, {}), jsx('span', { children: t('menuNewChatHint') })],
-          }),
           ...MENU.map((item) => {
             const Icon = item.icon
             return jsx('button', {
