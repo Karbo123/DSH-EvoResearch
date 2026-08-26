@@ -453,6 +453,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     '<research_memory_packet>',
     '<identity_profile>',
     '<project_env>',
+    // DSH system-reminder 注入：技能加载（<available_skills> 清单）、运行时上下文快照等
+    // 都以 <system-reminder> 包裹的 user 消息进入会话，属内部机制，不应显示为「你的消息」
+    // （技能加载动作已通过工具卡片可见，模型也能正常读取这些内容）。
+    '<system-reminder>',
+    'A skill is a reusable set',
   ]
   const isSystemLeak = (n: any): boolean => {
     if (n === null || n.data === undefined) return false
