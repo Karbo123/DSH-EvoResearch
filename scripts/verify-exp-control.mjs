@@ -98,7 +98,7 @@ try {
   const init = ledger.init(projectDir, slug)
   must(init.ok, `3) 账本 init 成功 sha=${init.ok ? init.sha.slice(0, 7) : init.error}`)
   const sanitized = slugifyProjectName(path.basename(path.resolve(projectDir)))
-  const repo = path.join(dataRoot, '.evoresearch-data', 'ledgers', sanitized, `${slug}.git`)
+  const repo = path.join(dataRoot, 'plugins', 'ledgers', sanitized, `${slug}.git`)
   must(fs.existsSync(repo), '3) bare 账本目录已创建')
   // 纪律 4: core.excludesFile=/dev/null
   must(gitConfig(repo, 'core.excludesFile') === '/dev/null', '3) 纪律 4: core.excludesFile=/dev/null')
@@ -172,8 +172,8 @@ try {
     must(exportedLog.every(sha => ledgerShas.includes(sha)), '6) 纪律 7: 导出仓库 shas 与账本一致')
   }
 
-  // 纪律 8: 研究对象 vs 产物分离 — 账本仅记录实验目录，非 project 根（以 experiment-ledger repoDir 位于 .evoresearch-data/ledgers 为证）
-  must(repo.replace(/\\/g, '/').includes('.evoresearch-data/ledgers'), '6) 纪律 8: 账本位于 ledgers 独立裸仓库，与实验目录分离')
+  // 纪律 8: 研究对象 vs 产物分离 — 账本仅记录实验目录，非 project 根（以 experiment-ledger repoDir 位于 plugins/ledgers 为证）
+  must(repo.replace(/\\/g, '/').includes('/plugins/ledgers/'), '6) 纪律 8: 账本位于 ledgers 独立裸仓库，与实验目录分离')
 
   // 7) 四阶段回合走完 — B.1/B.2/B.3
   const start = rounds.start(projectDir, slug)

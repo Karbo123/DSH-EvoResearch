@@ -368,7 +368,7 @@ export class ScienceLoopStore implements ScienceLoopPersistence {
   private readonly dir: string
 
   constructor(dataRoot: string) {
-    this.dir = path.join(dataRoot, '.evoresearch-data', 'science-loops')
+    this.dir = path.join(dataRoot, 'plugins', 'science-loops')
   }
 
   save(loop: ScienceLoop): void {

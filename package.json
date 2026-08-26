@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "build": "npm run build -w @evoresearch/dsh-plugin && npm run build -w @evoresearch/dsh-app",
+    "start:web": "node scripts/start-web.mjs --port 3081",
+    "test:launcher": "node --test scripts/web-port.test.mjs",
     "typecheck": "npm run typecheck -w @evoresearch/dsh-plugin",
     "test": "npm run test -w @evoresearch/dsh-plugin",
     "verify:domain": "node --import tsx scripts/verify-domain-e2e.mjs",

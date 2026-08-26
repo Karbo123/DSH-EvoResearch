@@ -3,7 +3,7 @@
  *
  * 对齐 EvoResearch middleware/active_team.py 与 `/expert` 命令：
  * - 专家 = 已安装技能（通过 ctx.skills.list() 发现）；
- * - 邀请状态持久化到 <dataRoot>/.evoresearch-data/active-teams.json；
+ * - 邀请状态持久化到 <dataRoot>/plugins/active-teams.json；
  * - 每次 run 把 active_teams 注入 configurable（由 host 入口随会话创建传递）。
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -34,7 +34,7 @@ export class ExpertService {
   private teams: ActiveTeam[] = []
 
   constructor(readonly config: ExpertConfig) {
-    this.file = path.join(config.dataRoot, '.evoresearch-data', 'active-teams.json')
+    this.file = path.join(config.dataRoot, 'plugins', 'active-teams.json')
     this.load()
   }
 

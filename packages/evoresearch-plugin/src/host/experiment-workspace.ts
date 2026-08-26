@@ -246,7 +246,7 @@ export class ExperimentWorkspaceService {
       // 覆盖并重建：删除实验目录及对应账本（A.5 纪律 6）
       fs.rmSync(targetDir, { recursive: true, force: true })
       const sanitized = slugifyProjectName(path.basename(ws))
-      const ledgerRepo = path.join(this.config.dataRoot, '.evoresearch-data', 'ledgers', sanitized, `${baseSlug}.git`)
+      const ledgerRepo = path.join(this.config.dataRoot, 'plugins', 'ledgers', sanitized, `${baseSlug}.git`)
       try { fs.rmSync(ledgerRepo, { recursive: true, force: true }) } catch { /* best effort */ }
     }
     const slug = baseSlug

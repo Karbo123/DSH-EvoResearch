@@ -157,6 +157,38 @@ describe('search_literature', () => {
     assert.equal(out.web_results[0]!.excerpt, 'web hit for graph neural networks')
   })
 
+  it('学术检索优先调用结构化题录路径，并完整保留查询词', async (t) => {
+    let captured = ''
+    const h = setup(t, {
+      hasWebSearch: () => true,
+      invokeAcademicSearch: async (q, limit) => {
+        captured = q
+        assert.equal(limit, 5)
+        return {
+          provider: 'OpenAlex',
+          query: q,
+          sources: [{
+            url: 'https://doi.org/10.1234/nlos',
+            title: 'NLOS imaging reconstruction',
+            doi: '10.1234/nlos',
+            venue: 'Optics Journal',
+            year: 2024,
+            sourceType: 'academic',
+          }],
+        }
+      },
+      invokeWebSearch: async () => { throw new Error('不应退化到普通网页搜索') },
+    })
+    const out = (await h.captured['search_literature']!.execute(
+      { queries: ['NLOS imaging reconstruction'] },
+      execFor(h.projectPath),
+    )) as { web_results: Array<{ kind: string; query: string; provider?: string; results?: Array<{ doi?: string }> }> }
+    assert.equal(captured, 'NLOS imaging reconstruction')
+    assert.equal(out.web_results[0]!.kind, 'academic')
+    assert.equal(out.web_results[0]!.provider, 'OpenAlex')
+    assert.equal(out.web_results[0]!.results?.[0]?.doi, '10.1234/nlos')
+  })
+
   it('单条网络失败降级为 web_error，绝不抛错', async (t) => {
     const h = setup(t, {
       hasWebSearch: () => true,

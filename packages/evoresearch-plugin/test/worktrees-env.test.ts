@@ -114,7 +114,7 @@ describe('WorktreeService', () => {
     const [first, latest] = initRepo(projectDir)
     const svc = new WorktreeService(dataRoot)
     const wt = svc.createWorktree(projectDir, { name: 'exp-a' })
-    assert.ok(wt.path.startsWith(path.join(dataRoot, '.evoresearch-data', 'worktrees')), `路径 ${wt.path}`)
+    assert.ok(wt.path.startsWith(path.join(dataRoot, 'plugins', 'worktrees')), `路径 ${wt.path}`)
     assert.equal(wt.name, 'exp-a')
     assert.equal(wt.branch, 'exp-a')
     assert.equal(wt.commit, latest, '起始 commit = 最新 HEAD')
@@ -271,7 +271,7 @@ describe('ProjectEnvService 环境指纹（ENV-03）', () => {
   it('poolDirOf：路径正确；非法指纹拒绝（防路径注入）', () => {
     const svc = new ProjectEnvService(dataRoot)
     const fp = '0123456789abcdef'
-    assert.equal(svc.poolDirOf(fp), path.join(dataRoot, '.evoresearch-data', 'envs', fp))
+    assert.equal(svc.poolDirOf(fp), path.join(dataRoot, 'plugins', 'envs', fp))
     assert.throws(() => svc.poolDirOf('../../evil'), /非法的环境指纹/)
     assert.throws(() => svc.poolDirOf(''), /非法的环境指纹/)
   })

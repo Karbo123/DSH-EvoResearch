@@ -10,7 +10,7 @@ import * as path from 'node:path'
 import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, renameSync, existsSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { WorkspaceService } from './workspace.js'
-import { resolveDshHomePath } from './core/paths.js'
+import { resolveDshHomePath, workspaceDataDir } from './core/paths.js'
 import type { MemoryRuntime } from './memory/index.js'
 import type { SchedulerService } from './scheduler.js'
 import type { ChannelManager } from './channels/index.js'
@@ -84,6 +84,27 @@ import type { ScienceLoopService, ScienceLoop, ScienceLoopAction } from './scien
 import type { ScienceChatGraphBridge } from './science/chat-graph-bridge.js'
 import type { JobHubService } from './jobs.js'
 import { callJson } from './core/llm.js'
+import { applyDataPaths, getDataPaths, getDataClearPaths, listDataDirectories, type DataPathApplyMode, type DataPathPair } from './data-paths.js'
+import type { ConfiguredWebSearchProvider } from './web-search.js'
+import { AutoRelatedWorkCacheStore } from './autorelatedwork-search.js'
+import { AUTO_RELATED_WORK_PROVIDER_PRESETS, autoRelatedWorkListModelsForProvider, autoRelatedWorkResolveProvider } from './autorelatedwork-ai-providers.js'
+import {
+  autoRelatedWorkHealth,
+  autoRelatedWorkAuthorPapersEvents,
+  autoRelatedWorkEnrichStreamEvents,
+  autoRelatedWorkPipelineEvents,
+  autoRelatedWorkRelatedSearchEvents,
+  collectAutoRelatedWorkEvents,
+  enrichAutoRelatedWorkAuthorsCompat,
+  enrichAutoRelatedWorkCompat,
+  refineAutoRelatedWorkCache,
+  searchAutoRelatedWorkAuthorCandidates,
+  searchAutoRelatedWorkAuthorPapers,
+  searchAutoRelatedWorkCompat,
+  type AutoRelatedWorkCompatRuntimeInput,
+  type AutoRelatedWorkConfig,
+  type AutoRelatedWorkCredentials,
+} from './autorelatedwork-compat.js'
 
 /** 各服务集合（host 入口注入）。 */
 export interface HostServices {
@@ -138,6 +159,8 @@ export interface HostServices {
   readonly jobHub?: JobHubService
   /** P2-1 论文图纸服务（figures/<id>/v<N>/ 版本历史；面板图纸分区数据源）。 */
   readonly figureService?: import('./figures.js').FigureService
+  /** 可配置联网搜索 Provider（设置面板与 web seam 共用）。 */
+  readonly webSearch?: ConfiguredWebSearchProvider
 }
 
 /** 平台能力服务集合（PLAT-13..20；可选接线）。 */
@@ -511,7 +534,7 @@ export class EvoResearchApiService extends TypertRemoteService {
     const base = args.workspaceDir && args.workspaceDir !== this.services.memory.config.dataRoot
       ? args.workspaceDir
       : this.services.memory.config.dataRoot
-    const profileDir = path.join(base, '.evoresearch-data', 'memories', 'profile')
+    const profileDir = path.join(workspaceDataDir(this.services.memory.config.dataRoot, base), 'memories', 'profile')
     const out: Array<{ name: string; text: string; bytes: number }> = []
     try {
       for (const entry of readdirSync(profileDir)) {
@@ -529,7 +552,7 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   /** 模型设置（设置面板）：读/写/应用。 */
   private modelSettingsFile(): string {
-    return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'model-settings.json')
+    return path.join(this.services.memory.config.dataRoot, 'plugins', 'model-settings.json')
   }
 
   readModelSettings(): ModelSettings {
@@ -594,6 +617,235 @@ export class EvoResearchApiService extends TypertRemoteService {
       renameSync(tmp, file)
     } catch { /* 档位持久化失败不阻塞默认模型应用 */ }
     return { ok: true, provider: setting.provider, model: setting.model }
+  }
+
+  @Remote('webSearchSettingsGet')
+  async webSearchSettingsGet(): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('联网搜索服务不可用')
+    return this.services.webSearch.publicSettings()
+  }
+
+  @Remote('webSearchSettingsSet')
+  async webSearchSettingsSet(args: { activeProvider: 'none' | string; providers: Record<string, unknown>; academicProvider?: 'none' | string; academicProviders?: Record<string, unknown>; apiKeys?: Record<string, unknown>; academicApiKeys?: Record<string, unknown>; clearKeys?: string[] }): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('联网搜索服务不可用')
+    return this.services.webSearch.saveSettings({ activeProvider: args.activeProvider as never, providers: args.providers ?? {}, academicProvider: args.academicProvider as never, academicProviders: args.academicProviders, apiKeys: args.apiKeys, academicApiKeys: args.academicApiKeys, clearKeys: args.clearKeys })
+  }
+
+  @Remote('webSearchTest')
+  async webSearchTest(args: { query: string }): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('联网搜索服务不可用')
+    // 设置面板的测试按钮必须走与平台 web_search 相同的通用搜索入口；
+    // 学术题录测试使用 academicSearchTest，两个 Provider 不能互相改道。
+    return this.services.webSearch.search({ query: String(args?.query ?? '') })
+  }
+
+  @Remote('academicSearchTest')
+  async academicSearchTest(args: { query: string }): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('学术搜索服务不可用')
+    return this.services.webSearch.searchAcademic(String(args?.query ?? ''), 8)
+  }
+
+  /** AutoRelatedWork 原版 ai_providers.py 的 provider 预设/解析 API。 */
+  @Remote('autoRelatedWorkAIProviders')
+  autoRelatedWorkAIProviders(args?: { baseURL?: string }): unknown {
+    const providers = Object.fromEntries(Object.entries(AUTO_RELATED_WORK_PROVIDER_PRESETS).map(([id, preset]) => [id, {
+      label: preset.label,
+      base: preset.base,
+      models: preset.models,
+      default: preset.default,
+    }]))
+    return { providers, currentProvider: autoRelatedWorkResolveProvider(String(args?.baseURL ?? '')) }
+  }
+
+  @Remote('autoRelatedWorkAIModels')
+  async autoRelatedWorkAIModels(args: { provider?: string; apiKey?: string; base?: string }): Promise<unknown> {
+    return autoRelatedWorkListModelsForProvider({ providerKey: String(args?.provider ?? 'custom'), apiKey: String(args?.apiKey ?? ''), baseOverride: String(args?.base ?? '') || undefined })
+  }
+
+  @Remote('autoRelatedWorkCacheStats')
+  autoRelatedWorkCacheStats(): unknown {
+    const cache = new AutoRelatedWorkCacheStore(path.join(this.services.memory.config.dataRoot, 'plugins', 'cache', 'scholar_cache.db'))
+    try { return cache.stats() } finally { cache.close() }
+  }
+
+  @Remote('autoRelatedWorkCacheClear')
+  autoRelatedWorkCacheClear(): { ok: boolean } {
+    const cache = new AutoRelatedWorkCacheStore(path.join(this.services.memory.config.dataRoot, 'plugins', 'cache', 'scholar_cache.db'))
+    try { cache.clear(); return { ok: true } } finally { cache.close() }
+  }
+
+  private autoRelatedWorkConfigFile(): string {
+    return path.join(this.services.memory.config.dataRoot, 'plugins', 'autorelatedwork-config.json')
+  }
+
+  private readAutoRelatedWorkConfig(): AutoRelatedWorkConfig {
+    try {
+      const raw = JSON.parse(readFileSync(this.autoRelatedWorkConfigFile(), 'utf8')) as unknown
+      return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? raw as AutoRelatedWorkConfig : {}
+    } catch { return {} }
+  }
+
+  private writeAutoRelatedWorkConfig(config: AutoRelatedWorkConfig): void {
+    const file = this.autoRelatedWorkConfigFile()
+    mkdirSync(path.dirname(file), { recursive: true })
+    const tmp = `${file}.tmp-${process.pid}`
+    writeFileSync(tmp, JSON.stringify(config, null, 2), 'utf8')
+    renameSync(tmp, file)
+  }
+
+  private autoRelatedWorkInput(args?: Record<string, unknown>): AutoRelatedWorkCompatRuntimeInput {
+    const rawConfig = args?.config
+    const rawCredentials = args?.credentials
+    const requestConfig = rawConfig !== null && typeof rawConfig === 'object' && !Array.isArray(rawConfig) ? rawConfig as AutoRelatedWorkConfig : {}
+    const config = { ...this.readAutoRelatedWorkConfig(), ...requestConfig }
+    const credentials = rawCredentials !== null && typeof rawCredentials === 'object' && !Array.isArray(rawCredentials) ? rawCredentials as AutoRelatedWorkCredentials : undefined
+    return { config, credentials, dataRoot: this.services.memory.config.dataRoot }
+  }
+
+  @Remote('autoRelatedWorkHealth')
+  async autoRelatedWorkHealth(args?: { config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return autoRelatedWorkHealth({ ...this.readAutoRelatedWorkConfig(), ...(args?.config ?? {}) }, args?.credentials ?? {})
+  }
+
+  @Remote('autoRelatedWorkConfigGet')
+  autoRelatedWorkConfigGet(args?: { config?: AutoRelatedWorkConfig }): unknown {
+    const config = { ...this.readAutoRelatedWorkConfig(), ...(args?.config ?? {}) }
+    return { config, credentials: { qg_configured: Boolean(config.qgServers?.some((item) => item.trim() !== '') || config.localProxy), semantic_scholar_configured: false, deepseek_configured: Boolean(config.deepseekURL) } }
+  }
+
+  @Remote('autoRelatedWorkConfigSet')
+  autoRelatedWorkConfigSet(args: { config?: AutoRelatedWorkConfig }): unknown {
+    const config = { ...this.readAutoRelatedWorkConfig(), ...(args?.config ?? {}) }
+    this.writeAutoRelatedWorkConfig(config)
+    // 凭据只返回布尔状态，不把 key/密码写入 settings 或 wire response。
+    return { status: 'ok', config, credentials: { qg_configured: Boolean(config.qgServers?.some((item) => item.trim() !== '') || config.localProxy), semantic_scholar_configured: false, deepseek_configured: Boolean(config.deepseekURL) } }
+  }
+
+  @Remote('autoRelatedWorkSearch')
+  async autoRelatedWorkSearch(args: { query: string; maxResults?: number; fast?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return searchAutoRelatedWorkCompat({ query: String(args?.query ?? ''), maxResults: args?.maxResults, fast: args?.fast, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  @Remote('autoRelatedWorkEnrich')
+  async autoRelatedWorkEnrich(args: { papers: Array<Record<string, unknown>>; rounds?: number; query?: string; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return enrichAutoRelatedWorkCompat({ papers: Array.isArray(args?.papers) ? args.papers : [], rounds: args?.rounds, query: args?.query, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  @Remote('autoRelatedWorkAuthorEnrich')
+  async autoRelatedWorkAuthorEnrich(args: { papers: Array<Record<string, unknown>>; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return enrichAutoRelatedWorkAuthorsCompat({ papers: Array.isArray(args?.papers) ? args.papers : [], ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  @Remote('autoRelatedWorkAuthorCandidates')
+  async autoRelatedWorkAuthorCandidates(args: { query: string; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return searchAutoRelatedWorkAuthorCandidates({ query: String(args?.query ?? ''), ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  @Remote('autoRelatedWorkAuthorPapers')
+  async autoRelatedWorkAuthorPapers(args: { name?: string; scholarId?: string; ssAuthorId?: string; openAlexAuthorId?: string; candidateInfo?: Record<string, unknown>; maxResults?: number; deepseekEnrich?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return searchAutoRelatedWorkAuthorPapers({ name: args?.name, scholarId: args?.scholarId, ssAuthorId: args?.ssAuthorId, openAlexAuthorId: args?.openAlexAuthorId, candidateInfo: args?.candidateInfo, maxResults: args?.maxResults, deepseekEnrich: args?.deepseekEnrich, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  /** HTTP SSE 路由专用：保持 AsyncGenerator，不能经过 Remote 的数组收集。 */
+  autoRelatedWorkAuthorPapersStream(args: { name?: string; scholarId?: string; ssAuthorId?: string; openAlexAuthorId?: string; candidateInfo?: Record<string, unknown>; maxResults?: number; deepseekEnrich?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): AsyncGenerator<unknown> {
+    return autoRelatedWorkAuthorPapersEvents({ name: args?.name, scholarId: args?.scholarId, ssAuthorId: args?.ssAuthorId, openAlexAuthorId: args?.openAlexAuthorId, candidateInfo: args?.candidateInfo, maxResults: args?.maxResults, deepseekEnrich: args?.deepseekEnrich, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  @Remote('autoRelatedWorkPipeline')
+  async autoRelatedWorkPipeline(args: { query: string; maxResults?: number; rounds?: number; deepseekEnrich?: boolean; authorEnrich?: boolean; fast?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return collectAutoRelatedWorkEvents(autoRelatedWorkPipelineEvents({ query: String(args?.query ?? ''), maxResults: args?.maxResults, rounds: args?.rounds, deepseekEnrich: args?.deepseekEnrich, authorEnrich: args?.authorEnrich, fast: args?.fast, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) }))
+  }
+
+  autoRelatedWorkPipelineStream(args: { query: string; maxResults?: number; rounds?: number; deepseekEnrich?: boolean; authorEnrich?: boolean; fast?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): AsyncGenerator<unknown> {
+    return autoRelatedWorkPipelineEvents({ query: String(args?.query ?? ''), maxResults: args?.maxResults, rounds: args?.rounds, deepseekEnrich: args?.deepseekEnrich, authorEnrich: args?.authorEnrich, fast: args?.fast, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  @Remote('autoRelatedWorkRelatedSearch')
+  async autoRelatedWorkRelatedSearch(args: { query: string; depth?: number; width?: number; maxResults?: number; maxTotal?: number; deepseekEnrich?: boolean; fast?: boolean; gsSeed?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return collectAutoRelatedWorkEvents(autoRelatedWorkRelatedSearchEvents({ query: String(args?.query ?? ''), depth: args?.depth, width: args?.width, maxResults: args?.maxResults, maxTotal: args?.maxTotal, deepseekEnrich: args?.deepseekEnrich, fast: args?.fast, gsSeed: args?.gsSeed, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) }))
+  }
+
+  autoRelatedWorkRelatedSearchStream(args: { query: string; depth?: number; width?: number; maxResults?: number; maxTotal?: number; deepseekEnrich?: boolean; fast?: boolean; gsSeed?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): AsyncGenerator<unknown> {
+    return autoRelatedWorkRelatedSearchEvents({ query: String(args?.query ?? ''), depth: args?.depth, width: args?.width, maxResults: args?.maxResults, maxTotal: args?.maxTotal, deepseekEnrich: args?.deepseekEnrich, fast: args?.fast, gsSeed: args?.gsSeed, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  @Remote('autoRelatedWorkEnrichStream')
+  async autoRelatedWorkEnrichStream(args: { papers: Array<Record<string, unknown>>; rounds?: number; authorEnrich?: boolean; query?: string; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return collectAutoRelatedWorkEvents(autoRelatedWorkEnrichStreamEvents({ papers: Array.isArray(args?.papers) ? args.papers : [], rounds: args?.rounds, authorEnrich: args?.authorEnrich, query: args?.query, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) }))
+  }
+
+  autoRelatedWorkEnrichStreamLive(args: { papers: Array<Record<string, unknown>>; rounds?: number; authorEnrich?: boolean; query?: string; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): AsyncGenerator<unknown> {
+    return autoRelatedWorkEnrichStreamEvents({ papers: Array.isArray(args?.papers) ? args.papers : [], rounds: args?.rounds, authorEnrich: args?.authorEnrich, query: args?.query, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) })
+  }
+
+  @Remote('autoRelatedWorkCacheRefine')
+  async autoRelatedWorkCacheRefine(args: { batch?: number; deepseekEnrich?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials }): Promise<unknown> {
+    return refineAutoRelatedWorkCache({ batch: args?.batch, deepseekEnrich: args?.deepseekEnrich, ...this.autoRelatedWorkInput(args as unknown as Record<string, unknown>) } as { dataRoot: string; batch?: number; deepseekEnrich?: boolean; config?: AutoRelatedWorkConfig; credentials?: AutoRelatedWorkCredentials })
+  }
+
+  @Remote('webSearchBackendStatus')
+  async webSearchBackendStatus(): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('联网搜索服务不可用')
+    return this.services.webSearch.webSearchBackendStatus()
+  }
+
+  @Remote('webSearchBackendInstall')
+  async webSearchBackendInstall(): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('联网搜索服务不可用')
+    return this.services.webSearch.webSearchBackendInstall()
+  }
+
+  @Remote('webSearchBackendStart')
+  async webSearchBackendStart(): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('联网搜索服务不可用')
+    return this.services.webSearch.webSearchBackendStart()
+  }
+
+  @Remote('webSearchBackendStop')
+  async webSearchBackendStop(): Promise<unknown> {
+    if (this.services.webSearch === undefined) throw new Error('联网搜索服务不可用')
+    return this.services.webSearch.webSearchBackendStop()
+  }
+
+  /** 当前进程实际使用的数据路径；不是从前端缓存或 cwd 推断。 */
+  @Remote('dataPathsGet')
+  dataPathsGet() {
+    return getDataPaths(this.services.memory.config.dataRoot)
+  }
+
+  /** 服务端目录浏览器：浏览器无法直接取得宿主机绝对路径，因此由 Host 列目录。 */
+  @Remote('dataPathsBrowse')
+  dataPathsBrowse(args: { path?: string }) {
+    try {
+      return listDataDirectories(typeof args?.path === 'string' && args.path.trim() !== '' ? args.path : undefined)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * 保存下一次启动的路径，并按用户选择迁移或复用目标目录。
+   * DSH_HOME 无法在当前进程热切换；若由 start-web 启动，则请求文件会令
+   * launcher 重启子进程，否则返回 restartRequired 供界面提示手动重启。
+   */
+  @Remote('dataPathsApply')
+  dataPathsApply(args: { evoresearchRoot: string; mode: DataPathApplyMode }) {
+    try {
+      const sessions = this.hostCtx.get('sessions') as { list?: () => Array<{ id?: string }> } | undefined
+      const agents = this.hostCtx.get('agents') as { get?: (id: string) => { status?: string } | undefined } | undefined
+      const running = (sessions?.list?.() ?? []).some((session) => agents?.get?.(session.id ?? '')?.status === 'running')
+      if (running) return { error: '有会话正在运行，请先停止任务再切换数据目录' }
+      const requested: DataPathPair = { evoresearchRoot: String(args?.evoresearchRoot ?? '') }
+      return applyDataPaths(this.services.memory.config.dataRoot, requested, args?.mode)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 设置面板展示清除动作实际触及的运行时路径。 */
+  @Remote('dataClearPathsGet')
+  dataClearPathsGet() {
+    return getDataClearPaths(this.services.memory.config.dataRoot)
   }
 
   /** 清除数据（设置面板）：scopes ∈ projects / models（prefs 为客户端本地偏好）。 */
@@ -664,7 +916,7 @@ export class EvoResearchApiService extends TypertRemoteService {
 
         // 根工作区（dataRoot 自身）的记忆 / Chat Graph 一并清空；
         // 模型配置（model-settings.json）属于另一个清除项，保留不动。
-        const rootEvoData = path.join(this.services.memory.config.dataRoot, '.evoresearch-data')
+        const rootEvoData = path.join(this.services.memory.config.dataRoot, 'plugins')
         for (const sub of ['memories', 'chat-graphs']) {
           try {
             rmSync(path.join(rootEvoData, sub), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
@@ -751,7 +1003,7 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   /** §29：会话元数据（置顶/标签色/归档）后端存储——pin/tag/archive 随项目数据迁移。 */  private metaFile(): string {
-    return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'session-meta.json')
+    return path.join(this.services.memory.config.dataRoot, 'plugins', 'session-meta.json')
   }
 
   private readSessionMeta(): Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }> {
@@ -799,7 +1051,7 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   /** §29：项目元数据（归档/标签色）后端存储——与 session-meta 同层，随项目数据迁移。 */
   private projectMetaFile(): string {
-    return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'project-meta.json')
+    return path.join(this.services.memory.config.dataRoot, 'plugins', 'project-meta.json')
   }
 
   private readProjectMeta(): Record<string, { archived?: boolean; tagColor?: string | null }> {
@@ -865,7 +1117,7 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   /** 客户端状态镜像（原 localStorage 的 UI 偏好/历史等）：跨浏览器随项目数据迁移。 */
   private clientStateFile(): string {
-    return path.join(this.services.memory.config.dataRoot, '.evoresearch-data', 'client-state.json')
+    return path.join(this.services.memory.config.dataRoot, 'plugins', 'client-state.json')
   }
 
   private readClientState(): Record<string, string> {
@@ -922,7 +1174,7 @@ export class EvoResearchApiService extends TypertRemoteService {
     const base = workspaceDir && workspaceDir !== this.services.memory.config.dataRoot
       ? workspaceDir
       : this.services.memory.config.dataRoot
-    return path.join(base, '.evoresearch-data', 'memories', 'profile')
+    return path.join(workspaceDataDir(this.services.memory.config.dataRoot, base), 'memories', 'profile')
   }
 
   /** 校验 profile 文件名（仅允许 <name>.md，禁止路径穿越）。 */
@@ -1615,12 +1867,43 @@ export class EvoResearchApiService extends TypertRemoteService {
    * 平台 web_search 不可用时明确降级（degraded: true），不伪造在线结果。
    */
   @Remote('libraryLiteratureWeb')
-  async libraryLiteratureWeb(args: { queries: string[] }): Promise<{ results: Array<{ kind: string; query: string; excerpt?: string; error?: string }>; degraded: boolean }> {
+  async libraryLiteratureWeb(args: { queries: string[] }): Promise<{
+    results: Array<{
+      kind: string
+      query: string
+      provider?: string
+      excerpt?: string
+      error?: string
+      sources?: Array<{ url: string; title: string; snippet?: string; publishedAt?: string; doi?: string; venue?: string; year?: number }>
+    }>
+    degraded: boolean
+  }> {
     const queries = (Array.isArray(args?.queries) ? args.queries : [])
       .map((q) => String(q ?? '').trim())
       .filter((q) => q !== '')
       .slice(0, 4)
     if (queries.length === 0) return { results: [], degraded: true }
+    // 文献面板和模型工具共用学术题录路径。普通 web_search 仍可作为
+    // 旧版/服务未接入时的兼容降级，但不再是论文检索的首选来源。
+    if (this.services.webSearch?.academicEnabled() === true) {
+      const results: Array<{
+        kind: string
+        query: string
+        provider?: string
+        error?: string
+        sources?: Array<{ url: string; title: string; snippet?: string; publishedAt?: string; doi?: string; venue?: string; year?: number }>
+      }> = []
+      for (const q of queries) {
+        try {
+          const result = await this.services.webSearch.searchAcademic(q, 8)
+          results.push({ kind: 'academic', query: q, provider: result.provider, sources: result.sources })
+        } catch (error) {
+          results.push({ kind: 'academic_error', query: q, error: error instanceof Error ? error.message : String(error) })
+        }
+      }
+      return { results, degraded: results.every((result) => result.kind.endsWith('_error')) }
+    }
+
     let toolsRuntime: { get?(name: string): unknown; execute?(input: { callId: string; name: string; arguments: unknown }): Promise<{ content: readonly unknown[]; isError: boolean }> } | undefined
     try {
       toolsRuntime = this.hostCtx.get('tools') as typeof toolsRuntime

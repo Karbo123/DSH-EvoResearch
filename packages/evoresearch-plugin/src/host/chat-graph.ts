@@ -16,14 +16,14 @@
  *   （GRAPH-08：文件更新后预览随之更新）。
  * - 非 context 连线可附自然语言说明 label（GRAPH-07，不建立强制关系枚举）。
  * - 删除节点/连线只删除视图引用，不删除目标聊天/笔记/文件（GRAPH-09）。
- * - 图按项目隔离存储：<dataRoot>/.evoresearch-data/chat-graphs/<projectName>.json
+ * - 图按项目隔离存储：<dataRoot>/plugins/chat-graphs/<projectName>.json
  *   （与 experiments 同级目录，随项目迁移）。
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { readSessionEvents, isSystemText } from './rewind.js'
-import { resolveDshHomePath } from './core/paths.js'
+import { resolveDshHomePath, workspaceDataDir } from './core/paths.js'
 import type { ScienceMemoryLink } from './science/memory.js'
 
 /** memory node 引用真实资料（GRAPH-04：节点只保存显示名与位置，不复制资料）。 */
@@ -496,9 +496,9 @@ export class ChatGraphService {
     this.dataRoot = dataRoot
   }
 
-  /** 图存储目录（.evoresearch-data/chat-graphs/）。 */
+  /** 图存储目录（<dataRoot>/plugins/chat-graphs/）。 */
   private graphsDir(): string {
-    return path.join(this.dataRoot, '.evoresearch-data', 'chat-graphs')
+    return path.join(this.dataRoot, 'plugins', 'chat-graphs')
   }
 
   /** 全局图文件（global scope 的记忆节点跨项目共享，如 SOUL.md/User.md/Taste.md 归类）。 */
@@ -783,7 +783,7 @@ export class ChatGraphService {
     const base = this.memoryBase(workspaceDir, input.scope)
     const subdir = input.collection ? 'collections' : 'notes'
     const fileName = this.memoryFileName(input.title, input.collection ? 'collection' : 'note')
-    const relativePath = path.join('.evoresearch-data', 'memories', subdir, fileName)
+    const relativePath = path.join(input.scope === 'global' ? 'plugins' : '.evoresearch-data', 'memories', subdir, fileName)
     const target = path.join(base, relativePath)
     this.atomicTextWrite(target, input.content)
     if (input.links !== undefined && input.links.length > 0) this.writeSidecarLinks(target, input.links)
@@ -1027,7 +1027,7 @@ export class ChatGraphService {
    * 实时读取引用资料预览（GRAPH-04/08）：打开节点时读真实文件，文件更新后
    * 预览随之更新（每次调用实时 stat+read，不做内容缓存）。
    * - 无 ref 的节点返回内嵌 content 文本（旧节点继续可用，GRAPH-06）；
-   * - note：相对 <workspaceDir>/.evoresearch-data/memories/notes/ 解析；
+   * - note：相对 workspace 数据目录的 memories/notes/ 解析；
    * - file/pdf/dir：绝对路径直接用，相对路径以 workspaceDir 为根；
    * - 文本类文件读取内容（大文件截断）；PDF/图片等二进制返回 binary 提示；
    * - 目录返回前 MAX_DIR_ENTRIES 项清单；目标缺失返回错误。
@@ -1045,7 +1045,7 @@ export class ChatGraphService {
     if (ref.kind === 'note') {
       // 笔记引用：相对笔记目录（与 NotesService.notesDirOf 一致）
       const base = node.scope === 'global' || workspaceDir === undefined || workspaceDir === this.dataRoot ? this.dataRoot : workspaceDir
-      target = path.isAbsolute(ref.path) ? ref.path : path.join(base, '.evoresearch-data', 'memories', 'notes', ref.path)
+      target = path.isAbsolute(ref.path) ? ref.path : path.join(workspaceDataDir(this.dataRoot, base), 'memories', 'notes', ref.path)
     } else if (!path.isAbsolute(target)) {
       const base = workspaceDir && workspaceDir !== this.dataRoot ? workspaceDir : this.dataRoot
       target = path.join(base, target)
@@ -1153,7 +1153,7 @@ const MAX_DIR_ENTRIES = 20
  * 参数 { workspaceDir?: string; title?: string; body: string } 完全一致；
  * 返回 NoteMeta（noteId/fileName/title/body/source/hasFrontmatter/updatedAt/byteSize）
  * 结构包含 { noteId: string; fileName: string }，可直接赋值——结构兼容，无需适配。
- * 存储布局核对：createNote 写 <base>/.evoresearch-data/memories/notes/<fileName>
+ * 存储布局核对：createNote 写 <base>/memories/notes/<fileName>
  * （base = workspaceDir 或 dataRoot 回退），与 previewOf 的 note 解析同规则。
  */
 export interface NoteWriter {

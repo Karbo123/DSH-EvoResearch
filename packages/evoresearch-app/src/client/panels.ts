@@ -935,7 +935,7 @@ export function SkillsPanel() {
   const [busy, setBusy] = useState<string | null>(null)
   const [view, setView] = useState<'proposals' | 'marketplace'>('proposals')
   // §42.9 AutoSkills 调度配置
-  const [asEnabled, setAsEnabled] = useState(true)
+  const [asEnabled, setAsEnabled] = useState(false)
   const [asMode, setAsMode] = useState('review')
   const [asCadence, setAsCadence] = useState('weekly')
   const [asTime, setAsTime] = useState('03:00')

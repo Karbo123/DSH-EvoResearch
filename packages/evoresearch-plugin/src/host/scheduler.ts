@@ -5,7 +5,7 @@
  * - 5 字段 cron 表达式（自研解析器，见 core/cron.ts）；
  * - 任务带 workspaceDir：触发时在该项目工作区执行；
  * - 结果线程记录 lastResultThreadId，WebUI 可直达并「Report to main chat」；
- * - 任务表持久化到 <dataRoot>/.evoresearch-data/scheduler.json（原子写）。
+ * - 任务表持久化到 <dataRoot>/plugins/scheduler.json（原子写）。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import * as fs from 'node:fs'
@@ -111,7 +111,7 @@ export class SchedulerService {
   private tickDisposer: (() => void) | undefined
 
   constructor(readonly config: SchedulerConfig) {
-    this.file = path.join(config.dataRoot, '.evoresearch-data', 'scheduler.json')
+    this.file = path.join(config.dataRoot, 'plugins', 'scheduler.json')
     this.load()
   }
 

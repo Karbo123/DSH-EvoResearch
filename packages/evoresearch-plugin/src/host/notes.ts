@@ -2,13 +2,13 @@
  * 自由文本研究笔记服务（NOTE-01..09）。
  *
  * 存储形态（主存储永远是 Markdown 文件；索引只是可重建的镜像，绝不作为唯一副本）：
- * - 新笔记：<base>/.evoresearch-data/memories/notes/<slug>-<8位hex>.md，零 frontmatter（NOTE-01）；
- * - 旧 Observation：<base>/.evoresearch-data/memories/observations/{global,projects/<P-id>}/*.md
+ * - 新笔记：<base>/memories/notes/<slug>-<8位hex>.md，零 frontmatter（NOTE-01）；
+ * - 旧 Observation：<base>/memories/observations/{global,projects/<P-id>}/*.md
  *   继续可读（NOTE-03/04）：frontmatter 可解析但默认折叠、不要求用户维护；旧 Remote API 保留兼容别名；
- * - 研究近况页：<base>/.evoresearch-data/memories/RESEARCH_MAP.md（可选，NOTE-07）；
- * - 背景资料：<base>/.evoresearch-data/memories/{USER_PROFILE,RESEARCH_TASTE,PROJECT_PROFILE}.md
+ * - 研究近况页：<base>/memories/RESEARCH_MAP.md（可选，NOTE-07）；
+ * - 背景资料：<base>/memories/{USER_PROFILE,RESEARCH_TASTE,PROJECT_PROFILE}.md
  *   （可选，NOTE-09；缺失时读取返回空对象且不抛错，按需参与上下文、绝不阻塞聊天）；
- * - 段落索引：<base>/.evoresearch-data/memories/notes/.notes-index.json（NOTE-05，可删除重建）。
+ * - 段落索引：<base>/memories/notes/.notes-index.json（NOTE-05，可删除重建）。
  *
  * 语义保证：
  * - 正文优先（NOTE-06）：索引/摘要/草稿永远不得改写用户正文；writeNote 是用户编辑入口，
@@ -22,6 +22,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { workspaceDataDir } from './core/paths.js'
 import { createHash, randomUUID } from 'node:crypto'
 
 /** 背景资料文件名（memories 根目录）。 */
@@ -425,15 +426,14 @@ export class NotesService {
 
   private readonly indexCache = new Map<string, NotesIndexFile>()
 
-  /** 记忆根目录（.evoresearch-data/memories；无 workspace 时落在部署根）。 */
+  /** 记忆根目录（workspace 数据目录下的 memories；根工作区时落在 <dataRoot>/plugins）。 */
   private memoriesDir(workspaceDir: string | undefined): string {
-    const base = workspaceDir && workspaceDir !== this.dataRoot ? workspaceDir : this.dataRoot
-    return path.join(base, '.evoresearch-data', 'memories')
+    return path.join(workspaceDataDir(this.dataRoot, workspaceDir), 'memories')
   }
 
   /** 全局记忆根目录（跨项目可见，但不会因为可见而自动注入全文）。 */
   globalMemoriesDir(): string {
-    return path.join(this.dataRoot, '.evoresearch-data', 'memories')
+    return path.join(this.dataRoot, 'plugins', 'memories')
   }
 
   /** 返回背景资料的实际作用域；SOUL.md 永远是全局文档。 */

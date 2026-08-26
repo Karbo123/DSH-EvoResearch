@@ -240,7 +240,7 @@ describe('SCI-05/06 科学记忆（Markdown + 定位链接）', () => {
     assert.equal(entry.kind, 'ideation')
     assert.ok(entry.body.startsWith('# 分支方向：对比学习'))
     assert.ok(entry.body.includes('待验证'))
-    const file = path.join(root, '.evoresearch-data', 'memories', 'science', 'ideation', entry.fileName)
+    const file = path.join(root, 'plugins', 'memories', 'science', 'ideation', entry.fileName)
     assert.ok(fs.existsSync(file))
     // 零 frontmatter：文件不以 --- 开头
     assert.ok(!fs.readFileSync(file, 'utf8').startsWith('---'))

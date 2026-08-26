@@ -115,6 +115,8 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
       '@deepseek-ai/dsh': '^0.1.0-rc.8', // dsh CLI（launch.js 直接调用其 bin）
       '@deepseek-ai/dsh-base': '^0.1.0-rc.8',
       '@deepseek-ai/dsh-web-app': '^0.1.0-rc.8', // 表面行复用其 /startup（web-startup 行）
+      'open-websearch': '^2.1.11', // EvoResearch 自动管理的本地无 Key 搜索后端
+      'google-ai-mode-mcp': '1.0.3', // Google AI Mode MCP：桌面 sidecar 内置 Node 依赖，免 npm
       '@evoresearch/dsh-app': `file:${join(ROOT, 'packages', 'evoresearch-app')}`,
       '@evoresearch/dsh-plugin': `file:${join(ROOT, 'packages', 'evoresearch-plugin')}`,
     },
@@ -128,9 +130,9 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   // 数据根写死为开发机绝对路径（.tmp-dev），而 dataRoot 解析优先级是
   // config.dataRoot > EVORESEARCH_DATA_ROOT 环境变量，带上它会让用户机器的
   // 数据写进不存在的开发路径。桌面版剥离该补丁，数据根完全交给 launch.js 注入的
-  // EVORESEARCH_DATA_ROOT（exe 同级 .evoresearch-data）。
+  // EVORESEARCH_ROOT（exe 同级 .evoresearch-data；启动器同步兼容变量）。
   const desktopPatchYml = `# EvoResearch 桌面版 profile 补丁层（构建脚本生成；开发版补丁见仓库 profiles/evoresearch/）。
-# 数据根不在此声明：由壳侧环境变量 EVORESEARCH_DATA_ROOT 决定（exe 同级 .evoresearch-data）。
+# 数据根不在此声明：由壳侧环境变量 EVORESEARCH_ROOT 决定（exe 同级 .evoresearch-data）。
 
 - insert:
     - id: tool-ask-user

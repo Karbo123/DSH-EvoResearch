@@ -3,7 +3,7 @@
  *
  * 产出：一份 Markdown 日报，包含概览、每个实验小节（最近尝试/当前回合/笔记）
  * 存储：<projectDir>/.evoresearch-data/reports/daily/<YYYY-MM-DD-HHmm>-<rand>.md
- * 配置：<dataRoot>/.evoresearch-data/daily-report.json（原子写）
+ * 配置：<dataRoot>/plugins/daily-report.json（原子写）
  * 调度：复用 core/cron 的 parseCron/nextRun + timer.interval 每分钟 tick
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { parseCron, nextRun } from './core/cron.js'
 import { ExperimentWorkspaceService } from './experiment-workspace.js'
-import { listProjects, slugifyProjectName } from './core/paths.js'
+import { listProjects, slugifyProjectName, workspaceDataDir } from './core/paths.js'
 
 /** 日报生成选项。 */
 export interface DailyReportOptions {
@@ -53,7 +53,7 @@ export class DailyReportService {
   private tickDisposer: (() => void) | undefined
 
   constructor(readonly dataRoot: string) {
-    this.file = path.join(dataRoot, '.evoresearch-data', 'daily-report.json')
+    this.file = path.join(dataRoot, 'plugins', 'daily-report.json')
     this.load()
   }
 
@@ -217,9 +217,9 @@ export class DailyReportService {
 
   private tryGetLedgerLog(projectDir: string, slug: string, limit: number): string[] {
     try {
-      // 账本路径：<dataRoot>/.evoresearch-data/ledgers/<sanitized>/<slug>.git
+      // 账本路径：<dataRoot>/plugins/ledgers/<sanitized>/<slug>.git
       const sanitized = slugifyProjectName(path.basename(path.resolve(projectDir)))
-      const repoDir = path.join(this.dataRoot, '.evoresearch-data', 'ledgers', sanitized, `${slug}.git`)
+      const repoDir = path.join(this.dataRoot, 'plugins', 'ledgers', sanitized, `${slug}.git`)
       if (!fs.existsSync(repoDir)) return []
       // 用 --git-dir 指定裸仓库读取 log（优先 git.exe，兼容 git）
       let result = spawnSync('git.exe', ['--git-dir', repoDir, 'log', `--pretty=format:%h %s`, '-n', String(limit)], {
@@ -299,7 +299,7 @@ export class DailyReportService {
     const projects = listProjects(this.dataRoot)
     const roots: string[] = [this.dataRoot, ...projects.map((name) => path.join(this.dataRoot, 'projects', name))]
     for (const root of roots) {
-      const dir = path.join(root, '.evoresearch-data', 'reports', 'daily')
+      const dir = path.join(workspaceDataDir(this.dataRoot, root), 'reports', 'daily')
       let entries: fs.Dirent[] = []
       try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { continue }
       for (const e of entries) {
@@ -326,7 +326,7 @@ export class DailyReportService {
     const projects = listProjects(this.dataRoot)
     const roots: string[] = [this.dataRoot, ...projects.map((name) => path.join(this.dataRoot, 'projects', name))]
     for (const root of roots) {
-      const p = path.join(root, '.evoresearch-data', 'reports', 'daily', `${reportId}.md`)
+      const p = path.join(workspaceDataDir(this.dataRoot, root), 'reports', 'daily', `${reportId}.md`)
       if (fs.existsSync(p)) return p
     }
     return null

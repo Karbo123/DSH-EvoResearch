@@ -150,7 +150,7 @@ describe('ExperimentLedgerService (A.6)', () => {
     const svc = new ExperimentLedgerService(dataRoot)
     svc.init(projectDir, 'demo')
     const sanitized = slugifyProjectName(path.basename(path.resolve(projectDir)))
-    const repo = path.join(dataRoot, '.evoresearch-data', 'ledgers', sanitized, 'demo.git')
+    const repo = path.join(dataRoot, 'plugins', 'ledgers', sanitized, 'demo.git')
     assert.equal(gitConfig(repo, 'core.excludesFile'), '/dev/null')
     // 额外验证：即使 .gitignore 忽略某文件，-f 仍能提交（通过 trial 不抛错验证）
     const expDir = path.join(projectDir, 'experiments', 'demo')

@@ -17,7 +17,7 @@ check('global 节点创建后可见', svc.get('p1').nodes.some((n) => n.id === g
 // 删除 global（模拟前端：get 后移除再 save）
 const g1r = svc.get('p1')
 svc.save('p1', { nodes: g1r.nodes.filter((n) => n.id !== g1.id), edges: g1r.edges })
-const globalFile = JSON.parse(fs.readFileSync(path.join(tmp, '.evoresearch-data', 'chat-graphs', '_global_.json'), 'utf8'))
+const globalFile = JSON.parse(fs.readFileSync(path.join(tmp, 'plugins', 'chat-graphs', '_global_.json'), 'utf8'))
 check('global 删除后全局文件移除', !globalFile.nodes.some((n) => n.id === g1.id))
 check('删除后 get 不再包含', !svc.get('p1').nodes.some((n) => n.id === g1.id))
 // 新项目也不可见

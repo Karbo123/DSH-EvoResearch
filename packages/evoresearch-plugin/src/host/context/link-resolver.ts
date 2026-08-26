@@ -8,6 +8,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { workspaceDataDir } from '../core/paths.js'
 
 export type ResolvedLinkKind =
   | 'url' | 'chat' | 'note' | 'paper' | 'experiment' | 'run' | 'log'
@@ -290,7 +291,7 @@ export class LinkResolver {
       return { locator: `chat:${value}`, kind: 'chat', label: labelOf(label, value), target: value, source, exists: true, searchHint: value }
     }
     const workspace = path.resolve(options.workspaceDir ?? this.dataRoot)
-    const noteRoot = path.join(workspace, '.evoresearch-data', 'memories', 'notes')
+    const noteRoot = path.join(workspaceDataDir(this.dataRoot, workspace), 'memories', 'notes')
     let candidate: string
     let kind: ResolvedLinkKind
     if (prefix === 'note') { candidate = path.join(noteRoot, value.endsWith('.md') ? value : `${value}.md`); kind = 'note' }

@@ -73,7 +73,7 @@ jobs:
             -f target_commitish="${GITHUB_SHA}" \
             -f name="${RELEASE_NAME}" \
             -F draft=false \
-            -F prerelease=true \
+            -F prerelease=false \
             -f body="$(cat <<'NOTES'
           Release notes 生成中——构建完成后由 publish-notes 步骤写入完整模板。
           NOTES

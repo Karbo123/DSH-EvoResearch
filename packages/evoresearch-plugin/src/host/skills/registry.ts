@@ -17,12 +17,12 @@
  * 声明，供 RA/EA/EMA（science/roles.ts）与 ExpertService 判断何时调用。
  *
  * 目录布局（每层一个根，技能 = <root>/<name>/SKILL.md [+AGENTS.md] [+source.json]）：
- * - builtin:  <dataRoot>/.evoresearch-data/skills/builtin/
+ * - builtin:  <dataRoot>/plugins/skills/builtin/
  * - global:   <dataRoot>/skills/            （与 autoskills 的 skillsDir 对齐，
  *             host/index.ts 即传 path.join(dataRoot, 'skills')）
  * - workspace: <workspaceDir>/skills/       （用户可见，随工作区迁移）
  * - project:  <workspaceDir>/.evoresearch-data/skills/
- * - custom:   <dataRoot>/.evoresearch-data/skills/custom/
+ * - custom:   <dataRoot>/plugins/skills/custom/
  *
  * 所有动态注册（watch/provider）返回 disposer；disposeAll() 在插件卸载时释放
  * 全部监听与 DSH provider 注册（PLAT-21 卸载无副作用）。
@@ -147,7 +147,7 @@ export class LayeredSkillRegistry {
     const ws = workspaceDir ?? this.options.workspaceDir ?? this.options.dataRoot
     switch (layer) {
       case 'builtin':
-        return path.join(this.options.dataRoot, '.evoresearch-data', 'skills', 'builtin')
+        return path.join(this.options.dataRoot, 'plugins', 'skills', 'builtin')
       case 'global':
         return path.join(this.options.dataRoot, 'skills')
       case 'workspace':
@@ -155,7 +155,7 @@ export class LayeredSkillRegistry {
       case 'project':
         return path.join(ws, '.evoresearch-data', 'skills')
       case 'custom':
-        return path.join(this.options.dataRoot, '.evoresearch-data', 'skills', 'custom')
+        return path.join(this.options.dataRoot, 'plugins', 'skills', 'custom')
     }
   }
 

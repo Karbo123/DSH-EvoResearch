@@ -79,7 +79,7 @@ describe('GRAPH-06 桥接：convertToNote × NotesService（t30 接口核对）'
     // 无 workspaceDir：NotesService 落到 dataRoot 布局
     const result = svc.convertToNote('demo', node.id, undefined, notes)
     assert.equal(result.ok, true)
-    const noteFile = path.join(dataRoot, '.evoresearch-data', 'memories', 'notes', result.fileName)
+    const noteFile = path.join(dataRoot, 'plugins', 'memories', 'notes', result.fileName)
     assert.equal(fs.existsSync(noteFile), true)
     const updated = svc.get('demo').nodes.find((n) => n.id === node.id)!
     const preview = svc.previewOf(updated, undefined)

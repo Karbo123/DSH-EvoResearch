@@ -110,7 +110,7 @@ function ensureCredentials() {
 }
 ensureCredentials()
 
-/** 启动 DSH web 服务（数据根 = DSH_HOME + EVORESEARCH_DATA_ROOT；程序文件在 cwd）。 */
+/** 启动 DSH web 服务（统一根 = EVORESEARCH_ROOT；兼容变量同步为同一路径）。 */
 function startDsh() {
   const dshBin = join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
   const child = spawn(process.execPath, [dshBin, '--profile', 'evoresearch', '--port', '0'], {
@@ -119,8 +119,9 @@ function startDsh() {
     windowsHide: true,
     env: {
       ...process.env,
+      EVORESEARCH_ROOT: dataHome,
       DSH_HOME: dataHome, // 会话/存储/凭据/profile 数据根
-      EVORESEARCH_DATA_ROOT: dataHome, // 插件数据根（projects/.evoresearch-data/.tools）
+      EVORESEARCH_DATA_ROOT: dataHome, // 兼容变量：与 EVORESEARCH_ROOT 相同
     },
   })
   child.stdout.on('data', (chunk) => parseOutput(String(chunk)))

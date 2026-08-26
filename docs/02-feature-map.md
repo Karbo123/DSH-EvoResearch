@@ -244,7 +244,7 @@
 | NF-02 状态栏上下文占用条（P0-4） | session-dock 复用 contextPressure 投影渲染三档配色占用条（≥80% 红 = autoCompactThreshold 对齐），tooltip 估算明细 | ✅ |
 | NF-03 后台任务注册表（P0-3） | jobs.ts `JobHubService`（register/complete/fail/markCancelled/cancelBySession/dispose，环形历史 cap 100）；host 四挂接点之一实验进程登记；Remote `jobsList`/`jobsCancel`/`jobsCountForSession` | ✅ |
 | NF-04 @会话引用数据层（P0-1 后端） | thread-preview.ts `extractPreview`/`resolveThreadPreview`（live → sessionQuery → 持久化 jsonl 三级降级）；composer 会话候选 UI 依赖此数据层 | ✅ 数据层 |
-| NF-05 AutoSkills 定时挖掘（P1-1） | autoskills.ts `mineAllWorkspaces`（观测聚类 + 笔记挖掘，mining 互斥）；host 内置调度任务（默认 `7 3 * * 1`，`evoresearch.autoskillsSchedule` 覆盖/off） | ✅ |
+| NF-05 AutoSkills 定时挖掘（P1-1） | autoskills.ts `mineAllWorkspaces`（观测聚类 + 笔记挖掘，mining 互斥）；host 内置调度任务（默认关闭，显式 `evoresearch.autoskillsSchedule` 后启用） | ✅ |
 | NF-06 记忆类型化关联边（P1-2） | store 迁移 v7 `observation_links` 表；`setObservationLink`/`listObservationLinks`；supersede 自动写 supersedes 边；link_observations 工具 `edge_type` 枚举；Remote `memoryObservationEdges`；Knowledge 卡片徽标按边类型着色（互补=青 / 矛盾=橙红 / 取代=灰删除线） | ✅ |
 | NF-07 ask_researcher 工具（P1-3） | tools/ask.ts 适配平台 ctx.userQuestions（超时降级文本提问，无人值守不卡死）；问题卡 UI 复用官方 pending question 帧 | ✅ |
 | NF-08 超限自动映射重试（P1-4） | context/overflow-watch.ts：turn/end 错误特征识别（9 条中英文）→ guard.overflowRetry 一次，冷却 + 同 turn 去重 + compaction 缺失降级告警 | ✅ |

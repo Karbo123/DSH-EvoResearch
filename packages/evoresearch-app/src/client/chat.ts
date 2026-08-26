@@ -419,53 +419,6 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
   rewindConfirming?: boolean
 }) {
   const displayText = trimPromptEdges(text)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(text)
-  if (editing) {
-    return jsxs('div', {
-      className: `evo-msg-row evo-msg-user${highlight ? ' evo-msg-jump' : ''}`,
-      'data-node-key': nodeKey,
-      children: [
-        jsx('div', { className: 'evo-msg-user-body' }),
-        jsxs('div', {
-          className: 'evo-msg-edit',
-          children: [
-            jsx('textarea', {
-              className: 'evo-msg-edit-textarea',
-              value: draft,
-              spellCheck: false,
-              autoFocus: true,
-              onInput: (e) => setDraft(e.currentTarget.value),
-              onKeyDown: (e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (seq !== undefined && draft.trim() !== '') onEdit?.(seq, draft) }
-                if (e.key === 'Escape') setEditing(false)
-              },
-            }),
-            jsxs('div', {
-              className: 'evo-msg-edit-acts',
-              children: [
-                jsx('span', { className: 'evo-msg-edit-hint', children: t('editHint') }),
-                jsx('span', { style: { flex: 1 } }),
-                jsx('button', {
-                  type: 'button',
-                  className: 'evo-btn evo-btn-danger',
-                  onClick: () => setEditing(false),
-                  children: t('cancel'),
-                }),
-                jsx('button', {
-                  type: 'button',
-                  className: 'evo-btn evo-btn-run',
-                  disabled: draft.trim() === '' || seq === undefined,
-                  onClick: () => { if (seq !== undefined && draft.trim() !== '') { setEditing(false); onEdit?.(seq, draft) } },
-                  children: t('editResend'),
-                }),
-              ],
-            }),
-          ],
-        }),
-      ],
-    })
-  }
   return jsxs('div', {
     className: `evo-msg-row evo-msg-user${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
@@ -491,7 +444,7 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
                 className: 'evo-msg-copy',
                 title: t('editMsg'),
                 'aria-label': t('editMsg'),
-                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); setEditing(true) },
+                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onEdit?.(seq, text) },
                 children: jsx(PenLine, {}),
               }),
               onRewind !== undefined && seq !== undefined && jsx('button', {
@@ -686,6 +639,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const listRef = useRef<HTMLDivElement | null>(null)
   const composerEditorHostRef = useRef<HTMLDivElement | null>(null)
   const composerEditorRef = useRef<Editor | null>(null)
+  const composerPlainTextRef = useRef<HTMLTextAreaElement | null>(null)
   const composerMarkdownRef = useRef(input)
   const submitRef = useRef<() => void>(() => {})
   const candidatesRef = useRef<Candidate[]>([])
@@ -747,6 +701,14 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
   // 光标移到文档末尾（ProseMirror 文本选择）。
   const moveCursorToEnd = () => {
+    if (markdownPlainText) {
+      const textarea = composerPlainTextRef.current
+      if (textarea !== null) {
+        textarea.focus()
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+      }
+      return
+    }
     composerEditorRef.current?.action((ctx) => {
       const view = ctx.get(editorViewCtx)
       const doc = view.state.doc
@@ -767,17 +729,18 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       )
     })
   }
-  const setComposerMarkdown = (value: string, cursorToEnd = false) => {
+  const setComposerMarkdown = (value: string, cursorToEnd = false, syncEditor = true) => {
     setInput(value)
     composerMarkdownRef.current = value
-    if (composerEditorRef.current !== null) replaceEditorMarkdown(value)
+    if (syncEditor && composerEditorRef.current !== null) replaceEditorMarkdown(value)
     if (cursorToEnd) requestAnimationFrame(() => moveCursorToEnd())
   }
   // 滚动容器 = 中间栏（消息区内容自适应、页面整体滚动；输入框 sticky 常驻底部）
   const scrollBox = () => document.querySelector<HTMLElement>('.evo-center')
 
   // ── 会话动作（§25.6）：Current / Search / Notify / Shortcuts / Compact / Clear view ──
-  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'wf-clear' | 'auto-approve'>(null)
+  const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'wf-clear' | 'auto-approve' | 'edit-resend'>(null)
+  const [pendingEdit, setPendingEdit] = useState<{ seq: number; text: string } | null>(null)
   const [clearView, setClearView] = useState(false)
   const [notifyOn, setNotifyOn] = useState(() => {
     try { return clientStateGet('evoresearch-notifications') === '1' } catch { return false }
@@ -906,7 +869,12 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   }
 
   // 切换会话时重置 Clear view 与跳转高亮
-  useEffect(() => { setClearView(false); setJumpKey(null) }, [sessionId])
+  useEffect(() => {
+    setClearView(false)
+    setJumpKey(null)
+    // 待编辑状态只属于当前会话，切换会话后不得把旧消息序号带到新会话。
+    setPendingEdit(null)
+  }, [sessionId])
 
   const toggleNotify = () => {
     if (notifyOn) {
@@ -942,21 +910,24 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     setActionDialog(null)
   }
 
-  // 用户消息编辑（§31.6 编辑图标）：回填输入框并聚焦（host 无已发消息修改 API）
-  const editUserMessage = (text: string) => {
+  // 用户消息编辑（§31.6 编辑图标）：只回填底部输入框，不在此处改动历史。
+  const editUserMessage = (seq: number, text: string) => {
+    if (opBusy) return
+    setPendingEdit({ seq, text })
     historyNavigationRef.current = false
     suppressCandidateTriggerRef.current = false
     historyIndexRef.current = -1
     historyDraftRef.current = null
     setComposerMarkdown(text, true)
     setTrigger(null)
+    setPendingImages([])
     requestAnimationFrame(() => moveCursorToEnd())
   }
 
   // ── §回溯/编辑重发：fork 截断子会话 + git 工作区恢复（index.ts 处理 promote/open）──
   const [opBusy, setOpBusy] = useState(false)
   const [rewindConfirm, setRewindConfirm] = useState<number | null>(null)
-  const runRewindOp = (url: string, body: Record<string, unknown>, resend?: string) => {
+  const runRewindOp = (url: string, body: Record<string, unknown>, resend?: string, onSuccess?: () => void) => {
     if (sessionId === null || opBusy) return
     setOpBusy(true)
     void fetch(url, {
@@ -965,6 +936,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       body: JSON.stringify(body),
     }).then((res) => res.json()).then((json) => {
       if (json.ok === true && typeof json.value?.childSessionId === 'string') {
+        onSuccess?.()
         if (json.value?.note !== undefined && json.value.note !== '') toast(json.value.note, 'info')
         window.dispatchEvent(new CustomEvent('evo-rewind', { detail: { childId: json.value.childSessionId, ...(resend !== undefined ? { resend } : {}) } }))
       } else {
@@ -974,7 +946,16 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     }).catch(() => { setOpBusy(false); toast(t('opFailed'), 'error') })
   }
   const editAndResend = (seq: number, text: string) => {
-    runRewindOp('/evoresearch/fs/usermsg-edit', { sessionId, seq }, text)
+    runRewindOp('/evoresearch/fs/usermsg-edit', { sessionId, seq }, text, () => {
+      setPendingEdit(null)
+      setPendingImages([])
+      setComposerMarkdown('')
+      setTrigger(null)
+      setHistoryIndex(-1)
+      historyNavigationRef.current = false
+      historyIndexRef.current = -1
+      historyDraftRef.current = null
+    })
   }
   const rewindAt = (seq: number) => {
     if (opBusy) return
@@ -1197,6 +1178,12 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
     if (!text || pendingApprovals.length > 0) return
     // 附件未就绪（仍在读取）时禁用发送
     if (pendingImages.some((img) => img.dataUrl === '')) return
+    if (opBusy) return
+    // 编辑态先确认；确认前不 fork、不删除历史，也不发送新消息。
+    if (pendingEdit !== null) {
+      setActionDialog('edit-resend')
+      return
+    }
     // 斜杠命令：单行且以 / 开头 → 直接执行（未知命令降级为普通聊天，§23.3）。
     // P2-4：带附件时也尝试执行——executor 会拒绝未声明 input.images 的命令，
     // 此时把附件还原为普通消息发送（原图不丢）。
@@ -1432,6 +1419,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
   const MARKDOWN_TOOLBAR_HEIGHT = 36
   const COMPOSER_BASE_MIN_HEIGHT = 112
   const [markdownToolbarOpen, setMarkdownToolbarOpen] = useState(false)
+  const [markdownPlainText, setMarkdownPlainText] = useState(false)
   const [headingValue, setHeadingValue] = useState('0')
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkDraft, setLinkDraft] = useState('')
@@ -1459,6 +1447,38 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
       const adjusted = height + (next ? MARKDOWN_TOOLBAR_HEIGHT : -MARKDOWN_TOOLBAR_HEIGHT)
       return Math.max(COMPOSER_BASE_MIN_HEIGHT + (next ? MARKDOWN_TOOLBAR_HEIGHT : 0), adjusted)
     })
+  }
+  // 「实时 Markdown」切换的是编辑模式；铅笔按钮只负责工具栏显隐。
+  const toggleMarkdownEditorMode = () => {
+    const nextPlainText = !markdownPlainText
+    if (nextPlainText) {
+      // 纯文本模式不显示依赖 Milkdown 选区的格式工具栏，并同步收回额外高度。
+      if (markdownToolbarOpen) {
+        setMarkdownToolbarOpen(false)
+        setComposerHeight((height) => height === null ? null : Math.max(COMPOSER_BASE_MIN_HEIGHT, height - MARKDOWN_TOOLBAR_HEIGHT))
+      }
+      setMarkdownPlainText(true)
+      requestAnimationFrame(() => composerPlainTextRef.current?.focus())
+      return
+    }
+    // 切回所见即所得前，先把纯文本编辑器中的最新 Markdown 重新解析到 Milkdown。
+    replaceEditorMarkdown(composerMarkdownRef.current)
+    setMarkdownPlainText(false)
+    requestAnimationFrame(() => {
+      focusEditor()
+      moveCursorToEnd()
+    })
+  }
+  const onPlainTextInput = (e: { currentTarget: HTMLTextAreaElement }) => {
+    const value = e.currentTarget.value
+    setComposerMarkdown(value, false, false)
+    inputRef.current = value
+    if (!historyNavigationRef.current) {
+      historyIndexRef.current = -1
+      historyDraftRef.current = null
+      setHistoryIndex(-1)
+    }
+    if (!suppressCandidateTriggerRef.current) setTrigger(detectTrigger(value, value.length))
   }
   const onComposerResizeStart = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void }) => {
     e.preventDefault()
@@ -1585,7 +1605,7 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                       nodeKey: node.key,
                       highlight: node.key === jumpKey,
                       seq: typeof node.data.seq === 'number' ? node.data.seq : node.anchorSeq,
-                      onEdit: editAndResend,
+                      onEdit: editUserMessage,
                       onRewind: rewindAt,
                       onBranch: onBranchFromMessage,
                       rewindConfirming: rewindConfirm === node.data.seq,
@@ -1882,11 +1902,27 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               }),
               jsxs('div', {
                 className: 'evo-composer-status',
-                'data-markdown-toolbar-open': markdownToolbarOpen || undefined,
+                'data-markdown-toolbar-open': markdownToolbarOpen && !markdownPlainText || undefined,
                 children: [
                   jsx('span', { className: 'evo-composer-dot', 'data-busy': running || undefined }),
                   jsx('span', { title: currentTitle === null ? t('noActiveConversationHint') : undefined, children: currentTitle === null ? t('noActiveConversation') : running ? t('running') : currentTitle }),
                   jsx(SessionStatusLine, { session }),
+                  pendingEdit !== null && jsxs('span', {
+                    className: 'evo-composer-editing',
+                    title: t('editPendingHint'),
+                    children: [
+                      jsx(PenLine, {}),
+                      jsx('span', { children: t('editingMessage') }),
+                      jsx('button', {
+                        type: 'button',
+                        className: 'evo-composer-editing-cancel',
+                        title: t('cancelEdit'),
+                        'aria-label': t('cancelEdit'),
+                        onClick: () => setPendingEdit(null),
+                        children: jsx(XIcon, {}),
+                      }),
+                    ],
+                  }),
                   // 当前工作路径（§25.4）：自适应宽度、中间省略、tooltip 完整路径
                   cwd !== null && jsx(CwdPath, { path: cwd }),
                   jsx('span', { style: cwd !== null ? { flex: '0 0 12px' } : { flex: 1 } }),
@@ -1902,20 +1938,22 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-markdown-state',
-                    'data-on': markdownToolbarOpen || undefined,
-                    title: markdownToolbarOpen ? t('hideMarkdownToolbar') : t('showMarkdownToolbar'),
-                    'aria-label': t('markdownWysiwyg'),
-                    'aria-pressed': markdownToolbarOpen || undefined,
-                    onClick: toggleMarkdownToolbar,
-                    children: t('markdownWysiwyg'),
+                    'data-on': markdownPlainText || undefined,
+                    title: markdownPlainText ? t('markdownSwitchToWysiwyg') : t('markdownSwitchToSource'),
+                    'aria-label': markdownPlainText ? t('markdownSwitchToWysiwyg') : t('markdownSwitchToSource'),
+                    'aria-pressed': markdownPlainText,
+                    onClick: toggleMarkdownEditorMode,
+                    children: markdownPlainText ? t('markdownSourceMode') : t('markdownWysiwyg'),
                   }),
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-markdown-toggle',
-                    'data-on': markdownToolbarOpen || undefined,
-                    title: markdownToolbarOpen ? t('hideMarkdownToolbar') : t('showMarkdownToolbar'),
+                    'data-on': !markdownPlainText && markdownToolbarOpen || undefined,
+                    title: markdownPlainText ? t('markdownToolbarWysiwygOnly') : markdownToolbarOpen ? t('hideMarkdownToolbar') : t('showMarkdownToolbar'),
                     'aria-label': markdownToolbarOpen ? t('hideMarkdownToolbar') : t('showMarkdownToolbar'),
-                    'aria-pressed': markdownToolbarOpen,
+                    'aria-pressed': !markdownPlainText && markdownToolbarOpen,
+                    'aria-disabled': markdownPlainText || undefined,
+                    disabled: markdownPlainText,
                     onClick: toggleMarkdownToolbar,
                     children: jsx(PenLine, {}),
                   }),
@@ -1923,7 +1961,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               }),
               jsx('div', {
                 className: 'evo-composer-editor',
-                'data-markdown-toolbar-open': markdownToolbarOpen || undefined,
+                'data-markdown-toolbar-open': markdownToolbarOpen && !markdownPlainText || undefined,
+                'data-markdown-plain': markdownPlainText || undefined,
                 role: 'textbox',
                 'aria-label': t('askAnything'),
                 'aria-expanded': candidates.length > 0 || undefined,
@@ -2062,9 +2101,33 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                         children: jsx(Code2, {}),
                       }),
                     ],
-                  }),
-                  jsx('div', { ref: composerEditorHostRef, className: 'evo-composer-editor-host evo-milkdown' }),
-                  input === '' && jsx('div', {
+                      }),
+                      markdownPlainText && jsx('textarea', {
+                        ref: composerPlainTextRef,
+                        className: 'evo-composer-source',
+                        value: input,
+                        placeholder: t('askAnything'),
+                        spellCheck: true,
+                        'aria-label': t('askAnything'),
+                        onInput: onPlainTextInput,
+                        onKeyDown: (e: { key: string; ctrlKey: boolean; metaKey: boolean; preventDefault: () => void }) => {
+                          const currentCandidates = candidatesRef.current
+                          if (currentCandidates.length > 0) {
+                            if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex((index) => (index + 1) % currentCandidates.length); return }
+                            if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex((index) => (index - 1 + currentCandidates.length) % currentCandidates.length); return }
+                            if (e.key === 'Tab') { e.preventDefault(); applyCandidateRef.current(currentCandidates[activeIndexRef.current] ?? currentCandidates[0]!); return }
+                            if (e.key === 'Escape') { e.preventDefault(); setTrigger(null); return }
+                          }
+                          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                            e.preventDefault()
+                            submitRef.current()
+                            return
+                          }
+                          if (e.key === 'Escape' && runningRef.current) { e.preventDefault(); stopTurn() }
+                        },
+                      }),
+                      jsx('div', { ref: composerEditorHostRef, className: 'evo-composer-editor-host evo-milkdown' }),
+                  !markdownPlainText && input === '' && jsx('div', {
                     className: 'evo-composer-placeholder',
                     'aria-hidden': true,
                     children: t('askAnything'),
@@ -2083,6 +2146,9 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
               jsxs('div', {
                 className: 'evo-composer-tools',
                 children: [
+                  jsx('div', {
+                    className: 'evo-composer-tool-start',
+                    children: [
                   jsx('button', {
                     type: 'button',
                     className: 'evo-composer-tool',
@@ -2178,13 +2244,19 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     onClick: () => setActionDialog('shortcuts'),
                     children: jsx(Keyboard, {}),
                   }),
-                  jsx('span', { className: 'evo-composer-spacer' }),
+                    ],
+                  }),
+                  jsx('div', {
+                    className: 'evo-composer-tool-end',
+                    children: [
                   // 会话权限（跟随当前会话，非全局）：输入框内切换权限档位
                   jsx(Dropdown, {
                     value: permPreset ?? '',
                     className: 'evo-composer-perm',
                     icon: ShieldCheckIcon,
                     placeholder: t('permission'),
+                    title: t('permission'),
+                    ariaLabel: t('permission'),
                     onChange: switchPerm,
                     options: [
                       { value: 'read-only', label: t('readOnly') },
@@ -2202,6 +2274,8 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
                     'aria-label': `${t('send')}（Ctrl+Enter）`,
                     onClick: submit,
                     children: jsx(Send, {}),
+                  }),
+                    ],
                   }),
                 ],
               }),
@@ -2232,6 +2306,18 @@ export function ChatArea({ nodes, partial, running, error, currentTitle, session
         onOpenThread,
       }),
       actionDialog === 'shortcuts' && jsx(ShortcutsDialog, { onClose: () => setActionDialog(null) }),
+      actionDialog === 'edit-resend' && pendingEdit !== null && jsx(ConfirmDialog, {
+        title: t('editResendConfirmTitle'),
+        message: t('editResendConfirmMsg'),
+        confirmLabel: t('editResendConfirm'),
+        danger: true,
+        onConfirm: () => {
+          const edit = pendingEdit
+          const resend = trimPromptEdges(composerMarkdownRef.current || input)
+          if (edit !== null && resend !== '') editAndResend(edit.seq, resend)
+        },
+        onClose: () => setActionDialog(null),
+      }),
       actionDialog === 'auto-approve' && jsx(ConfirmDialog, {
         title: t('autoApproveConfirmTitle'),
         message: t('autoApproveConfirmMsg'),

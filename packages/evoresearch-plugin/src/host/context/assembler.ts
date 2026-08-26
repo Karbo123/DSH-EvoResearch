@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { projectNameFromWorkspace } from '../core/paths.js'
+import { projectNameFromWorkspace, workspaceDataDir } from '../core/paths.js'
 import { isRuntimeEdge, isMemoryNode } from '../chat-graph.js'
 import type { ChatGraph, GraphNode } from '../chat-graph.js'
 import { sessionHistoryText } from '../chat-graph.js'
@@ -310,11 +310,11 @@ export class ContextAssembler {
 
   // ── CTX-10 效果信号 ───────────────────────────────────────────────────────
 
-  /** 追加一条效果信号（持久化到 <dataRoot>/.evoresearch-data/context/effects.jsonl）。 */
+  /** 追加一条效果信号（持久化到 <dataRoot>/plugins/context/effects.jsonl）。 */
   recordEffect(signal: EffectSignalRecord): void {
     this.effects.push(signal)
     try {
-      const file = path.join(this.dataRoot, '.evoresearch-data', 'context', 'effects.jsonl')
+      const file = path.join(this.dataRoot, 'plugins', 'context', 'effects.jsonl')
       fs.mkdirSync(path.dirname(file), { recursive: true })
       fs.appendFileSync(file, `${JSON.stringify(signal)}\n`, 'utf8')
     } catch {
@@ -524,7 +524,7 @@ export class ContextAssembler {
         ? absoluteRef
           ? memoryNode.ref.path
           : memoryNode.ref.kind === 'note'
-          ? path.resolve(memoryBase, '.evoresearch-data', 'memories', 'notes', memoryNode.ref.path)
+          ? path.resolve(workspaceDataDir(this.dataRoot, memoryBase), 'memories', 'notes', memoryNode.ref.path)
           : path.resolve(memoryBase, memoryNode.ref.path)
         : undefined
       const sidecar = sourceFile !== undefined ? sidecarLinksFor(sourceFile) : []

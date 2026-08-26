@@ -4,7 +4,7 @@
  * 两类环境并存：
  * - 项目私有 legacy 环境：<projectDir>/.venv（uv 默认目标，随项目迁移，git 忽略；
  *   ENV-06：保留为兼容环境，未经用户确认不删除——删除只经显式 remove()）。
- * - 共享环境池（§7.5）：<dataRoot>/.evoresearch-data/envs/<指纹>/——
+ * - 共享环境池（§7.5）：<dataRoot>/plugins/envs/<指纹>/——
  *   指纹 = 操作系统(platform+arch) + Python 版本 + 依赖文件内容哈希
  *   （uv.lock / requirements.txt / pyproject.toml，缺文件以空串参与）。
  *   相同依赖的多个 worktree 复用同一个池环境；依赖变化 → 新指纹 → 新环境，
@@ -66,8 +66,8 @@ const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 
 /** 参与指纹的依赖文件（按此顺序参与哈希；缺文件以空串计）。 */
 const DEP_FILES: readonly string[] = ['uv.lock', 'requirements.txt', 'pyproject.toml']
-/** 池根相对 dataRoot：.evoresearch-data/envs/。 */
-const POOL_REL = path.join('.evoresearch-data', 'envs')
+/** 池根相对 dataRoot：plugins/envs/。 */
+const POOL_REL = path.join('plugins', 'envs')
 /** 指纹格式：16 位小写 hex（防路径注入）。 */
 const POOL_FP_PATTERN = /^[0-9a-f]{16}$/
 
@@ -391,7 +391,7 @@ export class ProjectEnvService {
     return runAsync(uv, args, timeoutMs)
   }
 
-  /** 池根目录（<dataRoot>/.evoresearch-data/envs）。 */
+  /** 池根目录（<dataRoot>/plugins/envs）。 */
   poolRoot(): string {
     return path.join(this.dataRoot, POOL_REL)
   }

@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DATA_ROOT = process.argv[2]
-const PROFILE_DIR = join(DATA_ROOT, '.evoresearch-data', 'memories', 'profile')
+const PROFILE_DIR = join(DATA_ROOT, 'plugins', 'memories', 'profile')
 
 const { MemoryRuntime } = await import(pathToFileURL(join(ROOT, 'packages', 'evoresearch-plugin', 'lib', 'host', 'memory', 'index.js')).href)
 

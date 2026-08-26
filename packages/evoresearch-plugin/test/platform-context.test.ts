@@ -149,7 +149,7 @@ describe('PLAT-03 压缩探测接入与降级', () => {
     // 科研资料：先写一条 Ideation 记忆
     const memory = new ScienceMemory(root)
     const entry = memory.add('ideation', { title: '关键 Idea', body: '对比学习在序列数据上。' }, root)
-    const memoryFile = path.join(root, '.evoresearch-data', 'memories', 'science', 'ideation', entry.fileName)
+    const memoryFile = path.join(root, 'plugins', 'memories', 'science', 'ideation', entry.fileName)
     const before = fs.readFileSync(memoryFile, 'utf8')
     // 降级运行压缩
     const runtime = new ContextRuntime({ dataRoot: root, adapters: fakeAdapters({ compaction: 'missing' }) })
@@ -264,7 +264,7 @@ describe('PLAT-05 压缩事件订阅折叠进 compactions.jsonl', () => {
     assert.equal(folded.summaryText, '折叠摘要')
     assert.deepEqual(folded.messageRange?.shadowedSeqs, [2, 3, 4, 5])
     // 持久化到 compactions.jsonl
-    const lines = fs.readFileSync(path.join(root, '.evoresearch-data', 'context', 'compactions.jsonl'), 'utf8')
+    const lines = fs.readFileSync(path.join(root, 'plugins', 'context', 'compactions.jsonl'), 'utf8')
       .split('\n').filter((l) => l.trim() !== '')
     assert.ok(lines.some((line) => line.includes('dsh-fold-1')))
   })

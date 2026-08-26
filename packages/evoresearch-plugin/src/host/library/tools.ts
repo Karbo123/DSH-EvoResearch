@@ -19,6 +19,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type { LibraryIndexer, LibrarySearch } from './index.js'
 import type { SearchHit } from './types.js'
 import { projectDir, projectNameFromWorkspace } from '../core/paths.js'
+import type { AcademicSearchResult } from '../academic-search.js'
 
 /** 工具上下文依赖门面（组装层注入；测试可整体替换）。 */
 export interface LibraryToolsDeps {
@@ -37,6 +38,8 @@ export interface LibraryToolsDeps {
   invokeWebSearch(query: string): Promise<string>
   /** 测试注入 fetch；缺省用全局 fetch。 */
   fetchImpl?: typeof fetch
+  /** 论文专用检索；优先使用 OpenAlex，Crossref 作为无 Key 兜底。 */
+  invokeAcademicSearch?(query: string, limit: number): Promise<AcademicSearchResult>
 }
 
 /** ctx.tools 最小结构（避免直接依赖运行时类型）。 */
@@ -170,7 +173,8 @@ export function registerLibraryTools(ctx: Context, deps: LibraryToolsDeps): () =
   register({
     name: 'search_literature',
     description:
-      '文献综合检索：本地文献库 + （平台具备联网检索时）并发网络查询，合并去重返回题录级候选。' +
+      '文献综合检索：本地文献库 + （启用联网时）优先使用 OpenAlex/Crossref 的学术题录检索，' +
+      '避免通用网页搜索把词典和 SEO 页面混入论文结果；返回题录级候选。' +
       '用户说『把第 N 篇下进来』后用 import_literature 落库。',
     parameters: paramsSchema(
       {
@@ -227,10 +231,26 @@ export function registerLibraryTools(ctx: Context, deps: LibraryToolsDeps): () =
 
       // 网络部分：礼貌并发=1（顺序逐条）；单条失败降级为 web_error，绝不抛错。
       const webResults: Array<
-        { kind: 'web'; query: string; excerpt: string } | { kind: 'web_error'; query: string; error: string }
+        { kind: 'academic'; query: string; provider: string; results: unknown[] } |
+        { kind: 'web'; query: string; excerpt: string } |
+        { kind: 'web_error' | 'academic_error'; query: string; error: string }
       > = []
       if (!deps.hasWebSearch()) {
         notes.push('未配置网络检索（平台 web_search 工具不可用），仅返回本地文献库结果')
+      } else if (deps.invokeAcademicSearch !== undefined) {
+        for (const q of queries) {
+          if (localHits.length + webResults.length >= LITERATURE_RESULT_CAP) break
+          try {
+            const result = await deps.invokeAcademicSearch(q, perQuery)
+            webResults.push({ kind: 'academic', query: q, provider: result.provider, results: result.sources })
+          } catch (error) {
+            webResults.push({
+              kind: 'academic_error',
+              query: q,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
       } else {
         for (const q of queries) {
           if (localHits.length + webResults.length >= LITERATURE_RESULT_CAP) break

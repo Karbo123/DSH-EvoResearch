@@ -22,6 +22,9 @@ export const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
 /** 每个项目的数据目录名。 */
 export const PROJECT_DATA_DIR_NAME = '.evoresearch-data'
 
+/** 部署根目录下的 EvoResearch 插件全局状态目录名。 */
+export const PLUGIN_DATA_DIR_NAME = 'plugins'
+
 /** 项目根目录名。 */
 export const PROJECTS_DIR_NAME = 'projects'
 
@@ -53,6 +56,67 @@ export function slugifyProjectName(input: string, maxLength = 20): string {
 /** 项目根目录（dataRoot/projects）。 */
 export function projectsRoot(dataRoot: string): string {
   return path.join(dataRoot, PROJECTS_DIR_NAME)
+}
+
+/** 部署根目录下的插件全局状态目录。 */
+export function pluginDataDir(dataRoot: string): string {
+  return path.join(path.resolve(dataRoot), PLUGIN_DATA_DIR_NAME)
+}
+
+/**
+ * 把旧版部署根 .evoresearch-data 迁到 plugins/。项目目录内的
+ * projects/<name>/.evoresearch-data 不在此范围内，仍保持项目私有布局。
+ * 迁移只移动/合并，不删除数据；冲突时保留新目录内容并记录警告。
+ */
+export function migrateLegacyPluginData(dataRoot: string): { moved: boolean; conflicts: string[] } {
+  const root = path.resolve(dataRoot)
+  const legacy = path.join(root, PROJECT_DATA_DIR_NAME)
+  const target = pluginDataDir(root)
+  if (!fs.existsSync(legacy)) return { moved: false, conflicts: [] }
+  if (!fs.existsSync(target)) {
+    try {
+      fs.renameSync(legacy, target)
+      return { moved: true, conflicts: [] }
+    } catch {
+      // 跨设备/权限异常时退化为安全合并，旧目录继续保留。
+    }
+  }
+
+  const conflicts: string[] = []
+  const merge = (source: string, destination: string): void => {
+    const sourceStat = fs.lstatSync(source)
+    if (!fs.existsSync(destination)) {
+      fs.cpSync(source, destination, { recursive: true, force: false })
+      return
+    }
+    const destinationStat = fs.lstatSync(destination)
+    if (sourceStat.isDirectory() && destinationStat.isDirectory()) {
+      for (const entry of fs.readdirSync(source)) merge(path.join(source, entry), path.join(destination, entry))
+      return
+    }
+    if (sourceStat.isFile() && destinationStat.isFile()) {
+      const same = sourceStat.size === destinationStat.size
+        && fs.readFileSync(source).equals(fs.readFileSync(destination))
+      if (!same) conflicts.push(destination)
+      return
+    }
+    conflicts.push(destination)
+  }
+  fs.mkdirSync(target, { recursive: true })
+  for (const entry of fs.readdirSync(legacy)) merge(path.join(legacy, entry), path.join(target, entry))
+  return { moved: false, conflicts }
+}
+
+/**
+ * 根据工作区选择数据目录：部署根使用 plugins/，项目工作区仍使用项目私有
+ * .evoresearch-data/，不改变项目级隔离布局。
+ */
+export function workspaceDataDir(dataRoot: string, workspaceDir?: string): string {
+  const root = path.resolve(dataRoot)
+  const workspace = workspaceDir === undefined ? root : path.resolve(workspaceDir)
+  return normPath(workspace) === normPath(root)
+    ? pluginDataDir(root)
+    : path.join(workspace, PROJECT_DATA_DIR_NAME)
 }
 
 /** 单个项目目录（dataRoot/projects/<name>）。 */

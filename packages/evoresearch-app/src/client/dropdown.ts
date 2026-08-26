@@ -10,13 +10,15 @@ import { t } from './i18n'
 
 export interface DropdownOption { value: string; label: string }
 
-export function Dropdown({ value, options, onChange, placeholder, className, icon }: {
+export function Dropdown({ value, options, onChange, placeholder, className, icon, title, ariaLabel }: {
   value: string
   options: DropdownOption[]
   onChange: (v: string) => void
   placeholder?: string
   className?: string
   icon?: ComponentType
+  title?: string
+  ariaLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top: number; width: number; upward: boolean } | null>(null)
@@ -81,6 +83,8 @@ export function Dropdown({ value, options, onChange, placeholder, className, ico
         ref: btnRef,
         type: 'button',
         className: `evo-dropdown-btn${open ? ' evo-dropdown-open' : ''}`,
+        title,
+        'aria-label': ariaLabel,
         'aria-expanded': open || undefined,
         'aria-haspopup': 'listbox',
         onClick: toggle,

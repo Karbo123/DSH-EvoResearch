@@ -1,10 +1,13 @@
 # EvoResearch 示例 profile 的本地补丁层。
 # 与 dsh 部署约定一致：bundles 之后应用本文件，最后是 --patch overlays。
-# 默认无需修改；如需覆盖 evoresearch 插件配置，可在此按 id 重写：
-#
-- id: evoresearch-host
+# 数据根不在 profile 中写死：由启动时的 EVORESEARCH_ROOT 决定。
+# 启动器会把 DSH_HOME 与 EVORESEARCH_DATA_ROOT 强制设为同一根目录，
+# 这样开发 Web、正式 Web 与桌面版都能保持一处数据根且不会误写彼此。
+
+# 联网搜索由 EvoResearch 的稳定聚合 Provider 接管；具体后端由设置面板选择。
+- id: web
   config:
-    dataRoot: D:\DSH-Research\.tmp-dev\evoresearch-dev-data
+    searchProvider: evoresearch-configured
 
 # §21.3/§10.6：官方 dsh-base 默认不含 ask_user 工具行——补挂 tool-ask-user，
 # 使主 Agent 获得 ask_user_question 工具（模型主动提问 → 工作台问题卡片作答，

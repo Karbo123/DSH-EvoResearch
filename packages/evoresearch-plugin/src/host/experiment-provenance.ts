@@ -69,7 +69,7 @@ export function captureProvenance(opts: {
   let model: { provider: string; model: string } | undefined
   let config: Record<string, unknown> = {}
   try {
-    const settingsFile = path.join(opts.dataRoot, '.evoresearch-data', 'model-settings.json')
+    const settingsFile = path.join(opts.dataRoot, 'plugins', 'model-settings.json')
     const raw = JSON.parse(fs.readFileSync(settingsFile, 'utf8')) as Record<string, unknown>
     const code = raw.code as Record<string, { provider?: string; model?: string; reasoningEffort?: string }> | undefined
     if (code !== undefined) {
@@ -81,7 +81,7 @@ export function captureProvenance(opts: {
     let memoryTokenBudget = (raw as { memoryTokenBudget?: unknown }).memoryTokenBudget
     let auxiliaryModel = (raw as { auxiliaryModel?: unknown }).auxiliaryModel
     try {
-      const evoresearchSettings = path.join(opts.dataRoot, '.evoresearch-data', 'settings.yaml')
+      const evoresearchSettings = path.join(opts.dataRoot, 'plugins', 'settings.yaml')
       if (memoryTokenBudget === undefined || auxiliaryModel === undefined) {
         const yaml = fs.readFileSync(evoresearchSettings, 'utf8')
         const m = yaml.match(/memoryTokenBudget:\s*(\d+)/)

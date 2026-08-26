@@ -17,7 +17,7 @@ git push origin main
 
 ## 固定版本号与资产覆盖
 
-- Release 名称恒为 **EvoResearch v0.1.0-rc.1**，Tag 恒为 **v0.1.0-rc.1**（prerelease 标记）。
+- Release 名称恒为 **EvoResearch v0.1.0-rc.1**，Tag 恒为 **v0.1.0-rc.1**；虽然版本号保留 `rc.1`，Release 本身按正式发布显示在仓库首页。
 - 每次运行：先删除远端旧 Tag 与旧 Release → 用当前 commit 重建 Tag 与 Release →
   tauri-action / `gh release upload --clobber` 上传同名资产（覆盖更新）。
 - 因此该 Release 始终指向最近一次成功构建的产物。

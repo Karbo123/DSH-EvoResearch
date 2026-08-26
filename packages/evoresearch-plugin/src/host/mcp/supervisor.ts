@@ -360,7 +360,7 @@ export class McpSupervisor {
     this.delay = options.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.configFile = options.dataRoot === undefined
       ? undefined
-      : path.join(options.dataRoot, '.evoresearch-data', 'mcp-servers.json')
+      : path.join(options.dataRoot, 'plugins', 'mcp-servers.json')
     this.loadPersisted()
   }
 

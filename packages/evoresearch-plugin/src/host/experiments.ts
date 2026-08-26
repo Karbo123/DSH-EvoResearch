@@ -40,6 +40,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { workspaceDataDir } from './core/paths.js'
 import { randomUUID } from 'node:crypto'
 import type { ExperimentBranch, ExperimentCheckpoint, ExperimentManifest, ExperimentPhase, ExperimentSummary } from '../shared/types.js'
 
@@ -67,7 +68,7 @@ export class ExperimentService {
   }
 
   private rootOf(workspaceDir: string): string {
-    return path.join(this.assertWorkspace(workspaceDir), '.evoresearch-data', 'experiments')
+    return path.join(workspaceDataDir(this.dataRoot, this.assertWorkspace(workspaceDir)), 'experiments')
   }
 
   private fileOf(workspaceDir: string, id: string): string {

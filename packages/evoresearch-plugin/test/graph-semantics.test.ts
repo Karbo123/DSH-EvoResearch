@@ -229,8 +229,8 @@ describe('ChatGraphService：两种连线语义的基础保证（GRAPH-01）', (
     }
     assert.equal(svc.save('alpha', graph).ok, true)
     // 项目文件里只存项目节点；global 节点在全局文件
-    const projectFile = path.join(dataRoot, '.evoresearch-data', 'chat-graphs', 'alpha.json')
-    const globalFile = path.join(dataRoot, '.evoresearch-data', 'chat-graphs', '_global_.json')
+    const projectFile = path.join(dataRoot, 'plugins', 'chat-graphs', 'alpha.json')
+    const globalFile = path.join(dataRoot, 'plugins', 'chat-graphs', '_global_.json')
     const stored = JSON.parse(fs.readFileSync(projectFile, 'utf8')) as ChatGraph
     const storedGlobal = JSON.parse(fs.readFileSync(globalFile, 'utf8')) as ChatGraph
     assert.deepEqual(stored.nodes.map((n) => n.id), ['p1'])
@@ -430,7 +430,7 @@ describe('graphInherit：context 一次性 fork 的原子性（GRAPH-03）', () 
     assert.equal(graph.edges.filter((e) => e.to === fx.target.id && e.toPort === 'memory').length, 1)
 
     // ④ 单次落盘：磁盘文件与内存一致，无重复 context 边
-    const file = path.join(fx.dataRoot, '.evoresearch-data', 'chat-graphs', 'demo.json')
+    const file = path.join(fx.dataRoot, 'plugins', 'chat-graphs', 'demo.json')
     const stored = JSON.parse(fs.readFileSync(file, 'utf8')) as ChatGraph
     assert.equal(stored.nodes.find((n) => n.id === fx.target.id)?.sessionId, result.sessionId)
     assert.equal(stored.edges.filter((e) => e.to === fx.target.id && e.toPort === 'context').length, 1)
@@ -485,7 +485,7 @@ describe('GRAPH-04/08：memory node 引用真实资料 + previewOf 实时预览'
     const loaded = svc.get('demo').nodes.find((n) => n.id === node.id)
     assert.deepEqual(loaded?.ref, { kind: 'file', path: 'logs/run-1.log' })
     // 磁盘文件也包含 ref
-    const file = path.join(dataRoot, '.evoresearch-data', 'chat-graphs', 'demo.json')
+    const file = path.join(dataRoot, 'plugins', 'chat-graphs', 'demo.json')
     const stored = JSON.parse(fs.readFileSync(file, 'utf8')) as ChatGraph
     assert.deepEqual(stored.nodes.find((n) => n.id === node.id)?.ref, { kind: 'file', path: 'logs/run-1.log' })
   })

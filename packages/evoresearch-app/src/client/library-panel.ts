@@ -555,7 +555,14 @@ function PapersTab({ project, onError }: { project: string; onError: (message: s
   const [loading, setLoading] = useState(false)
   // P2-2 网络检索入口
   const [webQuery, setWebQuery] = useState('')
-  const [webHits, setWebHits] = useState<Array<{ kind: string; query: string; excerpt?: string; error?: string }> | null>(null)
+  const [webHits, setWebHits] = useState<Array<{
+    kind: string
+    query: string
+    provider?: string
+    excerpt?: string
+    error?: string
+    sources?: Array<{ url: string; title: string; snippet?: string; publishedAt?: string; doi?: string; venue?: string; year?: number }>
+  }> | null>(null)
   const [webDegraded, setWebDegraded] = useState(false)
   const [webLoading, setWebLoading] = useState(false)
 
@@ -613,7 +620,14 @@ function PapersTab({ project, onError }: { project: string; onError: (message: s
     setWebLoading(true)
     setWebHits(null)
     setWebDegraded(false)
-    void api<{ results: Array<{ kind: string; query: string; excerpt?: string; error?: string }>; degraded: boolean }>('library-literature-web', { queries })
+    void api<{ results: Array<{
+      kind: string
+      query: string
+      provider?: string
+      excerpt?: string
+      error?: string
+      sources?: Array<{ url: string; title: string; snippet?: string; publishedAt?: string; doi?: string; venue?: string; year?: number }>
+    }>; degraded: boolean }>('library-literature-web', { queries })
       .then((r) => { setWebLoading(false); setWebHits(r.results); setWebDegraded(r.degraded) })
       .catch((e: any) => { setWebLoading(false); onError(String(e?.message ?? e)) })
   }
@@ -712,9 +726,17 @@ function PapersTab({ project, onError }: { project: string; onError: (message: s
               children: [
                 jsxs('div', { className: 'evo-note-hit-title', children: [
                   jsx('span', { children: hit.query }),
-                  jsx('span', { className: hit.kind === 'web' ? 'evo-lib-badge ok' : 'evo-lib-badge miss', children: hit.kind === 'web' ? 'web' : 'error' }),
+                  jsx('span', { className: hit.kind === 'academic' || hit.kind === 'web' ? 'evo-lib-badge ok' : 'evo-lib-badge miss', children: hit.kind === 'academic' ? t('libWebAcademic') : hit.kind === 'web' ? 'web' : 'error' }),
                 ] }),
-                jsx('div', { className: 'evo-note-hit-meta', children: hit.kind === 'web' ? (hit.excerpt ?? '') : (hit.error ?? '') }),
+                hit.kind === 'academic'
+                  ? jsxs(Fragment, { children: [
+                      jsx('div', { className: 'evo-note-hit-meta', children: `${t('libWebAcademicProvider')}: ${hit.provider ?? 'OpenAlex'}` }),
+                      (hit.sources ?? []).slice(0, 8).map((source) => jsxs('div', { className: 'evo-note-hit-meta', children: [
+                        jsx('a', { href: source.url, target: '_blank', rel: 'noreferrer', children: source.title }),
+                        source.snippet !== undefined && jsx('div', { children: source.snippet }),
+                      ] }, source.doi ?? source.url)),
+                    ] })
+                  : jsx('div', { className: 'evo-note-hit-meta', children: hit.kind === 'web' ? (hit.excerpt ?? '') : (hit.error ?? '') }),
               ],
             }, `${hit.query}-${i}`)),
           }),

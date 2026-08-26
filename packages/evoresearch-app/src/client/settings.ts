@@ -8,7 +8,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Cpu, Info, Puzzle, Code2, Eye, Image as ImageIcon, Trash2, Server, Plus, X, Zap } from 'lucide-react'
+import { ArrowLeft, Cpu, HardDrive, Info, Puzzle, Code2, Eye, Image as ImageIcon, Trash2, Server, Plus, X, Zap, FolderOpen, ChevronRight, ArrowUp, Home, Copy, Search } from 'lucide-react'
 import { t } from './i18n'
 import { clientStateClear } from './client-state'
 import { toast } from './toast'
@@ -19,7 +19,7 @@ export interface SettingsDialogProps {
   onClose: () => void
 }
 
-interface PluginRow { id: string; state: string }
+interface PluginRow { id: string; state: string; version?: string }
 
 /** 构建指纹（§44.2）：读取 dist/build-stamp.json（前端 hash + 构建时间）。 */
 function BuildStamp() {
@@ -64,13 +64,14 @@ function PluginListSection() {
     }).then((res) => res.json()).then((json) => {
       if (!cancelled && json.ok && Array.isArray(json.value?.plugins)) {
         // 同一插件可能出现多个 fiber 条目（如 dev/hmr），按 id 去重，优先保留运行中状态。
-        const seen = new Map<string, { id: string; state: string }>()
-        for (const p of json.value.plugins as Array<{ id: string; state?: string }>) {
+        const seen = new Map<string, { id: string; state: string; version?: string }>()
+        for (const p of json.value.plugins as Array<{ id: string; state?: string; version?: string | null }>) {
           const id = String(p.id ?? '')
           const state = String(p.state ?? '')
+          const version = typeof p.version === 'string' && p.version !== '' ? p.version : undefined
           const prev = seen.get(id)
-          if (prev === undefined || (prev.state === 'loading' && state !== 'loading')) {
-            seen.set(id, { id, state })
+          if (prev === undefined || (prev.state === 'loading' && state !== 'loading') || (prev.version === undefined && version !== undefined)) {
+            seen.set(id, { id, state, ...(version !== undefined ? { version } : {}) })
           }
         }
         const rows = [...seen.values()].sort((a, b) => a.id.localeCompare(b.id))
@@ -93,7 +94,12 @@ function PluginListSection() {
           : jsx('div', { className: 'evo-plugin-list', children: plugins.map((p) => jsxs('div', {
               className: 'evo-plugin-row',
               children: [
-                jsx('span', { children: p.id }),
+                jsxs('span', { className: 'evo-plugin-main', children: [
+                  jsx('span', { className: 'evo-plugin-id', title: p.id, children: p.id }),
+                  jsx('span', { className: 'evo-plugin-version', children: p.id === 'cordis:include'
+                    ? t('pluginVersionBuiltin')
+                    : p.version !== undefined ? `v${p.version}` : t('pluginVersionUnknown') }),
+                ] }),
                 jsx('span', {
                   className: 'evo-plugin-state',
                   'data-active': p.state === '2' || undefined,
@@ -123,6 +129,500 @@ function AboutSection() {
           jsx(BuildStamp, {}),
         ],
       }),
+    ],
+  })
+}
+
+export interface DataPathsSnapshot {
+  evoresearchRoot: string
+  /** 服务端兼容性事实字段；UI 不再把它们作为独立配置项。 */
+  dshHome: string
+  evoResearchDataRoot: string
+  pluginStateRoot: string
+  configPath: string
+  restartManaged: boolean
+  pending: boolean
+}
+
+interface DataDirectoryRow {
+  name: string
+  path: string
+  hidden: boolean
+}
+
+interface DataDirectoryListing {
+  path: string
+  home: string
+  crumbs: DataDirectoryRow[]
+  entries: DataDirectoryRow[]
+  roots: DataDirectoryRow[]
+}
+
+type DataPathField = 'evoresearchRoot'
+
+/**
+ * 兼容旧版 data-paths-get 响应：旧服务可能没有 evoresearchRoot，
+ * 但 dshHome / evoResearchDataRoot 已经是同一个实际数据根。
+ */
+export function normalizeDataPathsSnapshot(value: Record<string, unknown>): DataPathsSnapshot {
+  const candidates = [value.evoresearchRoot, value.evoResearchDataRoot, value.dshHome]
+  const root = candidates.find((item): item is string => typeof item === 'string' && item.trim() !== '')
+  if (root === undefined) throw new Error(t('dataPathsLoadError'))
+  return { ...value, evoresearchRoot: root } as DataPathsSnapshot
+}
+
+function DataDirectoryPicker({ field, initialPath, onSelect, onClose }: {
+  field: DataPathField
+  initialPath: string
+  onSelect: (field: DataPathField, value: string) => void
+  onClose: () => void
+}) {
+  const [listing, setListing] = useState<DataDirectoryListing | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = (nextPath?: string) => {
+    setBusy(true)
+    setError(null)
+    void fetch('/evoresearch/fs/data-paths-browse', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(nextPath === undefined ? {} : { path: nextPath }),
+    }).then((res) => res.json()).then((json) => {
+      const value = json.value as DataDirectoryListing | { error?: string } | undefined
+      if (json.ok !== true || value === undefined || 'error' in value) throw new Error(('error' in (value ?? {}) ? value.error : undefined) ?? t('folderPickerLoadError'))
+      setListing(value)
+    }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : t('folderPickerLoadError')))
+      .finally(() => setBusy(false))
+  }
+
+  useEffect(() => { load(initialPath) }, [initialPath])
+
+  return jsxs('div', {
+    className: 'evo-modal-mask evo-data-path-picker-mask',
+    role: 'presentation',
+    children: [
+      jsxs('div', {
+        className: 'evo-modal evo-modal-sm evo-data-path-picker',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-label': t('folderPickerTitle'),
+        children: [
+          jsxs('div', { className: 'evo-modal-head', children: [
+            jsx('div', { className: 'evo-modal-title', children: t('folderPickerTitle') }),
+            jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('cancel'), 'aria-label': t('cancel'), onClick: onClose, children: jsx(X, {}) }),
+          ] }),
+          jsx('div', { className: 'evo-data-path-picker-hint', children: t('folderPickerHint') }),
+          listing !== null && jsxs(Fragment, { children: [
+            jsx('div', { className: 'evo-data-path-roots', children: listing.roots.map((root) => jsx('button', {
+              type: 'button', className: 'evo-data-path-root', title: root.path, onClick: () => load(root.path),
+              children: root.name,
+            }, root.path)) }),
+            jsxs('div', { className: 'evo-data-path-crumbs', children: [
+              jsx('button', { type: 'button', className: 'evo-data-path-up', title: t('folderUp'), 'aria-label': t('folderUp'), disabled: listing.crumbs.length < 2, onClick: () => load(listing.crumbs.at(-2)?.path), children: jsx(ArrowUp, {}) }),
+              listing.crumbs.map((crumb, index) => jsxs(Fragment, { children: [
+                index > 0 && jsx(ChevronRight, {}),
+                jsx('button', { type: 'button', className: 'evo-data-path-crumb', title: crumb.path, onClick: () => load(crumb.path), children: crumb.name }),
+              ] }, crumb.path)),
+            ] }),
+            jsx('div', { className: 'evo-data-path-current', title: listing.path, children: listing.path }),
+            jsx('div', { className: 'evo-data-path-entries', children: listing.entries.length === 0
+              ? jsx('div', { className: 'evo-setting-hint', children: t('folderEmpty') })
+              : listing.entries.map((entry) => jsxs('button', {
+                  type: 'button', className: 'evo-data-path-entry', title: entry.path, onClick: () => load(entry.path),
+                  children: [jsx(FolderOpen, {}), jsx('span', { children: entry.name }), jsx(ChevronRight, {})],
+                }, entry.path)) }),
+            error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+            jsxs('div', { className: 'evo-data-path-picker-actions', children: [
+              jsx('button', { type: 'button', className: 'evo-btn evo-btn-ok', disabled: busy, onClick: () => { onSelect(field, listing.path); onClose() }, children: jsxs(Fragment, { children: [jsx(FolderOpen, {}), jsx('span', { children: t('useThisFolder') })] }) }),
+              jsx('button', { type: 'button', className: 'evo-btn', disabled: busy, onClick: () => load(listing.home), children: jsxs(Fragment, { children: [jsx(Home, {}), jsx('span', { children: t('folderHome') })] }) }),
+            ] }),
+          ] }),
+          listing === null && busy && jsx('div', { className: 'evo-data-path-picker-loading', children: t('loading') }),
+          listing === null && error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+        ],
+      }),
+    ],
+  })
+}
+
+function DataPathsSection() {
+  const [snapshot, setSnapshot] = useState<DataPathsSnapshot | null>(null)
+  const [draft, setDraft] = useState<{ evoresearchRoot: string }>({ evoresearchRoot: '' })
+  const [picker, setPicker] = useState<{ field: DataPathField; initialPath: string } | null>(null)
+  const [applying, setApplying] = useState<'migrate' | 'reuse' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const load = () => {
+    setError(null)
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 5000)
+    void fetch('/evoresearch/fs/data-paths-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}', signal: controller.signal })
+      .then((res) => res.json()).then((json) => {
+        const value = json.value as Record<string, unknown> | undefined
+        if (json.ok !== true || value === undefined || 'error' in value) throw new Error((typeof value?.error === 'string' ? value.error : undefined) ?? t('dataPathsLoadError'))
+        const snapshotValue = normalizeDataPathsSnapshot(value)
+        setSnapshot(snapshotValue)
+        setDraft({ evoresearchRoot: snapshotValue.evoresearchRoot })
+      }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : t('dataPathsLoadError')))
+      .finally(() => window.clearTimeout(timeout))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const changed = snapshot !== null && snapshot.evoresearchRoot !== draft.evoresearchRoot
+  const apply = (mode: 'migrate' | 'reuse') => {
+    if (!changed || applying !== null) return
+    setApplying(mode)
+    setError(null)
+    setNotice(null)
+    void fetch('/evoresearch/fs/data-paths-apply', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ evoresearchRoot: draft.evoresearchRoot, mode }),
+    }).then((res) => res.json()).then((json) => {
+      const value = json.value as { error?: string; restartRequired?: boolean; restartRequested?: boolean; paths?: DataPathsSnapshot } | undefined
+      if (json.ok !== true || value === undefined || value.error !== undefined) throw new Error(value?.error ?? t('dataPathsApplyError'))
+      if (value.paths !== undefined && value.restartRequested === true) {
+        setSnapshot(value.paths)
+        setNotice(t('dataPathsRestarting'))
+        window.setTimeout(() => window.location.reload(), 1800)
+      } else if (value.paths !== undefined) {
+        // The current process still uses the old paths when no launcher accepted
+        // the restart request; keep the displayed snapshot factually current.
+        setNotice(value.restartRequired === true ? t('dataPathsManualRestart') : t('dataPathsSaved'))
+      }
+    }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : t('dataPathsApplyError')))
+      .finally(() => setApplying(null))
+  }
+
+  const field = (key: DataPathField, label: string, hint: string) => jsxs('div', { className: 'evo-data-path-row', children: [
+    jsxs('div', { className: 'evo-data-path-row-head', children: [
+      jsx('span', { className: 'evo-data-path-label', children: label }),
+      jsx('button', { type: 'button', className: 'evo-btn evo-btn-small evo-data-path-choose', onClick: () => setPicker({ field: key, initialPath: draft[key] || snapshot?.[key] || '' }), children: jsxs(Fragment, { children: [jsx(FolderOpen, {}), jsx('span', { children: t('chooseFolder') })] }) }),
+    ] }),
+    jsx('div', { className: 'evo-data-path-value', title: draft[key], children: draft[key] || t('loading') }),
+    jsx('div', { className: 'evo-setting-hint', children: hint }),
+  ] })
+
+  return jsxs('div', {
+    className: 'evo-setting evo-data-paths',
+    children: [
+      jsxs('div', { className: 'evo-setting-label', children: [jsx(HardDrive, {}), jsx('span', { children: t('dataPathsTitle') })] }),
+      jsx('div', { className: 'evo-setting-hint', children: t('dataPathsHint') }),
+      snapshot === null && error === null && jsx('div', { className: 'evo-setting-hint', children: t('loading') }),
+      snapshot !== null && jsxs(Fragment, { children: [
+        field('evoresearchRoot', t('evoResearchRootLabel'), t('evoResearchRootHint')),
+        jsxs('div', { className: 'evo-data-path-layout', children: [
+          jsx('div', { className: 'evo-data-path-layout-title', children: t('dataPathsLayoutLabel') }),
+          jsxs('div', { className: 'evo-data-path-layout-row', children: [
+            jsx('span', { className: 'evo-data-path-label', children: t('dshHomeLabel') }),
+            jsx('span', { className: 'evo-data-path-value', title: snapshot.evoresearchRoot, children: snapshot.evoresearchRoot }),
+          ] }),
+          jsxs('div', { className: 'evo-data-path-layout-row', children: [
+            jsx('span', { className: 'evo-data-path-label', children: t('evoDataRootLabel') }),
+            jsx('span', { className: 'evo-data-path-value', title: snapshot.evoresearchRoot, children: snapshot.evoresearchRoot }),
+          ] }),
+          jsxs('div', { className: 'evo-data-path-layout-row', children: [
+            jsx('span', { className: 'evo-data-path-label', children: t('pluginStateRootLabel') }),
+            jsx('span', { className: 'evo-data-path-value', title: snapshot.pluginStateRoot, children: snapshot.pluginStateRoot }),
+          ] }),
+        ] }),
+        snapshot.pending && jsx('div', { className: 'evo-data-path-pending', children: t('dataPathsPending') }),
+        changed && jsx('div', { className: 'evo-data-path-change', children: [
+          jsx('div', { className: 'evo-setting-hint', children: t('dataPathsChangeHint') }),
+          jsxs('div', { className: 'evo-data-path-actions', children: [
+            jsx('button', { type: 'button', className: 'evo-btn evo-btn-ok', disabled: applying !== null, onClick: () => apply('migrate'), children: jsxs(Fragment, { children: [jsx(FolderOpen, {}), jsx('span', { children: applying === 'migrate' ? t('dataPathsApplying') : t('dataPathsMigrate') })] }) }),
+            jsx('button', { type: 'button', className: 'evo-btn', disabled: applying !== null, onClick: () => apply('reuse'), children: jsxs(Fragment, { children: [jsx(Copy, {}), jsx('span', { children: applying === 'reuse' ? t('dataPathsApplying') : t('dataPathsReuse') })] }) }),
+          ] }),
+        ] }),
+        notice !== null && jsx('div', { className: 'evo-data-path-notice', children: notice }),
+      ] }),
+      error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
+      picker !== null && jsx(DataDirectoryPicker, { field: picker.field, initialPath: picker.initialPath, onSelect: (key, value) => setDraft((previous) => ({ ...previous, [key]: value })), onClose: () => setPicker(null) }),
+    ],
+  })
+}
+
+interface WebSearchProviderRow {
+  id: string
+  name: string
+  description: string
+  baseURL: string
+  apiKeyEnv?: string
+  requiresKey: boolean
+  apiKeyOptional?: boolean
+  configured: boolean
+  freeTier: string
+  managed?: boolean
+  installable?: boolean
+  installed?: boolean
+  running?: boolean
+  runtimeState?: string
+  runtimeEndpoint?: string
+  runtimeMessage?: string
+}
+
+interface WebSearchSettingsValue {
+  activeProvider: string
+  providers: WebSearchProviderRow[]
+  academicProvider?: string
+  academicProviders?: AcademicProviderRow[]
+}
+
+interface AcademicCredentialRow { id: string; label: string; env: string; configured: boolean; optional: boolean }
+interface AcademicProviderRow {
+  id: string
+  name: string
+  description: string
+  configured: boolean
+  freeTier: string
+  baseURL: string
+  settings?: { crossrefURL?: string; scholarURL?: string; localProxy?: string; qgServers?: string[]; qgPort?: number; qgChannel?: string; country?: string; delayMs?: number; enrich?: boolean; maxRetries?: number; maxEnrichmentRounds?: number; includeAuthorProfiles?: boolean; recursiveDepth?: number; recursiveWidth?: number; recursiveMaxTotal?: number; fetchBibtex?: boolean; fetchArxiv?: boolean; fetchArxivHTML?: boolean; deepseekEnrich?: boolean; deepseekURL?: string; deepseekModel?: string }
+  credentials: AcademicCredentialRow[]
+}
+
+/** 联网搜索 Provider：统一设置入口，密钥只提交到服务端 credentials，不回显。 */
+function WebSearchSection() {
+  const [settings, setSettings] = useState<WebSearchSettingsValue | null>(null)
+  const [draftProviders, setDraftProviders] = useState<Record<string, { baseURL: string; model?: string }>>({})
+  const [active, setActive] = useState('none')
+  const [apiKey, setApiKey] = useState('')
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState<'load' | 'save' | 'test' | 'backend' | null>('load')
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<{ count: number; sources: Array<{ title?: string; url: string }> } | null>(null)
+
+  const load = () => {
+    setBusy('load')
+    setError(null)
+    void fetch('/evoresearch/fs/web-search-settings-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((r) => r.json()).then((json) => {
+        if (json.ok !== true || !Array.isArray(json.value?.providers)) throw new Error(json.error?.message ?? t('webSearchLoadFailed'))
+        const value = json.value as WebSearchSettingsValue
+        setSettings(value)
+        setActive(typeof value.activeProvider === 'string' ? value.activeProvider : 'none')
+        setDraftProviders(Object.fromEntries(value.providers.map((p) => [p.id, { baseURL: p.baseURL }])))
+      }).catch((e: unknown) => setError(e instanceof Error ? e.message : t('webSearchLoadFailed')))
+      .finally(() => setBusy(null))
+  }
+  useEffect(load, [])
+
+  const selected = settings?.providers.find((p) => p.id === active)
+  const selectedDraft = active !== 'none' ? (draftProviders[active] ?? { baseURL: selected?.baseURL ?? '' }) : undefined
+  const manageBackend = (action: 'start' | 'stop') => {
+    if (busy !== null || selected?.managed !== true) return
+    setBusy('backend'); setError(null); setNotice(null)
+    void fetch(`/evoresearch/fs/web-search-backend-${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((r) => r.json()).then((json) => {
+        if (json.ok !== true) throw new Error(json.error?.message ?? t('webSearchBackendFailed'))
+        load()
+        setNotice(action === 'start' ? t('webSearchBackendStarted') : t('webSearchBackendStopped'))
+      }).catch((e: unknown) => setError(e instanceof Error ? e.message : t('webSearchBackendFailed')))
+      .finally(() => setBusy(null))
+  }
+  const updateURL = (baseURL: string) => {
+    if (active === 'none') return
+    setDraftProviders((previous) => ({ ...previous, [active]: { ...(previous[active] ?? {}), baseURL } }))
+  }
+  const save = () => {
+    if (busy !== null || settings === null) return
+    setBusy('save'); setError(null); setNotice(null)
+    void fetch('/evoresearch/fs/web-search-settings-save', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ activeProvider: active, providers: draftProviders, ...(apiKey.trim() !== '' ? { apiKeys: { [active]: apiKey } } : {}) }),
+    }).then((r) => r.json()).then((json) => {
+      if (json.ok !== true) throw new Error(json.error?.message ?? t('webSearchSaveFailed'))
+      setSettings(json.value as WebSearchSettingsValue)
+      setApiKey('')
+      setNotice(t('webSearchSaved'))
+    }).catch((e: unknown) => setError(e instanceof Error ? e.message : t('webSearchSaveFailed')))
+      .finally(() => setBusy(null))
+  }
+  const test = () => {
+    if (busy !== null || query.trim() === '') return
+    setBusy('test'); setError(null); setNotice(null); setTestResult(null)
+    void fetch('/evoresearch/fs/web-search-test', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }),
+    }).then((r) => r.json()).then((json) => {
+      if (json.ok !== true) throw new Error(json.error?.message ?? t('webSearchTestFailed'))
+      const sources = Array.isArray(json.value?.sources) ? json.value.sources : []
+      setTestResult({ count: sources.length, sources: sources.slice(0, 5) })
+    }).catch((e: unknown) => setError(e instanceof Error ? e.message : t('webSearchTestFailed')))
+      .finally(() => setBusy(null))
+  }
+
+  return jsxs('div', {
+    className: 'evo-setting evo-web-search-setting',
+    children: [
+      jsxs('div', { className: 'evo-setting-label', children: [jsx(Search, {}), jsx('span', { children: t('webSearchTitle') })] }),
+      jsx('div', { className: 'evo-setting-hint', children: t('webSearchDescription') }),
+      settings === null && busy === 'load' && jsx('div', { className: 'evo-setting-hint', children: t('loading') }),
+      settings !== null && jsxs(Fragment, { children: [
+        jsxs('label', { className: 'evo-setting-field evo-web-search-select', children: [
+          jsx('span', { className: 'evo-setting-field-label', children: t('webSearchProviderLabel') }),
+          jsx(Dropdown, {
+            value: active,
+            onChange: (value: string) => { setActive(value); setApiKey(''); setTestResult(null) },
+            ariaLabel: t('webSearchProviderLabel'),
+            options: [{ value: 'none', label: t('webSearchDisabled') }, ...settings.providers.map((p) => ({ value: p.id, label: `${p.name}${p.configured ? ' · ✓' : ''}` }))],
+          }),
+        ] }),
+        selected !== undefined && selectedDraft !== undefined && jsxs('div', { className: 'evo-web-search-card', children: [
+          jsx('div', { className: 'evo-web-search-name', children: selected.name }),
+          jsx('div', { className: 'evo-setting-hint', children: selected.description }),
+          jsx('div', { className: 'evo-setting-hint', children: `${t('webSearchFreeTier')}: ${selected.freeTier}` }),
+          selected.managed === true && jsxs('div', { className: 'evo-web-search-runtime', children: [
+            jsxs('div', { className: 'evo-setting-hint', children: [t('webSearchBackendStatus'), ': ', selected.running ? t('webSearchBackendRunning') : selected.runtimeState === 'installing' ? t('webSearchBackendInstalling') : t('webSearchBackendStoppedState'), selected.running && selected.runtimeEndpoint !== undefined ? ` · ${selected.runtimeEndpoint}` : ''] }),
+            selected.runtimeMessage !== undefined && jsx('div', { className: 'evo-panel-error', children: selected.runtimeMessage }),
+            jsxs('div', { className: 'evo-llm-actions', children: [
+              jsx('button', { type: 'button', className: 'evo-btn evo-btn-ok', disabled: busy !== null, onClick: () => manageBackend('start'), children: selected.running ? t('webSearchBackendRestart') : selected.installed ? t('webSearchBackendStart') : t('webSearchBackendInstallStart') }),
+              selected.running && jsx('button', { type: 'button', className: 'evo-btn', disabled: busy !== null, onClick: () => manageBackend('stop'), children: t('webSearchBackendStop') }),
+            ] }),
+          ] }),
+          jsx(ModelField, { label: t('webSearchEndpointLabel'), value: selectedDraft.baseURL, placeholder: selected.baseURL || t('webSearchEndpointPlaceholder'), onChange: updateURL }),
+          (selected.requiresKey || selected.apiKeyOptional) && jsxs('label', { className: 'evo-setting-field evo-web-search-key', children: [
+            jsx('span', { className: 'evo-setting-field-label', children: `${t('webSearchApiKeyLabel')}（${selected.apiKeyEnv ?? ''}${selected.apiKeyOptional ? `，${t('webSearchApiKeyOptional')}` : ''}）` }),
+            jsx('input', { type: 'password', className: 'evo-panel-input', value: apiKey, placeholder: selected.configured ? t('webSearchKeyConfigured') : t('webSearchKeyPlaceholder'), autoComplete: 'new-password', onInput: (e: { currentTarget: HTMLInputElement }) => setApiKey(e.currentTarget.value) }),
+          ] }),
+          jsxs('div', { className: 'evo-llm-actions', children: [
+            jsx('button', { type: 'button', className: 'evo-btn evo-btn-ok', disabled: busy !== null, onClick: save, children: busy === 'save' ? t('saving') : t('webSearchSave') }),
+          ] }),
+        ] }),
+        active !== 'none' && jsxs('div', { className: 'evo-web-search-test', children: [
+          jsx('div', { className: 'evo-setting-hint', children: t('webSearchTestHint') }),
+          jsxs('div', { className: 'evo-web-search-test-row', children: [
+            jsx('input', { className: 'evo-panel-input', value: query, placeholder: t('webSearchTestPlaceholder'), 'aria-label': t('webSearchTestPlaceholder'), onInput: (e: { currentTarget: HTMLInputElement }) => setQuery(e.currentTarget.value), onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') test() } }),
+            jsx('button', { type: 'button', className: 'evo-btn evo-btn-test', disabled: busy !== null || query.trim() === '', onClick: test, children: busy === 'test' ? t('testing') : t('webSearchTest') }),
+          ] }),
+          testResult !== null && jsx('div', { className: 'evo-web-search-result', 'aria-live': 'polite', children: [
+            jsx('div', { className: 'evo-setting-hint', children: t('webSearchTestResult').replace('{n}', String(testResult.count)) }),
+            testResult.sources.map((item) => jsx('a', { href: item.url, target: '_blank', rel: 'noreferrer', children: item.title ?? item.url }, item.url)),
+          ] }),
+        ] }),
+      ] }),
+      notice !== null && jsx('div', { className: 'evo-data-path-notice', children: notice }),
+      error !== null && jsx('div', { className: 'evo-panel-error', role: 'alert', children: error }),
+    ],
+  })
+}
+
+/** 学术论文专用搜索：与通用联网搜索使用不同的 Provider 配置和测试入口。 */
+function AcademicSearchSection() {
+  const [settings, setSettings] = useState<WebSearchSettingsValue | null>(null)
+  const [active, setActive] = useState('openalex-crossref')
+  const [drafts, setDrafts] = useState<Record<string, Record<string, unknown>>>({})
+  const [keys, setKeys] = useState<Record<string, string>>({})
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState<'load' | 'save' | 'test' | null>('load')
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<{ count: number; sources: Array<{ title?: string; url: string }> } | null>(null)
+
+  const load = () => {
+    setBusy('load'); setError(null)
+    void fetch('/evoresearch/fs/web-search-settings-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((r) => r.json()).then((json) => {
+        if (json.ok !== true || !Array.isArray(json.value?.academicProviders)) throw new Error(json.error?.message ?? t('academicLoadFailed'))
+        const value = json.value as WebSearchSettingsValue
+        const rows = value.academicProviders ?? []
+        setSettings(value)
+        setActive(typeof value.academicProvider === 'string' ? value.academicProvider : 'openalex-crossref')
+        setDrafts(Object.fromEntries(rows.map((row) => [row.id, {
+          ...(row.settings ?? {}),
+          baseURL: row.baseURL,
+        }])))
+      }).catch((e: unknown) => setError(e instanceof Error ? e.message : t('academicLoadFailed')))
+      .finally(() => setBusy(null))
+  }
+  useEffect(load, [])
+
+  const providers = settings?.academicProviders ?? []
+  const selected = providers.find((row) => row.id === active)
+  const draft = drafts[active] ?? {}
+  const update = (field: string, value: unknown) => setDrafts((previous) => ({ ...previous, [active]: { ...(previous[active] ?? {}), [field]: value } }))
+  const save = () => {
+    if (busy !== null || settings === null) return
+    setBusy('save'); setError(null); setNotice(null)
+    void fetch('/evoresearch/fs/web-search-settings-save', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ activeProvider: settings.activeProvider, providers: Object.fromEntries(settings.providers.map((p) => [p.id, { baseURL: p.baseURL }])), academicProvider: active, academicProviders: drafts, academicApiKeys: Object.fromEntries(Object.entries(keys).filter(([, value]) => value.trim() !== '')) }),
+    }).then((r) => r.json()).then((json) => {
+      if (json.ok !== true) throw new Error(json.error?.message ?? t('academicSaveFailed'))
+      setSettings(json.value as WebSearchSettingsValue); setKeys({}); setNotice(t('academicSaved'))
+    }).catch((e: unknown) => setError(e instanceof Error ? e.message : t('academicSaveFailed')))
+      .finally(() => setBusy(null))
+  }
+  const test = () => {
+    if (busy !== null || query.trim() === '') return
+    setBusy('test'); setError(null); setNotice(null); setTestResult(null)
+    void fetch('/evoresearch/fs/academic-search-test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) })
+      .then((r) => r.json()).then((json) => {
+        if (json.ok !== true) throw new Error(json.error?.message ?? t('academicTestFailed'))
+        const sources = Array.isArray(json.value?.sources) ? json.value.sources : []
+        setTestResult({ count: sources.length, sources: sources.slice(0, 5) })
+      }).catch((e: unknown) => setError(e instanceof Error ? e.message : t('academicTestFailed')))
+      .finally(() => setBusy(null))
+  }
+  const credentialRows = selected?.credentials ?? []
+
+  return jsxs('div', {
+    className: 'evo-setting evo-web-search-setting evo-academic-search-setting',
+    children: [
+      jsxs('div', { className: 'evo-setting-label', children: [jsx(Search, {}), jsx('span', { children: t('academicSearchTitle') })] }),
+      jsx('div', { className: 'evo-setting-hint', children: t('academicSearchDescription') }),
+      settings === null && busy === 'load' && jsx('div', { className: 'evo-setting-hint', children: t('loading') }),
+      settings !== null && jsxs(Fragment, { children: [
+        jsxs('label', { className: 'evo-setting-field evo-web-search-select', children: [
+          jsx('span', { className: 'evo-setting-field-label', children: t('academicSearchProviderLabel') }),
+          jsx(Dropdown, { value: active, onChange: (value: string) => { setActive(value); setTestResult(null) }, ariaLabel: t('academicSearchProviderLabel'), options: [{ value: 'none', label: t('academicSearchDisabled') }, ...providers.map((p) => ({ value: p.id, label: `${p.name}${p.configured ? ' · ✓' : ''}` }))] }),
+        ] }),
+        selected !== undefined && jsxs('div', { className: 'evo-web-search-card', children: [
+          jsx('div', { className: 'evo-web-search-name', children: selected.name }),
+          jsx('div', { className: 'evo-setting-hint', children: selected.description }),
+          jsx('div', { className: 'evo-setting-hint', children: `${t('webSearchFreeTier')}: ${selected.freeTier}` }),
+          selected.id === 'openalex-crossref' && jsxs(Fragment, { children: [
+            jsx(ModelField, { label: t('academicOpenAlexURLLabel'), value: String(draft.baseURL ?? selected.baseURL), onChange: (value) => update('baseURL', value) }),
+            jsx(ModelField, { label: t('academicCrossrefURLLabel'), value: String(draft.crossrefURL ?? selected.settings?.crossrefURL ?? ''), onChange: (value) => update('crossrefURL', value) }),
+          ] }),
+          selected.id === 'autorelatedwork' && jsxs(Fragment, { children: [
+            jsx(ModelField, { label: t('academicScholarURLLabel'), value: String(draft.scholarURL ?? selected.settings?.scholarURL ?? selected.baseURL), onChange: (value) => update('scholarURL', value) }),
+            jsx(ModelField, { label: t('academicProxyLabel'), value: String(draft.localProxy ?? selected.settings?.localProxy ?? ''), placeholder: t('academicProxyPlaceholder'), onChange: (value) => update('localProxy', value) }),
+            jsx(ModelField, { label: t('academicQGServersLabel'), value: Array.isArray(draft.qgServers) ? draft.qgServers.join(', ') : (selected.settings?.qgServers ?? []).join(', '), onChange: (value) => update('qgServers', value.split(',').map((item) => item.trim()).filter(Boolean)) }),
+            jsx(ModelField, { label: t('academicQGPortLabel'), value: String(draft.qgPort ?? selected.settings?.qgPort ?? 443), onChange: (value) => update('qgPort', Math.max(1, Math.round(Number(value) || 443))) }),
+            jsx(ModelField, { label: t('academicQGChannelLabel'), value: String(draft.qgChannel ?? selected.settings?.qgChannel ?? ''), placeholder: t('academicQGChannelPlaceholder'), onChange: (value) => update('qgChannel', value) }),
+            jsx(ModelField, { label: t('academicCountryLabel'), value: String(draft.country ?? selected.settings?.country ?? ''), placeholder: t('academicCountryPlaceholder'), onChange: (value) => update('country', value) }),
+            jsx(ModelField, { label: t('academicDelayLabel'), value: String(draft.delayMs ?? selected.settings?.delayMs ?? 1200), onChange: (value) => update('delayMs', Math.max(0, Number(value) || 0)) }),
+            jsx(ModelField, { label: t('academicRetryLabel'), value: String(draft.maxRetries ?? selected.settings?.maxRetries ?? 3), onChange: (value) => update('maxRetries', Math.min(6, Math.max(1, Math.round(Number(value) || 3)))) }),
+            jsx(ModelField, { label: t('academicEnrichmentRoundsLabel'), value: String(draft.maxEnrichmentRounds ?? selected.settings?.maxEnrichmentRounds ?? 1), onChange: (value) => update('maxEnrichmentRounds', Math.min(3, Math.max(1, Math.round(Number(value) || 1)))) }),
+            jsx(ModelField, { label: t('academicRecursiveDepthLabel'), value: String(draft.recursiveDepth ?? selected.settings?.recursiveDepth ?? 0), onChange: (value) => update('recursiveDepth', Math.min(3, Math.max(0, Math.round(Number(value) || 0)))) }),
+            jsx(ModelField, { label: t('academicRecursiveWidthLabel'), value: String(draft.recursiveWidth ?? selected.settings?.recursiveWidth ?? 5), onChange: (value) => update('recursiveWidth', Math.min(20, Math.max(1, Math.round(Number(value) || 5)))) }),
+            jsx(ModelField, { label: t('academicRecursiveMaxTotalLabel'), value: String(draft.recursiveMaxTotal ?? selected.settings?.recursiveMaxTotal ?? 50), onChange: (value) => update('recursiveMaxTotal', Math.min(100, Math.max(1, Math.round(Number(value) || 50)))) }),
+            jsx(ModelField, { label: t('academicDeepseekURLLabel'), value: String(draft.deepseekURL ?? selected.settings?.deepseekURL ?? ''), placeholder: 'https://api.deepseek.com', onChange: (value) => update('deepseekURL', value) }),
+            jsx(ModelField, { label: t('academicDeepseekModelLabel'), value: String(draft.deepseekModel ?? selected.settings?.deepseekModel ?? ''), placeholder: 'deepseek-chat', onChange: (value) => update('deepseekModel', value) }),
+            jsxs('div', { className: 'evo-setting-check-grid', children: [
+              jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.fetchBibtex !== false, onChange: (e: { currentTarget: HTMLInputElement }) => update('fetchBibtex', e.currentTarget.checked) }), jsx('span', { children: t('academicBibtexLabel') })] }),
+              jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.fetchArxiv !== false, onChange: (e: { currentTarget: HTMLInputElement }) => update('fetchArxiv', e.currentTarget.checked) }), jsx('span', { children: t('academicArxivLabel') })] }),
+              jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.fetchArxivHTML !== false, onChange: (e: { currentTarget: HTMLInputElement }) => update('fetchArxivHTML', e.currentTarget.checked) }), jsx('span', { children: t('academicArxivHTMLLabel') })] }),
+              jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.includeAuthorProfiles === true, onChange: (e: { currentTarget: HTMLInputElement }) => update('includeAuthorProfiles', e.currentTarget.checked) }), jsx('span', { children: t('academicAuthorProfilesLabel') })] }),
+              jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.deepseekEnrich === true, onChange: (e: { currentTarget: HTMLInputElement }) => update('deepseekEnrich', e.currentTarget.checked) }), jsx('span', { children: t('academicDeepseekEnrichLabel') })] }),
+            ] }),
+            jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.enrich !== false, onChange: (e: { currentTarget: HTMLInputElement }) => update('enrich', e.currentTarget.checked) }), jsx('span', { children: t('academicEnrichLabel') })] }),
+            jsx('div', { className: 'evo-setting-hint', children: t('academicCredentialsHint') }),
+            credentialRows.map((credential) => jsxs('label', { className: 'evo-setting-field evo-web-search-key', children: [jsx('span', { className: 'evo-setting-field-label', children: `${credential.label}（${credential.env}，${t('webSearchApiKeyOptional')}）` }), jsx('input', { type: credential.id === 'qgAuthPwd' ? 'password' : 'text', className: 'evo-panel-input', value: keys[credential.id] ?? '', placeholder: credential.configured ? t('webSearchKeyConfigured') : t('webSearchKeyPlaceholder'), autoComplete: 'new-password', onInput: (e: { currentTarget: HTMLInputElement }) => setKeys((previous) => ({ ...previous, [credential.id]: e.currentTarget.value })) })] }, credential.id)),
+          ] }),
+          jsxs('div', { className: 'evo-llm-actions', children: [jsx('button', { type: 'button', className: 'evo-btn evo-btn-ok', disabled: busy !== null, onClick: save, children: busy === 'save' ? t('saving') : t('academicSave') })] }),
+        ] }),
+        active !== 'none' && jsxs('div', { className: 'evo-web-search-test', children: [
+          jsx('div', { className: 'evo-setting-hint', children: t('academicTestHint') }),
+          jsxs('div', { className: 'evo-web-search-test-row', children: [jsx('input', { className: 'evo-panel-input', value: query, placeholder: t('academicTestPlaceholder'), 'aria-label': t('academicTestPlaceholder'), onInput: (e: { currentTarget: HTMLInputElement }) => setQuery(e.currentTarget.value), onKeyDown: (e: { key: string }) => { if (e.key === 'Enter') test() } }), jsx('button', { type: 'button', className: 'evo-btn evo-btn-test', disabled: busy !== null || query.trim() === '', onClick: test, children: busy === 'test' ? t('testing') : t('academicTest') })] }),
+          testResult !== null && jsx('div', { className: 'evo-web-search-result', 'aria-live': 'polite', children: [jsx('div', { className: 'evo-setting-hint', children: t('academicTestResult').replace('{n}', String(testResult.count)) }), testResult.sources.map((item) => jsx('a', { href: item.url, target: '_blank', rel: 'noreferrer', children: item.title ?? item.url }, item.url))] }),
+        ] }),
+      ] }),
+      notice !== null && jsx('div', { className: 'evo-data-path-notice', children: notice }),
+      error !== null && jsx('div', { className: 'evo-panel-error', role: 'alert', children: error }),
     ],
   })
 }
@@ -176,6 +676,7 @@ function ModelAssignSection() {
   const [saveMsg, setSaveMsg] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [migrated, setMigrated] = useState<Record<string, string>>({})
+  const loadSeq = useRef(0)
   /** 最近一次“应用/设为默认”选择的代码档（三档模型相同时也以此为准）。 */
   const [storedDefaultTier, setStoredDefaultTier] = useState<string | null>(null)
 
@@ -212,12 +713,14 @@ function ModelAssignSection() {
   }
 
   const load = () => {
+    const requestId = ++loadSeq.current
     setError(null)
     void Promise.all([
       fetch('/evoresearch/fs/model-settings-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json()),
       fetch('/evoresearch/fs/llm-providers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json()),
       fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((r) => r.json()).catch(() => ({ ok: false })),
     ]).then(([ms, lp, cat]) => {
+      if (requestId !== loadSeq.current) return
       const providerList: LlmProviderEditor[] = lp.ok === true ? (lp.value?.providers ?? []).map((p: Record<string, unknown>) => ({
         id: String(p.id ?? ''),
         displayName: String(p.displayName ?? ''),
@@ -304,9 +807,16 @@ function ModelAssignSection() {
       }
       setAssign(next)
       setMigrated(migratedMap)
-    }).catch((e: unknown) => setError((e as Error)?.message ?? t('loadFailed')))
+    }).catch((e: unknown) => {
+      if (requestId === loadSeq.current) setError((e as Error)?.message ?? t('loadFailed'))
+    })
   }
-  useEffect(load, [])
+  useEffect(() => {
+    load()
+    const onProvidersChanged = () => load()
+    window.addEventListener(PROVIDERS_CHANGED_EVENT, onProvidersChanged)
+    return () => window.removeEventListener(PROVIDERS_CHANGED_EVENT, onProvidersChanged)
+  }, [])
 
   const setField = (key: string, field: keyof AssignSetting, value: string) => {
     setAssign((prev) => (prev === null ? prev : { ...prev, [key]: { ...(prev[key] ?? {}), [field]: value } }))
@@ -622,13 +1132,116 @@ function ModelAssignSection() {
   })
 }
 
-/** 清除数据（设置面板）：三类数据可多选，二次确认后执行；成功后刷新页面。 */
+type DataClearPathEffect = 'delete-directory' | 'delete-children' | 'reset-file' | 'browser-storage'
+
+interface DataClearPathEntry {
+  id: string
+  path: string
+  effect: DataClearPathEffect
+}
+
+interface DataClearPaths {
+  projects: DataClearPathEntry[]
+  models: DataClearPathEntry[]
+  prefs: DataClearPathEntry[]
+}
+
+function isDataClearPaths(value: unknown): value is DataClearPaths {
+  if (value === null || typeof value !== 'object') return false
+  const raw = value as Record<string, unknown>
+  return ['projects', 'models', 'prefs'].every((scope) => Array.isArray(raw[scope]) && (raw[scope] as unknown[]).every((entry) => {
+    if (entry === null || typeof entry !== 'object') return false
+    const item = entry as Record<string, unknown>
+    return typeof item.id === 'string' && typeof item.path === 'string'
+      && (item.effect === 'delete-directory' || item.effect === 'delete-children' || item.effect === 'reset-file' || item.effect === 'browser-storage')
+  }))
+}
+
+function hostPath(base: string, ...parts: string[]): string {
+  const separator = base.includes('\\') ? '\\' : '/'
+  return [base.replace(/[\\/]+$/, ''), ...parts].join(separator)
+}
+
+/**
+ * 兼容尚未重启的旧 DSH 进程：旧进程没有 data-clear-paths-get，
+ * 但 data-paths-get 仍会返回当前进程实际使用的三个根目录。
+ */
+export function buildDataClearPathsFallback(paths: Pick<DataPathsSnapshot, 'dshHome' | 'evoResearchDataRoot' | 'pluginStateRoot'>): DataClearPaths {
+  const dataRoot = paths.evoResearchDataRoot
+  const pluginRoot = paths.pluginStateRoot || hostPath(dataRoot, 'plugins')
+  const dshHome = paths.dshHome
+  return {
+    projects: [
+      { id: 'project-directory', path: hostPath(dataRoot, 'projects', '<project-name>'), effect: 'delete-directory' },
+      { id: 'session-directory', path: hostPath(dshHome, 'sessions', '<workspace>'), effect: 'delete-directory' },
+      { id: 'memories-directory', path: hostPath(pluginRoot, 'memories'), effect: 'delete-directory' },
+      { id: 'chat-graphs-directory', path: hostPath(pluginRoot, 'chat-graphs'), effect: 'delete-directory' },
+      { id: 'scheduler-file', path: hostPath(pluginRoot, 'scheduler.json'), effect: 'reset-file' },
+      { id: 'session-meta-file', path: hostPath(pluginRoot, 'session-meta.json'), effect: 'reset-file' },
+    ],
+    models: [
+      { id: 'model-settings-file', path: hostPath(pluginRoot, 'model-settings.json'), effect: 'reset-file' },
+      { id: 'dsh-settings-file', path: hostPath(dshHome, 'settings.yaml'), effect: 'reset-file' },
+    ],
+    prefs: [
+      { id: 'client-state-file', path: hostPath(pluginRoot, 'client-state.json'), effect: 'reset-file' },
+      { id: 'browser-local-storage', path: '当前网页的浏览器 localStorage（键名以 evoresearch- 开头）', effect: 'browser-storage' },
+    ],
+  }
+}
+
+function clearPathEffectLabel(effect: DataClearPathEffect): string {
+  if (effect === 'delete-directory') return t('clearPathDeleteDirectory')
+  if (effect === 'delete-children') return t('clearPathDeleteChildren')
+  if (effect === 'browser-storage') return t('clearPathBrowserStorage')
+  return t('clearPathResetFile')
+}
+
+function clearPathDetail(id: string): string {
+  const key = `clearPath${id.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')}`
+  return t(key)
+}
+
+/** 清除数据（设置面板）：三类数据可多选，展示真实路径，二次确认后执行。 */
 function DataClearSection() {
   const [checked, setChecked] = useState({ projects: false, models: false, prefs: false })
+  const [clearPaths, setClearPaths] = useState<DataClearPaths | null>(null)
+  const [pathsError, setPathsError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const anyChecked = checked.projects || checked.models || checked.prefs
+
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/evoresearch/fs/data-clear-paths-get', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    }).then((res) => res.json()).then((json) => {
+      if (json.ok === true && isDataClearPaths(json.value)) return json.value
+      const message = typeof json.error?.message === 'string' ? json.error.message : ''
+      if (!message.includes('unknown method data-clear-paths-get')) throw new Error(message || t('clearPathsLoadError'))
+      // 新路由加入后，旧 DSH 进程可能仍在内存中运行；从同一进程的
+      // data-paths-get 响应生成兼容清单，确保展示的路径仍然是事实路径。
+      return fetch('/evoresearch/fs/data-paths-get', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      }).then((res) => res.json()).then((pathJson) => {
+        const raw = pathJson.value as Record<string, unknown> | undefined
+        if (pathJson.ok !== true || raw === undefined || typeof raw.dshHome !== 'string' || typeof raw.evoResearchDataRoot !== 'string' || typeof raw.pluginStateRoot !== 'string') {
+          throw new Error(t('clearPathsLoadError'))
+        }
+        return buildDataClearPathsFallback(raw as Pick<DataPathsSnapshot, 'dshHome' | 'evoResearchDataRoot' | 'pluginStateRoot'>)
+      })
+    }).then((paths) => {
+      if (!cancelled) setClearPaths(paths)
+    }).catch((reason: unknown) => {
+      if (!cancelled) setPathsError(reason instanceof Error ? reason.message : t('clearPathsLoadError'))
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const rows: Array<{ key: 'projects' | 'models' | 'prefs'; title: string; desc: string }> = [
     { key: 'projects', title: t('clearProjects'), desc: t('clearProjectsDesc') },
@@ -637,7 +1250,7 @@ function DataClearSection() {
   ]
 
   const execute = () => {
-    if (!anyChecked || busy) return
+    if (!anyChecked || clearPaths === null || busy) return
     if (!confirming) {
       setConfirming(true)
       setError(null)
@@ -685,6 +1298,20 @@ function DataClearSection() {
     }).catch((e: unknown) => finish(false, (e as Error)?.message ?? t('dataClearError')))
   }
 
+  const renderPathEntry = (entry: DataClearPathEntry) => jsxs('div', {
+    className: 'evo-clear-path-entry',
+    children: [
+      jsx('span', { className: 'evo-clear-path-effect', children: clearPathEffectLabel(entry.effect) }),
+      jsx('code', { className: 'evo-clear-path-value', title: entry.path, children: entry.path }),
+      jsx('span', { className: 'evo-clear-path-detail', children: clearPathDetail(entry.id) }),
+    ],
+  }, `${entry.id}:${entry.path}`)
+
+  const renderPathList = (entries: DataClearPathEntry[], className = 'evo-clear-row-paths') => jsxs('div', {
+    className,
+    children: entries.map(renderPathEntry),
+  })
+
   return jsxs('div', {
     className: 'evo-setting',
     children: [
@@ -693,12 +1320,15 @@ function DataClearSection() {
         children: [jsx(Trash2, {}), jsx('span', { children: t('settingsData') })],
       }),
       jsx('div', { className: 'evo-setting-hint', children: t('clearDataHint') }),
+      pathsError !== null && jsx('div', { className: 'evo-panel-error evo-clear-path-error', children: `${t('clearPathsLoadError')} ${pathsError}` }),
+      clearPaths === null && pathsError === null && jsx('div', { className: 'evo-clear-path-loading', children: t('clearPathsLoading') }),
       jsx('div', { className: 'evo-clear-rows', children: rows.map((row) => jsxs('label', {
         className: `evo-clear-row${checked[row.key] ? ' checked' : ''}`,
         children: [
           jsx('input', {
             type: 'checkbox',
             checked: checked[row.key],
+            disabled: clearPaths === null || busy,
             onChange: (e: { currentTarget: HTMLInputElement }) => {
               const next = e.currentTarget.checked
               setChecked((prev) => ({ ...prev, [row.key]: next }))
@@ -708,16 +1338,28 @@ function DataClearSection() {
           jsxs('span', { className: 'evo-clear-row-text', children: [
             jsx('span', { className: 'evo-clear-row-title', children: row.title }),
             jsx('span', { className: 'evo-clear-row-desc', children: row.desc }),
+            clearPaths !== null && renderPathList(clearPaths[row.key]),
           ] }),
         ],
       }, row.key)) }),
+      anyChecked && clearPaths !== null && jsxs('div', { className: 'evo-clear-summary', children: [
+        jsx('div', { className: 'evo-clear-summary-title', children: t('clearPathsSummary') }),
+        rows.filter((row) => checked[row.key]).map((row) => jsxs('div', {
+          className: 'evo-clear-summary-group',
+          children: [
+            jsx('div', { className: 'evo-clear-summary-label', children: row.title }),
+            renderPathList(clearPaths[row.key], 'evo-clear-summary-paths'),
+          ],
+        }, row.key)),
+      ] }),
+      !anyChecked && clearPaths !== null && jsx('div', { className: 'evo-clear-summary evo-clear-summary-empty', children: t('clearPathsNone') }),
       jsxs('div', { className: 'evo-clear-confirm', children: [
         confirming && jsx('div', { className: 'evo-panel-error', children: t('clearDataWarning') }),
         error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
         jsx('button', {
           type: 'button',
           className: `evo-btn evo-btn-danger${confirming ? ' confirming' : ''}`,
-          disabled: !anyChecked || busy,
+          disabled: !anyChecked || clearPaths === null || busy,
           onClick: execute,
           children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: busy ? t('clearDataBusy') : confirming ? t('clearDataConfirm') : t('clearDataBtn') })] }),
         }),
@@ -755,6 +1397,13 @@ interface LlmProviderEditor {
   apiKey: string
   api: string
   models: LlmModelRow[]
+}
+
+/** 模型提供商配置变化后，通知同一设置面板内的模型分配组件重新读取目录。 */
+const PROVIDERS_CHANGED_EVENT = 'evoresearch:providers-changed'
+
+function notifyProvidersChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(PROVIDERS_CHANGED_EVENT))
 }
 
 /** 编辑距离（用于把名字最接近的参照模型排到前面）。 */
@@ -902,6 +1551,7 @@ function LlmProviderSection() {
         }
         if (failures.length > 0) throw new Error(`${t('llmFetchFailed')}: ${failures.join('、')}`)
         setProviders((prev) => (prev ?? []).map((p) => (nextByProvider.has(p.id) ? { ...p, models: nextByProvider.get(p.id) as LlmModelRow[] } : p)))
+        notifyProvidersChanged()
         toast(t('llmFetchDone').replace('{n}', String(total)), 'success')
       } catch (e: unknown) {
         setError((e as Error)?.message ?? t('llmFetchFailed'))
@@ -934,6 +1584,7 @@ function LlmProviderSection() {
         }
         if (failures.length > 0) throw new Error(`${t('modelExcludeFailed')}: ${failures.join('、')}`)
         setProviders((prev) => (prev ?? []).map((p) => (remaining.has(p.id) ? { ...p, models: remaining.get(p.id) as LlmModelRow[] } : p)))
+        notifyProvidersChanged()
         toast(t('modelExcluded').replace('{id}', modelId).replace('{n}', String(affected.length)), 'success')
       } catch (e: unknown) {
         setError((e as Error)?.message ?? t('modelExcludeFailed'))
@@ -975,10 +1626,14 @@ function LlmProviderSection() {
       }).then((r) => r.json()).catch(() => ({ ok: false, error: { message: t('networkFailed') } }))
       const listed: Array<{ id?: string; name?: string }> = probe.ok === true ? (probe.value?.models ?? []) : []
       if (probe.ok !== true) {
-        setProbeWarning(t('llmProbeWarn').replace('{msg}', probe.error?.message ?? t('llmProbeFailed')))
+        setError(probe.error?.message ?? t('llmProbeFailed'))
+        return
       } else if (listed.length === 0) {
         setProbeWarning(t('llmProbeEmpty'))
       }
+      const resolvedBaseURL = typeof probe.value?.baseURL === 'string' && probe.value.baseURL !== ''
+        ? probe.value.baseURL
+        : baseURL
       const manual = draft.manualModels.split(/[,，;；]/).map((s) => s.trim()).filter(Boolean)
       const seen = new Set<string>()
       const models: Array<Record<string, string>> = []
@@ -1007,7 +1662,7 @@ function LlmProviderSection() {
           patch: {
             create: true,
             displayName: displayName !== '' ? displayName : id,
-            baseURL,
+            baseURL: resolvedBaseURL,
             apiKey,
             api,
             models,
@@ -1019,6 +1674,7 @@ function LlmProviderSection() {
       setAdding(false)
       setDraft({ id: '', displayName: '', baseURL: '', apiKey: '', api: 'openai-completions', manualModels: '' })
       load()
+      notifyProvidersChanged()
     } catch (e: unknown) {
       setError((e as Error)?.message ?? t('llmSaveFailed'))
     } finally {
@@ -1040,6 +1696,7 @@ function LlmProviderSection() {
         toast(t('llmRemoved'), 'success')
         setSavedId(null)
         load()
+        notifyProvidersChanged()
       } else setError(json.error?.message ?? t('llmSaveFailed'))
     }).catch((e: unknown) => {
       setBusyId(null)
@@ -1084,6 +1741,7 @@ function LlmProviderSection() {
         setSavedId(savedAs)
         toast(newId !== '' && newId !== id ? t('llmSavedRenamed') : t('llmSaved'), 'success')
         if (newId !== '' && newId !== id) load()
+        notifyProvidersChanged()
       } else setError(json.error?.message ?? t('llmSaveFailed'))
     }).catch((e: unknown) => {
       setBusyId(null)
@@ -1409,6 +2067,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
                 className: 'evo-settings-content',
                 children: tab === 'general'
                   ? jsxs(Fragment, { children: [
+                      jsx(DataPathsSection, {}),
+                      jsx(WebSearchSection, {}),
+                      jsx(AcademicSearchSection, {}),
                       jsx(PluginListSection, {}),
                       jsx(AboutSection, {}),
                     ] })

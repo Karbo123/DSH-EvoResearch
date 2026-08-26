@@ -50,6 +50,8 @@ awesome-dsh-plugin/
 .tmp-web-data/
 .anonymous-user-id
 .evoresearch-data/
+/.evoresearch-paths.json
+/.evoresearch-restart.json
 # 本地验收与协作运行数据
 .agent-teams/
 .tmp-web-dsh/
@@ -58,6 +60,11 @@ storages/
 
 # 本机 DSH 凭据（含密钥，不入库；生效位置在各 DSH_HOME 下）
 /.credentials.yaml
+
+# 本地 API/代理凭据（含密钥，不入库；可提交脱敏模板 .env.example）
+.env
+.env.*
+!.env.example
 
 # 构建期生成的客户端样式（katex 字体内联，勿入库）
 packages/evoresearch-app/src/client/katex-css.ts

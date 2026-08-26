@@ -22,6 +22,7 @@ import { ensureGoalContract, looksLongHorizon, type GoalRuntime } from './goals.
 import { TurnTextAccumulator, turnInterruptFromEndReason, type SessionEventLike } from '../session-text.js'
 import type { ResearchCategory } from '../../shared/types.js'
 import type { NotesService } from '../notes.js'
+import { workspaceDataDir } from '../core/paths.js'
 
 /** 记忆插件配置。 */
 export interface MemoryConfig {
@@ -150,10 +151,7 @@ export class MemoryRuntime implements GoalRuntime {
 
   /** 项目记忆目录（.evoresearch-data/memories）。 */
   private memoryDirFor(workspaceDir: string): string {
-    const base = workspaceDir && workspaceDir !== this.config.dataRoot
-      ? workspaceDir
-      : this.config.dataRoot
-    return path.join(base, '.evoresearch-data', 'memories')
+    return path.join(workspaceDataDir(this.config.dataRoot, workspaceDir), 'memories')
   }
 
   /** 后台回填：从 DSH sessionQuery 拉取该项目的历史会话事件并索引进 Turn Catalog。 */
@@ -228,7 +226,7 @@ export class MemoryRuntime implements GoalRuntime {
     const session = getSession?.call(sessions, sessionId) as { header?: { cwd?: string } } | undefined
     const cwd = session?.header?.cwd
     const base = cwd && cwd !== this.config.dataRoot ? cwd : this.config.dataRoot
-    const profileDir = path.join(base, '.evoresearch-data', 'memories', 'profile')
+    const profileDir = path.join(workspaceDataDir(this.config.dataRoot, base), 'memories', 'profile')
     const files: Array<{ name: string; text: string }> = []
     try {
       for (const entry of fs.readdirSync(profileDir)) {

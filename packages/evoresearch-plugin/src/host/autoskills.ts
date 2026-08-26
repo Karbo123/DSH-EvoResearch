@@ -11,8 +11,8 @@
  * - EVO-09 `runSkill`：接入真实 DSH Skill 注册表（attach(ctx) 探测
  *   ctx.get('skills')），装载验证并记录可读执行结果；探测不到返回明确错误。
  *
- * 提案持久化到 <dataRoot>/.evoresearch-data/autoskills.json（原子写）；
- * 技能运行记录追加到 <dataRoot>/.evoresearch-data/evolution/skill-runs.jsonl。
+ * 提案持久化到 <dataRoot>/plugins/autoskills.json（原子写）；
+ * 技能运行记录追加到 <dataRoot>/plugins/evolution/skill-runs.jsonl。
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -23,6 +23,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { AutoSkillProposal } from '../shared/types.js'
 import type { ResearchMemoryStore } from './memory/store.js'
 import type { EvolutionSignal } from './evolution/signals.js'
+import { workspaceDataDir } from './core/paths.js'
 
 /** 视为 procedural 的类别（§42.7：方法/实验类观测可蒸馏为可执行技能）。 */
 const PROCEDURAL_CATEGORIES = new Set(['method', 'experiment'])
@@ -218,8 +219,8 @@ export class AutoSkillsService {
   private mining = false
 
   constructor(readonly config: AutoSkillsConfig) {
-    this.file = path.join(config.dataRoot, '.evoresearch-data', 'autoskills.json')
-    this.skillsDir = config.skillsDir ?? path.join(config.dataRoot, '.evoresearch-data', 'skills')
+    this.file = path.join(config.dataRoot, 'plugins', 'autoskills.json')
+    this.skillsDir = config.skillsDir ?? path.join(config.dataRoot, 'plugins', 'skills')
     this.load()
   }
 
@@ -302,7 +303,7 @@ export class AutoSkillsService {
 
   /** 读取某工作区研究笔记正文（P1-1 挖掘输入；目录缺失返回空）。 */
   private readNoteTexts(workspaceDir: string): string[] {
-    const notesDir = path.join(workspaceDir || this.config.dataRoot, '.evoresearch-data', 'memories', 'notes')
+    const notesDir = path.join(workspaceDataDir(this.config.dataRoot, workspaceDir || this.config.dataRoot), 'memories', 'notes')
     const texts: string[] = []
     try {
       for (const entry of fs.readdirSync(notesDir)) {
@@ -585,7 +586,7 @@ export class AutoSkillsService {
 
   /** 追加运行记录（EVO-09 可读结果）。 */
   private appendRunRecord(record: { at: number; proposalId: string; name: string; loaded: boolean; summary: string }): void {
-    const file = path.join(this.config.dataRoot, '.evoresearch-data', 'evolution', 'skill-runs.jsonl')
+    const file = path.join(this.config.dataRoot, 'plugins', 'evolution', 'skill-runs.jsonl')
     fs.mkdirSync(path.dirname(file), { recursive: true })
     fs.appendFileSync(file, `${JSON.stringify(record)}\n`, 'utf8')
   }
@@ -613,7 +614,7 @@ export class AutoSkillsService {
    * time(HH:MM 本地)。返回 cron 等价式（供 scheduler reconcile）。
    */
   saveConfig(config: { enabled?: boolean; mode?: string; cadence?: string; time?: string }): { cron: string | null } {
-    const file = path.join(this.config.dataRoot, '.evoresearch-data', 'autoskills-config.json')
+    const file = path.join(this.config.dataRoot, 'plugins', 'autoskills-config.json')
     const merged = { ...this.readConfig(), ...config }
     fs.writeFileSync(file, JSON.stringify(merged, null, 2), 'utf8')
     // cron 推导：nightly=每天；weekly=周日(0)；monthly=每月 1 日
@@ -629,7 +630,7 @@ export class AutoSkillsService {
 
   readConfig(): { enabled?: boolean; mode?: string; cadence?: string; time?: string } {
     try {
-      const raw = JSON.parse(fs.readFileSync(path.join(this.config.dataRoot, '.evoresearch-data', 'autoskills-config.json'), 'utf8'))
+      const raw = JSON.parse(fs.readFileSync(path.join(this.config.dataRoot, 'plugins', 'autoskills-config.json'), 'utf8'))
       return typeof raw === 'object' && raw !== null ? raw : {}
     } catch {
       return {}

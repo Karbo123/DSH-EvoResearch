@@ -11,6 +11,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { workspaceDataDir } from '../core/paths.js'
 import { randomUUID } from 'node:crypto'
 
 /** 科学记忆类型。 */
@@ -80,8 +81,7 @@ export class ScienceMemory {
 
   /** 记忆目录：<workspace>/.evoresearch-data/memories/science/<kind>/。 */
   dirOf(workspaceDir: string | undefined, kind: ScienceMemoryKind): string {
-    const base = workspaceDir && workspaceDir !== this.dataRoot ? workspaceDir : this.dataRoot
-    return path.join(base, '.evoresearch-data', 'memories', 'science', kind)
+    return path.join(workspaceDataDir(this.dataRoot, workspaceDir), 'memories', 'science', kind)
   }
 
   private indexFile(workspaceDir: string | undefined, kind: ScienceMemoryKind): string {

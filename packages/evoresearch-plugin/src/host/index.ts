@@ -54,7 +54,7 @@ import { ProjectEnvService } from './project-env.js'
 import { RewindService } from './rewind.js'
 import { EvoResearchApiService, type HostServices, type PlatformServices } from './api.js'
 import { registerCommands } from './commands.js'
-import { projectNameFromWorkspace } from './core/paths.js'
+import { migrateLegacyPluginData, pluginDataDir, projectNameFromWorkspace, workspaceDataDir } from './core/paths.js'
 import { registerVisionTool } from './vision.js'
 import { defaultApprovalPolicy, decideApproval, decideUnattendedShell, isUnattendedSource } from './platform/approval-policy.js'
 import { markUnattendedSession, isMarkedUnattended } from './platform/unattended-registry.js'
@@ -79,6 +79,8 @@ import { registerAskResearcherTool } from './tools/ask.js'
 import { OverflowWatch } from './context/overflow-watch.js'
 import { registerLibraryTools, type LibraryToolsDeps } from './library/tools.js'
 import { FigureService, registerFigureTools } from './figures.js'
+import { ConfiguredWebSearchProvider, WEB_SEARCH_SETTINGS_NAMESPACE, WEB_SEARCH_SETTINGS_SCHEMA } from './web-search.js'
+import { ManagedMcpSearchManager, OpenWebSearchManager } from './web-search-manager.js'
 
 /** 插件配置（settings 的 evoresearch 段合并环境变量）。 */
 export interface EvoResearchPluginConfig {
@@ -92,7 +94,7 @@ export interface EvoResearchPluginConfig {
   readonly memoryEnabled?: boolean
   /** 是否注册 vision_check 视觉检查工具（默认 true；模型未配置时自动跳过）。 */
   readonly visionEnabled?: boolean
-  /** P1-1 AutoSkills 定时挖掘 cron（默认 '7 3 * * 1' 每周一凌晨；'off' 关闭）。 */
+  /** P1-1 AutoSkills 定时挖掘 cron（默认关闭；显式设置后启用）。 */
   readonly autoskillsSchedule?: string
   /** P3-2 无人值守 shell 门控：allow-list 前缀（deny 清单恒生效）。 */
   readonly unattended?: { allowCommands?: string[] }
@@ -103,8 +105,10 @@ function resolveConfig(ctx: Context): EvoResearchPluginConfig {
   const settings = ctx.get('settings') as { get?: (ns: string) => unknown } | undefined
   const fromSettings = (settings?.get?.('evoresearch') ?? {}) as Partial<EvoResearchPluginConfig>
   const fromEnv: { dataRoot?: string } = {}
-  if (process.env.EVORESEARCH_DATA_ROOT) fromEnv.dataRoot = process.env.EVORESEARCH_DATA_ROOT
-  return { ...fromEnv, ...fromSettings }
+  if (process.env.EVORESEARCH_ROOT) fromEnv.dataRoot = process.env.EVORESEARCH_ROOT
+  else if (process.env.EVORESEARCH_DATA_ROOT) fromEnv.dataRoot = process.env.EVORESEARCH_DATA_ROOT
+  // 启动器显式传入的 EVORESEARCH_ROOT 是唯一数据根，优先于历史 settings.yaml。
+  return { ...fromSettings, ...fromEnv }
 }
 
 /** 把一段文本投递给一个后台 agent 会话（定时任务/通道共用）。 */
@@ -130,12 +134,44 @@ export async function deliverToAgent(
 
 const name = 'evoresearch-host'
 
-const inject = ['commands', 'tools', 'systemPrompt'] as const
+const inject = ['commands', 'tools', 'systemPrompt', 'settings', 'web'] as const
 
 function apply(ctx: Context): void {
   const config = resolveConfig(ctx)
   const dataRoot = config.dataRoot ?? process.cwd()
+  const legacyMigration = migrateLegacyPluginData(dataRoot)
+  if (legacyMigration.moved) console.log(`[evoresearch] 已将旧插件数据目录迁移到 ${pluginDataDir(dataRoot)}`)
+  if (legacyMigration.conflicts.length > 0) {
+    console.warn(`[evoresearch] 旧插件数据迁移存在 ${legacyMigration.conflicts.length} 个冲突，已保留目标目录文件`)
+  }
   console.log(`[evoresearch] host 插件激活（dataRoot: ${dataRoot}）`)
+
+  // 统一的可配置联网搜索 Provider：profile 将 web seam 固定指向此稳定 id，
+  // 具体使用 DeepSeek/OpenAI/Tavily/Brave/Serper/SearXNG/Parallel/Exa/Open-WebSearch
+  // 等通用 Provider 由设置面板决定；论文工具读取独立的学术搜索 Provider，
+  // 不会因普通搜索关键词而偷偷切换到学术后端。
+  const settings = ctx.get('settings') as { register?(namespace: string, schema: unknown, options?: { applies?: 'live' | 'restart' }): unknown } | undefined
+  if (typeof settings?.register === 'function') {
+    settings.register(WEB_SEARCH_SETTINGS_NAMESPACE, WEB_SEARCH_SETTINGS_SCHEMA, { applies: 'live' })
+  } else {
+    console.warn('[evoresearch] settings 服务不可用，联网搜索设置无法持久化')
+  }
+  const webSearchManager = new OpenWebSearchManager(dataRoot)
+  const webSearch = new ConfiguredWebSearchProvider(ctx, webSearchManager)
+  const googleAiModeManager = new ManagedMcpSearchManager(dataRoot, 'google-ai-mode')
+  const freeSearchManager = new ManagedMcpSearchManager(dataRoot, 'free-search')
+  webSearch.setManagedManager('google-ai-mode', googleAiModeManager)
+  webSearch.setManagedManager('free-search', freeSearchManager)
+  const web = ctx.get('web') as { registerSearchProvider?(provider: unknown): () => void } | undefined
+  if (typeof web?.registerSearchProvider === 'function') {
+    web.registerSearchProvider(webSearch)
+  } else {
+    console.warn('[evoresearch] ctx.web 不可用，联网搜索 Provider 未挂载')
+  }
+  // 默认搜索后端由 EvoResearch 自动安装并管理；用户无需另行启动 daemon。
+  void webSearch.initializeSelectedBackend().catch((error) => {
+    console.warn(`[evoresearch] Open-WebSearch 自动启动失败（首次搜索或设置面板可重试）: ${String(error)}`)
+  })
 
   // 1) 科研项目工作区
   const workspaceConfig: WorkspaceConfig = { dataRoot }
@@ -250,7 +286,7 @@ function apply(ctx: Context): void {
       if (ref === undefined) return chatGraph.previewOf(node, workspaceDir, maxChars)
       const base = node.scope === 'global' || workspaceDir === undefined || workspaceDir === dataRoot ? dataRoot : workspaceDir
       const target = ref.kind === 'note'
-        ? path.isAbsolute(ref.path) ? path.resolve(ref.path) : path.resolve(base, '.evoresearch-data', 'memories', 'notes', ref.path)
+        ? path.isAbsolute(ref.path) ? path.resolve(ref.path) : path.resolve(workspaceDataDir(dataRoot, base), 'memories', 'notes', ref.path)
         : path.isAbsolute(ref.path) ? path.resolve(ref.path) : path.resolve(base, ref.path)
       const root = path.resolve(base)
       const rootOk = target === root || target.startsWith(`${root}${path.sep}`) || target.startsWith(`${path.resolve(dataRoot)}${path.sep}`)
@@ -448,6 +484,7 @@ function apply(ctx: Context): void {
     experimentWorkspace, experimentProcess, worktrees, experimentLedger,
     experimentRounds, dailyReport, scienceLoops, scienceGraphBridge, chatGraph,
     projectEnv, rewind, notes, libraryIndexer, librarySearch, manuscript,
+    webSearch,
     evo: { signals, registry }, contextGuard, contextRuntime, contextAssembler,
     platform, jobHub,
     get figureService() { return figureServiceRef.current },
@@ -501,14 +538,16 @@ function apply(ctx: Context): void {
   } catch (error) {
     console.warn(`[evoresearch] P3-2 无人值守 shell 门控挂载失败（不影响其余功能）: ${String(error)}`)
   }
-  // P2-2 文献检索三工具：本地库 + 平台 web_search 探测合并
+  // P2-2 文献检索三工具：本地库 + 学术题录检索；通用 web_search 仅作兼容降级
   const libraryToolsDeps: LibraryToolsDeps = {
     dataRoot,
     librarySearch,
     libraryIndexer,
     hasWebSearch: () => {
+      if (!webSearch.enabled() && !webSearch.academicEnabled()) return false
       try { return (ctx.get('tools') as { get?(name: string): unknown } | undefined)?.get?.('web_search') !== undefined } catch { return false }
     },
+    invokeAcademicSearch: async (query, limit) => webSearch.searchAcademic(query, limit),
     invokeWebSearch: async (query) => {
       const result = await (ctx.get('tools') as NonNullable<ReturnType<typeof ctx.get>> & { execute(input: { callId: string; name: string; arguments: unknown; signal?: AbortSignal }): Promise<{ content: readonly unknown[]; isError: boolean }> }).execute({
         callId: `evoresearch-web-${Date.now()}`,
@@ -782,19 +821,25 @@ function apply(ctx: Context): void {
   const disposeContextRuntime = contextRuntime.attach(ctx)
   const disposeAutoskills = autoskills.attach(ctx)
 
-  // P1-1 AutoSkills 定时挖掘：经 SchedulerService 注册内置任务（每周一凌晨 3:07，
-  // settings.yaml evoresearch.autoskills.schedule 可覆盖 cron 或设 off 关闭）。
+  // P1-1 AutoSkills 定时挖掘：仅在显式配置 cron 时注册内置任务。
+  // 未配置时清理历史版本遗留的重复内置任务，避免后台会话悄悄出现在侧栏。
   // 结果经 deliverToAgent 回报主对话（通知也走对话，F1）。
   let disposeAutoskillsMining: (() => void) | undefined
   {
     const scheduleSetting = (config as { autoskillsSchedule?: string }).autoskillsSchedule
-    if (scheduleSetting !== 'off') {
-      const cron = typeof scheduleSetting === 'string' && scheduleSetting !== '' ? scheduleSetting : '7 3 * * 1'
+    const builtinPrompt = '执行一次全项目技能挖掘（mineAllWorkspaces）：汇总各项目观测聚类与笔记重复做法，生成待审技能提案。完成后汇报新增提案数与名称列表。'
+    for (const task of scheduler.list()) {
+      if (task.name === 'AutoSkills 定时挖掘' && task.prompt === builtinPrompt && task.workspaceDir === dataRoot) {
+        scheduler.remove(task.taskId)
+      }
+    }
+    if (typeof scheduleSetting === 'string' && scheduleSetting !== '' && scheduleSetting !== 'off') {
+      const cron = scheduleSetting
       try {
         const task = scheduler.add({
           name: 'AutoSkills 定时挖掘',
           cron,
-          prompt: `执行一次全项目技能挖掘（mineAllWorkspaces）：汇总各项目观测聚类与笔记重复做法，生成待审技能提案。完成后汇报新增提案数与名称列表。`,
+          prompt: builtinPrompt,
           workspaceDir: dataRoot,
         })
         void task
@@ -819,6 +864,9 @@ function apply(ctx: Context): void {
       disposeDailyReport()
       disposeContextRuntime()
       disposeAutoskills()
+      void webSearchManager.dispose()
+      void googleAiModeManager.dispose()
+      void freeSearchManager.dispose()
       for (const dispose of disposersNf) dispose()
       jobHub.dispose()
       disposeContextAssemblerPrompt?.()

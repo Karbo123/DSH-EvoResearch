@@ -111,7 +111,7 @@ export interface GuardStatus {
 
 /** 运行时配置。 */
 export interface ContextWindowConfig {
-  /** 部署根目录（档案/日志写入 <dataRoot>/.evoresearch-data/context/）。 */
+  /** 部署根目录（档案/日志写入 <dataRoot>/plugins/context/）。 */
   readonly dataRoot?: string
   readonly enabled?: boolean
   readonly windowCatalog?: WindowCatalogConfig
@@ -253,9 +253,9 @@ export class ContextWindowRuntime implements ContextWindowGuard {
     }
   }
 
-  /** 内部数据目录（<dataRoot>/.evoresearch-data/context/）。 */
+  /** 内部数据目录（<dataRoot>/plugins/context/）。 */
   private contextDir(): string {
-    return path.join(this.config.dataRoot, '.evoresearch-data', 'context')
+    return path.join(this.config.dataRoot, 'plugins', 'context')
   }
 
   private compactionsFile(): string {

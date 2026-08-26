@@ -7,8 +7,11 @@
  * 请求声明的根目录内（isWithin 校验）。
  */
 import { opendir, readFile, readdir, rm, stat, writeFile, mkdir } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { zstdDecompressSync } from 'node:zlib'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /** 统计字节流中的行数（事件数近似；超长文件在调用侧已设上限）。 */
@@ -97,6 +100,100 @@ function requireString(payload: Record<string, unknown>, key: string): string {
   return value
 }
 
+function writeSseHeaders(res: ServerResponse): void {
+  res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', connection: 'keep-alive', 'x-accel-buffering': 'no' })
+}
+
+async function writeSseEvents(res: ServerResponse, events: unknown): Promise<void> {
+  writeSseHeaders(res)
+  const writeItem = async (item: unknown): Promise<boolean> => {
+    if (item === null || typeof item !== 'object') return true
+    const event = (item as { event?: unknown }).event
+    const data = (item as { data?: unknown }).data
+    if (typeof event !== 'string') return true
+    if (res.destroyed || res.writableEnded) return false
+    const accepted = res.write(`event: ${event}\ndata: ${JSON.stringify(data ?? {})}\n\n`)
+    if (!accepted) await new Promise<void>((resolve) => res.once('drain', resolve))
+    return !res.destroyed && !res.writableEnded
+  }
+  try {
+    if (events !== null && typeof events === 'object' && Symbol.asyncIterator in events) {
+      for await (const item of events as AsyncIterable<unknown>) if (!await writeItem(item)) break
+    } else if (Array.isArray(events)) {
+      for (const item of events) if (!await writeItem(item)) break
+    }
+  } finally {
+    if (!res.writableEnded) res.end()
+  }
+}
+
+const moduleRequire = createRequire(import.meta.url)
+
+/** 从插件实际解析到的 package.json 读取版本；找不到时返回 undefined，不猜版本。 */
+export function pluginPackageVersion(entry: any): string | undefined {
+  const specifier = typeof entry?.options?.name === 'string' ? entry.options.name : ''
+  if (specifier === '' || specifier.startsWith('cordis:')) return undefined
+  const parts = specifier.split('/')
+  const packageName = specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]
+  if (packageName === undefined || packageName === '') return undefined
+
+  // loader 的 baseUrl 才是实际 profile 的解析上下文；仅使用 cwd 在
+  // 从任意目录启动、或 DSH_HOME 位于另一目录时会漏掉 profile 依赖。
+  const roots = [process.cwd()]
+  const dshHome = process.env.DSH_HOME?.trim()
+  if (dshHome !== undefined && dshHome !== '') roots.push(join(resolve(dshHome), 'profiles', 'evoresearch'))
+  const baseUrls = [
+    entry?.parent?.tree?.ctx?.baseUrl,
+    entry?.parent?.ctx?.baseUrl,
+    entry?.ctx?.baseUrl,
+  ]
+  for (const value of baseUrls) {
+    if (typeof value !== 'string' || value === '') continue
+    try {
+      const basePath = value.startsWith('file:') ? fileURLToPath(value) : value
+      roots.push(basePath)
+    } catch { /* 无法转换的 baseUrl 由其他解析根兜底 */ }
+  }
+
+  const uniqueRoots = [...new Set(roots)]
+  const resolvers = [moduleRequire]
+  for (const root of uniqueRoots) {
+    try { resolvers.push(createRequire(join(root, '__evoresearch-plugin-version__.cjs'))) } catch { /* 忽略无效解析根 */ }
+  }
+  const modulePaths: string[] = []
+  const seenModules = new Set<string>()
+  const addResolved = (resolved: string | undefined) => {
+    if (resolved !== undefined && !seenModules.has(resolved)) {
+      seenModules.add(resolved)
+      modulePaths.push(resolved)
+    }
+  }
+  for (const resolver of resolvers) {
+    // package.json 是最准确的来源；这里使用公开的 package.json export，
+    // 不从 lockfile 或包名字符串猜测版本。
+    try { addResolved(resolver.resolve(`${packageName}/package.json`)) } catch { /* 某些旧包未导出 package.json */ }
+    try { addResolved(resolver.resolve(specifier)) } catch { /* 继续尝试其他解析上下文 */ }
+    for (const root of uniqueRoots) {
+      try { addResolved(resolver.resolve(`${packageName}/package.json`, { paths: [root] })) } catch { /* 该搜索根未安装此包 */ }
+      try { addResolved(resolver.resolve(specifier, { paths: [root] })) } catch { /* 该搜索根未安装此包 */ }
+    }
+  }
+
+  for (const modulePath of modulePaths) {
+    let directory = dirname(modulePath)
+    while (true) {
+      try {
+        const pkg = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as { name?: unknown; version?: unknown }
+        if (pkg.name === packageName && typeof pkg.version === 'string' && pkg.version !== '') return pkg.version
+      } catch { /* 继续向上查找包根 */ }
+      const parent = dirname(directory)
+      if (parent === directory) break
+      directory = parent
+    }
+  }
+  return undefined
+}
+
 /** 通过 DSH 凭据服务 / 环境变量解析 provider 的 API key（用于直接探测模型端点）。 */
 async function resolveProviderApiKey(ctx: any, ref: string | undefined): Promise<string | undefined> {
   if (ref === undefined) return undefined
@@ -137,6 +234,34 @@ async function fetchEndpointModels(
         ...(outputModalities !== undefined && outputModalities.length > 0 ? { outputModalities } : {}),
       }
     })
+}
+
+/**
+ * 为 OpenAI 兼容服务生成探测候选地址。
+ *
+ * 保留用户输入的地址作为第一候选：有些网关把 /models 直接挂在根路径，
+ * 不能无条件追加 /v1。只有原地址不以 /v1 结尾时才追加第二候选。
+ */
+export function providerBaseUrlCandidates(baseURL: string): string[] {
+  const normalized = baseURL.trim().replace(/\/+$/, '')
+  if (/\/v1$/i.test(normalized)) return [normalized]
+  return [normalized, `${normalized}/v1`]
+}
+
+/** 探测 provider，并返回真正成功的 baseURL，供保存配置时使用。 */
+export async function probeProviderEndpoint(baseURL: string, apiKey?: string): Promise<{
+  baseURL: string
+  models: Array<{ id: string; name?: string; contextWindow?: number; endpoints?: string[]; outputModalities?: string[] }>
+}> {
+  let lastError: unknown
+  for (const candidate of providerBaseUrlCandidates(baseURL)) {
+    try {
+      return { baseURL: candidate, models: await fetchEndpointModels(candidate, apiKey) }
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
 /** 图片生成模型的常见命名特征（网关没有模态元数据时的兜底判定，避免把纯文本/视觉模型列进图片生成）。 */
@@ -348,6 +473,32 @@ function llmPiAiSection(settings: any): { providers: Record<string, any> } {
   }
 }
 
+/**
+ * 为 provider 保存操作创建可写副本。
+ * DSH settings 的 document/resolved 配置可能被冻结；保存路由不能原地
+ * 新增、删除或修改 provider，否则新增 provider 会抛出 "object is not extensible"。
+ */
+export function cloneLlmProviders(source: unknown): Record<string, any> {
+  if (source === null || typeof source !== 'object' || Array.isArray(source)) return {}
+  const providers: Record<string, any> = {}
+  for (const [id, value] of Object.entries(source as Record<string, unknown>)) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      providers[id] = value
+      continue
+    }
+    const profile = { ...(value as Record<string, unknown>) }
+    if (Array.isArray(profile.models)) {
+      profile.models = profile.models.map((model) => (
+        model !== null && typeof model === 'object' && !Array.isArray(model)
+          ? { ...(model as Record<string, unknown>) }
+          : model
+      ))
+    }
+    providers[id] = profile
+  }
+  return providers
+}
+
 /** 规范化模型条目：只保留 id / name / contextWindow / maxTokens / reasoningEfforts，丢弃空字段。 */
 function sanitizeModelEntry(m: unknown): { id: string; name?: string; contextWindow?: number; maxTokens?: number; reasoningEfforts?: Record<string, string | null> | false } | null {
   const entry = m as { id?: unknown; name?: unknown; contextWindow?: unknown; maxTokens?: unknown; reasoningEfforts?: unknown } | null
@@ -453,6 +604,7 @@ export function registerWorkspaceApi(ctx: any): void {
       const url = new URL(req.url ?? '/', 'http://dsh.internal')
       const pathname = url.pathname
       const method = pathname.startsWith('/evoresearch/fs/') ? pathname.slice('/evoresearch/fs/'.length) : undefined
+      const evoresearch = ctx.get('evoresearch') as Record<string, (args?: unknown) => unknown> | undefined
 
       try {
         // GET /evoresearch/fs/file?path= → 媒体/文本文件流
@@ -474,6 +626,13 @@ export function registerWorkspaceApi(ctx: any): void {
         if (req.method === 'GET' && method === 'mode') {
           const permission = ctx.get('permissionPresets')
           writeOk(res, { preset: permission?.defaultPreset ?? null })
+          return
+        }
+        // AutoRelatedWork 与原 Flask API 对齐的只读 GET 端点。
+        if (req.method === 'GET' && (method === 'auto-related-work/health' || method === 'auto-related-work/config' || method === 'auto-related-work/cache-stats')) {
+          const serviceMethod = method === 'auto-related-work/health' ? 'autoRelatedWorkHealth' : method === 'auto-related-work/config' ? 'autoRelatedWorkConfigGet' : 'autoRelatedWorkCacheStats'
+          if (evoresearch?.[serviceMethod] === undefined) throw httpError(400, 'method-error', 'AutoRelatedWork 服务不可用')
+          writeOk(res, await evoresearch[serviceMethod]())
           return
         }
         if (req.method !== 'POST') {
@@ -617,6 +776,7 @@ export function registerWorkspaceApi(ctx: any): void {
             entries.push({
               id: entry.options?.name ?? entry.name ?? String(entry),
               state: entry.fiber === undefined ? 'loading' : String(entry.fiber.state ?? ''),
+              version: pluginPackageVersion(entry) ?? null,
             })
           }
           writeOk(res, { plugins: entries })
@@ -743,7 +903,7 @@ export function registerWorkspaceApi(ctx: any): void {
               if (listed === null && profile?.baseURL !== undefined) {
                 try {
                   const apiKey = await resolveProviderApiKey(ctx, profile.apiKeyEnv)
-                  listed = await fetchEndpointModels(profile.baseURL, apiKey)
+                  listed = (await probeProviderEndpoint(profile.baseURL, apiKey)).models
                 } catch { /* 端点无目录 */ }
               }
               const seen = new Set<string>()
@@ -844,8 +1004,11 @@ export function registerWorkspaceApi(ctx: any): void {
             return
           }
           let models: Array<{ id: string; name: string; contextWindow: number | null }> = []
+          let resolvedBaseURL = baseURL
           try {
-            const fetched = await fetchEndpointModels(baseURL, apiKey)
+            const result = await probeProviderEndpoint(baseURL, apiKey)
+            resolvedBaseURL = result.baseURL
+            const fetched = result.models
             const seen = new Set<string>()
             for (const m of fetched) {
               if (m.id !== '' && !seen.has(m.id)) {
@@ -856,7 +1019,7 @@ export function registerWorkspaceApi(ctx: any): void {
           } catch (error) {
             throw httpError(400, 'probe-failed', `模型端点探测失败: ${(error as Error)?.message ?? String(error)}`)
           }
-          writeOk(res, { listed: true, models })
+          writeOk(res, { listed: true, baseURL: resolvedBaseURL, models })
           return
         }
 
@@ -1030,7 +1193,7 @@ export function registerWorkspaceApi(ctx: any): void {
           if (settings?.replace === undefined) throw httpError(400, 'method-error', 'settings 服务不可用')
           let provider = requireString(payload, 'provider')
           const patch = (payload.patch ?? {}) as Record<string, unknown>
-          const section = llmPiAiSection(settings)
+          const section = { providers: cloneLlmProviders(llmPiAiSection(settings).providers) }
           let profile = section.providers[provider] as Record<string, unknown> | undefined
           if (patch.remove === true) {
             const removed = profile
@@ -1171,8 +1334,85 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
+        // AutoRelatedWork：这是原 D:\auto-related-work/backend/app.py 的
+        // 完整 JSON/SSE 兼容入口。密钥只随本次请求传给 Host，不写入浏览器。
+        if (typeof method === 'string' && method.startsWith('auto-related-work/')) {
+          const operation = method.slice('auto-related-work/'.length)
+          const jsonMethods: Record<string, string> = {
+            config: 'autoRelatedWorkConfigSet', search: 'autoRelatedWorkSearch', enrich: 'autoRelatedWorkEnrich',
+            'author-enrich': 'autoRelatedWorkAuthorEnrich', 'author-candidates': 'autoRelatedWorkAuthorCandidates',
+            'author-papers': 'autoRelatedWorkAuthorPapers', pipeline: 'autoRelatedWorkPipeline',
+            'related-search': 'autoRelatedWorkRelatedSearch', 'enrich-stream': 'autoRelatedWorkEnrichStream',
+            'cache-refine': 'autoRelatedWorkCacheRefine', 'cache-clear': 'autoRelatedWorkCacheClear',
+          }
+          if (operation === 'health' || operation === 'config' || operation === 'cache-stats' || operation === 'cache-clear' || operation === 'cache-refine' || jsonMethods[operation] !== undefined) {
+            const stream = operation === 'pipeline' || operation === 'related-search' || operation === 'enrich-stream' || operation === 'author-papers'
+            const streamMethods: Record<string, string> = { pipeline: 'autoRelatedWorkPipelineStream', 'related-search': 'autoRelatedWorkRelatedSearchStream', 'enrich-stream': 'autoRelatedWorkEnrichStreamLive', 'author-papers': 'autoRelatedWorkAuthorPapersStream' }
+            const serviceMethod = operation === 'health' ? 'autoRelatedWorkHealth' : operation === 'cache-stats' ? 'autoRelatedWorkCacheStats' : stream ? streamMethods[operation] : jsonMethods[operation]
+            if (serviceMethod === undefined || evoresearch?.[serviceMethod] === undefined) throw httpError(400, 'method-error', 'AutoRelatedWork 服务不可用')
+            try {
+              const value = await evoresearch[serviceMethod](payload)
+              if (stream) await writeSseEvents(res, value)
+              else writeOk(res, value)
+            } catch (error) { writeError(res, error) }
+            return
+          }
+        }
+
         // ── 业务面板数据（直连插件 EvoResearchApiService，绕开 Remote $mount）──
-        const evoresearch = ctx.get('evoresearch') as Record<string, (args?: unknown) => unknown> | undefined
+        if (method === 'web-search-settings-get') {
+          if (evoresearch?.webSearchSettingsGet === undefined) throw httpError(400, 'method-error', '联网搜索服务不可用')
+          writeOk(res, await (evoresearch.webSearchSettingsGet as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'web-search-settings-save') {
+          if (evoresearch?.webSearchSettingsSet === undefined) throw httpError(400, 'method-error', '联网搜索服务不可用')
+          try {
+            const activeProvider = typeof payload.activeProvider === 'string' ? payload.activeProvider : 'none'
+            const providers = payload.providers !== null && typeof payload.providers === 'object' ? payload.providers as Record<string, unknown> : {}
+            const academicProvider = typeof payload.academicProvider === 'string' ? payload.academicProvider : undefined
+            const academicProviders = payload.academicProviders !== null && typeof payload.academicProviders === 'object' ? payload.academicProviders as Record<string, unknown> : undefined
+            const apiKeys = payload.apiKeys !== null && typeof payload.apiKeys === 'object' ? payload.apiKeys as Record<string, unknown> : undefined
+            const academicApiKeys = payload.academicApiKeys !== null && typeof payload.academicApiKeys === 'object' ? payload.academicApiKeys as Record<string, unknown> : undefined
+            const clearKeys = Array.isArray(payload.clearKeys) ? payload.clearKeys.filter((x): x is string => typeof x === 'string') : undefined
+            writeOk(res, await (evoresearch.webSearchSettingsSet as (a: { activeProvider: string; providers: Record<string, unknown>; academicProvider?: string; academicProviders?: Record<string, unknown>; apiKeys?: Record<string, unknown>; academicApiKeys?: Record<string, unknown>; clearKeys?: string[] }) => Promise<unknown>)({ activeProvider, providers, academicProvider, academicProviders, apiKeys, academicApiKeys, clearKeys }))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+        if (method === 'web-search-test') {
+          if (evoresearch?.webSearchTest === undefined) throw httpError(400, 'method-error', '联网搜索服务不可用')
+          try {
+            writeOk(res, await (evoresearch.webSearchTest as (a: { query: string }) => Promise<unknown>)({ query: requireString(payload, 'query') }))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+        if (method === 'academic-search-test') {
+          if (evoresearch?.academicSearchTest === undefined) throw httpError(400, 'method-error', '学术搜索服务不可用')
+          try {
+            writeOk(res, await (evoresearch.academicSearchTest as (a: { query: string }) => Promise<unknown>)({ query: requireString(payload, 'query') }))
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+        if (method === 'web-search-backend-status' || method === 'web-search-backend-install' || method === 'web-search-backend-start' || method === 'web-search-backend-stop') {
+          const methodName = method === 'web-search-backend-status'
+            ? 'webSearchBackendStatus'
+            : method === 'web-search-backend-install'
+              ? 'webSearchBackendInstall'
+              : method === 'web-search-backend-start' ? 'webSearchBackendStart' : 'webSearchBackendStop'
+          if (evoresearch?.[methodName] === undefined) throw httpError(400, 'method-error', '联网搜索后端管理服务不可用')
+          try {
+            writeOk(res, await (evoresearch[methodName] as () => Promise<unknown>)())
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         if (method === 'projects') {
           if (evoresearch?.projectsList === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           writeOk(res, await (evoresearch.projectsList as () => Promise<unknown>)())
@@ -1343,6 +1583,42 @@ export function registerWorkspaceApi(ctx: any): void {
           } catch (error) {
             writeError(res, error)
           }
+          return
+        }
+        // 数据路径（设置面板）：返回当前进程实际路径，切换后由 launcher 重启 DSH
+        if (method === 'data-paths-get') {
+          if (evoresearch?.dataPathsGet === undefined) throw httpError(400, 'method-error', '数据路径服务不可用')
+          writeOk(res, await (evoresearch.dataPathsGet as () => Promise<unknown>)())
+          return
+        }
+        if (method === 'data-paths-browse') {
+          if (evoresearch?.dataPathsBrowse === undefined) throw httpError(400, 'method-error', '目录选择服务不可用')
+          const browsePath = typeof payload.path === 'string' && payload.path.trim() !== '' ? payload.path : undefined
+          writeOk(res, await (evoresearch.dataPathsBrowse as (a: { path?: string }) => Promise<unknown>)({ path: browsePath }))
+          return
+        }
+        if (method === 'data-paths-apply') {
+          if (evoresearch?.dataPathsApply === undefined) throw httpError(400, 'method-error', '数据路径服务不可用')
+          if (typeof payload.evoresearchRoot !== 'string') {
+            throw httpError(400, 'bad-request', 'EVORESEARCH_ROOT 必须是路径')
+          }
+          if (payload.mode !== 'migrate' && payload.mode !== 'reuse') {
+            throw httpError(400, 'bad-request', '请选择“迁移数据”或“直接复用”')
+          }
+          try {
+            const result = await (evoresearch.dataPathsApply as (a: { evoresearchRoot: string; mode: 'migrate' | 'reuse' }) => Promise<unknown>)({
+              evoresearchRoot: payload.evoresearchRoot,
+              mode: payload.mode,
+            })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+        if (method === 'data-clear-paths-get') {
+          if (evoresearch?.dataClearPathsGet === undefined) throw httpError(400, 'method-error', '清除数据路径服务不可用')
+          writeOk(res, await (evoresearch.dataClearPathsGet as () => Promise<unknown>)())
           return
         }
         // 清除数据（设置面板）：scopes ∈ projects / models（prefs 为客户端本地偏好）

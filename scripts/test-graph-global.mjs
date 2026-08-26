@@ -22,8 +22,8 @@ check('P2 不可见 P1 project 节点', !g2.nodes.some((n) => n.id === n1.id))
 const g1r = svc.get('p1')
 check('P1 可见自己的 project 节点', g1r.nodes.some((n) => n.id === n1.id))
 // 4) 落盘：全局文件只有 global 节点；P1 文件只有 project 节点
-const globalFile = JSON.parse(fs.readFileSync(path.join(tmp, '.evoresearch-data', 'chat-graphs', '_global_.json'), 'utf8'))
-const p1File = JSON.parse(fs.readFileSync(path.join(tmp, '.evoresearch-data', 'chat-graphs', 'p1.json'), 'utf8'))
+const globalFile = JSON.parse(fs.readFileSync(path.join(tmp, 'plugins', 'chat-graphs', '_global_.json'), 'utf8'))
+const p1File = JSON.parse(fs.readFileSync(path.join(tmp, 'plugins', 'chat-graphs', 'p1.json'), 'utf8'))
 check('全局文件仅 global 节点', globalFile.nodes.length === 1 && globalFile.nodes[0].id === g1.id)
 check('项目文件仅 project 节点', p1File.nodes.length === 1 && p1File.nodes[0].id === n1.id)
 // 5) global 节点内容更新（P2 侧保存）→ P1 也应看到更新

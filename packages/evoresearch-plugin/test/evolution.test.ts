@@ -375,7 +375,7 @@ describe('EVO-08 Skill 草稿 Markdown 可编辑，批准后才安装', () => {
     // 空内容拒绝
     assert.equal(service.updateProposalContent(proposal.proposalId, '  '), false)
     assert.equal(service.approve(proposal.proposalId), true)
-    const skillFile = path.join(root, '.evoresearch-data', 'skills', proposal.name, 'SKILL.md')
+    const skillFile = path.join(root, 'plugins', 'skills', proposal.name, 'SKILL.md')
     const installed = fs.readFileSync(skillFile, 'utf8')
     assert.ok(installed.includes('每次实验都要记录超参数到 CSV'))
     assert.ok(installed.includes('name: '))
@@ -419,7 +419,7 @@ describe('EVO-09 runSkill 接入真实 DSH Skill 执行', () => {
     assert.ok(result.summary?.includes('已在 DSH SkillRegistry 装载'))
     assert.ok(result.summary?.includes(proposal.name))
     // 可读运行记录已追加
-    const runs = fs.readFileSync(path.join(root, '.evoresearch-data', 'evolution', 'skill-runs.jsonl'), 'utf8')
+    const runs = fs.readFileSync(path.join(root, 'plugins', 'evolution', 'skill-runs.jsonl'), 'utf8')
       .split('\n').filter((l) => l.trim() !== '')
     assert.equal(runs.length, 1)
     const record = JSON.parse(runs[0]!) as { loaded: boolean; summary: string }
@@ -462,7 +462,7 @@ describe('EVO-09 runSkill 接入真实 DSH Skill 执行', () => {
     assert.equal(service.run(proposal.proposalId), true) // 触发异步执行
     // 等待异步留痕完成
     await new Promise((resolve) => setTimeout(resolve, 50))
-    const runs = fs.readFileSync(path.join(root, '.evoresearch-data', 'evolution', 'skill-runs.jsonl'), 'utf8')
+    const runs = fs.readFileSync(path.join(root, 'plugins', 'evolution', 'skill-runs.jsonl'), 'utf8')
       .split('\n').filter((l) => l.trim() !== '')
     assert.equal(runs.length, 1)
   })

@@ -8,7 +8,7 @@
  * EVO-02：把同类信号聚合为可读 Markdown（`aggregateWeaknesses` /
  * `weaknessMarkdown`），描述为自然语言，不引入结构化失败分类。
  *
- * 存储：追加式 JSONL（`<dataRoot>/.evoresearch-data/evolution/signals.jsonl`），
+ * 存储：追加式 JSONL（`<dataRoot>/plugins/evolution/signals.jsonl`），
  * 每行一个信号对象；追加不改写历史，天然满足"留在后台、可重建、不删除原文"。
  *
  * 收集点接线：本模块只提供 `recordSignal` 接口；由队长/其他模块在
@@ -116,7 +116,7 @@ export class SignalStore {
   private readonly file: string
 
   constructor(readonly dataRoot: string) {
-    this.file = path.join(dataRoot, '.evoresearch-data', 'evolution', 'signals.jsonl')
+    this.file = path.join(dataRoot, 'plugins', 'evolution', 'signals.jsonl')
   }
 
   /** JSONL 文件路径（公开：诊断/备份复用）。 */

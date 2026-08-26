@@ -52,7 +52,7 @@ report.approve = pid ? await (await fetch(`http://127.0.0.1:${APP_PORT}/evoresea
 const { AutoSkillsService } = await import(pathToFileURL(join(ROOT, 'packages', 'evoresearch-plugin', 'lib', 'host', 'autoskills.js')).href)
 const svc = new AutoSkillsService({ dataRoot: join(MEMORY_DIR, '..', '..') })
 const skillName = fresh[0] ? String(fresh[0].name).replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '').slice(0, 64) : 'none'
-const skillDir = join(svc['skillsDir'] ?? join(MEMORY_DIR, '..', '.evoresearch-data', 'skills'), skillName)
+const skillDir = join(svc['skillsDir'] ?? join(MEMORY_DIR, '..', 'plugins', 'skills'), skillName)
 try {
   const skillMd = readFileSync(join(skillDir, 'SKILL.md'), 'utf8')
   report.skillMd = { hasFrontmatter: skillMd.startsWith('---'), hasName: skillMd.includes(`name: ${skillName}`), hasTodo: skillMd.includes('TODO') }

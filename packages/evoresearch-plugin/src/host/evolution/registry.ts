@@ -13,7 +13,7 @@
  * 活动候选副作用（EVO-10 卸载无副作用）。
  *
  * 候选隔离存储：全部候选与"当前启用版本指针"一起持久化在
- * `<dataRoot>/.evoresearch-data/evolution/candidates.json`；候选通过/拒绝/回滚
+ * `<dataRoot>/plugins/evolution/candidates.json`；候选通过/拒绝/回滚
  * 都不影响其他组件与当前启用版本（EVO-05 的隔离由 evaluateCandidate 保证，
  * 本模块保证版本指针可恢复）。
  */
@@ -97,7 +97,7 @@ export class CandidateRegistry {
   private readonly applier: ComponentApplier
 
   constructor(readonly options: CandidateRegistryOptions) {
-    this.file = path.join(options.dataRoot, '.evoresearch-data', 'evolution', 'candidates.json')
+    this.file = path.join(options.dataRoot, 'plugins', 'evolution', 'candidates.json')
     this.applier = options.apply ?? (() => () => { /* no-op */ })
     this.load()
   }

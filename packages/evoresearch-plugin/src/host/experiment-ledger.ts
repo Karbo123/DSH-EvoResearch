@@ -7,7 +7,7 @@
  * - 可审计：每次尝试恰好一个 commit（--allow-empty）
  * - 可导出：git clone bare → 普通仓库
  *
- * 裸仓库路径：<dataRoot>/.evoresearch-data/ledgers/<sanitized-project>/<slug>.git
+ * 裸仓库路径：<dataRoot>/plugins/ledgers/<sanitized-project>/<slug>.git
  * 工作区：<projectDir>/experiments/<slug>  (--work-tree)
  */
 import * as fs from 'node:fs'
@@ -80,7 +80,7 @@ export class ExperimentLedgerService {
     if (name === undefined) {
       throw new Error(`实验账本需要项目目录（dataRoot/projects/<name>）: ${projectDir}`)
     }
-    return path.join(this.dataRoot, '.evoresearch-data', 'ledgers', slugifyProjectName(name), `${slug}.git`)
+    return path.join(this.dataRoot, 'plugins', 'ledgers', slugifyProjectName(name), `${slug}.git`)
   }
 
   private expDir(projectDir: string, slug: string): string {

@@ -3,7 +3,7 @@
  *
  * PLAT-16：同步/异步/后台/可继续/可取消子代理的统一适配接口（create/continue/
  * interrupt/report）+ 父子任务谱系/恢复点/结果回报的 JSONL 记录（SubagentRegistry，
- * <dataRoot>/.evoresearch-data/subagents.jsonl）。
+ * <dataRoot>/plugins/subagents.jsonl）。
  *
  * PLAT-19：可插拔子代理 provider 接口——进程内 / fork / ACP / DSH SDK / 外部
  * 编码 Agent 都可以实现 SubagentProvider 并注册进 SubagentProviderRegistry；
@@ -58,7 +58,7 @@ export class SubagentRegistry {
   private readonly records: SubagentRecord[] = []
 
   constructor(readonly dataRoot: string) {
-    this.file = path.join(dataRoot, '.evoresearch-data', 'subagents.jsonl')
+    this.file = path.join(dataRoot, 'plugins', 'subagents.jsonl')
     this.load()
   }
 
