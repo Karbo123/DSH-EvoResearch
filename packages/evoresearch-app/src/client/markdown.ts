@@ -61,6 +61,96 @@ for (const [name, lang] of LANGUAGES) {
   if (!hljs.getLanguage(name)) hljs.registerLanguage(name, lang as never)
 }
 
+// ── JSON 结构化渲染（§需求4）───────────────────────────────────────────────
+// 纯 TS 自实现（无第三方依赖）：键名/字符串/数字/布尔/null 分色 + 缩进；
+// 大 JSON（> ~2KB 或深度 > 4）默认折叠，点击「展开」后显示完整嵌套。
+const JSON_COLLAPSE_BYTES = 2048
+const JSON_COLLAPSE_DEPTH = 4
+
+function escHtmlFragment(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** 递归把 JSON 值渲染为带 token class 的缩进 HTML；顺带统计最大深度。 */
+function renderJsonValue(value: unknown, depth: number, ctx: { depth: number }): string {
+  if (depth > ctx.depth) ctx.depth = depth
+  const indent = '    '.repeat(depth)
+  const childIndent = '    '.repeat(depth + 1)
+  if (value === null) return '<span class="evo-jnull">null</span>'
+  if (typeof value === 'boolean') return `<span class="evo-jbool">${value}</span>`
+  if (typeof value === 'number') {
+    return Number.isFinite(value as number)
+      ? `<span class="evo-jnum">${value}</span>`
+      : `<span class="evo-jstr">${escHtmlFragment(JSON.stringify(value))}</span>`
+  }
+  if (typeof value === 'string') return `<span class="evo-jstr">${escHtmlFragment(JSON.stringify(value))}</span>`
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '<span class="evo-jpunct">[</span><span class="evo-jpunct">]</span>'
+    const items = value.map((c) => renderJsonValue(c, depth + 1, ctx))
+    const multi = value.length > 1 || items.some((s) => /[\n\[\{]/.test(s))
+    if (!multi) return `<span class="evo-jpunct">[</span>${items.join('<span class="evo-jpunct">, </span>')}<span class="evo-jpunct">]</span>`
+    return `<span class="evo-jpunct">[</span>\n${items.map((s) => `${childIndent}${s}`).join(',\n')}\n${indent}<span class="evo-jpunct">]</span>`
+  }
+  const keys = Object.keys(value)
+  if (keys.length === 0) return '<span class="evo-jpunct">{</span><span class="evo-jpunct">}</span>'
+  const pairs = keys.map((k) => `<span class="evo-jkey">${escHtmlFragment(JSON.stringify(k))}</span><span class="evo-jpunct">: </span>${renderJsonValue((value as Record<string, unknown>)[k], depth + 1, ctx)}`)
+  const multi = keys.length > 1 || pairs.some((p) => /[\n\[\{]/.test(p))
+  if (!multi) return `<span class="evo-jpunct">{ </span>${pairs.join('<span class="evo-jpunct">, </span>')}<span class="evo-jpunct"> }</span>`
+  return `<span class="evo-jpunct">{</span>\n${pairs.map((s) => `${childIndent}${s}`).join(',\n')}\n${indent}<span class="evo-jpunct">}</span>`
+}
+
+/** 文本是否可判定为 JSON（代码块 language=json 或内容看起来是对象/数组字面量）。 */
+function looksLikeJson(s: string): boolean {
+  const t = s.trim()
+  if (t === '' || (t[0] !== '{' && t[0] !== '[')) return false
+  try { JSON.parse(t); return true } catch { return false }
+}
+
+/** 渲染 code block 的 JSON：可折叠时返回带 data 前缀的 HTML，返回字符串由 highlight 使用。 */
+function renderJsonBlock(lang: string, str: string): string | null {
+  const text = lang.trim().toLowerCase()
+  const isJsonLang = text === 'json' || text === 'json5' || text === 'jsonc'
+  // 仅当显式 json 语言，或无语言标签且内容可解析为 JSON 时才走 JSON 渲染
+  if (!isJsonLang && (text !== '' || !looksLikeJson(str))) return null
+  let parsed: unknown
+  try { parsed = JSON.parse(str) } catch { return null }
+  const ctx = { depth: 0 }
+  const html = renderJsonValue(parsed, 0, ctx)
+  const bytes = str.length
+  const large = bytes > JSON_COLLAPSE_BYTES || ctx.depth > JSON_COLLAPSE_DEPTH
+  if (!large) {
+    return `<pre class="evo-json"><code class="language-json">${html}</code></pre>`
+  }
+  const plain = html.replace(/<[^>]+>/g, '')
+  const preview = plain.length > 160 ? `${plain.slice(0, 160)}…` : plain
+  return `<pre class="evo-json evo-json-large" data-json-bytes="${bytes}" data-json-depth="${ctx.depth}">
+  <span class="evo-json-toggle" role="button" tabindex="0" aria-expanded="false">
+    <span class="evo-json-toggle-icon" aria-hidden="true">▸</span>
+    <span class="evo-json-toggle-label">JSON · ${bytes} bytes · ${ctx.depth} levels · <span class="evo-json-toggle-preview">${escHtmlFragment(preview)}</span></span>
+  </span>
+  <code class="evo-json-hidden" hidden>${html}</code>
+</pre>`
+}
+
+let jsonToggleBound = false
+function bindJsonToggle(): void {
+  if (jsonToggleBound || typeof document === 'undefined') return
+  jsonToggleBound = true
+  document.addEventListener('click', (e: MouseEvent) => {
+    const target = e.target as Element | null
+    const btn = target?.closest?.('.evo-json-toggle')
+    if (!btn) return
+    const pre = btn.closest('.evo-json-large')
+    if (!pre) return
+    e.preventDefault()
+    const hidden = pre.querySelector<HTMLElement>('.evo-json-hidden')
+    pre.classList.add('evo-json-open')
+    btn.setAttribute('hidden', '')
+    if (hidden !== null) { hidden.hidden = false; hidden.setAttribute('data-open', '1') }
+    btn.setAttribute('aria-expanded', 'true')
+  })
+}
+
 /** 块级 $$...$$（markdown-it 15 下 texmath 1.0.0 的行内规则已失效，自实现）。 */
 function mathBlockRule(state: any, startLine: number, endLine: number, silent: boolean): boolean {
   const start = state.bMarks[startLine] + state.tShift[startLine]
@@ -138,6 +228,11 @@ const md = new MarkdownIt({
       // 占位容器：流式期间不渲染，回答结束后由 renderMermaidBlocks 惰性绘制（§31.5）。
       // 以 <pre 开头避免 markdown-it fence 渲染器再次包一层 pre/code。
       return `<pre class="evo-mermaid">${md.utils.escapeHtml(str)}</pre>`
+    }
+    const jsonHtml = renderJsonBlock(lang, str)
+    if (jsonHtml !== null) {
+      bindJsonToggle()
+      return jsonHtml
     }
     if (lang !== '' && hljs.getLanguage(lang)) {
       try {
