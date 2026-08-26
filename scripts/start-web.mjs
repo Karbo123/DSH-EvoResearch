@@ -18,7 +18,7 @@ const restartEnv = process.env.EVORESEARCH_RESTART_FILE
 const configPath = resolve(configEnv && configEnv.trim() !== '' ? configEnv : join(root, '.evoresearch-paths.json'))
 const restartFile = resolve(restartEnv && restartEnv.trim() !== '' ? restartEnv : join(root, '.evoresearch-restart.json'))
 const profileSource = join(root, 'profiles', 'evoresearch')
-const dshVersion = '@deepseek-ai/dsh@0.1.0-rc.8'
+const dshVersion = '@deepseek-ai/dsh@0.1.1-rc.2'
 
 function option(name, fallback) {
   const index = process.argv.indexOf(name)

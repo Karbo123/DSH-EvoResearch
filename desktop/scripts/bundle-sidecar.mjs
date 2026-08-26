@@ -112,9 +112,9 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
     version: '0.1.0-rc.1',
     private: true,
     dependencies: {
-      '@deepseek-ai/dsh': '^0.1.0-rc.8', // dsh CLI（launch.js 直接调用其 bin）
-      '@deepseek-ai/dsh-base': '^0.1.0-rc.8',
-      '@deepseek-ai/dsh-web-app': '^0.1.0-rc.8', // 表面行复用其 /startup（web-startup 行）
+      '@deepseek-ai/dsh': '^0.1.1-rc.2', // dsh CLI（launch.js 直接调用其 bin）
+      '@deepseek-ai/dsh-base': '^0.1.1-rc.2',
+      '@deepseek-ai/dsh-web-app': '^0.1.1-rc.2', // 表面行复用其 /startup（web-startup 行）
       'open-websearch': '^2.1.11', // EvoResearch 自动管理的本地无 Key 搜索后端
       'google-ai-mode-mcp': '1.0.3', // Google AI Mode MCP：桌面 sidecar 内置 Node 依赖，免 npm
       '@evoresearch/dsh-app': `file:${join(ROOT, 'packages', 'evoresearch-app')}`,
