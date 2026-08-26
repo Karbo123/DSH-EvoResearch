@@ -34,7 +34,9 @@ const DICT: Record<string, [string, string]> = {
   team: ['Team', '科研团队'],
   searchResearch: ['Search title or content...', '搜索标题或内容...'],
   searchSort: ['Sort conversations', '排序方式'],
+  currentProjects: ['Current Projects', '当前项目'],
   workbench: ['Workbench', '科研工作台'],
+  workbenchMenu: ['Workbench menu (right-click the EvoResearch logo)', '科研工作台菜单（右键点击 EvoResearch logo）'],
   // 左侧工作台导航：入口用途说明（tooltip / 面板底部小字）
   menuImportHint: ['Import an existing folder as a project, or create a new project workspace.', '把已有文件夹导入为项目，或在工作区新建项目。'],
   menuSkillsHint: ['Review auto-suggested research skills and browse the built-in skill catalog.', '审阅自动生成的科研技能提案，并浏览内置技能目录。'],

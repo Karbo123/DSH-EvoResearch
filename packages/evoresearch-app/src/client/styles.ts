@@ -145,6 +145,24 @@ body { margin: 0; }
 .evo-brand-btn:hover { background: var(--hover-bg); }
 .evo-brand-logo { width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0; }
 .evo-brand-name { font-size: 17px; font-weight: 600; white-space: nowrap; }
+.evo-brand-menu { position: fixed; left: 8px; top: 52px; z-index: 1200; width: 230px; }
+.evo-brand-menu-panel {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px;
+  border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--color-surface); box-shadow: 0 14px 34px rgb(0 0 0 / 22%), 0 3px 9px rgb(0 0 0 / 12%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+.evo-brand-menu-title {
+  padding: 2px 10px 8px; font-size: 12px; font-weight: 700; letter-spacing: .03em;
+  color: var(--color-text-tertiary); border-bottom: 1px solid var(--color-border-light); margin-bottom: 4px;
+}
+.evo-brand-menu-item {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: none; background: none;
+  border-radius: 8px; color: var(--color-text-primary); font-size: 13px; cursor: pointer; text-align: left; font-family: inherit;
+}
+.evo-brand-menu-item:hover { background: var(--hover-bg); }
+.evo-brand-menu-item[data-active] { background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); font-weight: 600; }
+.evo-brand-menu-item svg { width: 15px; height: 15px; color: var(--brand); flex-shrink: 0; }
 .evo-icon-btn {
   display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
   border: none; background: none; border-radius: 8px; color: var(--color-text-secondary); cursor: pointer;
@@ -189,6 +207,7 @@ body { margin: 0; }
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-tl-head { padding: 10px 12px 4px; display: flex; align-items: center; gap: 6px; }
 .evo-tl-head-title { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.evo-tl-head-title.evo-current-projects { font-size: 18px; font-weight: 700; letter-spacing: .01em; }
 .evo-tl-back { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; font-size: 12px; font: inherit; transition: border-color 0.15s, color 0.15s, background 0.15s; }
 .evo-tl-back:hover { border-color: var(--brand); color: var(--brand); background: var(--hover-bg); }
 .evo-tl-back svg { width: 14px; height: 14px; }

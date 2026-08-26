@@ -14,7 +14,8 @@ import { clientStateGet, clientStateSet } from './client-state'
 /** 导航视图（点击菜单项切换中间面板；None = 聊天）。 */
 export type SideView = null | 'skills' | 'memory' | 'schedule' | 'workspace' | 'channels' | 'team' | 'experiments' | 'notes' | 'library'
 
-const MENU = [
+/** 工作台导航菜单（由左上角 EvoResearch logo 的右键菜单复用）。 */
+export const MENU = [
   { key: 'import', label: t('importProject'), icon: FolderGit2, desc: t('menuImportHint') },
   { key: 'skills', label: t('researchSkills'), icon: GraduationCap, desc: t('menuSkillsHint') },
   { key: 'memory', label: t('evomemory'), icon: BrainCircuit, desc: t('menuMemoryHint') },
@@ -48,8 +49,6 @@ export interface ThreadListProps {
   useSessions: (selector: (s: any) => any) => any
   /** 工作区注册表，用于显示 AI 标题而不改变实际项目路径。 */
   useWorkspaces: (selector: (s: any) => any) => any
-  view: SideView
-  onView: (v: SideView) => void
   /** 打开（选中）一个会话 */
   onOpen: (id: string) => void
   /** 新建聊天；传入项目工作区路径 = 在该项目下新建子聊天 */
@@ -207,7 +206,7 @@ export function normalizeSessionsSnapshot(input: any): any {
   return { ...input, ids, byId, current, jobsBySession: input.jobsBySession ?? {} }
 }
 
-export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, onNewChat, onProjectModeChange, hasActive, onRename, onRenameProject, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, projectTagColors, onSetProjectTagColor, hideIds, deletedIds, onDelete, onDeleteProject, archivedIds, onToggleArchive, archivedProjects, onToggleProjectArchive, runningIds, promotedIds }: ThreadListProps) {
+export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onProjectModeChange, hasActive, onRename, onRenameProject, onForkSideChat, onCopyHistory, onExport, pinnedIds, onTogglePin, tagColors, onSetTagColor, projectTagColors, onSetProjectTagColor, hideIds, deletedIds, onDelete, onDeleteProject, archivedIds, onToggleArchive, archivedProjects, onToggleProjectArchive, runningIds, promotedIds }: ThreadListProps) {
   const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
   const workspaces = useWorkspaces((s) => s)
   const currentId = sessions.current
@@ -587,16 +586,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
     return result
   })()
 
-  const isActive = (key: string) =>
-    (key === 'skills' && view === 'skills') ||
-    (key === 'memory' && view === 'memory') ||
-    (key === 'schedule' && view === 'schedule') ||
-    (key === 'channels' && view === 'channels') ||
-    (key === 'team' && view === 'team') ||
-    (key === 'experiments' && view === 'experiments') ||
-    (key === 'notes' && view === 'notes') ||
-    (key === 'library' && view === 'library') ||
-    (key === 'import' && view === 'workspace')
+  // 工作台导航已迁移到左上角 EvoResearch logo 的右键菜单（index.ts）。
 
   return jsxs('div', {
     className: 'evo-tl',
@@ -605,23 +595,7 @@ export function ThreadList({ useSessions, useWorkspaces, view, onView, onOpen, o
       jsxs('div', {
         className: 'evo-tl-head',
         children: [
-          jsx('span', { className: 'evo-tl-head-title', children: t('workbench') }),
-        ],
-      }),
-      jsx('nav', {
-        className: 'evo-tl-menu',
-        children: [
-          ...MENU.map((item) => {
-            const Icon = item.icon
-            return jsx('button', {
-              type: 'button',
-              className: 'evo-tl-item',
-              title: item.desc,
-              'data-active': isActive(item.key) || undefined,
-              onClick: () => onView(item.key === 'import' ? 'workspace' : (item.key as SideView)),
-              children: jsxs(Fragment, { children: [jsx(Icon, {}, 'icon'), jsx('span', { children: item.label }, 'label')] }),
-            }, item.key)
-          }),
+          jsx('span', { className: 'evo-tl-head-title evo-current-projects', children: t('currentProjects') }),
         ],
       }),
       jsxs('div', {

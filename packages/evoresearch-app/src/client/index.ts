@@ -21,7 +21,7 @@ import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
 import { XYFLOW_CSS } from './xyflow-css'
 import { applyTheme, resolvedTheme, toggleTheme } from './theme'
-import { ThreadList, normalizeSessionsSnapshot, type SideView } from './threadlist'
+import { ThreadList, normalizeSessionsSnapshot, MENU, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
 import { registerConversation } from './conversation'
@@ -258,6 +258,31 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return t === 'agents' || t === 'chats' ? t : 'workspace'
   })
   const [view, setView] = useState<SideView>(null)
+  // 左上角 EvoResearch 品牌右键菜单（工作台导航入口）
+  const [brandMenuOpen, setBrandMenuOpen] = useState(false)
+  const brandBtnRef = useRef<HTMLButtonElement | null>(null)
+  const brandMenuRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!brandMenuOpen) return
+    const onDoc = (e: MouseEvent | KeyboardEvent) => {
+      const target = e instanceof MouseEvent ? e.target : null
+      if (target instanceof Node && (brandBtnRef.current?.contains(target) || brandMenuRef.current?.contains(target))) return
+      if (e instanceof KeyboardEvent && e.key === 'Escape') { setBrandMenuOpen(false); return }
+      setBrandMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onDoc)
+    document.addEventListener('scroll', onDoc, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onDoc)
+      document.removeEventListener('scroll', onDoc, true)
+    }
+  }, [brandMenuOpen])
+  const openViewFromBrandMenu = (key: string) => {
+    setBrandMenuOpen(false)
+    setViewAndUrl(key === 'import' ? 'workspace' : (key as SideView))
+  }
   const [themeDark, setThemeDark] = useState(() => resolvedTheme() === 'dark')
   const [panels, setPanels] = useState(readPanels)
   const [dragging, setDragging] = useState<'left' | 'right' | null>(null)
@@ -1399,9 +1424,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             children: [
               jsx('button', {
                 type: 'button',
+                ref: brandBtnRef,
                 className: 'evo-brand-btn',
                 // 不能直接传 startNewChat：onClick 会把事件对象当作 projectCwd 传入。
                 onClick: () => startNewChat(),
+                onContextMenu: (e) => {
+                  e.preventDefault()
+                  setBrandMenuOpen((open) => !open)
+                },
                 title: t('goHome'),
                 children: jsxs(Fragment, {
                   children: [
@@ -1488,8 +1518,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 children: jsx(ThreadList, {
                   useSessions,
                   useWorkspaces,
-                  view,
-                  onView: setViewAndUrl,
                   onOpen: openSession,
                   onNewChat: startNewChat,
                   onProjectModeChange: setProjectScope,
@@ -1765,6 +1793,32 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
           settingsOpen && jsx(SettingsDialog, {
             onClose: () => setSettingsOpen(false),
+          }),
+          brandMenuOpen && jsx('div', {
+            ref: brandMenuRef,
+            className: 'evo-brand-menu',
+            role: 'menu',
+            'aria-label': t('workbenchMenu'),
+            onClick: () => setBrandMenuOpen(false),
+            children: jsxs('div', {
+              className: 'evo-brand-menu-panel',
+              children: [
+                jsx('div', { className: 'evo-brand-menu-title', children: t('workbench') }),
+                ...MENU.map((item) => {
+                  const Icon = item.icon
+                  const active = (item.key === 'import' && view === 'workspace') || view === item.key
+                  return jsx('button', {
+                    type: 'button',
+                    className: 'evo-brand-menu-item',
+                    'data-active': active || undefined,
+                    role: 'menuitem',
+                    title: item.desc,
+                    onClick: () => openViewFromBrandMenu(item.key),
+                    children: jsxs(Fragment, { children: [jsx(Icon, {}, 'icon'), jsx('span', { children: item.label }, 'label')] }),
+                  }, item.key)
+                }),
+              ],
+            }),
           }),
         ],
       }),
