@@ -20,7 +20,7 @@ import { gfm, insertTableCommand, toggleStrikethroughCommand } from '@milkdown/p
 import { history as milkdownHistory } from '@milkdown/plugin-history'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import {
-  Paperclip, Send, Wrench, User, Copy, Check, PenLine,
+  Paperclip, Send, Wrench, User, Copy, Check, PenLine, Atom,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
   ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History, GitBranch,
   Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2,
@@ -423,7 +423,7 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
     className: `evo-msg-row evo-msg-user${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
     children: [
-      jsx('div', { className: 'evo-msg-user-body' }),
+      jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-user evo-msg-user-body', 'aria-hidden': true, children: jsxs(Fragment, { children: [jsx(User, {})] }) }),
       jsxs('div', {
         className: 'evo-msg-stack',
         children: [
@@ -488,7 +488,7 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId }: {
     className: `evo-msg-row${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
     children: [
-      jsx('div', { className: 'evo-msg-avatar', children: jsx(User, {}) }),
+      jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsxs(Fragment, { children: [jsx(Atom, {})] }) }),
       jsxs('div', {
         className: 'evo-msg-body',
         children: [

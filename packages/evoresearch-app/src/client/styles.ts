@@ -297,7 +297,7 @@ body { margin: 0; }
 .evo-dashboard-value { font-size: 22px; font-weight: 600; color: var(--brand); line-height: 1.1; }
 .evo-dashboard-label { font-size: 11.5px; color: var(--color-text-tertiary); }
 /* ── 输入面板：sticky 常驻中间栏底部（消息区内容自适应、页面整体滚动）── */
-.evo-composer-wrap { flex-shrink: 0; padding: 4px 24px 8px; display: flex; flex-wrap: wrap; justify-content: center; position: sticky; bottom: 0; z-index: 30; background: var(--color-background); }
+.evo-composer-wrap { flex-shrink: 0; padding: 4px 0 8px; display: flex; flex-wrap: wrap; justify-content: center; position: sticky; bottom: 0; z-index: 30; background: var(--color-background); }
 /* ── 输入候选弹层（§23.2–23.5：斜杠命令 / @文件 / 输入历史）── */
 .evo-cand { position: absolute; bottom: calc(100% - 8px); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 96px)); max-height: 280px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18); z-index: 40; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .evo-cand-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 10px 6px; border-bottom: 1px solid var(--color-border-light); }
@@ -309,7 +309,7 @@ body { margin: 0; }
 .evo-cand-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .evo-cand-title { font-size: 13px; color: var(--color-text-primary); font-family: ui-monospace, Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .evo-cand-sub { font-size: 11.5px; color: var(--color-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.evo-composer { width: 75%; max-width: none; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 2px 12px rgba(0,0,0,.05); }
+.evo-composer { width: 75%; max-width: none; margin-inline: auto; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 2px 12px rgba(0,0,0,.05); }
 .evo-composer-status { display: flex; align-items: center; gap: 7px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); }
 .evo-composer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
 .evo-composer-textarea { width: 100%; padding: 10px 14px 4px; border: none; outline: none; resize: none; background: none; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--color-text-primary); font-size: 14.5px; font-family: inherit; line-height: 1.55; min-height: 44px; max-height: 220px; position: relative; z-index: 1; }
@@ -384,7 +384,7 @@ body { margin: 0; }
 .evo-insp-empty svg { width: 36px; height: 36px; color: var(--color-border); margin-bottom: 8px; }
 .evo-view { flex: 1; overflow-y: auto; }
 /* ── 消息列表 ── */
-.evo-msg-list { flex: none; height: auto; overflow: visible; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 10px; width: 60%; max-width: none; min-width: min(560px, 100%); margin: 0 auto; position: relative; }
+.evo-msg-list { flex: none; height: auto; overflow: visible; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 10px; width: 75%; max-width: none; min-width: 0; margin: 0 auto; position: relative; }
 .evo-msg-error { padding: 10px 14px; border: 1px solid var(--color-error); border-radius: 10px; color: var(--color-error); font-size: 13px; background: color-mix(in srgb, var(--color-error) 8%, transparent); }
 .evo-useronly-hint { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border: 1px dashed color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: 999px; color: var(--color-text-secondary); font-size: 12px; background: color-mix(in srgb, var(--brand) 7%, var(--color-surface)); cursor: pointer; transition: border-color 0.15s, color 0.15s; }
 .evo-useronly-hint:hover { border-color: var(--brand); color: var(--brand); }
@@ -397,11 +397,15 @@ body { margin: 0; }
 .evo-jump-latest svg { width: 14px; height: 14px; }
 .evo-msg-row { display: flex; gap: 10px; align-items: flex-start; }
 .evo-msg-user { flex-direction: row-reverse; }
-.evo-msg-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--color-avatar-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--color-text-secondary); }
+.evo-msg-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .evo-msg-avatar svg { width: 15px; height: 15px; }
-.evo-msg-body { min-width: 0; max-width: 50%; display: flex; flex-direction: column; gap: 4px; }
-.evo-msg-user-body { min-width: 0; max-width: 50%; }
-.evo-msg-user .evo-msg-stack { max-width: 50%; }
+.evo-msg-avatar-ai { background: linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 55%, #0e5c6e)); color: var(--brand-foreground); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 35%, transparent); }
+.evo-msg-avatar-ai svg { width: 16px; height: 16px; }
+.evo-msg-avatar-user { background: var(--color-avatar-bg); color: var(--color-text-secondary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text-tertiary) 28%, transparent); }
+.evo-msg-avatar-user svg { width: 15px; height: 15px; }
+.evo-msg-body { min-width: 0; max-width: 75%; display: flex; flex-direction: column; gap: 4px; }
+.evo-msg-user-body { min-width: 0; max-width: 75%; flex: 0 0 auto; }
+.evo-msg-user .evo-msg-stack { max-width: 75%; }
 .evo-msg-bubble { padding: 8px 14px; border-radius: 13px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .evo-msg-bubble-user { padding-block: 8px; line-height: 1.5; background: var(--color-user-message-bg); color: var(--color-user-message); border-top-right-radius: 4px; }
 .evo-msg-bubble-user .evo-md { line-height: 1.5; }
@@ -414,6 +418,7 @@ body { margin: 0; }
 /* 窄屏：消息列与审批/命令条占满可用宽度（放在主规则之后，避免被前面的媒体查询覆盖） */
 @media (max-width: 767px) {
   .evo-msg-list { width: 100%; min-width: 0; }
+  .evo-composer { width: 100%; max-width: none; margin-inline: 0; }
   .evo-approval-list, .evo-cmd-card { max-width: 100%; min-width: 0; }
 }
 /* ── Thinking 折叠（§31.6：reasoning 默认折叠，左侧 2px 边线 + 次级文字）── */
@@ -1213,6 +1218,22 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-md .hljs { background: transparent; }
 .evo-md .evo-mermaid { margin: 0 0 16px; padding: 12px 14px; border: 1px dashed var(--color-border); border-radius: 8px; background: var(--color-background); color: var(--color-text-tertiary); font-size: 12.5px; font-family: ui-monospace, Consolas, monospace; overflow-x: auto; white-space: pre-wrap; }
 .evo-md .evo-mermaid svg { max-width: 100%; height: auto; display: block; white-space: normal; }
+/* ── JSON 结构化渲染（§需求4）── */
+.evo-md .evo-json { margin: 6px 0; padding: 10px 12px; background: var(--color-background); border: 1px solid var(--color-border-light); border-radius: 8px; overflow-x: auto; white-space: pre; font-family: Consolas, "Cascadia Code", ui-monospace, monospace; font-size: 12.5px; line-height: 1.55; color: var(--color-text-primary); }
+.evo-json .evo-jkey { color: var(--brand); }
+.evo-json .evo-jstr { color: var(--color-info); }
+.evo-json .evo-jnum { color: var(--color-warning); }
+.evo-json .evo-jbool { color: var(--color-success); }
+.evo-json .evo-jnull { color: var(--color-text-tertiary); font-style: italic; }
+.evo-json .evo-jpunct { color: var(--color-text-tertiary); }
+.evo-json.evo-json-large { padding: 4px; }
+.evo-json-toggle { display: flex; align-items: flex-start; gap: 7px; width: 100%; padding: 7px 9px; border: none; background: none; color: var(--color-text-secondary); font-family: inherit; font-size: 12px; line-height: 1.5; text-align: left; cursor: pointer; border-radius: 6px; }
+.evo-json-toggle:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-json-toggle-icon { flex: 0 0 auto; color: var(--brand); font-size: 12px; line-height: 1.5; transition: transform 0.15s ease; }
+.evo-json-toggle-label { min-width: 0; word-break: break-word; white-space: normal; }
+.evo-json-toggle-preview { color: var(--color-text-tertiary); font-family: Consolas, "Cascadia Code", ui-monospace, monospace; font-size: 11.5px; }
+.evo-json-hidden { display: block; padding: 6px 8px 4px; }
+.evo-json-hidden[hidden] { display: none; }
 /* ── 输入框 Markdown 预览 ── */
 .evo-md-toggle { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); }
 .evo-md-toggle-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 999px; cursor: pointer; }
