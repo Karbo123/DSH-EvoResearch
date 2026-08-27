@@ -1544,11 +1544,14 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tab-editor-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); flex-shrink: 0; }
 .evo-tab-editor-path { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-tab-editor { flex: 1; min-height: 0; width: 100%; border: none; outline: none; resize: none; background: var(--color-surface); color: var(--color-text-primary); font-family: ui-monospace, Consolas, 'SF Mono', monospace; font-size: 13px; line-height: 1.65; padding: 14px 18px; tab-size: 2; }
-/* ── 文件 tab（按类型：md 渲染/编辑 双模式）── */
+/* ── 文件 tab（按类型：md → Milkdown 所见即所得实时编辑）── */
 .evo-tab-file-body { gap: 0; }
 .evo-tab-file-preview { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 22px; font-size: 14px; line-height: 1.7; background: var(--color-surface); }
 .evo-tab-editor-head .evo-btn-run { gap: 5px; padding: 5px 10px; font-size: 12px; border-radius: 6px; }
 .evo-btn-run.evo-btn-active { outline: 2px solid color-mix(in srgb, var(--brand) 55%, transparent); outline-offset: 1px; }
+/* Milkdown 文件编辑器：占满 tab 剩余高度（覆盖 composer 的固定高度）；工具条常开由 data-markdown-toolbar-open 控制 */
+.evo-tab-md-live.evo-composer-editor { flex: 1 1 auto; min-height: 200px; height: auto; }
+.evo-tab-md-live .evo-composer-editor-host { flex: 1 1 auto; min-height: 0; }
 /* ── 实验管理（§5.1）── */
 .evo-exp-notice { margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-success) 35%, var(--color-border)); color: var(--color-success); font-size: 12.5px; }
 .evo-exp-item { border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 8px; background: var(--color-surface); }
