@@ -1510,6 +1510,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tab-close:hover { background: rgba(255, 255, 255, 0.22); opacity: 1; }
 .evo-tab-close svg { width: 11px; height: 11px; }
 .evo-tab-new-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 2px; }
+.evo-tab-new-wrap-drop-target::before { content: ''; position: absolute; left: -5px; top: 4px; bottom: 4px; width: 2px; border-radius: 2px; background: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 18%, transparent); pointer-events: none; }
+.evo-tab-new-wrap-drop-target .evo-tab-new { color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent); }
 .evo-tab-new { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--color-text-tertiary); cursor: pointer; flex-shrink: 0; transition: background 0.12s ease, color 0.12s ease; }
 .evo-tab-new:hover:not(:disabled) { background: var(--hover-bg); color: var(--brand); }
 .evo-tab-new:disabled { opacity: 0.45; cursor: not-allowed; }

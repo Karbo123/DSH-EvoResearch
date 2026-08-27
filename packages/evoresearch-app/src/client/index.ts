@@ -1838,7 +1838,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         }),
                         jsxs('div', {
                           ref: tabNewRef,
-                          className: 'evo-tab-new-wrap',
+                          className: `evo-tab-new-wrap${dragId !== null && origIndexRef.current !== tabs.length - 1 && dragTargetIdx === tabs.length - 1 ? ' evo-tab-new-wrap-drop-target' : ''}`,
                           children: [
                             jsx('button', {
                               type: 'button',
