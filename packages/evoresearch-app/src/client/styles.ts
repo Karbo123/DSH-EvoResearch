@@ -1497,7 +1497,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── 标签栏（§5.2：轻量分段导航，接近原生桌面工具栏）── */
 .evo-tabwrap { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1; }
 .evo-tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 14px; background: color-mix(in srgb, var(--color-background) 94%, var(--color-surface)); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
-.evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.15s ease; will-change: transform; }
+.evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); will-change: transform; }
 .evo-tab:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-tab[data-active] { background: var(--color-surface); border-color: var(--color-border); color: var(--color-text-primary); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 /* 拖拽中的 tab：抬起、加投影、禁止触摸滚动干扰；位置由内联 transform 跟随指针/FLIP */

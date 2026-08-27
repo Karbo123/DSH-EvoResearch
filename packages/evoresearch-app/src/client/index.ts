@@ -1796,11 +1796,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           // ghost 让位：拖拽中不重排数组，仅用 transform 让其它 tab 平滑让出一个位置
                           const d = origIndexRef.current
                           const target = dragTargetIdx
-                          const w = dragRef.current !== null ? dragRef.current.width : 0
+                          // 一个让位槽 = 被拖 tab 宽度 + tabbar 的 2px gap，确保滑动后正好落入相邻槽位
+                          const step = dragRef.current !== null ? dragRef.current.width + 2 : 0
                           let shift = 0
-                          if (!dragging && w !== 0 && d >= 0) {
-                            if (d < target && i > d && i <= target) shift = -w          // 向右拖：中间 tab 左移
-                            else if (d > target && i < d && i >= target) shift = w      // 向左拖：中间 tab 右移
+                          if (!dragging && step !== 0 && d >= 0) {
+                            if (d < target && i > d && i <= target) shift = -step
+                            else if (d > target && i < d && i >= target) shift = step
                           }
                           return jsxs('div', {
                             ref: (el: HTMLDivElement | null) => { tabElRefs.current[tab.id] = el },
@@ -1810,7 +1811,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                             style: dragging
                               ? { transform: `translateX(${dragGhostX}px)`, zIndex: 40, position: 'relative', transition: 'none' }
                               : shift !== 0
-                                ? { transform: `translateX(${shift}px)`, transition: 'transform 0.15s ease' }
+                                ? { transform: `translateX(${shift}px)`, transition: 'transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1)' }
                                 : undefined,
                             onClick: () => activateTab(tab.id),
                             // 鼠标中键（button 1）点击 tab → 等价于按关闭键（干净直接关，脏弹确认）
