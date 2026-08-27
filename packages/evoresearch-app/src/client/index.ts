@@ -15,7 +15,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef, useSyncExternalStore, Component } from 'react'
 import {
   PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, SquarePen,
-  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, FolderOpen,
+  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, FolderOpen, Share2, Activity,
 } from 'lucide-react'
 import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
@@ -494,6 +494,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     // Bug：仅 patchUrl 清 view 会造成 state/URL 失步（面板残留主区域）——state 一并清
     setView(null)
     patchUrl({ threadId: id, view: null })
+    // 左侧选中会话 → 中间区显示对话（若对话 tab 已被关闭则重新加回）
+    openFixedTab('chat', t('chatTab'))
   }
   const startNewChat = (projectCwd?: string) => {
     justCreatedSessionRef.current = null
@@ -1158,6 +1160,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   tabsRef.current = tabs
   const tabNameOf = (path: string): string => path.slice(Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')) + 1) || path
   const activateTab = (id: string) => { setActiveTabId(id); setTabMenuOpen(false) }
+  /**
+   * 打开固定类型 tab（对话/图谱/轨迹，各自最多同时 1 个）：
+   * 不存在则重新加入，存在则聚焦。关闭后可用 + 菜单或此函数加回来。
+   * @param title 已翻译的标题字符串（调用方传 t('chatTab') 等）。
+   */
+  const openFixedTab = (kind: 'chat' | 'chatgraph' | 'trajectory', title: string) => {
+    setTabs((prev) => (prev.some((t) => t.kind === kind) ? prev : [...prev, { id: kind, kind, title }]))
+    setActiveTabId(kind)
+    setTabMenuOpen(false)
+  }
   const openTabPdf = (path: string, root: string) => {
     const existing = tabsRef.current.find((tab) => tab.kind === 'pdf' && tab.filePath === path)
     if (existing !== undefined) { setActiveTabId(existing.id); setTabMenuOpen(false); return }
@@ -1193,7 +1205,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const closeTab = (id: string) => {
     setTabs((prev) => {
       const next = prev.filter((tab) => tab.id !== id)
-      if (activeTabId === id) setActiveTabId('chat')
+      // 关闭的是当前激活 tab 时，落到剩余第一个 tab（不再硬编码 chat，因为 chat 也可能被关闭）
+      if (activeTabId === id) setActiveTabId(next[0]?.id ?? 'chat')
       return next
     })
   }
@@ -1248,7 +1261,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }, [])
   // 轨迹面板「查看对话」→ 切回对话标签
   useEffect(() => {
-    const onJumpChat = () => { setActiveTabId('chat'); setTabMenuOpen(false) }
+    const onJumpChat = () => { openFixedTab('chat', t('chatTab')) }
     window.addEventListener('evo-traj-jump-chat', onJumpChat)
     return () => window.removeEventListener('evo-traj-jump-chat', onJumpChat)
   }, [])
@@ -1642,7 +1655,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           },
                           children: [
                             jsx('span', { className: `evo-tab-title${tab.kind === 'editor' ? ' evo-tab-title-file' : ''}${tab.kind === 'editor' && isTabDirty(tab) ? ' evo-tab-title-dirty' : ''}`, children: tab.title }),
-                            (tab.kind === 'pdf' || tab.kind === 'editor') && jsx('button', {
+                            jsx('button', {
                               type: 'button',
                               className: 'evo-tab-close',
                               title: t('closeTab'),
@@ -1668,6 +1681,25 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                               className: 'evo-tab-menu',
                               style: tabMenuPos ?? undefined,
                               children: [
+                                // 重新加回已关闭的固定标签（对话/图谱/轨迹）：各自最多同时 1 个
+                                !tabs.some((t) => t.kind === 'chat') && jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tab-menu-item',
+                                  onClick: () => openFixedTab('chat', t('chatTab')),
+                                  children: jsxs(Fragment, { children: [jsx(MessagesSquare, {}), jsx('span', { children: t('chatTab') })] }),
+                                }),
+                                !tabs.some((t) => t.kind === 'chatgraph') && jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tab-menu-item',
+                                  onClick: () => openFixedTab('chatgraph', t('chatGraphTab')),
+                                  children: jsxs(Fragment, { children: [jsx(Share2, {}), jsx('span', { children: t('chatGraphTab') })] }),
+                                }),
+                                !tabs.some((t) => t.kind === 'trajectory') && jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tab-menu-item',
+                                  onClick: () => openFixedTab('trajectory', t('trajectoryTab')),
+                                  children: jsxs(Fragment, { children: [jsx(Activity, {}), jsx('span', { children: t('trajectoryTab') })] }),
+                                }),
                                 // 从工作区打开（懒加载目录树）
                                 jsx('button', {
                                   type: 'button',
@@ -1743,7 +1775,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           currentSessionId: current ?? null,
                           onOpenSession: (id: string) => {
                             openSession(id)
-                            setActiveTabId('chat')
+                            openFixedTab('chat', t('chatTab'))
                           },
                           onCreateSession: async () => {
                             const cwdNow = current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
