@@ -1813,7 +1813,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                             style: dragging
                               ? { transform: `translateX(${dragGhostX}px)`, zIndex: 40, position: 'relative', transition: 'none' }
                               : previewing
-                                ? { transform: `translateX(${shift}px)`, transition: 'transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1)' }
+                                ? { transform: `translateX(${shift}px)`, transition: 'transform 0.32s cubic-bezier(0.4, 0, 0.2, 1)' }
                                 : undefined,
                             onClick: () => activateTab(tab.id),
                             // 鼠标中键（button 1）点击 tab → 等价于按关闭键（干净直接关，脏弹确认）
