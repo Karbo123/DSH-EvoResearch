@@ -1123,6 +1123,104 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [tabBusy, setTabBusy] = useState(false)
   const tabFileInputRef = useRef<HTMLInputElement | null>(null)
   const tabNewRef = useRef<HTMLDivElement | null>(null)
+  // ── Tab 长按拖拽重排 ──
+  // dragRef：指针会话（pointerId + 抓取点 + 0.3s 长按定时器）；dragId：已进入拖拽模式的 tab
+  // 用 FLIP（First-Last-Invert-Play）做让位平滑：重排后其余 tab 从旧位置动画滑到新位置。
+  const dragRef = useRef<{ id: string; pointerId: number; grabX: number; width: number; holdTimer: ReturnType<typeof setTimeout> | null; moved: boolean } | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragOffsetX, setDragOffsetX] = useState<number>(0)                 // 被拖 tab 跟随手指的 translateX
+  const tabElRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const firstLeft = useRef<Record<string, number>>({})
+  const [flipTick, setFlipTick] = useState(0)
+
+  const snapshotTabsLeft = () => {
+    const snap: Record<string, number> = {}
+    for (const t of tabsRef.current) { const el = tabElRefs.current[t.id]; if (el) snap[t.id] = el.getBoundingClientRect().left }
+    firstLeft.current = snap
+  }
+  const reorderMove = (id: string, from: number, to: number) => {
+    if (from === to) return
+    snapshotTabsLeft()
+    setTabs((prev) => {
+      if (from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev
+      const next = prev.slice()
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+    setFlipTick((v) => v + 1)
+  }
+  const clearHoldTimer = () => {
+    const s = dragRef.current
+    if (s !== null && s.holdTimer !== null) { clearTimeout(s.holdTimer); s.holdTimer = null }
+  }
+  // 左键按住 0.3s → 进入拖拽模式
+  const beginDragHold = (tab: WorkspaceTab, el: HTMLDivElement, e: { pointerId: number; clientX: number }) => {
+    if (tab.kind !== 'editor' && tab.kind !== 'pdf' && tab.kind !== 'chat' && tab.kind !== 'chatgraph' && tab.kind !== 'trajectory') return
+    const rect = el.getBoundingClientRect()
+    dragRef.current = { id: tab.id, pointerId: e.pointerId, grabX: e.clientX, width: rect.width, holdTimer: null, moved: false }
+    try { el.setPointerCapture(e.pointerId) } catch { /* 忽略捕获失败 */ }
+    const session = dragRef.current
+    session.holdTimer = setTimeout(() => {
+      if (dragRef.current !== session || session.moved) return
+      setDragId(session.id)
+      setDragOffsetX(0)
+    }, 300)
+  }
+  const onTabDragMove = (tabId: string, clientX: number) => {
+    const s = dragRef.current
+    if (s === null || s.id !== tabId) return
+    const dx = Math.abs(clientX - s.grabX)
+    if (dragId === null) {
+      // 0.3s 内大幅移动 → 视为普通点击/滚动，取消长按
+      if (dx > 8) { clearHoldTimer(); dragRef.current = null }
+      return
+    }
+    // 已进入拖拽：被拖 tab 跟随手指；越过相邻 tab 中线则让位重排
+    const d = dx >= 0 ? (clientX - s.grabX) : 0
+    setDragOffsetX(d)
+    const ids = tabsRef.current.map((t) => t.id)
+    const idx = ids.indexOf(tabId)
+    if (idx < 0) return
+    const leftEl = idx > 0 ? tabElRefs.current[ids[idx - 1]] : null
+    const rightEl = idx < ids.length - 1 ? tabElRefs.current[ids[idx + 1]] : null
+    if (leftEl) { const r = leftEl.getBoundingClientRect(); if (clientX < r.left + r.width / 2) { reorderMove(tabId, idx, idx - 1); return } }
+    if (rightEl) { const r = rightEl.getBoundingClientRect(); if (clientX > r.left + r.width / 2) { reorderMove(tabId, idx, idx + 1); return } }
+  }
+  const endDrag = (tabId: string) => {
+    const s = dragRef.current
+    if (s === null || s.id !== tabId) return
+    clearHoldTimer()
+    dragRef.current = null
+    setDragId(null)
+    setDragOffsetX(0)
+  }
+  // FLIP：重排（tabs 顺序变化）后，把每个 tab 从旧 left 动画滑到当前位置
+  const useTabFlip = (deps: unknown[]) => {
+    useEffect(() => {
+      if (dragId === null && Object.keys(firstLeft.current).length === 0) return
+      const raf = requestAnimationFrame(() => {
+        for (const t of tabsRef.current) {
+          if (t.id === dragId) continue // 被拖 tab 的位置由 dragOffsetX 控制，不做 FLIP
+          const el = tabElRefs.current[t.id]
+          const first = firstLeft.current[t.id]
+          if (!el || first === undefined) continue
+          const last = el.getBoundingClientRect().left
+          const delta = first - last
+          if (Math.abs(delta) < 1) continue
+          el.style.transition = 'none'
+          el.style.transform = `translateX(${delta}px)`
+          requestAnimationFrame(() => {
+            el.style.transition = 'transform 0.2s ease'
+            el.style.transform = ''
+          })
+        }
+        firstLeft.current = {}
+      })
+      return () => cancelAnimationFrame(raf)
+    }, deps)
+  }
+  useTabFlip([flipTick, dragId])
   // 待确认关闭的「有未保存改动」文件 tab
   const [closeTabConfirmId, setCloseTabConfirmId] = useState<string | null>(null)
   // + 菜单位置（fixed 定位：脱离 tabbar 的 overflow 裁剪）
@@ -1525,13 +1623,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
-                onClick: () => { setInspector(true); setInspectorTab('chats') },
-                title: t('sideChats'),
-                children: jsx(MessagesSquare, {}),
-              }),
-              jsx('button', {
-                type: 'button',
-                className: 'evo-icon-btn',
                 onClick: toggleLanguage,
                 title: t('language'),
                 children: jsx(Languages, {}),
@@ -1644,27 +1735,41 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                     jsxs('div', {
                       className: 'evo-tabbar',
                       children: [
-                        tabs.map((tab) => jsxs('div', {
-                          className: 'evo-tab',
-                          'data-active': activeTabId === tab.id || undefined,
-                          'data-dirty': (tab.kind === 'editor' && isTabDirty(tab)) || undefined,
-                          onClick: () => activateTab(tab.id),
-                          // 鼠标中键（button 1）点击 tab → 等价于按关闭键（干净直接关，脏弹确认）
-                          onAuxClick: (e: { button?: number; preventDefault(): void }) => {
-                            if (e.button === 1) { e.preventDefault(); requestCloseTab(tab.id) }
-                          },
-                          children: [
-                            jsx('span', { className: `evo-tab-title${tab.kind === 'editor' ? ' evo-tab-title-file' : ''}${tab.kind === 'editor' && isTabDirty(tab) ? ' evo-tab-title-dirty' : ''}`, children: tab.title }),
-                            jsx('button', {
-                              type: 'button',
-                              className: 'evo-tab-close',
-                              title: t('closeTab'),
-                              'aria-label': t('closeTab'),
-                              onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); requestCloseTab(tab.id) },
-                              children: jsx(X, {}),
-                            }),
-                          ],
-                        }, tab.id)),
+                        tabs.map((tab) => {
+                          const dragging = dragId === tab.id
+                          return jsxs('div', {
+                            ref: (el: HTMLDivElement | null) => { tabElRefs.current[tab.id] = el },
+                            className: `evo-tab${dragging ? ' evo-tab-dragging' : ''}`,
+                            'data-active': activeTabId === tab.id || undefined,
+                            'data-dirty': (tab.kind === 'editor' && isTabDirty(tab)) || undefined,
+                            style: dragging ? { transform: `translateX(${dragOffsetX}px)`, zIndex: 40, position: 'relative' } : undefined,
+                            onClick: () => activateTab(tab.id),
+                            // 鼠标中键（button 1）点击 tab → 等价于按关闭键（干净直接关，脏弹确认）
+                            onAuxClick: (e: { button?: number; preventDefault(): void }) => {
+                              if (e.button === 1) { e.preventDefault(); requestCloseTab(tab.id) }
+                            },
+                            // 左键按住 0.3s 进入拖拽；松开结束；关闭键不触发拖拽
+                            onPointerDown: (e: { button?: number; pointerId: number; clientX: number; target: EventTarget | null; currentTarget: HTMLDivElement }) => {
+                              if ((e.button ?? 0) !== 0) return
+                              if ((e.target as HTMLElement | null)?.closest?.('.evo-tab-close')) return
+                              beginDragHold(tab, e.currentTarget, { pointerId: e.pointerId, clientX: e.clientX })
+                            },
+                            onPointerMove: (e: { pointerId: number; clientX: number }) => onTabDragMove(tab.id, e.clientX),
+                            onPointerUp: () => endDrag(tab.id),
+                            onPointerCancel: () => endDrag(tab.id),
+                            children: [
+                              jsx('span', { className: `evo-tab-title${tab.kind === 'editor' ? ' evo-tab-title-file' : ''}${tab.kind === 'editor' && isTabDirty(tab) ? ' evo-tab-title-dirty' : ''}`, children: tab.title }),
+                              jsx('button', {
+                                type: 'button',
+                                className: 'evo-tab-close',
+                                title: t('closeTab'),
+                                'aria-label': t('closeTab'),
+                                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); requestCloseTab(tab.id) },
+                                children: jsx(X, {}),
+                              }),
+                            ],
+                          }, tab.id)
+                        }),
                         jsxs('div', {
                           ref: tabNewRef,
                           className: 'evo-tab-new-wrap',
