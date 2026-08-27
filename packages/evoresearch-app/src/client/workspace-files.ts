@@ -62,7 +62,6 @@ function TreeNode({ entry, root, depth, onOpenFile }: {
     } catch { setChildren([]) }
     setLoading(false)
   }
-
   return jsxs(Fragment, {
     children: [
       jsx('button', {
@@ -257,6 +256,15 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
     }).catch((e) => { setZipBusy(false); setError(String(e)) })
   }
 
+  // 点击文件 → 在工作区中央 tab 打开（md 渲染/编辑、pdf 独立预览、文本编辑）；
+  // 图片仍在侧边栏内嵌预览（中央无图片 tab）。派发 evo-open-tab 给 main 区。
+  const openFileInMainArea = (path: string) => {
+    if (base === null) return
+    const kind = fileKind(path)
+    if (kind === 'image') { setOpenPath(path); return }
+    window.dispatchEvent(new CustomEvent('evo-open-tab', { detail: { path, root: base, kind: kind === 'pdf' ? 'pdf' : 'editor' } }))
+  }
+
   useEffect(() => {
     if (base === null) { setEntries(null); return }
     let cancelled = false
@@ -341,7 +349,7 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
           entry,
           root: base,
           depth: 0,
-          onOpenFile: setOpenPath,
+          onOpenFile: openFileInMainArea,
         }, entry.path)),
       }),
     ],

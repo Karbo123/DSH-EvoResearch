@@ -24,6 +24,7 @@ import { applyTheme, resolvedTheme, toggleTheme } from './theme'
 import { ThreadList, normalizeSessionsSnapshot, MENU, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
+import { TabFileEditor } from './tab-file'
 import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
@@ -1736,33 +1737,13 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           }),
                         })
                       }
-                      if (activeTab.kind === 'editor' && activeTab.filePath !== undefined) {
-                        return jsxs('div', {
-                          className: 'evo-tab-body evo-tab-editor-body',
-                          children: [
-                            jsxs('div', {
-                              className: 'evo-tab-editor-head',
-                              children: [
-                                jsx('span', { className: 'evo-tab-editor-path', children: activeTab.filePath }),
-                                jsx('span', { style: { flex: 1 } }),
-                                jsx('button', {
-                                  type: 'button',
-                                  className: 'evo-btn evo-btn-run',
-                                  onClick: () => saveTabEditor(activeTab),
-                                  children: jsxs(Fragment, { children: [jsx(Save, {}), jsx('span', { children: t('save') })] }),
-                                }),
-                              ],
-                            }),
-                            jsx('textarea', {
-                              className: 'evo-tab-editor',
-                              value: activeTab.draft ?? '',
-                              spellCheck: false,
-                              onInput: (e) => updateTabDraft(activeTab.id, e.currentTarget.value),
-                              onKeyDown: (e) => {
-                                if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveTabEditor(activeTab) }
-                              },
-                            }),
-                          ],
+                      if (activeTab.kind === 'editor' && activeTab.filePath !== undefined && activeTab.root !== undefined) {
+                        return jsx(TabFileEditor, {
+                          path: activeTab.filePath,
+                          root: activeTab.root,
+                          draft: activeTab.draft,
+                          onDraft: (text) => updateTabDraft(activeTab.id, text),
+                          onSave: () => saveTabEditor(activeTab),
                         })
                       }
                       return jsx(ChatArea, {
