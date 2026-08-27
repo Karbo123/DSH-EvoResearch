@@ -304,13 +304,38 @@ const SANITIZE_OPTS = {
   ADD_ATTR: ['class', 'colspan', 'rowspan', 'start', 'checked', 'disabled'],
   FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'button', 'textarea', 'select', 'link', 'meta', 'base'],
   FORBID_ATTR: ['onerror', 'onclick', 'onload', 'onmouseover', 'onmouseout', 'onkeydown', 'onkeyup', 'onfocus', 'onblur'],
+  // 允许 http/https/mailto 与自定义 evo-file（项目文件预览链接）、data:image 图片缩放。
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
+  ADD_DATA_URI_TAGS: ['img'],
 }
 
 /** 渲染并净化一段 Markdown（返回可直接 innerHTML 的字符串）。 */
 export function renderMarkdown(text: string): string {
   if (text === '') return ''
-  const html = md.render(text)
-  return DOMPurify.sanitize(html, SANITIZE_OPTS)
+  const html = md.render(linkifyProjectFiles(text))
+  return DOMPurify.sanitize(wrapCodeFileLinks(html), SANITIZE_OPTS)
+}
+
+// 识别的项目文件扩展名（AI 回复里的产出物引用 → 可点击预览链接）
+const PROJECT_FILE_EXTS = new Set(['md', 'markdown', 'txt', 'py', 'json', 'csv', 'tex', 'pdf', 'ipynb', 'yaml', 'yml'])
+// 行内裸文件名/相对路径（反引号外）→ markdown 链接（[name](evo-file://path)）。
+// 排除：已出现在 [..](..) 链接内（前导 [ 或 (）、后续闭 `) 或 ]（链接语法一部分）。
+// 反引号内的行内 code 引用由 htmlFileLinks 在渲染后的 HTML 层补齐（见下）。
+const FILE_REF_RE = /(?<![[`(])([\w.-]+(?:\/[\w.-]+)*\.(?:md|markdown|txt|py|json|csv|tex|pdf|ipynb|yaml|yml))(?![\])`])/g
+
+/** 渲染后的 HTML 层：单反引号行内 code 里的纯文件名 → <a>（如 `` `xx.md` ``、
+ * 产出文件列表 `` **产出文件**：`xx.md` ``）。markdown-it 把反引号内内容转义为
+ * <code>xx.md</code>，此处把"内部恰为单个文件名"的 code 替换为含链接的 code。
+ */
+const CODE_FILE_RE = /<code>([\w.-]+(?:\/[\w.-]+)*\.(?:md|markdown|txt|py|json|csv|tex|pdf|ipynb|yaml|yml))<\/code>/g
+function wrapCodeFileLinks(html: string): string {
+  return html.replace(CODE_FILE_RE, (_m, name: string) => `<code><a class="evo-code-filelink" href="evo-file://${name}">${name}</a></code>`)
+}
+
+/** 把文本中的裸项目文件名/相对路径转成可点击的 evo-file 链接。 */
+export function linkifyProjectFiles(text: string): string {
+  if (text === '') return ''
+  return text.replace(FILE_REF_RE, (whole, name: string) => `[${name}](evo-file://${name})`)
 }
 
 /**

@@ -1778,6 +1778,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         jobs: currentJobs,
                         onOpenThread: openSession,
                         onBranchFromMessage: branchFromMessage,
+                        onOpenProjectFile: (rel) => {
+                          if (cwdNow === null || cwdNow === '') return
+                          openTabEditor(`${cwdNow.replace(/[\\/]$/, '')}/${rel.replace(/^[/\\]+/, '')}`, cwdNow)
+                        },
                         onSend: sendMessage,
                       })
                     })(),

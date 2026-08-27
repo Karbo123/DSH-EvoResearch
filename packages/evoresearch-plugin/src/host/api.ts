@@ -372,6 +372,68 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   /**
+   * 列出项目根目录文件树（工作区「项目文件」入口 + AI 回复文件链接共用）。
+   * 递归 2 层、上限 200 项；跳过 .git/.evoresearch-data/隐藏项/常见依赖目录。
+   * 返回相对路径（/ 分隔），dir=false 表示目录。
+   */
+  @Remote('projectFilesList')
+  projectFilesList(args: { projectDir?: string; depth?: number }): Array<{ path: string; dir?: boolean; bytes?: number }> | { error: string } {
+    try {
+      const root = String(args?.projectDir ?? '')
+      if (root === '' || !existsSync(root) || !statSync(root).isDirectory()) {
+        return { error: '项目目录不存在' }
+      }
+      // 与 workspace 导入同款跳过集合；项目私有数据目录也不展示
+      const walk = (current: string, depth: number): Array<{ path: string; dir?: boolean; bytes?: number }> => {
+        if (depth > 2) return []
+        const out: Array<{ path: string; dir?: boolean; bytes?: number }> = []
+        let entries: string[]
+        try {
+          entries = readdirSync(current, { encoding: 'utf8' })
+        } catch {
+          return out
+        }
+        for (const name of entries.sort((a, b) => a.localeCompare(b))) {
+          if (out.length >= 200) break
+          if (name.startsWith('.')) continue
+          if (name === 'node_modules' || name === '.venv' || name === 'dist' || name === '__pycache__' || name === 'build') continue
+          const full = path.join(current, name)
+          let st
+          try { st = statSync(full) } catch { continue }
+          const rel = path.relative(root, full).split(path.sep).join('/')
+          if (st.isDirectory()) {
+            out.push({ path: rel, dir: true })
+            out.push(...walk(full, depth + 1))
+          } else if (st.isFile()) {
+            out.push({ path: rel, bytes: st.size })
+          }
+        }
+        return out
+      }
+      return [{ path: '', dir: true }, ...walk(root, 0)]
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 读取项目内文本文件（预览用；≤2MB，utf8）。 */
+  @Remote('projectFileRead')
+  projectFileRead(args: { projectDir?: string; relPath: string }): { path: string; content: string } | { error: string } {
+    try {
+      const root = String(args?.projectDir ?? '')
+      const rel = String(args?.relPath ?? '')
+      if (root === '' || rel === '') return { error: '缺少参数' }
+      const target = path.join(root, rel)
+      if (!target.startsWith(root + path.sep) && target !== root) return { error: '路径越界' }
+      if (!existsSync(target) || !statSync(target).isFile()) return { error: '文件不存在' }
+      if (statSync(target).size > 2 * 1024 * 1024) return { error: '文件过大（>2MB），请在本机打开' }
+      return { path: target, content: readFileSync(target, 'utf8') }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
    * 自动创建项目工作区（欢迎页首条消息触发）：AI 生成 slug，失败确定性回退。
    * 模型取当前默认选择，其次配置的 auxiliaryModel，最后部署默认（new-api）。
    */

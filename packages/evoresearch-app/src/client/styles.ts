@@ -1245,6 +1245,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-md hr { border: none; border-top: 1px solid var(--color-border); margin: 6px 0; }
 .evo-md a { color: var(--brand); text-decoration: none; }
 .evo-md a:hover { text-decoration: underline; }
+.evo-md a[href^="evo-file://"] { color: var(--brand); font-weight: 600; background: color-mix(in srgb, var(--brand) 8%, transparent); border-radius: 4px; padding: 1px 4px; white-space: nowrap; cursor: pointer; }
+.evo-md a[href^="evo-file://"]::before { content: '📄'; font-size: 10px; margin-right: 3px; opacity: 0.8; }
 .evo-md img { max-width: 100%; border-radius: 8px; }
 .evo-md .katex-display { margin: 8px 0 16px; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 .evo-md .hljs { background: transparent; }
@@ -1591,6 +1593,24 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-panel-item-wrap { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 .evo-panel-item-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .evo-panel-item-row > svg { width: 15px; height: 15px; color: var(--brand); flex-shrink: 0; }
+/* ── 项目文件树（工作区「项目文件」入口）── */
+.evo-project-files { margin-top: 2px; display: flex; flex-direction: column; gap: 4px; }
+.evo-project-files-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--color-border-light); border-radius: 8px; background: none; color: var(--color-text-secondary); font-size: 12px; cursor: pointer; align-self: flex-start; }
+.evo-project-files-toggle:hover { color: var(--brand); background: var(--hover-bg); }
+.evo-project-files-toggle svg { width: 13px; height: 13px; color: var(--brand); flex-shrink: 0; }
+.evo-project-files-hint { margin-top: 2px; }
+.evo-project-files-list { display: flex; flex-direction: column; gap: 1px; max-height: 240px; overflow-y: auto; border: 1px solid var(--color-border-light); border-radius: 8px; padding: 4px; }
+.evo-project-file { display: flex; align-items: center; gap: 7px; padding: 5px 8px; border: none; background: none; border-radius: 6px; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; min-width: 0; text-align: left; }
+.evo-project-file:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-project-file svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--brand); }
+.evo-project-file .evo-project-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.evo-project-file .evo-project-file-size { margin-left: auto; font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-file-preview { margin-top: 4px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); overflow: hidden; }
+.evo-file-preview-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--color-border-light); }
+.evo-file-preview-name { font-size: 12px; color: var(--color-text-primary); flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-file-preview-size { font-size: 11px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-file-preview-body { max-height: 420px; overflow-y: auto; padding: 12px 14px; font-size: 13px; }
+.evo-file-preview-text { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.6; color: var(--color-text-secondary); }
 .evo-env-card { border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); overflow: hidden; }
 .evo-env-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; background: none; cursor: pointer; text-align: left; font-size: 12.5px; color: var(--color-text-primary); }
 .evo-env-head > svg { width: 14px; height: 14px; color: var(--brand); flex-shrink: 0; }

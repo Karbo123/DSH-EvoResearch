@@ -12,8 +12,9 @@ import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
   Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
   UserPlus, Power, PowerOff, Ban, ExternalLink, Send, Sparkles, PenLine, Pencil,
-  Boxes, Download, ChevronDown, ChevronRight,
+  Boxes, Download, ChevronDown, ChevronRight, FileText, Folder,
 } from 'lucide-react'
+import { renderMarkdown } from './markdown'
 
 const CATEGORY_LABELS: Record<string, string> = {
   idea: 'catIdea', method: 'catMethod', experiment: 'catExperiment',
@@ -1326,6 +1327,120 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
   })
 }
 
+/** 项目文件树（工作区「项目文件」入口）：列出项目根目录文件，点击 md/文本文件内嵌预览。 */
+interface ProjectFileEntry { path: string; dir?: boolean; bytes?: number }
+function ProjectFilesCard({ projectDir }: { projectDir: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [entries, setEntries] = useState<ProjectFileEntry[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [preview, setPreview] = useState<{ path: string; content: string } | null>(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
+
+  const toggle = () => {
+    const next = !expanded
+    setExpanded(next)
+    if (next && entries === null) {
+      setLoading(true)
+      setError(null)
+      void api<ProjectFileEntry[]>('project-files-list', { projectDir })
+        .then((list) => { setEntries(list); setLoading(false) })
+        .catch((e: any) => { setLoading(false); setError(String(e?.message ?? e)) })
+    }
+  }
+
+  const openFile = (relPath: string) => {
+    if (previewBusy) return
+    setPreviewBusy(true)
+    setError(null)
+    void api<{ path: string; content: string }>('project-file-read', { projectDir, relPath })
+      .then((res) => { setPreview(res); setPreviewBusy(false) })
+      .catch((e: any) => { setPreviewBusy(false); setError(String(e?.message ?? e)) })
+  }
+
+  // 目录前缀 → 缩进层级（/ 分隔段数）
+  const depthOf = (rel: string) => (rel.split('/').length - 1)
+
+  // 展开后的文件树/加载/空态视图（提前计算，避免 JSX 内深嵌套三元 + 括号歧义）
+  let filesContent: any = null
+  if (expanded) {
+    if (loading) filesContent = jsx('div', { className: 'evo-panel-hint evo-project-files-hint', children: t('loading') })
+    else if (error !== null) filesContent = jsx('div', { className: 'evo-panel-error evo-project-files-hint', children: error })
+    else if ((entries ?? []).filter((e) => !e.dir).length === 0) filesContent = jsx('div', { className: 'evo-panel-hint evo-project-files-hint', children: t('projectFilesEmpty') })
+    else filesContent = jsxs('div', {
+      className: 'evo-project-files-list',
+      children: [
+        (entries ?? []).map((e) => {
+          if (e.dir) return null
+          const depth = depthOf(e.path)
+          const isMd = e.path.endsWith('.md')
+          return jsx('button', {
+            type: 'button',
+            className: 'evo-project-file',
+            style: { paddingLeft: `${8 + depth * 14}px` },
+            onClick: () => openFile(e.path),
+            title: e.path,
+            children: jsxs(Fragment, {
+              children: [
+                jsx(isMd ? FileText : Boxes, {}),
+                jsx('span', { className: 'evo-project-file-name', children: e.path.split('/').pop() }),
+                e.bytes !== undefined && e.bytes > 0 && jsx('span', { className: 'evo-project-file-size', children: `${Math.max(1, Math.round(e.bytes / 1024))} KB` }),
+              ],
+            }),
+          }, e.path)
+        }),
+      ],
+    })
+  }
+
+  return jsxs('div', {
+    className: 'evo-project-files',
+    children: [
+      jsx('button', {
+        type: 'button',
+        className: 'evo-project-files-toggle',
+        onClick: toggle,
+        children: jsxs(Fragment, {
+          children: [
+            jsx(expanded ? ChevronDown : ChevronRight, {}),
+            jsx(FileText, {}),
+            jsx('span', { children: t('projectFiles') }),
+          ],
+        }),
+      }),
+      filesContent,
+      preview !== null && jsxs('div', {
+        className: 'evo-file-preview',
+        children: [
+          jsxs('div', {
+            className: 'evo-file-preview-head',
+            children: [
+              jsx('span', { className: 'evo-file-preview-name', children: preview.path }),
+              jsx('span', { className: 'evo-file-preview-size', children: `${Math.max(1, Math.round(preview.content.length / 1024))} KB` }),
+              jsx('span', { style: { flex: 1 } }),
+              jsx('button', {
+                type: 'button',
+                className: 'evo-icon-btn',
+                title: t('closePreview'),
+                'aria-label': t('closePreview'),
+                onClick: () => setPreview(null),
+                children: jsx(XIcon, {}),
+              }),
+            ],
+          }),
+          jsx('div', {
+            className: 'evo-file-preview-body',
+            children: preview.path.endsWith('.md')
+              ? jsx('div', { className: 'evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(preview.content) } })
+              : jsx('pre', { className: 'evo-file-preview-text', children: preview.content.slice(0, 40000) }),
+          }),
+        ],
+      }),
+      previewBusy && jsx('div', { className: 'evo-panel-hint evo-project-files-hint', children: t('loading') }),
+    ],
+  })
+}
+
 /** Workspace 面板：项目列表 + 新建项目 + Import Project + 每项目环境。 */
 export function WorkspacePanel() {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null)
@@ -1449,6 +1564,7 @@ export function WorkspacePanel() {
                       ],
                     }),
                     p.path !== undefined && jsx(ProjectEnvCard, { projectDir: p.path, onError: (m) => setError(m) }),
+                    p.path !== undefined && jsx(ProjectFilesCard, { projectDir: p.path }),
                   ],
                 }, p.name)),
               }),

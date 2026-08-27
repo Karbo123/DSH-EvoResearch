@@ -1839,6 +1839,21 @@ export function registerWorkspaceApi(ctx: any): void {
           writeOk(res, await (evoresearch.projectImport as (a: { sourcePath: string; name?: string }) => Promise<unknown>)({ sourcePath, ...(name === undefined ? {} : { name }) }))
           return
         }
+        // 项目文件树（工作区「项目文件」入口）：相对路径递归列举。
+        if (method === 'project-files-list') {
+          if (evoresearch?.projectFilesList === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const projectDir = typeof payload.projectDir === 'string' ? payload.projectDir : undefined
+          const depth = typeof payload.depth === 'number' ? payload.depth : undefined
+          writeOk(res, await (evoresearch.projectFilesList as (a: { projectDir?: string; depth?: number }) => Promise<unknown>)({ ...(projectDir === undefined ? {} : { projectDir }), ...(depth === undefined ? {} : { depth }) }))
+          return
+        }
+        // 项目文件预览读取（md/文本内嵌预览）。
+        if (method === 'project-file-read') {
+          if (evoresearch?.projectFileRead === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const projectDir = typeof payload.projectDir === 'string' ? payload.projectDir : undefined
+          writeOk(res, await (evoresearch.projectFileRead as (a: { projectDir?: string; relPath: string }) => Promise<unknown>)({ ...(projectDir === undefined ? {} : { projectDir }), relPath: requireString(payload, 'relPath') }))
+          return
+        }
 
         // ── Channels：状态 / 启动 / 停止 ──
         if (method === 'channels-status') {
