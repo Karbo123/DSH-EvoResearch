@@ -20,6 +20,7 @@ import {
 import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
 import { XYFLOW_CSS } from './xyflow-css'
+import { MONACO_CSS } from './monaco-css'
 import { applyTheme, resolvedTheme, toggleTheme } from './theme'
 import { ThreadList, normalizeSessionsSnapshot, MENU, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
@@ -138,6 +139,7 @@ function installCss() {
     ['@evoresearch/dsh-app/workspace.css', CSS],
     ['@evoresearch/dsh-app/katex.css', KATEX_CSS],
     ['@evoresearch/dsh-app/xyflow.css', XYFLOW_CSS],
+    ['@evoresearch/dsh-app/monaco.css', MONACO_CSS],
   ]
   for (const [tagId, css] of sheets) {
     if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) {

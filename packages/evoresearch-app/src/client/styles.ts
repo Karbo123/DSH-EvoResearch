@@ -1552,6 +1552,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* Milkdown 文件编辑器：占满 tab 剩余高度（覆盖 composer 的固定高度）；工具条常开由 data-markdown-toolbar-open 控制 */
 .evo-tab-md-live.evo-composer-editor { flex: 1 1 auto; min-height: 200px; height: auto; }
 .evo-tab-md-live .evo-composer-editor-host { flex: 1 1 auto; min-height: 0; }
+/* Monaco 文件编辑器：占满 tab 剩余高度 */
+.evo-tab-monaco { flex: 1 1 auto; min-height: 0; }
 /* ── 实验管理（§5.1）── */
 .evo-exp-notice { margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-success) 35%, var(--color-border)); color: var(--color-success); font-size: 12.5px; }
 .evo-exp-item { border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 8px; background: var(--color-surface); }

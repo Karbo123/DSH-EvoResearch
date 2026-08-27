@@ -24,6 +24,7 @@ import { gfm, insertTableCommand, toggleStrikethroughCommand } from '@milkdown/p
 import { history as milkdownHistory } from '@milkdown/plugin-history'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { Dropdown } from './dropdown'
+import { TabMonacoEditor } from './tab-monaco'
 import { Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2, Save } from 'lucide-react'
 
 const MD_EXT = new Set(['.md', '.markdown'])
@@ -190,11 +191,14 @@ function MarkdownLive({ initial, onMarkdown, onSave }: { initial: string; onMark
   })
 }
 
-/** 工作区文件 tab（按类型适配：md → Milkdown 实时编辑，其它文本 → textarea）。 */
+/** 工作区文件 tab（按类型适配：md → Milkdown 实时编辑，其它文本 → Monaco 代码编辑器）。 */
 export function TabFileEditor({ path, draft, onDraft, onSave }: TabFileEditorProps) {
   const [content, setContent] = useState<string | null>(null)
   const [readError, setReadError] = useState<string | null>(null)
   const isMarkdown = MD_EXT.has(path.slice(path.lastIndexOf('.')).toLowerCase())
+  // Monaco addCommand 需要稳定引用（注册一次），经 ref 转发最新 onSave
+  const saveRef = useRef(onSave)
+  saveRef.current = onSave
 
   // 打开时自动读取文件内容（draft 已有值则直接采用，避免覆盖未保存编辑）
   useEffect(() => {
@@ -249,13 +253,7 @@ export function TabFileEditor({ path, draft, onDraft, onSave }: TabFileEditorPro
       readError !== null && jsx('div', { className: 'evo-panel-error', children: readError }),
       content === null
         ? jsx('div', { className: 'evo-panel-hint', children: t('loading') })
-        : jsx('textarea', {
-            className: 'evo-tab-editor evo-tab-file-edit',
-            value: content,
-            spellCheck: false,
-            onInput: (e) => onDraft(e.currentTarget.value),
-            onKeyDown: (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); onSave() } },
-          }),
+        : jsx(TabMonacoEditor, { path, value: content, onDraft, onSaveRef: saveRef }),
     ],
   })
 }
