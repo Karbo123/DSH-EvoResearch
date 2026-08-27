@@ -1134,6 +1134,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     onWinUp: ((e: PointerEvent) => void) | null
     onWinCancel: ((e: PointerEvent) => void) | null
     capturedEl: HTMLElement | null
+    bar: HTMLElement | null
   } | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   // dragActiveRef：拖拽是否已激活（由 0.1s 定时器置位）。move/up 的 window 闭包是旧渲染抓的，
@@ -1172,8 +1173,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     if (s.onWinUp) window.removeEventListener('pointerup', s.onWinUp)
     if (s.onWinCancel) window.removeEventListener('pointercancel', s.onWinCancel)
     if (s.capturedEl !== null) { try { s.capturedEl.releasePointerCapture(s.pointerId) } catch { /* 忽略 */ } }
+    if (s.bar !== null) { try { s.bar.style.overflowX = '' } catch { /* 忽略 */ } }
     document.body.style.userSelect = ''
-    s.onWinMove = null; s.onWinUp = null; s.onWinCancel = null; s.capturedEl = null
+    s.onWinMove = null; s.onWinUp = null; s.onWinCancel = null; s.capturedEl = null; s.bar = null
   }
   // 左键按住 0.1s → 进入拖拽模式，并把 move/up/cancel 挂到 window
   const beginDragHold = (tab: WorkspaceTab, el: HTMLDivElement, e: { pointerId: number; clientX: number }) => {
@@ -1195,8 +1197,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       if (dragRef.current === null || dragRef.current.pointerId !== pid) return
       endDrag(id)
     }
-    dragRef.current = { id, pointerId: pid, grabX: e.clientX, width: rect.width, holdTimer: null, onWinMove, onWinUp, onWinCancel, capturedEl: el }
+    dragRef.current = { id, pointerId: pid, grabX: e.clientX, width: rect.width, holdTimer: null, onWinMove, onWinUp, onWinCancel, capturedEl: el, bar: null }
     try { el.setPointerCapture(pid) } catch { /* 忽略捕获失败 */ }
+    // 拖拽期间禁用标签栏横向滚动（避免内容被推出触发自动滚动→闪烁）；结束后恢复
+    const tabbar = document.querySelector<HTMLElement>('.evo-tabbar')
+    if (tabbar !== null) { tabbar.style.overflowX = 'hidden'; dragRef.current.bar = tabbar }
     document.body.style.userSelect = 'none'
     window.addEventListener('pointermove', onWinMove)
     window.addEventListener('pointerup', onWinUp)
@@ -1218,20 +1223,21 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       if (dx > 8) { dragActiveRef.current = false; clearHoldTimer(); detachWinListeners(); dragRef.current = null; setDragId(null); setDragOffsetX(0) }
       return
     }
-    // 已进入拖拽：被拖 tab 跟随手指。位移取「指针到它当前槽位中线」的相对值（重排后槽位随之
-    // 更新，不会累积成大偏移），并钳制在 ±width 内——大幅横拖也不会让 tab 飞出标签栏。
+    // 已进入拖拽：被拖 tab 跟随手指。期望中心 = 指针 X，但钳制在标签栏可见区间内——
+    // 这样 tab 永不超出标签栏，不会把内容推出触发自动滚动，也就不会闪烁。
+    const bar = s.bar !== null ? s.bar : document.querySelector<HTMLElement>('.evo-tabbar')
     const dragEl = tabElRefs.current[tabId]
     if (dragEl !== null && dragEl !== undefined) {
       const r = dragEl.getBoundingClientRect()
-      let d = clientX - (r.left + r.width / 2)
-      const lim = Math.max(70, s.width)
-      if (d > lim) d = lim
-      if (d < -lim) d = -lim
-      setDragOffsetX(d)
+      let center = clientX
+      if (bar !== null) {
+        const br = bar.getBoundingClientRect()
+        const half = Math.max(0, Math.min(r.width / 2, (br.right - br.left) / 2))
+        if (center < br.left + half) center = br.left + half
+        if (center > br.right - half) center = br.right - half
+      }
+      setDragOffsetX(center - (r.left + r.width / 2))
     }
-    // 防止拖拽时标签栏因内容被推出而横向自动滚动（拉回当前滚动位置）
-    const bar = document.querySelector<HTMLElement>('.evo-tabbar')
-    if (bar !== null && bar.scrollLeft !== 0) bar.scrollLeft = 0
     const ids = tabsRef.current.map((t) => t.id)
     const idx = ids.indexOf(tabId)
     if (idx < 0) return
