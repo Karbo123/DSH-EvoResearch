@@ -15,7 +15,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef, useSyncExternalStore, Component } from 'react'
 import {
   PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, SquarePen,
-  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, Save, FolderOpen,
+  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, FolderOpen,
 } from 'lucide-react'
 import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
@@ -26,6 +26,7 @@ import { ThreadList, normalizeSessionsSnapshot, MENU, type SideView } from './th
 import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
 import { TabFileEditor } from './tab-file'
+import { ConfirmDialog } from './session-actions'
 import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
@@ -1102,7 +1103,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     filePath?: string
     root?: string
     draft?: string
+    /** 磁盘上最近一次读写到的内容（dirty 基准）。未保存改动 = draft !== original。 */
+    original?: string
   }
+  /** 仿照 VSCode：斜体=干净（未改动/已保存），正体=有未保存改动。 */
+  const isTabDirty = (tab: WorkspaceTab): boolean =>
+    tab.kind === 'editor' && tab.draft !== undefined && tab.original !== undefined && tab.draft !== tab.original
   const [tabs, setTabs] = useState<WorkspaceTab[]>([
     { id: 'chat', kind: 'chat', title: t('chatTab') },
     { id: 'chatgraph', kind: 'chatgraph', title: t('chatGraphTab') },
@@ -1115,6 +1121,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [tabBusy, setTabBusy] = useState(false)
   const tabFileInputRef = useRef<HTMLInputElement | null>(null)
   const tabNewRef = useRef<HTMLDivElement | null>(null)
+  // 待确认关闭的「有未保存改动」文件 tab
+  const [closeTabConfirmId, setCloseTabConfirmId] = useState<string | null>(null)
   // + 菜单位置（fixed 定位：脱离 tabbar 的 overflow 裁剪）
   const [tabMenuPos, setTabMenuPos] = useState<{ top: number; left: number } | null>(null)
   const toggleTabMenu = () => {
@@ -1168,6 +1176,19 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const updateTabDraft = (id: string, draft: string) => {
     setTabs((prev) => prev.map((tab) => (tab.id === id ? { ...tab, draft } : tab)))
+  }
+  /** TabFileEditor 首次读取磁盘内容后上报原始内容，作为 dirty 基准。 */
+  const setTabLoaded = (id: string, original: string) => {
+    setTabs((prev) => prev.map((tab) => (tab.id === id ? { ...tab, original } : tab)))
+  }
+  /** 关闭文件 tab：有未保存改动时先弹确认（仿 VSCode）。 */
+  const requestCloseTab = (id: string) => {
+    const tab = tabsRef.current.find((t) => t.id === id)
+    if (tab !== undefined && isTabDirty(tab)) {
+      setCloseTabConfirmId(id)
+      return
+    }
+    closeTab(id)
   }
   const closeTab = (id: string) => {
     setTabs((prev) => {
@@ -1275,8 +1296,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ root: tab.root, path: tab.filePath, text: tab.draft ?? '' }),
     }).then((res) => res.json()).then((json) => {
-      if (json.ok === true) toast(t('saved'), 'success')
-      else toast(json.error?.message ?? t('llmSaveFailed'), 'error')
+      if (json.ok === true) {
+        setTabs((prev) => prev.map((t) => (t.id === tab.id ? { ...t, original: t.draft } : t)))
+        toast(t('saved'), 'success')
+      } else toast(json.error?.message ?? t('llmSaveFailed'), 'error')
     }).catch(() => { toast(t('llmSaveFailed'), 'error') })
   }
 
@@ -1611,15 +1634,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         tabs.map((tab) => jsxs('div', {
                           className: 'evo-tab',
                           'data-active': activeTabId === tab.id || undefined,
+                          'data-dirty': (tab.kind === 'editor' && isTabDirty(tab)) || undefined,
                           onClick: () => activateTab(tab.id),
                           children: [
-                            jsx('span', { className: 'evo-tab-title', children: tab.title }),
+                            jsx('span', { className: `evo-tab-title${tab.kind === 'editor' ? ' evo-tab-title-file' : ''}${tab.kind === 'editor' && isTabDirty(tab) ? ' evo-tab-title-dirty' : ''}`, children: tab.title }),
                             (tab.kind === 'pdf' || tab.kind === 'editor') && jsx('button', {
                               type: 'button',
                               className: 'evo-tab-close',
                               title: t('closeTab'),
                               'aria-label': t('closeTab'),
-                              onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); closeTab(tab.id) },
+                              onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); requestCloseTab(tab.id) },
                               children: jsx(X, {}),
                             }),
                           ],
@@ -1749,6 +1773,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           root: activeTab.root,
                           draft: activeTab.draft,
                           onDraft: (text) => updateTabDraft(activeTab.id, text),
+                          onLoaded: (original) => setTabLoaded(activeTab.id, original),
                           onSave: () => saveTabEditor(activeTab),
                         })
                       }
@@ -1806,6 +1831,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
           settingsOpen && jsx(SettingsDialog, {
             onClose: () => setSettingsOpen(false),
+          }),
+          closeTabConfirmId !== null && jsx(ConfirmDialog, {
+            title: t('closeUnsavedTitle'),
+            message: t('closeUnsavedMessage'),
+            confirmLabel: t('closeUnsavedConfirm'),
+            danger: true,
+            onConfirm: () => { closeTab(closeTabConfirmId) },
+            onClose: () => setCloseTabConfirmId(null),
           }),
           brandMenuOpen && jsx('div', {
             ref: brandMenuRef,

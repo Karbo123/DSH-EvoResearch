@@ -25,7 +25,7 @@ import { history as milkdownHistory } from '@milkdown/plugin-history'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { Dropdown } from './dropdown'
 import { TabMonacoEditor } from './tab-monaco'
-import { Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2, Save } from 'lucide-react'
+import { Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2, FileText } from 'lucide-react'
 
 const MD_EXT = new Set(['.md', '.markdown'])
 
@@ -34,6 +34,8 @@ export interface TabFileEditorProps {
   root: string
   draft?: string
   onDraft: (text: string) => void
+  /** 首次读取磁盘内容后上报原始内容（dirty 基准）。 */
+  onLoaded: (original: string) => void
   onSave: () => void
 }
 
@@ -192,13 +194,16 @@ function MarkdownLive({ initial, onMarkdown, onSave }: { initial: string; onMark
 }
 
 /** 工作区文件 tab（按类型适配：md → Milkdown 实时编辑，其它文本 → Monaco 代码编辑器）。 */
-export function TabFileEditor({ path, draft, onDraft, onSave }: TabFileEditorProps) {
+export function TabFileEditor({ path, root, draft, onDraft, onLoaded, onSave }: TabFileEditorProps) {
   const [content, setContent] = useState<string | null>(null)
   const [readError, setReadError] = useState<string | null>(null)
   const isMarkdown = MD_EXT.has(path.slice(path.lastIndexOf('.')).toLowerCase())
   // Monaco addCommand 需要稳定引用（注册一次），经 ref 转发最新 onSave
   const saveRef = useRef(onSave)
   saveRef.current = onSave
+  // onLoaded 引用转发（避免闭包捕获旧值）
+  const onLoadedRef = useRef(onLoaded)
+  onLoadedRef.current = onLoaded
 
   // 打开时自动读取文件内容（draft 已有值则直接采用，避免覆盖未保存编辑）
   useEffect(() => {
@@ -210,26 +215,28 @@ export function TabFileEditor({ path, draft, onDraft, onSave }: TabFileEditorPro
       body: JSON.stringify({ path }),
     }).then((res) => res.json()).then((json) => {
       if (cancelled) return
-      if (json.ok === true) { setContent(String(json.value.text ?? '')); setReadError(null) }
-      else setReadError(json.error?.message ?? '读取失败')
+      if (json.ok === true) {
+        const text = String(json.value.text ?? '')
+        setContent(text); setReadError(null)
+        // 上报磁盘原始内容作为 dirty 基准（仅首次/内容变化时；draft 优先分支不覆盖脏状态）
+        if (draft === undefined || draft === '') onLoadedRef.current(text)
+      } else setReadError(json.error?.message ?? '读取失败')
     }).catch((e) => { if (!cancelled) setReadError(String(e)) })
     return () => { cancelled = true }
   }, [path])
 
   const name = path.slice(Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')) + 1) || path
+  // 头部路径显示：项目根相对路径（短、有语义、窄屏也能容纳），不显示深层绝对路径
+  const relPath = root !== '' && (path === root || path.startsWith(root + '\\') || path.startsWith(root + '/'))
+    ? path.slice(root.length).replace(/^[\\/]+/, '')
+    : path
 
-  // ── 头部：路径 + 保存 ──
+  // ── 头部：文件图标 + 相对路径（保存走 Ctrl+S，不再单独放按钮）──
   const head = jsxs('div', {
     className: 'evo-tab-editor-head',
     children: [
-      jsx('span', { className: 'evo-tab-editor-path', title: path, children: isMarkdown ? name : path }),
-      jsx('span', { style: { flex: 1 } }),
-      jsx('button', {
-        type: 'button',
-        className: 'evo-btn evo-btn-run',
-        onClick: onSave,
-        children: jsxs(Fragment, { children: [jsx(Save, {}), jsx('span', { children: t('save') })] }),
-      }),
+      jsx(FileText, { className: 'evo-tab-editor-fileicon' }),
+      jsx('span', { className: 'evo-tab-editor-path', title: path, children: isMarkdown ? name : relPath }),
     ],
   })
 

@@ -1501,6 +1501,9 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tab:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-tab[data-active] { background: var(--color-surface); border-color: var(--color-border); color: var(--color-text-primary); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 .evo-tab-title { overflow: hidden; text-overflow: ellipsis; }
+/* 文件编辑 tab：未改动=斜体，有未保存改动=正体（仿 VSCode dirty 语义的斜体约定） */
+.evo-tab-title-file { font-style: italic; }
+.evo-tab-title-file.evo-tab-title-dirty { font-style: normal; font-weight: 700; color: var(--color-text-primary); }
 .evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: 5px; cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0.65; }
 .evo-tab-close:hover { background: rgba(255, 255, 255, 0.22); opacity: 1; }
 .evo-tab-close svg { width: 11px; height: 11px; }
@@ -1541,13 +1544,13 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tab-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .evo-tab-frame { flex: 1; width: 100%; border: none; background: #ffffff; }
 .evo-tab-editor-body { gap: 0; }
-.evo-tab-editor-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); flex-shrink: 0; }
-.evo-tab-editor-path { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-tab-editor-head { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); flex-shrink: 0; min-height: 36px; box-sizing: border-box; }
+.evo-tab-editor-fileicon { width: 14px; height: 14px; color: var(--color-text-tertiary); flex-shrink: 0; }
+.evo-tab-editor-path { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
 .evo-tab-editor { flex: 1; min-height: 0; width: 100%; border: none; outline: none; resize: none; background: var(--color-surface); color: var(--color-text-primary); font-family: ui-monospace, Consolas, 'SF Mono', monospace; font-size: 13px; line-height: 1.65; padding: 14px 18px; tab-size: 2; }
 /* ── 文件 tab（按类型：md → Milkdown 所见即所得实时编辑）── */
 .evo-tab-file-body { gap: 0; }
 .evo-tab-file-preview { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 22px; font-size: 14px; line-height: 1.7; background: var(--color-surface); }
-.evo-tab-editor-head .evo-btn-run { gap: 5px; padding: 5px 10px; font-size: 12px; border-radius: 6px; }
 .evo-btn-run.evo-btn-active { outline: 2px solid color-mix(in srgb, var(--brand) 55%, transparent); outline-offset: 1px; }
 /* Milkdown 文件编辑器：占满 tab 剩余高度（覆盖 composer 的固定高度）；工具条常开由 data-markdown-toolbar-open 控制 */
 .evo-tab-md-live.evo-composer-editor { flex: 1 1 auto; min-height: 200px; height: auto; }
