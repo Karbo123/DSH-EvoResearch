@@ -1488,6 +1488,30 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
+        // §44：会话 URL 短别名（?t=<slug>）——分配/反查，随 session-meta 持久化
+        if (method === 'session-slug-ensure') {
+          if (evoresearch?.sessionSlugEnsure === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          const sessionId = requireString(payload, 'sessionId')
+          const args: { sessionId: string; preferred?: string } = { sessionId }
+          if (typeof payload.preferred === 'string' && payload.preferred.trim() !== '') args.preferred = payload.preferred.slice(0, 200)
+          try {
+            const result = await (evoresearch.sessionSlugEnsure as (a: typeof args) => Promise<{ slug?: string }>).call(evoresearch, args)
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
+        if (method === 'session-slug-lookup') {
+          if (evoresearch?.sessionSlugLookup === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
+          try {
+            const result = await (evoresearch.sessionSlugLookup as (a: { slug: string }) => Promise<{ sessionId: string | null }>).call(evoresearch, { slug: requireString(payload, 'slug') })
+            writeOk(res, result)
+          } catch (error) {
+            writeError(res, error)
+          }
+          return
+        }
         // §29：项目元数据（归档/标签色）——后端存储，随项目数据迁移
         if (method === 'project-meta-get') {
           if (evoresearch?.projectMetaGet === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')

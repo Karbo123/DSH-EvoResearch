@@ -10,7 +10,7 @@ import * as path from 'node:path'
 import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, renameSync, existsSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { WorkspaceService } from './workspace.js'
-import { resolveDshHomePath, workspaceDataDir } from './core/paths.js'
+import { resolveDshHomePath, workspaceDataDir, slugifyProjectName } from './core/paths.js'
 import type { MemoryRuntime } from './memory/index.js'
 import type { SchedulerService } from './scheduler.js'
 import type { ChannelManager } from './channels/index.js'
@@ -318,6 +318,18 @@ function sessionKeyOf(cwd: string): string {
     }
   }
   return `--${(readable.replace(/^-+/, '') || 'root').slice(0, 251)}--`
+}
+
+/**
+ * §29 会话元数据条目：置顶/标签色/归档 + URL 短别名 slug（§44 thread alias）。
+ * slug 一经分配不再变更（会话标题后来怎么改都不影响已分享的 ?t= 链接），
+ * 删除会话时随 dropSessionRefs 一起清理。
+ */
+export type SessionMetaEntry = {
+  pinned?: boolean
+  tagColor?: string | null
+  archived?: boolean
+  slug?: string
 }
 
 /** EvoResearch Remote API。 */
@@ -1097,20 +1109,21 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
   }
 
-  /** §29：会话元数据（置顶/标签色/归档）后端存储——pin/tag/archive 随项目数据迁移。 */  private metaFile(): string {
+  /** §29：会话元数据（置顶/标签色/归档/slug）后端存储——随项目数据迁移。 */
+  private metaFile(): string {
     return path.join(this.services.memory.config.dataRoot, 'plugins', 'session-meta.json')
   }
 
-  private readSessionMeta(): Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }> {
+  private readSessionMeta(): Record<string, SessionMetaEntry> {
     try {
       const raw = JSON.parse(readFileSync(this.metaFile(), 'utf8')) as Record<string, unknown>
-      return typeof raw === 'object' && raw !== null ? (raw as Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }>) : {}
+      return typeof raw === 'object' && raw !== null ? (raw as Record<string, SessionMetaEntry>) : {}
     } catch {
       return {}
     }
   }
 
-  private writeSessionMeta(meta: Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }>): void {
+  private writeSessionMeta(meta: Record<string, SessionMetaEntry>): void {
     const file = this.metaFile()
     mkdirSync(path.dirname(file), { recursive: true })
     const tmp = `${file}.tmp-${process.pid}`
@@ -1119,7 +1132,7 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   @Remote('sessionMetaGet')
-  sessionMetaGet(): Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }> {
+  sessionMetaGet(): Record<string, SessionMetaEntry> {
     return this.readSessionMeta()
   }
 
@@ -1129,19 +1142,67 @@ export class EvoResearchApiService extends TypertRemoteService {
     if (sessionId === '') return { ok: false }
     const meta = this.readSessionMeta()
     const current = meta[sessionId] ?? {}
-    const next: { pinned?: boolean; tagColor?: string | null; archived?: boolean } = { ...current }
+    const next: SessionMetaEntry = { ...current }
     const patch = args?.patch ?? {}
     if (patch.pinned !== undefined) next.pinned = patch.pinned
     if (patch.tagColor !== undefined) next.tagColor = patch.tagColor === null ? null : patch.tagColor
     if (patch.archived !== undefined) next.archived = patch.archived
-    // 全空则删除该会话条目
-    if (next.pinned === undefined && next.tagColor === undefined && next.archived === undefined) {
+    // 全空则删除该会话条目；slug 已分配的会话即使其余字段为空也保留（URL 短别名仍然有效）
+    if (next.pinned === undefined && next.tagColor === undefined && next.archived === undefined && next.slug === undefined) {
       delete meta[sessionId]
     } else {
       meta[sessionId] = next
     }
     this.writeSessionMeta(meta)
     return { ok: true }
+  }
+
+  /**
+   * §44 URL 短别名：为会话分配一个稳定的英文 slug（用于 ?t= 链接，替代长 UUID）。
+   * 来源优先级：client 提供的会话标题（preferred）→ session-<uuid 前 8 位短哈希兜底。
+   * slug 与 sessionId 的映射持久化在 session-meta.json；同一会话重复调用返回既有 slug，
+   * 冲突时按 -2/-3 后缀依次避让（与项目目录命名策略一致）。
+   */
+  @Remote('sessionSlugEnsure')
+  sessionSlugEnsure(args: { sessionId: string; preferred?: string }): { slug?: string } {
+    const sessionId = String(args?.sessionId ?? '').trim()
+    if (sessionId === '') return {}
+    const meta = this.readSessionMeta()
+    const current = meta[sessionId]
+    if (typeof current?.slug === 'string' && current.slug !== '') return { slug: current.slug }
+    let base = slugifyProjectName(String(args?.preferred ?? ''), 20)
+    if (base === '' || base === 'project') {
+      // 纯中文/空标题回退：从 session-<uuid> 中提取短哈希段（确定性、≤9 字符）
+      const hex = /[0-9a-f]{8}/i.exec(sessionId)?.[0]?.toLowerCase() ?? ''
+      if (hex !== '') base = `s-${hex}`
+      else {
+        const chars = Array.from(sessionId).filter((ch) => /[a-z0-9]/i.test(ch)).slice(0, 8).join('').toLowerCase()
+        base = chars !== '' ? `s-${chars}` : 'thread'
+      }
+    }
+    const taken = new Set<string>()
+    for (const [id, entry] of Object.entries(meta)) {
+      if (id === sessionId) continue
+      if (typeof entry?.slug === 'string' && entry.slug !== '') taken.add(entry.slug)
+    }
+    let slug = base
+    for (let n = 2; n <= 64 && taken.has(slug); n += 1) slug = `${base}-${n}`
+    // 极端拥挤时随机后缀保底（仍短且唯一概率极高）
+    while (taken.has(slug)) slug = `${base}-${randomUUID().slice(0, 6)}`
+    this.writeSessionMeta({ ...meta, [sessionId]: { ...(meta[sessionId] ?? {}), slug } })
+    return { slug }
+  }
+
+  /** §44：slug → sessionId 反查（浏览器刷新/分享链接恢复用）；未登记返回 null。 */
+  @Remote('sessionSlugLookup')
+  sessionSlugLookup(args: { slug: string }): { sessionId: string | null } {
+    const slug = String(args?.slug ?? '').trim()
+    if (slug === '') return { sessionId: null }
+    const meta = this.readSessionMeta()
+    for (const [sessionId, entry] of Object.entries(meta)) {
+      if (typeof entry?.slug === 'string' && entry.slug !== '' && entry.slug === slug) return { sessionId }
+    }
+    return { sessionId: null }
   }
 
   /** §29：项目元数据（归档/标签色）后端存储——与 session-meta 同层，随项目数据迁移。 */

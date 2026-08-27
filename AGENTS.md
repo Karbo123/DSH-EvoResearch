@@ -325,6 +325,7 @@ node scripts/check-docs.mjs
 4. **Cordis 插件**：profile 为 `@deepseek-ai/dsh-base` + `@evoresearch/dsh-app` + `@evoresearch/dsh-plugin`；rc.2 起需 `ui-renderer` 提供 `uiRenderer` 服务（`cordis.patch.yml`）。
 5. **截图/临时脚本产物**：一律 `.tmp-dev/images/`；一次性调试脚本可放 `scripts/.tmp-*`（gitignore）或直接 `.tmp-dev/`。不得污染项目根、用户目录或数据目录。
 6. **数据目录**：EvoResearch 开发 Web 数据只进 `.tmp-dev/.evoresearch-data/`；正式 Web 数据只进仓库根 `.evoresearch-data/`；官方 DSH 数据只在 `C:\Users\Karbo\.dsh`（勿写勿删）；桌面版数据只在 exe 同级 `.evoresearch-data/`。
+7. **URL 短化（§44）**：面向用户的 URL 一律用短键与可读短值——会话是 `?t=<slug>`（英文别名或 `s-<uuid 前8位>` 兜底，映射持久化于 `plugins/session-meta.json`，经 `sessionSlugEnsure/sessionSlugLookup` 分配与反查），键名一律单/双字符：`v`（视图）/`i`（检查器）/`it`（检查子标签）/`sb`（窄屏抽屉）/`r`（编辑重发文本），且**枚举值同样缩写**：`v=ws|sk|mem|sch|ch|tm|exp|note|lib`、`it=ws|ag|ch`；完整单词的旧链接仍兼容读取并自动升级为短形式。禁止再往分享链接里塞完整 `session-<uuid>` 或 `threadId=/view=/inspector=` 长参数。DSH 引擎层的 `session-<uuid>` 目录名不动，slug 只是 UI 层别名。新增任何 URL 参数先走这条规则。
 
 ---
 

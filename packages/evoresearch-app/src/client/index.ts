@@ -175,7 +175,37 @@ const CLIENT_STATE_PREFIXES = [
 
 const PANELS_KEY = 'evoresearch-panels'
 
-/** URL 查询状态（§43.5）：可分享/可恢复的导航状态（threadId/view/inspector…）。 */
+/** URL 查询键（§44 短化）：t=会话短别名 slug，v=视图，i/it=检查器，sb=窄屏抽屉，r=编辑重发。 */
+const URL_KEY_THREAD = 't'
+const URL_KEY_VIEW = 'v'
+const URL_KEY_INSPECTOR = 'i'
+const URL_KEY_INSPECTOR_TAB = 'it'
+const URL_KEY_SIDEBAR = 'sb'
+const URL_KEY_RESEND = 'r'
+
+/**
+ * §44 值短化：固定枚举写成 2–3 字符缩写（如 workspace→ws、agents→ag），
+ * 保证 v=ws&it=ag 这类参数同样极短；完整单词仍兼容读取（旧分享链接自动识别）。
+ */
+const ENC_VALUE_VIEW: Record<string, string> = {
+  workspace: 'ws',
+  skills: 'sk',
+  memory: 'mem',
+  schedule: 'sch',
+  channels: 'ch',
+  team: 'tm',
+  experiments: 'exp',
+  notes: 'note',
+  library: 'lib',
+}
+const ENC_VALUE_TAB: Record<string, string> = { workspace: 'ws', agents: 'ag', chats: 'ch' }
+
+/** 写入用：编码枚举值；未知值原样透传（避免意外丢参）。 */
+function encValue(table: Record<string, string>, v: string | null): string | null {
+  return v === null || table[v] === undefined ? v : table[v]
+}
+
+/** URL 查询状态（§43.5）：可分享/可恢复的导航状态（t/v/i/it…）。 */
 function patchUrl(patch: Record<string, string | null>): void {
   try {
     const params = new URLSearchParams(location.search)
@@ -186,6 +216,79 @@ function patchUrl(patch: Record<string, string | null>): void {
     const qs = params.toString()
     history.replaceState(null, '', qs === '' ? location.pathname : `${location.pathname}?${qs}`)
   } catch { /* URL 更新失败不影响功能 */ }
+}
+
+// ── §44 会话 URL 短别名：?t=<slug> 替代长 UUID；slug ↔ sessionId 映射后端持久化 ──
+
+/** slug 别名内存缓存（session-meta 启动加载后填充）；key: sessionId, value: slug。 */
+const threadSlugBySession = new Map<string, string>()
+const threadSessionBySlug = new Map<string, string>()
+
+/** 从 session-meta 条目表重建双射映射（幂等）。 */
+function ingestThreadSlugs(meta: Record<string, { slug?: string } | undefined>): void {
+  for (const [sessionId, entry] of Object.entries(meta)) {
+    if (typeof entry?.slug !== 'string' || entry.slug === '') continue
+    if (!threadSlugBySession.has(sessionId)) {
+      threadSlugBySession.set(sessionId, entry.slug)
+      if (!threadSessionBySlug.has(entry.slug)) threadSessionBySlug.set(entry.slug, sessionId)
+    }
+  }
+}
+
+/** 取会话的 slug 别名（未登记返回 null，调用方需自行 ensure）。 */
+function threadSlugOf(sessionId: string): string | null {
+  return threadSlugBySession.get(sessionId) ?? null
+}
+
+/**
+ * 异步为会话分配短别名并更新当前 URL（openSession 已写入 ?t= 占位）。
+ * preferred 传会话标题（AI slug 优先），失败时由 host 回退 s-<短哈希>；
+ * 竞态保护：仅当 URL 当前仍指向同一会话时才替换参数值。
+ */
+async function ensureThreadAlias(sessionId: string, preferred: string | undefined): Promise<void> {
+  try {
+    const res = await fetch('/evoresearch/fs/session-slug-ensure', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId, ...(preferred !== undefined && preferred.trim() !== '' ? { preferred: preferred.slice(0, 200) } : {}) }),
+    })
+    const json = await res.json()
+    const slug = json?.value?.slug
+    if (typeof slug !== 'string' || slug === '') return
+    if (!threadSlugBySession.has(sessionId)) {
+      threadSlugBySession.set(sessionId, slug)
+      if (!threadSessionBySlug.has(slug)) threadSessionBySlug.set(slug, sessionId)
+    }
+    // 仅当分享链接仍停在该会话的占位短哈希上时才替换为正式 slug（用户已切走则不动）
+    const params = new URLSearchParams(location.search)
+    if (params.get(URL_KEY_THREAD) === sessionId.replace(/^session-/, '').slice(0, 8)) patchUrl({ [URL_KEY_THREAD]: slug })
+  } catch { /* 别名分配失败不影响功能，占位仍在 */ }
+}
+
+/** 解析 URL ?t= 的会话 id：已登记 slug 直接反查；未知的先试 host 反查，再兜底按占位短哈希还原。 */
+async function resolveThreadIdParam(value: string | null): Promise<string | null> {
+  if (value === null || value === '') return null
+  const direct = value.startsWith('session-')
+    ? value
+    : (/^[0-9a-f]{1,8}$/i.test(value) ? `session-${value}` : threadSessionBySlug.get(value) ?? null)
+  if (direct !== null) return direct
+  try {
+    const res = await fetch('/evoresearch/fs/session-slug-lookup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: value }),
+    })
+    const json = await res.json()
+    const sessionId = json?.value?.sessionId
+    if (typeof sessionId === 'string' && sessionId !== '') {
+      if (!threadSlugBySession.has(sessionId)) {
+        threadSlugBySession.set(sessionId, value)
+        threadSessionBySlug.set(value, sessionId)
+      }
+      return sessionId
+    }
+  } catch { /* 反查失败按不存在处理 */ }
+  return null
 }
 
 function readPanels(): { left: number; right: number } {
@@ -213,7 +316,7 @@ function currentTitleOf(sessions: any, workspaces: any): string | null {
 }
 
 /**
- * 页面级错误边界（§33.4）：渲染失败时提供 Reload（保留 URL threadId/project）
+ * 页面级错误边界（§33.4）：渲染失败时提供 Reload（保留 URL t=（会话别名）/project）
  * 与 Go back（回首页）。
  */
 class ErrorBoundary extends (Component as any) {
@@ -252,11 +355,15 @@ class ErrorBoundary extends (Component as any) {
 function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
   const workspaces = useWorkspaces((w) => w)
   const [projectScope, setProjectScope] = useState<{ name: string; path: string } | null>(null)
-  const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get('inspector') === '1' : false)
+  const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get(URL_KEY_INSPECTOR) === '1' : false)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() => {
     if (typeof window === 'undefined') return 'workspace'
-    const t = new URLSearchParams(location.search).get('inspectorTab')
-    return t === 'agents' || t === 'chats' ? t : 'workspace'
+    const params = new URLSearchParams(location.search)
+    // §44 值短化：it=ws/ag/ch；旧链接 it=agents/chats（完整单词）同样识别
+    const t = params.get(URL_KEY_INSPECTOR_TAB) ?? params.get('inspectorTab')
+    if (t === ENC_VALUE_TAB.agents || t === 'agents') return 'agents'
+    if (t === ENC_VALUE_TAB.chats || t === 'chats') return 'chats'
+    return 'workspace'
   })
   const [view, setView] = useState<SideView>(null)
   // 首次发送（欢迎页无会话时）：乐观渲染「用户消息 + AI 加载中」，让界面立即响应，
@@ -294,23 +401,25 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const frameRef = useRef<HTMLDivElement | null>(null)
   const desktop = isDesktop()
 
-  // 没有明确 threadId 的首页不跟随 sessions 服务异步恢复上一次会话。
+  // 没有明确 t=（会话短别名）的首页不跟随 sessions 服务异步恢复上一次会话。
   // 否则首帧会短暂显示欢迎区，服务恢复 current 后又立刻切成旧对话，形成闪烁。
   const [homeMode, setHomeMode] = useState(() => {
     if (typeof window === 'undefined') return true
     const params = new URLSearchParams(location.search)
-    return params.get('threadId') === null && params.get('view') === null
+    // 旧链接 ?threadId= 同样视为“明确会话”，避免首帧闪烁
+    return params.get(URL_KEY_THREAD) === null && params.get('threadId') === null && params.get(URL_KEY_VIEW) === null
   })
   // 首次发送创建会话后，视图快照可能晚一拍；用短生命周期引用承接紧接着的第二条输入。
   const justCreatedSessionRef = useRef<string | null>(null)
 
   // 响应式（§26.1）：<768px 左右栏改为抽屉 + 黑色 40% 遮罩。
   // 窄屏首屏抽屉默认收起：抽屉 z-index 高于顶栏，若初始展开会遮住整屏
-  // （含导航开关），用户必须先点遮罩才能操作。URL 参数 sidebar=1 强制展开。
+  // （含导航开关），用户必须先点遮罩才能操作。URL 参数 sb=1（旧 sidebar=1）强制展开。
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
   const [sidebar, setSidebar] = useState(() => {
     if (typeof window === 'undefined') return true
-    const param = new URLSearchParams(location.search).get('sidebar')
+    // §44 键短化：sb=1/0；旧链接 sidebar=1 同样识别
+    const param = new URLSearchParams(location.search).get(URL_KEY_SIDEBAR) ?? new URLSearchParams(location.search).get('sidebar')
     if (param === '1') return true
     if (param === '0') return false
     return window.innerWidth >= 768
@@ -490,7 +599,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     sessionsService?.open(id)
     // Bug：仅 patchUrl 清 view 会造成 state/URL 失步（面板残留主区域）——state 一并清
     setView(null)
-    patchUrl({ threadId: id, view: null })
+    // §44 短化 URL：占位 ?t=<uuid 前8位> 保证刷新窗口内仍可恢复；slug 分配完成后原位替换为可读别名
+    patchUrl({ [URL_KEY_THREAD]: id.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
+    void ensureThreadAlias(id, sessions.byId[id]?.displayTitle)
   }
   const startNewChat = (projectCwd?: string) => {
     justCreatedSessionRef.current = null
@@ -498,7 +609,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     // 创建过程完成前仍保持首页/空白状态，避免旧会话在中间短暂闪回。
     setHomeMode(true)
     // Home 操作清除 thread/project/定位状态（§43.5），关闭不合适的面板
-    patchUrl({ threadId: null, view: null })
+    patchUrl({ [URL_KEY_THREAD]: null, [URL_KEY_VIEW]: null })
     // 新对话：优先指定项目工作区（左侧项目内新建）；否则继承当前会话所在项目；无则空白
     const cwd = projectCwd !== undefined && projectCwd !== '' ? projectCwd : undefined
     // 延迟到用户真正发送时再创建：这样项目列表创建项目、项目内列表创建子聊天，
@@ -514,44 +625,79 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }
   }
 
-  // §43.5/§33.4：URL threadId 恢复（刷新或分享链接打开对应会话）；?resend= 编辑重发
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const threadId = params.get('threadId')
-    const resend = params.get('resend')
-    if (threadId === null || threadId === '') return
-    setHomeMode(false)
-    if (resend !== null) {
-      // 编辑重发：清除参数，打开会话后自动发送修正文本（走官方 prompt 流程）
-      history.replaceState(null, '', `${location.pathname}${location.search.replace(/([?&])resend=[^&]*/, '$1').replace(/[?&]$/, '')}${location.hash}`)
-    }
-    let cancelled = false
-    let attempts = 0
-    const tryOpen = () => {
-      if (cancelled) return
-      if (sessionsService === null || attempts > 30) return
-      attempts += 1
-      try {
-        sessionsService.open(threadId)
-      } catch {
-        setTimeout(tryOpen, 300)
+    // §43.5/§33.4：URL t= 恢复（刷新或分享链接打开对应会话）；旧链接的 threadId=<完整id> 兼容读取并自动升级为短别名
+    useEffect(() => {
+      const params = new URLSearchParams(location.search)
+      const legacyThreadId = params.get('threadId')
+      const threadParamRaw = legacyThreadId !== null && legacyThreadId !== '' ? legacyThreadId : params.get(URL_KEY_THREAD)
+      // §44 键短化：r=<文本>（旧 resend=<文本> 同样识别）
+      const resend = params.get(URL_KEY_RESEND) ?? params.get('resend')
+      if (threadParamRaw === null || threadParamRaw === '') return
+      setHomeMode(false)
+      if (params.get(URL_KEY_RESEND) !== null) {
+        // 编辑重发：清除参数，打开会话后自动发送修正文本（走官方 prompt 流程）
+        history.replaceState(null, '', `${location.pathname}${location.search.replace(new RegExp(`[?&]${URL_KEY_RESEND}=[^&]*`), '$1').replace(/[?&]$/, '')}${location.hash}`)
+      } else if (params.get('resend') !== null) {
+        history.replaceState(null, '', `${location.pathname}${location.search.replace(/([?&])resend=[^&]*/, '$1').replace(/[?&]$/, '')}${location.hash}`)
       }
-    }
-    tryOpen()
-    if (resend !== null && resend !== '') {
-      // 等会话绑定就绪后自动重发
-      const timer = setInterval(() => {
-        if (cancelled) { clearInterval(timer); return }
-        const s = sessionsService?.binding(threadId)?.session
-        if (s !== undefined) {
-          clearInterval(timer)
-          void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+      let cancelled = false
+      let attempts = 0
+      const tryOpen = () => {
+        if (cancelled) return
+        if (sessionsService === null || attempts > 30) return
+        attempts += 1
+        try {
+          sessionsService.open(threadParamRaw)
+        } catch {
+          setTimeout(tryOpen, 300)
         }
-      }, 200)
-      setTimeout(() => clearInterval(timer), 20000)
-    }
-    return () => { cancelled = true }
-  }, [])
+      }
+      void resolveThreadIdParam(threadParamRaw).then((resolved) => {
+        if (cancelled) return
+        if (resolved === null) return
+        // 会话 id 解析完成后再开始重试打开（服务未就绪时定时重试）
+        const tryOpenResolved = () => {
+          if (cancelled) return
+          if (sessionsService === null || attempts > 30) return
+          attempts += 1
+          try {
+            sessionsService.open(resolved)
+          } catch {
+            setTimeout(tryOpenResolved, 300)
+          }
+        }
+        tryOpenResolved()
+        if (resend !== null && resend !== '') {
+          // 等会话绑定就绪后自动重发
+          const timer = setInterval(() => {
+            if (cancelled) { clearInterval(timer); return }
+            const s = sessionsService?.binding(resolved)?.session
+            if (s !== undefined) {
+              clearInterval(timer)
+              void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+            }
+          }, 200)
+          setTimeout(() => clearInterval(timer), 20000)
+        }
+        // URL 归一化：清掉旧 threadId=/占位哈希，换正式 ?t=
+        patchUrl({ threadId: null, [URL_KEY_THREAD]: threadSlugOf(resolved) ?? resolved.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
+      })
+      // slug 反查失败时的兜底直开路径（旧链接 / 未登记参数）
+      tryOpen()
+      if (resend !== null && resend !== '') {
+        // 等会话绑定就绪后自动重发（解析失败兜底）
+        const timer = setInterval(() => {
+          if (cancelled) { clearInterval(timer); return }
+          const s = sessionsService?.binding(threadParamRaw)?.session
+          if (s !== undefined) {
+            clearInterval(timer)
+            void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
+          }
+        }, 200)
+        setTimeout(() => clearInterval(timer), 20000)
+      }
+      return () => { cancelled = true }
+    }, [])
 
   // §26.6：Scheduled 面板 "Report to main chat" —— 以普通用户消息回送当前主对话
   useEffect(() => {
@@ -620,21 +766,21 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }
   }, [sessionSnapshot])
 
-  // §43.5：view / inspector 状态写入 URL（可分享/可恢复）
+  // §43.5：view / inspector 状态写入 URL（可分享/可恢复；键名与值 §44 全短化）
   const setViewAndUrl = (v: SideView) => {
     setView(v)
-    patchUrl({ view: v })
+    patchUrl({ [URL_KEY_VIEW]: encValue(ENC_VALUE_VIEW, v) })
   }
   const toggleInspector = () => {
     setInspector((v) => {
-      patchUrl({ inspector: v ? null : '1', inspectorTab: v ? null : inspectorTab })
+      patchUrl({ [URL_KEY_INSPECTOR]: v ? null : '1', [URL_KEY_INSPECTOR_TAB]: v ? null : encValue(ENC_VALUE_TAB, inspectorTab) })
       return !v
     })
   }
   // §43.5：Inspector 子标签写入 URL（workspace/agents/chats 可分享恢复）
   const setInspectorTabUrl = (t: InspectorTab) => {
     setInspectorTab(t)
-    patchUrl({ inspectorTab: t })
+    patchUrl({ [URL_KEY_INSPECTOR_TAB]: encValue(ENC_VALUE_TAB, t) })
   }
 
   // ── Recents 操作（§26.3）与 Side Chat（§22.3）──
@@ -879,7 +1025,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       .then((res) => res.json())
       .then((json) => {
         if (cancelled || !json.ok) return
-        const meta = json.value as Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean }>
+        const meta = json.value as Record<string, { pinned?: boolean; tagColor?: string | null; archived?: boolean; slug?: string }>
+        // §44：slug ↔ sessionId 双射缓存（URL 短化用）
+        ingestThreadSlugs(meta)
         const pinNext = new Set<string>()
         const tagNext: Record<string, string> = {}
         const archNext = new Set<string>()
