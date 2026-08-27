@@ -1881,6 +1881,12 @@ function apply(ctx: any) {
       jsx(ErrorBoundary, { children: jsx(EvoFrame, props) }),
     )
 
+    // 禁用浏览器原生右键菜单：应用内所有右键交互均为自绘菜单
+    // （品牌菜单 / 图谱节点边菜单）。捕获阶段监听，最早取消默认行为，
+    // 不影响任何自绘菜单的打开。
+    const suppressNativeContextMenu = (e: MouseEvent) => { e.preventDefault() }
+    document.addEventListener('contextmenu', suppressNativeContextMenu, true)
+
     // 换浏览器/设备后：先以后端 client-state.json 为准回填 localStorage，
     // 再挂载根组件，保证首帧就渲染恢复后的偏好/历史/布局；
     // 随后把旧浏览器里尚未写穿的文件/本地键补写一份到后端。
@@ -1897,6 +1903,7 @@ function apply(ctx: any) {
       connectionSource = null
       sessionsService = null
       workspacesService = null
+      document.removeEventListener('contextmenu', suppressNativeContextMenu, true)
     }
   }, 'evoresearch-ui: layout 服务 + root 同步注册 + 异步 hydration')
 }
