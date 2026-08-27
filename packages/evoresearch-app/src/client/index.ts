@@ -1761,7 +1761,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         onBranchFromMessage: branchFromMessage,
                         onOpenProjectFile: (rel) => {
                           if (cwdNow === null || cwdNow === '') return
-                          openTabEditor(`${cwdNow.replace(/[\\/]$/, '')}/${rel.replace(/^[/\\]+/, '')}`, cwdNow)
+                          // 拼接后统一分隔符为平台原生（Windows \），避免混合 /\ 观感
+                          const joined = `${cwdNow.replace(/[\\/]+$/, '')}\\${rel.replace(/^[/\\]+/, '').replace(/\//g, '\\')}`
+                          openTabEditor(joined, cwdNow)
                         },
                         onSend: sendMessage,
                       })
