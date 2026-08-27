@@ -1218,9 +1218,20 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       if (dx > 8) { dragActiveRef.current = false; clearHoldTimer(); detachWinListeners(); dragRef.current = null; setDragId(null); setDragOffsetX(0) }
       return
     }
-    // 已进入拖拽：被拖 tab 跟随手指；越过相邻 tab 中线则让位重排
-    const d = dx >= 0 ? (clientX - s.grabX) : 0
-    setDragOffsetX(d)
+    // 已进入拖拽：被拖 tab 跟随手指。位移取「指针到它当前槽位中线」的相对值（重排后槽位随之
+    // 更新，不会累积成大偏移），并钳制在 ±width 内——大幅横拖也不会让 tab 飞出标签栏。
+    const dragEl = tabElRefs.current[tabId]
+    if (dragEl !== null && dragEl !== undefined) {
+      const r = dragEl.getBoundingClientRect()
+      let d = clientX - (r.left + r.width / 2)
+      const lim = Math.max(70, s.width)
+      if (d > lim) d = lim
+      if (d < -lim) d = -lim
+      setDragOffsetX(d)
+    }
+    // 防止拖拽时标签栏因内容被推出而横向自动滚动（拉回当前滚动位置）
+    const bar = document.querySelector<HTMLElement>('.evo-tabbar')
+    if (bar !== null && bar.scrollLeft !== 0) bar.scrollLeft = 0
     const ids = tabsRef.current.map((t) => t.id)
     const idx = ids.indexOf(tabId)
     if (idx < 0) return
