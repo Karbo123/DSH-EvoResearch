@@ -1245,7 +1245,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         if (g !== undefined && dragCenter > g.left + g.width / 2) { target = i; break }
       }
     }
-    if (target !== origIndexRef.current) {
+    if (target !== targetIdxRef.current) {
       targetIdxRef.current = target
       setDragTargetIdx(target)
     }
@@ -1804,6 +1804,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                             if (d < target && i > d && i <= target) shift = -step
                             else if (d > target && i < d && i >= target) shift = step
                           }
+                          const previewing = dragId !== null && d >= 0
                           return jsxs('div', {
                             ref: (el: HTMLDivElement | null) => { tabElRefs.current[tab.id] = el },
                             className: `evo-tab${dragging ? ' evo-tab-dragging' : ''}`,
@@ -1811,7 +1812,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                             'data-dirty': (tab.kind === 'editor' && isTabDirty(tab)) || undefined,
                             style: dragging
                               ? { transform: `translateX(${dragGhostX}px)`, zIndex: 40, position: 'relative', transition: 'none' }
-                              : shift !== 0
+                              : previewing
                                 ? { transform: `translateX(${shift}px)`, transition: 'transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1)' }
                                 : undefined,
                             onClick: () => activateTab(tab.id),
