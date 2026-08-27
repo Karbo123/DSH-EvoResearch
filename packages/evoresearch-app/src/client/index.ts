@@ -1219,15 +1219,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const bar = s.bar !== null ? s.bar : document.querySelector<HTMLElement>('.evo-tabbar')
     const geo = startGeoRef.current
     const dragGeo = geo[tabId]
+    // 用被拖 tab 的中心而不是鼠标热点判定落点，保留按下时的抓取偏移，体感更符合直觉。
+    let dragCenter = clientX + (dragGeo !== undefined ? dragGeo.left + dragGeo.width / 2 - s.grabX : 0)
     if (dragGeo !== undefined) {
-      let center = clientX
       const barRect = bar !== null ? bar.getBoundingClientRect() : null
       const half = Math.max(0, Math.min(dragGeo.width / 2, barRect !== null ? (barRect.right - barRect.left) / 2 : dragGeo.width / 2))
       if (barRect !== null) {
-        if (center < barRect.left + half) center = barRect.left + half
-        if (center > barRect.right - half) center = barRect.right - half
+        if (dragCenter < barRect.left + half) dragCenter = barRect.left + half
+        if (dragCenter > barRect.right - half) dragCenter = barRect.right - half
       }
-      setDragGhostX(center - (dragGeo.left + dragGeo.width / 2))
+      setDragGhostX(dragCenter - (dragGeo.left + dragGeo.width / 2))
     }
     const ids = tabsRef.current.map((t) => t.id)
     const idx = ids.indexOf(tabId)
@@ -1236,12 +1237,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     // 固定使用拖拽开始时的中点，避免让位 transform 反过来影响落点判定。
     for (let i = 0; i < idx; i++) {
       const g = geo[ids[i]]
-      if (g !== undefined && clientX < g.left + g.width / 2) { target = i; break }
+      if (g !== undefined && dragCenter < g.left + g.width / 2) { target = i; break }
     }
     if (target === origIndexRef.current) {
       for (let i = ids.length - 1; i > idx; i--) {
         const g = geo[ids[i]]
-        if (g !== undefined && clientX > g.left + g.width / 2) { target = i; break }
+        if (g !== undefined && dragCenter > g.left + g.width / 2) { target = i; break }
       }
     }
     if (target !== origIndexRef.current) {
