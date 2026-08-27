@@ -97,11 +97,6 @@ const DICT: Record<string, [string, string]> = {
   workspace: ['Workspace', '工作区'],
   agents: ['Agents', '智能体'],
   noFilesYet: ['No files in the workspace yet', '工作区暂无文件'],
-  projectFiles: ['Project files', '项目文件'],
-  projectFilesEmpty: ['No files yet — the AI will save reports/code here.', '暂无文件——AI 产出的报告/代码会保存在此处。'],
-  closePreview: ['Close preview', '关闭预览'],
-  openInEditor: ['Open in editor', '在编辑器中打开'],
-  filePreviewTitle: ['File preview', '文件预览'],
   noActiveAgents: ['No active agents', '暂无活跃智能体'],
   noSideChats: ['No side chats yet', '暂无侧边对话'],
   // 设置
