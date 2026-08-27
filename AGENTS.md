@@ -35,22 +35,31 @@
 | 场景 | 实际路径 | 说明 |
 |------|----------|------|
 | **3080 官方 DSH** | `C:\Users\Karbo\.dsh\` | 官方原版 DSH 的 sessions、storages、settings、凭据；**不加载 EvoResearch，不可污染、不可删除** |
-| **3081 起 EvoResearch Web（开发）** | `D:\DSH-Research\.tmp-dev\.evoresearch-data\` | 3081 是首选端口；占用时启动器自动选择更高空闲端口。本环境 `DSH_HOME` 与 `EVORESEARCH_DATA_ROOT` 的共同外层根；项目、会话、设置、profile 和插件内部状态全部在此；**删此一处即清空开发测试数据** |
+| **3081 起 EvoResearch Web（开发）** | `D:\DSH-Research\.tmp-dev\.evoresearch-data\`（主仓库 main）或 `D:\DSH-Research\.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>\`（worktree） | 3081 是首选端口；占用时启动器自动选择更高空闲端口。对应根是 `DSH_HOME` 与 `EVORESEARCH_DATA_ROOT` 的共同外层根；项目、会话、设置、profile 和插件内部状态全部在对应根；**清理 worktree 时要清理对应带标识的根** |
+| **worktree 内 EvoResearch Web（开发，按 worktree 隔离）** | `<主仓库>\.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>\` | 在任一 worktree 里 `npm run start:web` 时自动使用当前 worktree 的独立根（见 §2.2）；如分支 `claude/monaco-editor`，目录名会包含清洗后的分支名和稳定短标识；与主仓库及其它 worktree 的数据根互不冲突，可并行开发/验收 |
 | **3081 起 EvoResearch Web（正式）** | `D:\DSH-Research\.evoresearch-data\` | 3081 是首选端口；占用时启动器自动选择更高空闲端口。EvoResearch 正式 Web 的共同外层根；项目数据与本环境 DSH_HOME 均在此；**不可与开发目录混用** |
 | **桌面版 EvoResearch** | `<安装目录>\.evoresearch-data\`（exe 同级，开头有点） | `desktop/sidecar/launch.js` 通过 `EVORESEARCH_DATA_HOME` 传入；随程序目录迁移，整体备份即迁移；端口动态分配 |
 | **正式 Web 的历史内容提醒** | `D:\DSH-Research\.evoresearch-data\` | 规范上属于 EvoResearch 正式 Web；其中旧会话/旧任务可能是历史残留，清理前先确认，不得当作官方 3080 数据 |
 | **临时产物（截图/调试输出）** | `D:\DSH-Research\.tmp-dev\images\` | 见 §3 |
 | **项目工作区（3081）** | `<EvoResearch dataRoot>\projects\<name>\` | 开发时位于 `.tmp-dev\.evoresearch-data\projects\<name>\`，正式 Web 位于 `.evoresearch-data\projects\<name>\`；内部 `.evoresearch-data/` 为项目私有数据 |
 
-### 2.2 与工作目录无关（workflow / worktree 均一致 — 重要）
+### 2.2 工作目录与 worktree 数据根隔离（核心约束）
 
-**无论是否使用 Claude Code 的 workflow / worktree 功能，EvoResearch 3081 开发时读取和写入的持久化配置与数据路径都相同**：
+**主仓库（main）`npm run start:web` 仍读写 `.tmp-dev\.evoresearch-data`，行为不变。**
 
-- Claude Code workflow 启用时可能把工作目录切到 `.claude/worktrees/<name>`，不启用时就是主仓库 `D:\DSH-Research` —— **但 EvoResearch 的数据路径不跟随进程 cwd**，因为：
-  1. `dataRoot` 由启动时的 `EVORESEARCH_ROOT` 以绝对路径传入（见 `host/index.ts`）；profile 不再写死某一个环境路径；
-  2. `DSH_HOME` / `EVORESEARCH_DATA_ROOT` 启动时以**同一绝对路径**显式传入。
-- 因此：**从任何 worktree、任何 cwd 启动开发 EvoResearch 3081，读写的都是主仓库下同一份 `.tmp-dev\.evoresearch-data`**。正式 Web 则读写仓库根 `.evoresearch-data`；项目列表、实验账本、记忆库不会因启动位置不同而分裂。3080 官方 DSH 不适用这条规则。
-- ⚠️ 唯一例外：若某 worktree 里改了 `profiles/evoresearch/cordis.patch.yml` 且未合并回 main，以该 profile 启动才会指向别处——合并前不要用 worktree 版 profile 启动。
+**在任意 git worktree 里 `npm run start:web`，启动器自动把数据根按 worktree 和分支隔离**：`<主仓库>/.tmp-dev/.evoresearch-data-<分支名>-<worktree标识>`。这是由 `scripts/start-web.mjs` 的 `detectWorktreeIsolation()` 自动完成的——它用 `git --git-common-dir` / `--show-toplevel` / `branch --show-current` 判断当前是否在 worktree 中，是则把 `EVORESEARCH_ROOT` / `DSH_HOME` / `EVORESEARCH_DATA_ROOT` 一并指到该 worktree 的独立根。分支名中的非法字符（如 `/`）会被收敛为 `-`，并附加当前 worktree 路径的稳定短标识，避免不同分支清洗后目录名碰撞；detached HEAD 也会使用 `detached-<标识>` 隔离。
+
+> **代码与数据都按 worktree 隔离**：启动器从当前 worktree 的 `profiles\evoresearch` 加载插件，因此该 worktree 需要先在自身目录执行 `npm install` 和 `npm run build`（可共享 pnpm/npm 下载缓存，但不能依赖主仓库构建产物）。这样每个 worktree 验收的是自己的分支代码；隔离根只保存该实例的 sessions/storages/projects/plugins/settings 等运行数据。
+
+**为什么这样做**：多个 worktree 并行开发/验收独立功能时，若都读写同一份 `.tmp-dev\.evoresearch-data`，两个 DSH 实例会同时抢写 `settings.yaml`、`storages\workspace.json`、`plugins\*\*.json`，并并发打开 `plugins\memories\research_memory.db`（SQLite 锁/损坏风险），会话列表与项目映射还会互相穿插——即"多个 worktree 写到同一处而冲突"。**worktree 数据根隔离后，每个 worktree 有自己完整的 projects / ledgers / memories / sessions / storages / settings，互不冲突，可并行开发与并行验收。**
+
+**端口选择会自动探测并尽量避免冲突**：`scripts/web-port.mjs` 从 3081 起查找空闲端口，多个 worktree 实例通常会依次使用 3081/3082/3083…，并始终跳过 3080。并行启动的极短竞态仍由操作系统最终绑定结果决定。
+
+**什么时候隔离与共享的分界**：
+- **串行使用（同一时刻只起一个实例）**：主仓库与任意 worktree 各自读写自己的根，互不影响。
+- **并行验收多个独立功能**：每个 worktree 一个分支、一套独立根，天然隔离，正是本设计的意图。
+- **需要共享数据**（如想让某 worktree 复用主仓库的记忆/账本）：使用启动器 `--root <绝对路径>`（经 `npm run start:web -- --root <绝对路径>` 传入）显式覆盖隔离根。普通继承的 `EVORESEARCH_ROOT` 在 worktree 中不会覆盖自动隔离，避免环境变量误配造成共享。
+- ⚠️ **worktree 里改了 `profiles/evoresearch/cordis.patch.yml` 但未构建时**：先在该 worktree 执行 `npm install` 和 `npm run build`，再启动验收；启动器加载的是当前 worktree 的 profile，不会读取主仓库的 profile。
 
 **本机正式 Web 与发布版 Web 的区别**：本机正式 Web 的 `EVORESEARCH_ROOT` 可以明确写成 `D:\DSH-Research\.evoresearch-data`，因为这是本机数据隔离约定；发布版不能照搬这条命令。发布版启动器应先计算统一根目录，再设置：
 
@@ -73,6 +82,8 @@ EVORESEARCH_DATA_ROOT = EVORESEARCH_ROOT
 | `EVORESEARCH_PORT_FILE` | 桌面版端口文件 | `%LOCALAPPDATA%\com.evoresearch.desktop\port.json` |
 
 > `dataRoot` 解析优先级（`host/index.ts`）：`config.dataRoot`（若 profile 提供）> `EVORESEARCH_ROOT` > `EVORESEARCH_DATA_ROOT` > `process.cwd()`。当前 EvoResearch profile 不写死 `dataRoot`；统一启动器显式传入 `EVORESEARCH_ROOT`，并把两个兼容变量同步为同一路径，cwd 只作为异常兜底。
+>
+> **在 worktree 里使用 `npm run start:web` 时**，上表三个变量由启动器自动替换为该 worktree 的独立根 `.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>`（见 §2.2），无需也不应手工覆盖。确需共享数据时，只使用启动器 `--root <绝对路径>` 显式覆盖；继承的 `EVORESEARCH_ROOT` 不会关闭 worktree 隔离。
 
 ### 2.4 配置文件位置
 
@@ -82,7 +93,7 @@ EVORESEARCH_DATA_ROOT = EVORESEARCH_ROOT
 
 ### 2.5 启动后会产生/读写哪些文件（持久化清单）
 
-按 §4.2 启动开发 Web 后，所有持久化文件都在 `.tmp-dev\.evoresearch-data\` 外层目录下；正式 Web 使用同样的布局，但外层根替换为 `.evoresearch-data`。插件全局状态统一放在外层根的 `plugins\` 下，不再创建根级第二层 `.evoresearch-data`。
+按 §4.2 启动开发 Web 后，持久化文件都在对应开发 dataRoot 外层目录下：主仓库是 `.tmp-dev\.evoresearch-data\`，worktree 是 `.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>\`；正式 Web 使用 `.evoresearch-data`。插件全局状态统一放在外层根的 `plugins\` 下，不再创建根级第二层 `.evoresearch-data`。
 
 **A. DSH 引擎层（`DSH_HOME` 外层根，由 DSH 框架读写）：**
 
@@ -90,7 +101,7 @@ EVORESEARCH_DATA_ROOT = EVORESEARCH_ROOT
 |-----------|--------|------|
 | `settings.yaml` | DSH 全局配置 | 默认模型（agent-default-model）、LLM provider 列表（new-api baseURL、模型 id、reasoningEffort）；UI 里改模型设置会写这里 |
 | `.credentials.yaml` | 凭据存储 | provider 的 API key（如 `NEW_API_API_KEY: sk-...`）；**含密钥，gitignore，勿外传** |
-| `profiles\evoresearch\` | 本项目的 profile | 见 §4.2.1；声明加载哪些 bundle、dataRoot 指向；node_modules 是 pnpm junction 到主仓库构建产物 |
+| `profiles\evoresearch\` | 本项目的 profile | 见 §4.2.1；worktree 使用当前 worktree 的 profile 和 workspace 构建产物，主仓库使用主仓库 profile |
 | `sessions\<工作区hash>\session-<uuid>\` | 对话会话存储 | 每个会话一个目录，存消息 JSONL 与会话元数据；左侧会话列表的数据源。目录名是启动时 cwd 路径的编码 |
 | `storages\workspace.json` / `session_projcache.json` | DSH 工作区状态 | workspace 注册表、会话→项目映射缓存 |
 
@@ -108,7 +119,7 @@ EVORESEARCH_DATA_ROOT = EVORESEARCH_ROOT
 | `plugins\client-state.json` / `plugins\session-meta.json` / `plugins\project-meta.json` | 前端/元信息缓存 | UI 状态持久化、会话元信息、项目元信息 |
 | `plugins\evolution\candidates.json` | evolution 候选 | 自主演化候选队列 |
 
-> 清空开发环境 = 删整个 `.tmp-dev\.evoresearch-data\`（profile、sessions、settings、凭据、项目和插件数据会一并删掉，需按 §4.2.1 重建）。正式 Web 根目录是 `.evoresearch-data\`，不可误删。只清测试项目 = 删对应 dataRoot 下的 `projects\<name>\`；实验账本位于 `dataRoot\plugins\ledgers\`，按项目名清理对应条目。
+> 清空开发环境 = 删整个 `.tmp-dev\.evoresearch-data\`（profile、sessions、settings、凭据、项目和插件数据会一并删掉，需按 §4.2.1 重建）。**worktree 按分支隔离的根也要一并清理**（每个用过的分支一个 `.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>\`，见 §2.2 / §3.2），否则残留的分支数据不会随主仓库根被清掉。正式 Web 根目录是 `.evoresearch-data\`，不可误删。只清测试项目 = 删对应 dataRoot 下的 `projects\<name>\`；实验账本位于 `dataRoot\plugins\ledgers\`，按项目名清理对应条目。
 
 ### 2.5.1 `EVORESEARCH_ROOT`、`DSH_HOME` 与 `EVORESEARCH_DATA_ROOT` 的边界
 
@@ -144,7 +155,7 @@ EVORESEARCH_DATA_ROOT = EVORESEARCH_ROOT
 | 端口 | 用途 | EvoResearch 插件 | `DSH_HOME` | 实际效果 |
 |------|------|--------------------------|------------|----------|
 | `3080` | 官方原版 DSH | **不加载** | `C:\Users\Karbo\.dsh` | 只读写官方 DSH 数据，禁止加载 EvoResearch |
-| `3081` | EvoResearch Web 开发/测试 | **加载** | `D:\DSH-Research\.tmp-dev\.evoresearch-data` | 所有 EvoResearch 开发产出落 `.tmp-dev\.evoresearch-data`，删此一处即清测试 |
+| `3081` | EvoResearch Web 开发/测试 | **加载** | 主仓库：`D:\DSH-Research\.tmp-dev\.evoresearch-data`；worktree 内：`.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>` | 主仓库开发产出落 `.tmp-dev\.evoresearch-data`；worktree 内按分支隔离（见 §2.2），删对应根即清该环境测试数据 |
 
 **常见坑**：把 EvoResearch 插件挂到 3080，或让 3081 使用 `C:\Users\Karbo\.dsh`，都会造成官方 DSH 与 EvoResearch 数据混同；用 `Start-Process` 不加 `-Environment` 则环境变量不传递。
 
@@ -175,7 +186,8 @@ EVORESEARCH_DATA_ROOT = EVORESEARCH_ROOT
 | 子目录 | 用途 |
 |--------|------|
 | `.tmp-dev/images/` | 所有截图、HTML 预览等可视化产物 |
-| `.tmp-dev/.evoresearch-data/` | 3081 EvoResearch 开发数据根（含 DSH `profiles/`、`sessions/`、`storages/` 和插件状态） |
+| `.tmp-dev/.evoresearch-data/` | 3081 EvoResearch 开发数据根（主仓库 main；含 DSH `profiles/`、`sessions/`、`storages/` 和插件状态） |
+| `.tmp-dev/.evoresearch-data-<分支名>-<worktree标识>/` | worktree 的独立开发数据根（见 §2.2）；分支名经清洗并附加 worktree 路径短哈希，可整体删除以清理该 worktree 测试数据 |
 | `.tmp-dev/node_modules/` | Playwright（`playwright` + `playwright-core`），e2e/截图脚本经 `file:///D:/DSH-Research/.tmp-dev/node_modules/playwright/index.mjs` 导入；**勿删** |
 | `.tmp-dev/scripts-legacy/` | 历史一次性调试脚本归档（不再维护） |
 | `.tmp-dev/legacy-tmp-port/` | 旧 `.tmp-port` 遗留目录归档（agent-team 测试、mnist-data 等） |
@@ -203,7 +215,7 @@ npm run build        # 构建插件 + 前端（修改 packages/* 后必须重新
 npm run start:web
 ```
 
-它默认使用 `.tmp-dev\.evoresearch-data`，读取仓库根的 `.evoresearch-paths.json`，并监听设置面板写入的 `.evoresearch-restart.json`。它会优先探测 3081；若已占用，则自动选择 3082、3083……中的第一个空闲端口，并打印实际访问地址。设置面板中的数据目录迁移/复用也可以在保存后自动重启当前 Web 子进程。直接使用下面的 `Start-Process npx.cmd ...` 命令是固定端口的底层启动方式，不具备自动换端口和设置面板自动重启能力。
+**在任意 worktree 里运行 `npm run start:web` 时，数据根自动切换为该 worktree 的独立根 `.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>`**（见 §2.2），端口同样从 3081 起自动递增。启动前必须先在该 worktree 执行 `npm install` 和 `npm run build`，以确保验收的是当前分支代码。
 
 **日常启动（profile 已就绪时）**：
 
@@ -229,28 +241,15 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 --profile evoresearch --port 3081
 ```
 
 **验证启动成功**：
-1. 日志出现 `[evoresearch] host 插件激活（dataRoot: D:\DSH-Research\.tmp-dev\.evoresearch-data）`；
+1. 日志出现 `[evoresearch] host 插件激活（dataRoot: …）`：主仓库为 `.tmp-dev\.evoresearch-data`，worktree 内为该分支独立根 `.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>`（见 §2.2）；
 2. 使用启动器日志打印的实际 URL 访问（正常情况下是 `http://127.0.0.1:3081/`，端口占用时可能是 3082 或更高）并返回 200；
-3. 页面左侧项目列表来自 `.tmp-dev`；3080 是独立的官方 DSH，不作 EvoResearch 对照环境。
+3. 页面左侧项目列表来自对应 dataRoot（主仓库 `.tmp-dev`，worktree 为其分支根）；3080 是独立的官方 DSH，不作 EvoResearch 对照环境。
 
-**profile 就绪判定**：`D:\DSH-Research\.tmp-dev\.evoresearch-data\profiles\evoresearch\` 应通过 junction 指向仓库的 `profiles\evoresearch\`，并存在 `cordis.yml`、`cordis.patch.yml`、`package.json`、`node_modules`。若缺失，按 §4.2.1 重建。
+**profile 就绪判定**：当前 worktree 的 `profiles\evoresearch\` 必须存在 `cordis.yml`、`cordis.patch.yml`、`package.json`、`node_modules`，且 `node_modules/@evoresearch/dsh-app`、`dsh-plugin` 指向该 worktree 自己的 workspace 包。不要把 worktree profile junction 到主仓库；启动器会把 profile 挂载到对应 dataRoot 下的 `profiles\evoresearch\`。若缺失，先在当前 worktree 执行 `npm install` 和 `npm run build`。
 
 #### 4.2.1 重建开发 profile（一次性 / node_modules 损坏时）
 
-```powershell
-# 1. 建立外层数据根
-New-Item -ItemType Directory -Force D:\DSH-Research\.tmp-dev\.evoresearch-data
-
-# 2. DSH_HOME 必须能从根下找到 profiles；使用 junction 保留 package.json 中
-#    file:../../packages/... 相对于主仓库 profile 的正确解析位置。
-if (-not (Test-Path D:\DSH-Research\.tmp-dev\.evoresearch-data\profiles)) {
-  New-Item -ItemType Junction `
-    -Path D:\DSH-Research\.tmp-dev\.evoresearch-data\profiles `
-    -Target D:\DSH-Research\profiles
-}
-```
-
-> profile 的 `package.json` 以 `file:` 引用主仓库 `packages\evoresearch-app` / `packages\evoresearch-plugin`。直接使用仓库 profile 的 junction 可以保持这些相对路径有效；主仓库 `npm run build` 更新 `lib/` 后无需重装 profile。不要把 profile 复制到数据目录后再 `pnpm install`，否则 `file:../../packages/...` 会解析到错误位置。
+> **worktree 数据根的 profile 由启动器自动挂载当前 worktree 的 profile**；不要手工把 profile junction 到主仓库。若 `profiles\evoresearch\` 或其 `node_modules` 缺失，必须在当前 worktree 执行 `npm install` 和 `npm run build`。`package.json` 中的 `file:../../packages/...` 会相对于当前 worktree profile 正确解析；不要复制 profile 到数据目录后再安装。
 
 **注意**：`--profile evoresearch` 只认裸名（profile 必须位于 `$DSH_HOME/profiles/` 下），**不能**传 `--profile profiles/evoresearch` 路径形式（rc.2 会报 invalid profile name）。
 
@@ -324,19 +323,19 @@ node scripts/check-docs.mjs
 3. **React key**：所有 `.map()` 必须传 key（第三参数）；`index.ts` 有 `suppressKeyWarning` 兜底（仅压制误报）。
 4. **Cordis 插件**：profile 为 `@deepseek-ai/dsh-base` + `@evoresearch/dsh-app` + `@evoresearch/dsh-plugin`；rc.2 起需 `ui-renderer` 提供 `uiRenderer` 服务（`cordis.patch.yml`）。
 5. **截图/临时脚本产物**：一律 `.tmp-dev/images/`；一次性调试脚本可放 `scripts/.tmp-*`（gitignore）或直接 `.tmp-dev/`。不得污染项目根、用户目录或数据目录。
-6. **数据目录**：EvoResearch 开发 Web 数据只进 `.tmp-dev/.evoresearch-data/`；正式 Web 数据只进仓库根 `.evoresearch-data/`；官方 DSH 数据只在 `C:\Users\Karbo\.dsh`（勿写勿删）；桌面版数据只在 exe 同级 `.evoresearch-data/`。
-7. **URL 短化（§44）**：面向用户的 URL 一律用短键与可读短值——会话是 `?t=<slug>`（英文别名或 `s-<uuid 前8位>` 兜底，映射持久化于 `plugins/session-meta.json`，经 `sessionSlugEnsure/sessionSlugLookup` 分配与反查），键名一律单/双字符：`v`（视图）/`i`（检查器）/`it`（检查子标签）/`sb`（窄屏抽屉）/`r`（编辑重发文本），且**枚举值同样缩写**：`v=ws|sk|mem|sch|ch|tm|exp|note|lib`、`it=ws|ag|ch`；完整单词的旧链接仍兼容读取并自动升级为短形式。禁止再往分享链接里塞完整 `session-<uuid>` 或 `threadId=/view=/inspector=` 长参数。DSH 引擎层的 `session-<uuid>` 目录名不动，slug 只是 UI 层别名。新增任何 URL 参数先走这条规则。
+6. **数据目录**：EvoResearch 开发 Web 数据只进 `.tmp-dev/.evoresearch-data/`（主仓库）或 `.tmp-dev/.evoresearch-data-<分支名>-<worktree标识>/`（worktree，见 §2.2）；正式 Web 数据只进仓库根 `.evoresearch-data/`；官方 DSH 数据只在 `C:\Users\Karbo\.dsh`（勿写勿删）；桌面版数据只在 exe 同级 `.evoresearch-data/`。
+7. **URL 短化**：面向用户的 URL 一律用短键与可读短值——会话是 `?t=<slug>`（英文别名或 `s-<uuid 前8位>` 兜底，映射持久化于 `plugins/session-meta.json`，经 `sessionSlugEnsure/sessionSlugLookup` 分配与反查），键名一律单/双字符：`v`（视图）/`i`（检查器）/`it`（检查子标签）/`sb`（窄屏抽屉）/`r`（编辑重发文本），且**枚举值同样缩写**：`v=ws|sk|mem|sch|ch|tm|exp|note|lib`、`it=ws|ag|ch`；完整单词的旧链接仍兼容读取并自动升级为短形式。禁止再往分享链接里塞完整 `session-<uuid>` 或 `threadId=/view=/inspector=` 长参数。DSH 引擎层的 `session-<uuid>` 目录名不动，slug 只是 UI 层别名。新增任何 URL 参数先走这条规则。更完整的约定见 `docs/` 下的 URL 短化设计文档。
 
 ---
 
 ## 7. 初次交接 Checklist
 
 - [ ] `npm install && npm run build` 能通过
-- [ ] 按 §4.2 启动 Web，日志 dataRoot 为 `.tmp-dev\.evoresearch-data`，并使用日志中的实际 URL（3081 首选，端口占用时自动递增）返回 200
+- [ ] 按 §4.2 启动 Web，日志 dataRoot 为主仓库 `.tmp-dev\.evoresearch-data`（在主仓库 main 里），并使用日志中的实际 URL（3081 首选，端口占用时自动递增）返回 200；若在 worktree 里启动，dataRoot 应为该分支独立根 `.tmp-dev\.evoresearch-data-<分支名>-<worktree标识>`
 - [ ] `http://127.0.0.1:3081/?desktop=1` 标题栏 36px 正常，设置面板返回按钮可见（`top:46` 不被遮挡）
 - [ ] `node desktop/scripts/build.mjs --skip-download` 能产出 NSIS 安装包，安装后无黑窗、无滚动条/黑边
 - [ ] `npm run verify` 全绿
-- [ ] 知晓：临时产物只进 `.tmp-dev/`（截图 `images/`）；EvoResearch 开发 Web 数据只进 `.tmp-dev/.evoresearch-data/`；正式 Web 数据只进仓库根 `.evoresearch-data/`；官方 DSH 数据只在 `C:\Users\Karbo\.dsh`；桌面版数据只在 exe 同级 `.evoresearch-data/`
+- [ ] 知晓：临时产物只进 `.tmp-dev/`（截图 `images/`）；EvoResearch 开发 Web 数据只进 `.tmp-dev/.evoresearch-data/`（主仓库）或 `.tmp-dev/.evoresearch-data-<分支名>-<worktree标识>/`（worktree，见 §2.2）；正式 Web 数据只进仓库根 `.evoresearch-data/`；官方 DSH 数据只在 `C:\Users\Karbo\.dsh`；桌面版数据只在 exe 同级 `.evoresearch-data/`
 
 ---
 
@@ -399,7 +398,9 @@ node scripts/check-docs.mjs
 
 - 并行开发用 `.claude/worktrees/<name>`（Claude Code 自动管理）；每个 worktree 对应一个
   `claude/*` 分支；成果及时 commit——未提交的草稿在 worktree 目录删除时无法找回。
-- **worktree 里启动 3081 读写同一份 `.tmp-dev`**（见 §2.2），不会产生第二套项目数据。
+- **每个 worktree 启动 Web 都使用独立数据根** `.tmp-dev/.evoresearch-data-<分支名>-<worktree标识>`
+  （见 §2.2）：并行开发/验收的数据互不冲突，端口从 3081 起自动探测且不使用 3080；主仓库 main 仍用
+  `.tmp-dev\.evoresearch-data`。确需共享数据时只通过启动器 `--root <绝对路径>` 显式覆盖。
 - 合并顺序参考（2026-08-22）：sleepy-bartik（RC8+chatgraph，已含 heuristic 的 merge）→
   jovial（补齐剩余 commit）→ main；冲突多为 import 行与文档章节，取两边并集。
 
@@ -415,9 +416,9 @@ node scripts/check-docs.mjs
   移动端暂无完整后端；Android 同理为预览壳。
 - **待办线索**：iOS 正式签名分发（需 Apple Developer 证书 → secrets → CI 出 IPA）；
   Android 签名 secrets 可选配。
-- **数据布局（2026-08-24 定稿）**：EvoResearch 开发 Web 数据 `.tmp-dev/.evoresearch-data/`、正式 Web 数据 `.evoresearch-data/`（两者均作为各自的 `EVORESEARCH_ROOT`、`DSH_HOME` 与 `EVORESEARCH_DATA_ROOT`；插件全局状态位于根下 `plugins/`，不再嵌套第二层 `.evoresearch-data/`）；临时产物 `.tmp-dev/images/`；Playwright 依赖
+- **数据布局（2026-08-24 定稿）**：EvoResearch 开发 Web 数据 `.tmp-dev/.evoresearch-data/`（主仓库）或 `.tmp-dev/.evoresearch-data-<分支名>-<worktree标识>/`（worktree 独立根，见 §2.2）、正式 Web 数据 `.evoresearch-data/`（各自作为对应环境的 `EVORESEARCH_ROOT`、`DSH_HOME` 与 `EVORESEARCH_DATA_ROOT`；插件全局状态位于根下 `plugins/`，不再嵌套第二层 `.evoresearch-data/`）；临时产物 `.tmp-dev/images/`；Playwright 依赖
   `.tmp-dev/node_modules/`；旧 `.tmp-port/` 已删除。
 
 ---
 
-*最后更新：2026-08-24（3080 官方 DSH / 3081 EvoResearch 隔离；Web 数据根统一为各环境 `.evoresearch-data/`；`DSH_HOME` 与插件数据职责说明）*
+*最后更新：2026-08-24（worktree 数据根使用“清洗后分支名 + 稳定 worktree 标识”，并加载当前 worktree profile 和构建产物；每个 worktree 需独立执行 `npm install`、`npm run build`，可并行开发与验收；3080 官方 DSH / EvoResearch Web 数据严格隔离）*

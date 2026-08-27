@@ -96,7 +96,7 @@
 | 中英双语（默认中文，~150 处 UI 字符串 i18n） | 工作台 i18n（readLang 默认 zh）+ 全面本地化 | ✅ |
 | 业务面板（记忆/调度/通道/团队/技能/工作区） | EvoMemory 四 tab / Scheduled Builder / Channels / Team / Skills（提案+市场）/ Workspace（新建+导入） | ✅ |
 | 会话行操作（重命名/置顶/标签色/导出/归档/删除） | ThreadList（localStorage 持久化 + 两段式确认 + 已归档分区） | ✅ |
-| URL 短化（§44）：`?t=<slug>` 替代 `?threadId=<uuid>`；键名全单双字符（`v/i/it/sb/r`），枚举值同步缩写（`v=ws|sk|mem|sch|ch|tm|exp|note|lib`、`it=ws|ag|ch`） | `api.ts sessionSlugEnsure/Lookup`（slug ≤20 英文别名 + s-<uuid前8位> 回退 + -2/-3 冲突避让，持久化于 session-meta.json）+ client `URL_KEY_*` / `encValue`；完整单词旧链接兼容读取并自动升级 | ✅ |
+| URL 短化：`?t=<slug>` 替代 `?threadId=<uuid>`；键名全单双字符（`v/i/it/sb/r`），枚举值同步缩写（`v=ws|sk|mem|sch|ch|tm|exp|note|lib`、`it=ws|ag|ch`） | `api.ts sessionSlugEnsure/Lookup`（slug ≤20 英文别名 + s-<uuid前8位> 回退 + -2/-3 冲突避让，持久化于 session-meta.json）+ client `URL_KEY_*` / `encValue`；完整单词旧链接兼容读取并自动升级 | ✅ |
 | JSON 完整诊断导出（reasoning + 工具调用/结果） | session-export（§41.8） | ✅ |
 | MCP 管理 | `host/mcp/supervisor.ts`：stdio/HTTP/Streamable HTTP 生命周期、过滤和局部降级 | ✅（需配置服务器） |
 

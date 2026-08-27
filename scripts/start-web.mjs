@@ -5,18 +5,82 @@
  * panel writes the bootstrap document and a restart request; this process
  * notices that request and recreates the child with the new environment.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
-import { spawn, execFile } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { spawn, execFile, execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findAvailablePort, parsePort } from './web-port.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const defaultEvoResearchRoot = join(root, '.tmp-dev', '.evoresearch-data')
+
+/**
+ * git 分支名 -> 文件系统安全的一段（用于数据根目录名）。
+ * git 分支名不能含空格与 ~^:?*[\，但仍可能含其它可打印字符，
+ * 统一收敛为 [A-Za-z0-9._-]，避免目录名怪异或跨平台问题。
+ */
+function sanitizeBranch(branch) {
+  return branch.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '') || 'worktree'
+}
+
+/**
+ * 检测本次启动是否发生在 git worktree 中（而非主仓库）。
+ *
+ * 设计目标：多 worktree 并行独立开发/验收时，每个 worktree 使用各自
+ * 独立的数据根，避免多个 DSH 实例去抢同一份 .tmp-dev\.evoresearch-data。
+ *
+ * 判定方式：
+ *  - 用 --git-common-dir 拿到主仓库的 .git 公共目录，其父目录即主仓库根。
+ *  - 用 --show-toplevel 拿到当前 cwd 所属的（子）仓库顶目录。
+ *  - 若当前顶目录 != 主仓库根，则说明正运行在某个 worktree 里。
+ * 返回 { mainRoot, branch, isolatedRoot, isWorktree }；主仓库返回 isWorktree=false。
+ */
+function worktreeId(topLevel) {
+  return createHash('sha1').update(resolve(topLevel)).digest('hex').slice(0, 8)
+}
+
+function detectWorktreeIsolation() {
+  try {
+    const commonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim()
+    const topLevel = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: root, encoding: 'utf8' }).trim()
+    const branch = execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim()
+    const mainRoot = resolve(root, commonDir, '..')
+    const currentRoot = resolve(topLevel)
+    const isWorktree = currentRoot !== mainRoot
+    if (!isWorktree) {
+      return { mainRoot, branch, isolatedRoot: null, isWorktree: false }
+    }
+    const id = worktreeId(currentRoot)
+    const label = sanitizeBranch(branch || 'detached')
+    return {
+      mainRoot,
+      branch: branch || `detached-${id}`,
+      isolatedRoot: join(mainRoot, '.tmp-dev', `.evoresearch-data-${label}-${id}`),
+      isWorktree: true,
+    }
+  } catch {
+    return { mainRoot: root, branch: '', isolatedRoot: null, isWorktree: false }
+  }
+}
+
+const wt = detectWorktreeIsolation()
+// 主仓库默认根不变；worktree 则落到主仓库 .tmp-dev 下按分支命名的独立根。
+const defaultEvoResearchRoot = wt.isolatedRoot
+  || join(wt.mainRoot, '.tmp-dev', '.evoresearch-data')
+if (wt.isolatedRoot) {
+  console.log(`[evoresearch] ★ worktree 环境（分支 ${wt.branch}）→ 数据根隔离到 ${wt.isolatedRoot}`)
+  console.log(`[evoresearch] 这样可以并行开发/验收多个独立功能，互不冲突。`)
+}
+// 主仓库可读取 EVORESEARCH_ROOT；worktree 默认忽略继承值以保持隔离。
+// 只有显式 --root 能让 worktree 有意共享自定义数据根。
+const explicitEnvRoot = (process.env.EVORESEARCH_ROOT || '').trim()
+const explicitLauncherRoot = option('--root', '').trim()
 const configEnv = process.env.EVORESEARCH_PATHS_CONFIG
 const restartEnv = process.env.EVORESEARCH_RESTART_FILE
 const configPath = resolve(configEnv && configEnv.trim() !== '' ? configEnv : join(root, '.evoresearch-paths.json'))
 const restartFile = resolve(restartEnv && restartEnv.trim() !== '' ? restartEnv : join(root, '.evoresearch-restart.json'))
+// 每个 worktree 加载自己的 profile 和构建产物，确保代码验收对应当前分支。
+// worktree 的依赖安装/构建由开发者按 §4.1 在该 worktree 内完成。
 const profileSource = join(root, 'profiles', 'evoresearch')
 const dshVersion = '@deepseek-ai/dsh@0.1.1-rc.2'
 
@@ -48,9 +112,20 @@ function resolvePaths() {
   const envRoot = process.env.EVORESEARCH_ROOT
     || process.env.EVORESEARCH_DATA_ROOT
     || process.env.DSH_HOME
-  const evoresearchRoot = configured.evoresearchRoot
-    || (envRoot && envRoot.trim() !== '' ? envRoot.trim() : undefined)
-    || defaultEvoResearchRoot
+  let evoresearchRoot
+  if (explicitLauncherRoot !== '') {
+    // 显式 --root 最高优先级（包括 worktree 共享数据的有意覆盖）。
+    evoresearchRoot = explicitLauncherRoot
+  } else if (wt.isolatedRoot) {
+    // worktree 默认优先隔离；避免继承的 EVORESEARCH_ROOT 让多个 worktree 共享数据。
+    evoresearchRoot = wt.isolatedRoot
+  } else {
+    // 主仓库允许通过环境变量或配置文件指定根，否则使用开发默认根。
+    evoresearchRoot = explicitEnvRoot
+      || configured.evoresearchRoot
+      || (envRoot && envRoot.trim() !== '' ? envRoot.trim() : undefined)
+      || defaultEvoResearchRoot
+  }
   const rootPath = resolve(evoresearchRoot)
   return { evoresearchRoot: rootPath, dshHome: rootPath, evoResearchDataRoot: rootPath }
 }
@@ -59,18 +134,31 @@ function ensureProfile(dshHome) {
   if (!existsSync(profileSource)) throw new Error(`找不到 EvoResearch profile: ${profileSource}`)
   const profileDir = join(dshHome, 'profiles', 'evoresearch')
   mkdirSync(dirname(profileDir), { recursive: true })
+
+  if (existsSync(profileDir)) {
+    const actual = resolve(realpathSync(profileDir))
+    const expected = resolve(realpathSync(profileSource))
+    const sameTarget = process.platform === 'win32'
+      ? actual.toLowerCase() === expected.toLowerCase()
+      : actual === expected
+    if (!sameTarget) {
+      // 旧版 worktree 根可能仍链接主仓库 profile；只替换 dataRoot 内的链接。
+      rmSync(profileDir, { recursive: true, force: true })
+    }
+  }
+
   if (!existsSync(profileDir)) {
     try {
       symlinkSync(profileSource, profileDir, process.platform === 'win32' ? 'junction' : 'dir')
-      return
     } catch (error) {
-      throw new Error(`无法在新数据目录创建 profile 链接，请检查目录权限: ${error.message}`)
+      throw new Error(`无法在数据目录创建当前 worktree 的 profile 链接，请检查目录权限: ${error.message}`)
     }
   }
+
   const appModule = join(profileDir, 'node_modules', '@evoresearch', 'dsh-app')
   const pluginModule = join(profileDir, 'node_modules', '@evoresearch', 'dsh-plugin')
   if (!existsSync(appModule) || !existsSync(pluginModule)) {
-    throw new Error(`目标 DSH_HOME 的 profile 不完整: ${profileDir}。请使用“迁移数据”，或删除目标目录后重试。`)
+    throw new Error(`当前 worktree 的 profile 依赖不完整: ${profileSource}。请在当前 worktree 执行 npm install 和 npm run build。`)
   }
 }
 
