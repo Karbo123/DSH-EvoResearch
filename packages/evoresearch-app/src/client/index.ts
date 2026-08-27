@@ -12,7 +12,7 @@
  * 后端能力（会话、模型、工具）由 dsh-base 提供 —— 不重复造轮子。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState, useEffect, useRef, useSyncExternalStore, Component } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useSyncExternalStore, Component } from 'react'
 import {
   PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, SquarePen,
   MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, FolderOpen, Share2, Activity,
@@ -1145,6 +1145,55 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const origIndexRef = useRef(-1)                                    // 拖拽开始时被拖 tab 的原 index
   const startGeoRef = useRef<Record<string, { left: number; width: number }>>({}) // 拖拽开始时的自然位置快照
   const tabElRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const neighborFromRef = useRef<Record<string, number>>({})
+  const neighborAnimationsRef = useRef<Record<string, Animation>>({})
+  const readAnimatedShift = (el: HTMLDivElement, fallback: number) => {
+    const transform = getComputedStyle(el).transform
+    const match = transform.match(/^matrix\([^,]+,[^,]+,[^,]+,[^,]+,\s*(-?[\d.]+),/)
+    return match === null ? fallback : Number(match[1])
+  }
+  useLayoutEffect(() => {
+    if (dragId === null || origIndexRef.current < 0) return
+    const from = neighborFromRef.current
+    const geo = startGeoRef.current
+    const ids = tabsRef.current.map((tab) => tab.id)
+    const d = origIndexRef.current
+    const target = dragTargetIdx
+    const dragged = dragRef.current
+    const step = dragged === null ? 0 : dragged.width + 2
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i]
+      if (id === dragId) continue
+      const el = tabElRefs.current[id]
+      const g = geo[id]
+      if (el === null || el === undefined || g === undefined || step === 0) continue
+      let shift = 0
+      if (d < target && i > d && i <= target) shift = -step
+      else if (d > target && i < d && i >= target) shift = step
+      const animation = neighborAnimationsRef.current[id]
+      if (animation !== undefined) {
+        animation.commitStyles()
+        const previous = readAnimatedShift(el, from[id] ?? shift)
+        animation.cancel()
+        from[id] = previous
+      }
+      const previous = from[id] ?? shift
+      if (Math.abs(previous - shift) > 0.5) {
+        neighborAnimationsRef.current[id] = el.animate(
+          [{ transform: `translateX(${previous}px)` }, { transform: `translateX(${shift}px)` }],
+          { duration: 420, easing: 'linear', fill: 'forwards' },
+        )
+        neighborAnimationsRef.current[id].addEventListener('finish', () => {
+          delete neighborAnimationsRef.current[id]
+        }, { once: true })
+      }
+      from[id] = shift
+    }
+  }, [dragId, dragTargetIdx])
+  useEffect(() => () => {
+    for (const animation of Object.values(neighborAnimationsRef.current)) animation.cancel()
+    neighborAnimationsRef.current = {}
+  }, [])
 
   const clearHoldTimer = () => {
     const s = dragRef.current
@@ -1200,6 +1249,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         geo[t.id] = { left: r !== null ? r.left : 0, width: r !== null ? r.width : 0 }
       }
       startGeoRef.current = geo
+      neighborFromRef.current = {}
       targetIdxRef.current = Math.max(0, origIndexRef.current)
       setDragTargetIdx(Math.max(0, origIndexRef.current))
       setDragId(id)                       // 0.1s 长按 → 进入拖拽模式
@@ -1271,6 +1321,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     origIndexRef.current = -1
     targetIdxRef.current = 0
     startGeoRef.current = {}
+    neighborFromRef.current = {}
     dragRef.current = null
     setDragId(null)
     setDragTargetIdx(0)
@@ -1813,7 +1864,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                             style: dragging
                               ? { transform: `translateX(${dragGhostX}px)`, zIndex: 40, position: 'relative', transition: 'none' }
                               : previewing
-                                ? { transform: `translateX(${shift}px)`, transition: 'transform 0.5s linear' }
+                                ? { transition: 'none' }
                                 : undefined,
                             onClick: () => activateTab(tab.id),
                             // 鼠标中键（button 1）点击 tab → 等价于按关闭键（干净直接关，脏弹确认）
