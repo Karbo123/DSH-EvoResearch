@@ -1636,6 +1636,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           'data-active': activeTabId === tab.id || undefined,
                           'data-dirty': (tab.kind === 'editor' && isTabDirty(tab)) || undefined,
                           onClick: () => activateTab(tab.id),
+                          // 鼠标中键（button 1）点击 tab → 等价于按关闭键（干净直接关，脏弹确认）
+                          onAuxClick: (e: { button?: number; preventDefault(): void }) => {
+                            if (e.button === 1) { e.preventDefault(); requestCloseTab(tab.id) }
+                          },
                           children: [
                             jsx('span', { className: `evo-tab-title${tab.kind === 'editor' ? ' evo-tab-title-file' : ''}${tab.kind === 'editor' && isTabDirty(tab) ? ' evo-tab-title-dirty' : ''}`, children: tab.title }),
                             (tab.kind === 'pdf' || tab.kind === 'editor') && jsx('button', {
