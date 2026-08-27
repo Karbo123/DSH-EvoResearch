@@ -1181,7 +1181,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       if (Math.abs(previous - shift) > 0.5) {
         neighborAnimationsRef.current[id] = el.animate(
           [{ transform: `translateX(${previous}px)` }, { transform: `translateX(${shift}px)` }],
-          { duration: 420, easing: 'linear', fill: 'forwards' },
+          { duration: 210, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' },
         )
         neighborAnimationsRef.current[id].addEventListener('finish', () => {
           delete neighborAnimationsRef.current[id]
