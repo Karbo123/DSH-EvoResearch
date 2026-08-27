@@ -1740,7 +1740,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         })
                       }
                       if (activeTab.kind === 'editor' && activeTab.filePath !== undefined && activeTab.root !== undefined) {
+                        // key=activeTab.id：切到不同文件 tab 时强制重挂载 TabFileEditor，
+                        // 避免 React 复用同一实例（Milkdown/Monaco 在 [] deps 的 effect 里只初始化一次，
+                        // 复用会导致显示上一个文件的内容——md/非 md 内容串台的根因）。
                         return jsx(TabFileEditor, {
+                          key: activeTab.id,
                           path: activeTab.filePath,
                           root: activeTab.root,
                           draft: activeTab.draft,
