@@ -1140,8 +1140,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [dragId, setDragId] = useState<string | null>(null)          // 正在拖拽的 tab id
   const dragActiveRef = useRef(false)                                // 拖拽是否已激活（0.1s 后置位）
   const [dragTargetIdx, setDragTargetIdx] = useState(0)              // 被拖 tab 的目标落点 index
+  const targetIdxRef = useRef(0)                                      // endDrag 通过 window 旧闭包调用，落点必须读 ref
   const [dragGhostX, setDragGhostX] = useState(0)                    // 被拖 tab 跟随指针的 translateX
   const origIndexRef = useRef(-1)                                    // 拖拽开始时被拖 tab 的原 index
+  const startGeoRef = useRef<Record<string, { left: number; width: number }>>({}) // 拖拽开始时的自然位置快照
   const tabElRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const clearHoldTimer = () => {
@@ -1191,6 +1193,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       if (dragRef.current !== sessionRef || dragRef.current.pointerId !== pid) return
       dragActiveRef.current = true
       origIndexRef.current = tabsRef.current.findIndex((t) => t.id === id)
+      const geo: Record<string, { left: number; width: number }> = {}
+      for (const t of tabsRef.current) {
+        const tabEl = tabElRefs.current[t.id]
+        const r = tabEl !== null && tabEl !== undefined ? tabEl.getBoundingClientRect() : null
+        geo[t.id] = { left: r !== null ? r.left : 0, width: r !== null ? r.width : 0 }
+      }
+      startGeoRef.current = geo
+      targetIdxRef.current = Math.max(0, origIndexRef.current)
       setDragTargetIdx(Math.max(0, origIndexRef.current))
       setDragId(id)                       // 0.1s 长按 → 进入拖拽模式
       setDragGhostX(0)
@@ -1207,40 +1217,37 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }
     // 被拖 tab 跟随指针，钳制在标签栏可见区间内（不飞出、不触发滚动）
     const bar = s.bar !== null ? s.bar : document.querySelector<HTMLElement>('.evo-tabbar')
-    const dragEl = tabElRefs.current[tabId]
-    if (dragEl !== null && dragEl !== undefined) {
-      const r = dragEl.getBoundingClientRect()
+    const geo = startGeoRef.current
+    const dragGeo = geo[tabId]
+    if (dragGeo !== undefined) {
       let center = clientX
-      if (bar !== null) {
-        const br = bar.getBoundingClientRect()
-        const half = Math.max(0, Math.min(r.width / 2, (br.right - br.left) / 2))
-        if (center < br.left + half) center = br.left + half
-        if (center > br.right - half) center = br.right - half
+      const barRect = bar !== null ? bar.getBoundingClientRect() : null
+      const half = Math.max(0, Math.min(dragGeo.width / 2, barRect !== null ? (barRect.right - barRect.left) / 2 : dragGeo.width / 2))
+      if (barRect !== null) {
+        if (center < barRect.left + half) center = barRect.left + half
+        if (center > barRect.right - half) center = barRect.right - half
       }
-      setDragGhostX(center - (r.left + r.width / 2))
+      setDragGhostX(center - (dragGeo.left + dragGeo.width / 2))
     }
-    // 计算目标落点 index（不修改数组，只更新 target，交给让位动画）
     const ids = tabsRef.current.map((t) => t.id)
     const idx = ids.indexOf(tabId)
     if (idx < 0) return
     let target = origIndexRef.current
-    // 向左拖：从左往右找第一个「指针已越过其左边界」的 tab → 被拖应插到它前面
+    // 固定使用拖拽开始时的中点，避免让位 transform 反过来影响落点判定。
     for (let i = 0; i < idx; i++) {
-      const el = tabElRefs.current[ids[i]]
-      if (!el) continue
-      const r = el.getBoundingClientRect()
-      if (clientX < r.left + r.width / 2) { target = i; break }
+      const g = geo[ids[i]]
+      if (g !== undefined && clientX < g.left + g.width / 2) { target = i; break }
     }
-    // 若左侧全部未越过（target 仍 = 原位置），则检查右侧：从右往左找第一个「指针已越过其右边界」的 tab
     if (target === origIndexRef.current) {
       for (let i = ids.length - 1; i > idx; i--) {
-        const el = tabElRefs.current[ids[i]]
-        if (!el) continue
-        const r = el.getBoundingClientRect()
-        if (clientX > r.left + r.width / 2) { target = i; break }
+        const g = geo[ids[i]]
+        if (g !== undefined && clientX > g.left + g.width / 2) { target = i; break }
       }
     }
-    if (target !== origIndexRef.current) setDragTargetIdx(target)
+    if (target !== origIndexRef.current) {
+      targetIdxRef.current = target
+      setDragTargetIdx(target)
+    }
   }
   const endDrag = (tabId: string) => {
     const s = dragRef.current
@@ -1249,7 +1256,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     detachWinListeners()
     // 提交拖拽落点：把被拖 tab 一次性移动到目标 index
     const from = origIndexRef.current
-    const to = Math.min(Math.max(dragTargetIdx, 0), tabsRef.current.length - 1)
+    const to = Math.min(Math.max(targetIdxRef.current, 0), tabsRef.current.length - 1)
     if (from >= 0 && from < tabsRef.current.length && to >= 0 && to < tabsRef.current.length && from !== to) {
       setTabs((prev) => {
         if (from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev
@@ -1261,6 +1268,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }
     dragActiveRef.current = false
     origIndexRef.current = -1
+    targetIdxRef.current = 0
+    startGeoRef.current = {}
     dragRef.current = null
     setDragId(null)
     setDragTargetIdx(0)
