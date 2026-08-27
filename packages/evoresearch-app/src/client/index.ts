@@ -1123,10 +1123,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [tabBusy, setTabBusy] = useState(false)
   const tabFileInputRef = useRef<HTMLInputElement | null>(null)
   const tabNewRef = useRef<HTMLDivElement | null>(null)
-  // ── Tab 长按拖拽重排 ──
-  // dragRef：指针会话（pointerId + 抓取点 + 0.1s 长按定时器 + window 级移动/抬起监听）。
-  // 关键：move/up 挂到 window（不只依赖被捕获元素），这样即使大幅下拉后松开，也会触发
-  // pointerup 正常结束拖拽；FLIP 让其它 tab 平滑滑动让位。
+  // ── Tab 长按拖拽重排（ghost 预览模型）──
+  // 拖拽中**不修改 tabs 数组**，避免频繁重排反复打断动画造成闪烁：
+  //  - 被拖 tab 用 translateX(dragGhostX) 跟随指针
+  //  - 其它 tab 用 translateX(±width) 平滑让位（CSS transition 接管，不会被打断）
+  //  - 松开时才一次性提交真实数组顺序 → 无闪烁、不抖动。
   const dragRef = useRef<{
     id: string; pointerId: number; grabX: number; width: number
     holdTimer: ReturnType<typeof setTimeout> | null
@@ -1136,32 +1137,13 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     capturedEl: HTMLElement | null
     bar: HTMLElement | null
   } | null>(null)
-  const [dragId, setDragId] = useState<string | null>(null)
-  // dragActiveRef：拖拽是否已激活（由 0.1s 定时器置位）。move/up 的 window 闭包是旧渲染抓的，
-  // 不能依赖 state 的 dragId（会因闭包陈旧读到 null），所以用 ref 判断。
-  const dragActiveRef = useRef(false)
-  const [dragOffsetX, setDragOffsetX] = useState<number>(0)                 // 被拖 tab 跟随手指的 translateX
+  const [dragId, setDragId] = useState<string | null>(null)          // 正在拖拽的 tab id
+  const dragActiveRef = useRef(false)                                // 拖拽是否已激活（0.1s 后置位）
+  const [dragTargetIdx, setDragTargetIdx] = useState(0)              // 被拖 tab 的目标落点 index
+  const [dragGhostX, setDragGhostX] = useState(0)                    // 被拖 tab 跟随指针的 translateX
+  const origIndexRef = useRef(-1)                                    // 拖拽开始时被拖 tab 的原 index
   const tabElRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const firstLeft = useRef<Record<string, number>>({})
-  const [flipTick, setFlipTick] = useState(0)
 
-  const snapshotTabsLeft = () => {
-    const snap: Record<string, number> = {}
-    for (const t of tabsRef.current) { const el = tabElRefs.current[t.id]; if (el) snap[t.id] = el.getBoundingClientRect().left }
-    firstLeft.current = snap
-  }
-  const reorderMove = (id: string, from: number, to: number) => {
-    if (from === to) return
-    snapshotTabsLeft()
-    setTabs((prev) => {
-      if (from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev
-      const next = prev.slice()
-      const [moved] = next.splice(from, 1)
-      next.splice(to, 0, moved)
-      return next
-    })
-    setFlipTick((v) => v + 1)
-  }
   const clearHoldTimer = () => {
     const s = dragRef.current
     if (s !== null && s.holdTimer !== null) { clearTimeout(s.holdTimer); s.holdTimer = null }
@@ -1180,8 +1162,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 左键按住 0.1s → 进入拖拽模式，并把 move/up/cancel 挂到 window
   const beginDragHold = (tab: WorkspaceTab, el: HTMLDivElement, e: { pointerId: number; clientX: number }) => {
     if (tab.kind !== 'editor' && tab.kind !== 'pdf' && tab.kind !== 'chat' && tab.kind !== 'chatgraph' && tab.kind !== 'trajectory') return
-    const session = dragRef.current
-    if (session !== null) return // 已有拖拽会话，忽略
+    if (dragRef.current !== null) return // 已有拖拽会话，忽略
     const rect = el.getBoundingClientRect()
     const pid = e.pointerId
     const id = tab.id
@@ -1199,7 +1180,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }
     dragRef.current = { id, pointerId: pid, grabX: e.clientX, width: rect.width, holdTimer: null, onWinMove, onWinUp, onWinCancel, capturedEl: el, bar: null }
     try { el.setPointerCapture(pid) } catch { /* 忽略捕获失败 */ }
-    // 拖拽期间禁用标签栏横向滚动（避免内容被推出触发自动滚动→闪烁）；结束后恢复
     const tabbar = document.querySelector<HTMLElement>('.evo-tabbar')
     if (tabbar !== null) { tabbar.style.overflowX = 'hidden'; dragRef.current.bar = tabbar }
     document.body.style.userSelect = 'none'
@@ -1210,8 +1190,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     sessionRef.holdTimer = setTimeout(() => {
       if (dragRef.current !== sessionRef || dragRef.current.pointerId !== pid) return
       dragActiveRef.current = true
-      setDragId(id) // 0.1s 长按 → 进入拖拽模式
-      setDragOffsetX(0)
+      origIndexRef.current = tabsRef.current.findIndex((t) => t.id === id)
+      setDragTargetIdx(Math.max(0, origIndexRef.current))
+      setDragId(id)                       // 0.1s 长按 → 进入拖拽模式
+      setDragGhostX(0)
     }, 100)
   }
   const onTabDragMove = (tabId: string, clientX: number) => {
@@ -1220,11 +1202,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const dx = Math.abs(clientX - s.grabX)
     if (!dragActiveRef.current) {
       // 0.1s 内大幅移动 → 视为普通点击/滚动，取消长按并结束
-      if (dx > 8) { dragActiveRef.current = false; clearHoldTimer(); detachWinListeners(); dragRef.current = null; setDragId(null); setDragOffsetX(0) }
+      if (dx > 8) { dragActiveRef.current = false; clearHoldTimer(); detachWinListeners(); dragRef.current = null; setDragId(null); setDragGhostX(0) }
       return
     }
-    // 已进入拖拽：被拖 tab 跟随手指。期望中心 = 指针 X，但钳制在标签栏可见区间内——
-    // 这样 tab 永不超出标签栏，不会把内容推出触发自动滚动，也就不会闪烁。
+    // 被拖 tab 跟随指针，钳制在标签栏可见区间内（不飞出、不触发滚动）
     const bar = s.bar !== null ? s.bar : document.querySelector<HTMLElement>('.evo-tabbar')
     const dragEl = tabElRefs.current[tabId]
     if (dragEl !== null && dragEl !== undefined) {
@@ -1236,53 +1217,56 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         if (center < br.left + half) center = br.left + half
         if (center > br.right - half) center = br.right - half
       }
-      setDragOffsetX(center - (r.left + r.width / 2))
+      setDragGhostX(center - (r.left + r.width / 2))
     }
+    // 计算目标落点 index（不修改数组，只更新 target，交给让位动画）
     const ids = tabsRef.current.map((t) => t.id)
     const idx = ids.indexOf(tabId)
     if (idx < 0) return
-    const leftEl = idx > 0 ? tabElRefs.current[ids[idx - 1]] : null
-    const rightEl = idx < ids.length - 1 ? tabElRefs.current[ids[idx + 1]] : null
-    if (leftEl) { const r = leftEl.getBoundingClientRect(); if (clientX < r.left + r.width / 2) { reorderMove(tabId, idx, idx - 1); return } }
-    if (rightEl) { const r = rightEl.getBoundingClientRect(); if (clientX > r.left + r.width / 2) { reorderMove(tabId, idx, idx + 1); return } }
+    let target = origIndexRef.current
+    // 向左拖：从左往右找第一个「指针已越过其左边界」的 tab → 被拖应插到它前面
+    for (let i = 0; i < idx; i++) {
+      const el = tabElRefs.current[ids[i]]
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      if (clientX < r.left + r.width / 2) { target = i; break }
+    }
+    // 若左侧全部未越过（target 仍 = 原位置），则检查右侧：从右往左找第一个「指针已越过其右边界」的 tab
+    if (target === origIndexRef.current) {
+      for (let i = ids.length - 1; i > idx; i--) {
+        const el = tabElRefs.current[ids[i]]
+        if (!el) continue
+        const r = el.getBoundingClientRect()
+        if (clientX > r.left + r.width / 2) { target = i; break }
+      }
+    }
+    if (target !== origIndexRef.current) setDragTargetIdx(target)
   }
   const endDrag = (tabId: string) => {
     const s = dragRef.current
     if (s === null || s.id !== tabId) return
     clearHoldTimer()
     detachWinListeners()
+    // 提交拖拽落点：把被拖 tab 一次性移动到目标 index
+    const from = origIndexRef.current
+    const to = Math.min(Math.max(dragTargetIdx, 0), tabsRef.current.length - 1)
+    if (from >= 0 && from < tabsRef.current.length && to >= 0 && to < tabsRef.current.length && from !== to) {
+      setTabs((prev) => {
+        if (from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev
+        const next = prev.slice()
+        const [moved] = next.splice(from, 1)
+        next.splice(to, 0, moved)
+        return next
+      })
+    }
     dragActiveRef.current = false
+    origIndexRef.current = -1
     dragRef.current = null
     setDragId(null)
-    setDragOffsetX(0)
+    setDragTargetIdx(0)
+    setDragGhostX(0)
   }
-  // FLIP：重排（tabs 顺序变化）后，把每个 tab 从旧 left 动画滑到当前位置
-  const useTabFlip = (deps: unknown[]) => {
-    useEffect(() => {
-      if (dragId === null && Object.keys(firstLeft.current).length === 0) return
-      const raf = requestAnimationFrame(() => {
-        for (const t of tabsRef.current) {
-          if (t.id === dragId) continue // 被拖 tab 的位置由 dragOffsetX 控制，不做 FLIP
-          const el = tabElRefs.current[t.id]
-          const first = firstLeft.current[t.id]
-          if (!el || first === undefined) continue
-          const last = el.getBoundingClientRect().left
-          const delta = first - last
-          if (Math.abs(delta) < 1) continue
-          el.style.transition = 'none'
-          el.style.transform = `translateX(${delta}px)`
-          requestAnimationFrame(() => {
-            el.style.transition = 'transform 0.2s ease'
-            el.style.transform = ''
-          })
-        }
-        firstLeft.current = {}
-      })
-      return () => cancelAnimationFrame(raf)
-    }, deps)
-  }
-  useTabFlip([flipTick, dragId])
-  // 卸载时兜底清理拖拽监听
+  // 卸载时兜底清理拖拽监听/指针捕获
   useEffect(() => () => { detachWinListeners() }, [])
   // 待确认关闭的「有未保存改动」文件 tab
   const [closeTabConfirmId, setCloseTabConfirmId] = useState<string | null>(null)
@@ -1798,14 +1782,27 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                     jsxs('div', {
                       className: 'evo-tabbar',
                       children: [
-                        tabs.map((tab) => {
+                        tabs.map((tab, i) => {
                           const dragging = dragId === tab.id
+                          // ghost 让位：拖拽中不重排数组，仅用 transform 让其它 tab 平滑让出一个位置
+                          const d = origIndexRef.current
+                          const target = dragTargetIdx
+                          const w = dragRef.current !== null ? dragRef.current.width : 0
+                          let shift = 0
+                          if (!dragging && w !== 0 && d >= 0) {
+                            if (d < target && i > d && i <= target) shift = -w          // 向右拖：中间 tab 左移
+                            else if (d > target && i < d && i >= target) shift = w      // 向左拖：中间 tab 右移
+                          }
                           return jsxs('div', {
                             ref: (el: HTMLDivElement | null) => { tabElRefs.current[tab.id] = el },
                             className: `evo-tab${dragging ? ' evo-tab-dragging' : ''}`,
                             'data-active': activeTabId === tab.id || undefined,
                             'data-dirty': (tab.kind === 'editor' && isTabDirty(tab)) || undefined,
-                            style: dragging ? { transform: `translateX(${dragOffsetX}px)`, zIndex: 40, position: 'relative', transition: 'none' } : undefined,
+                            style: dragging
+                              ? { transform: `translateX(${dragGhostX}px)`, zIndex: 40, position: 'relative', transition: 'none' }
+                              : shift !== 0
+                                ? { transform: `translateX(${shift}px)`, transition: 'transform 0.15s ease' }
+                                : undefined,
                             onClick: () => activateTab(tab.id),
                             // 鼠标中键（button 1）点击 tab → 等价于按关闭键（干净直接关，脏弹确认）
                             onAuxClick: (e: { button?: number; preventDefault(): void }) => {
