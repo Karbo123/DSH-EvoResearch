@@ -20,7 +20,7 @@ import type { ExperimentService } from './experiments.js'
 import type { ChatGraphService, GraphGroup, GraphNode, GraphEdge } from './chat-graph.js'
 import type { ProjectEnvService, ProjectEnvInfo } from './project-env.js'
 import type { RewindService } from './rewind.js'
-import type { NotesService } from './notes.js'
+import type { NotesService, NoteSummary } from './notes.js'
 import type { ExperimentWorkspaceService, ExperimentWorkspaceInfo, ExperimentWorkspaceDetail, ExperimentWorkspaceEntry, ExperimentWorkspaceTree } from './experiment-workspace.js'
 import type { ExperimentProcessService, RunRecord, ExperimentGraphRef, ExperimentGraphRefResolution } from './experiment-process.js'
 import type { ExperimentLedgerService } from './experiment-ledger.js'
@@ -2424,6 +2424,243 @@ export class EvoResearchApiService extends TypertRemoteService {
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  /**
+   * Chat Graph 项目会话同步（自动补种，幂等）：
+   * - 枚举该项目全部子聊天会话（sessionQuery.listSessions() 过滤 meta.cwd === workspaceDir），
+   *   未入图的会话补成 chat 节点（按 sessionId 去重；标题取首条用户消息截断）；
+   * - 项目研究笔记导出为 memory 引用节点（按 ref.kind=note + fileName 去重）；
+   * - 不虚构连线：context/memory 边语义严格（fork 一次性 / 持续参考），只由用户拖线
+   *   或科研管线建立；同步只追加缺失节点，绝不改动已有节点位置与布局。
+   */
+  @Remote('graphSync')
+  async graphSync(args: { workspaceDir?: string }): Promise<{ ok: boolean; addedChats?: number; addedMemories?: number; addedEdges?: number; error?: string; rev?: number }> {
+    try {
+      const name = this.graphProjectOf(args)
+      const workspaceDir = String(args?.workspaceDir ?? '')
+      const graph = this.services.chatGraph.get(name)
+      const nodes: Array<Record<string, unknown>> = [...graph.nodes] as never
+      let nextEdges: Array<Record<string, unknown>> | undefined
+      let addedChats = 0
+      let addedMemories = 0
+      const normalizeWorkspace = (dir: string): string => {
+        const p = dir.replace(/\//g, '\\').replace(/[\\]+$/, '')
+        return process.platform === 'win32' ? p.toLowerCase() : p
+      }
+
+      // 新节点放置区：现有内容最右侧起一列新网格（不覆盖既有布局）
+      let spotIndex = 0
+      const baseX = nodes.length > 0 ? Math.max(...nodes.map((n) => Number((n as { x?: unknown }).x ?? 0))) + 220 : 80
+      const nextSpot = (): { x: number; y: number } => {
+        const i = spotIndex++
+        return { x: baseX + Math.floor(i / 4) * 220, y: 60 + (i % 4) * 130 }
+      }
+      const createdAt = Date.now()
+      const nextId = (): string => {
+        let candidate = randomUUID().slice(0, 8)
+        while (nodes.some((n) => (n as { id?: unknown }).id === candidate)) candidate = randomUUID().slice(0, 8)
+        return candidate
+      }
+
+      // ── 子聊天会话 → chat 节点 ──
+      // listSessions() 返回 { header: { id, cwd, ... }, live, persisted }：会话归属看 header.cwd。
+      if (workspaceDir !== '') {
+        const wanted = normalizeWorkspace(workspaceDir)
+        const sessionQuery = this.hostCtx.get('sessionQuery') as { listSessions?: () => Promise<unknown[]> } | undefined
+        if (sessionQuery?.listSessions !== undefined) {
+          try {
+            const all = (await sessionQuery.listSessions()) ?? []
+            const knownSessions = new Set(nodes.map((n) => (n as { sessionId?: unknown }).sessionId).filter((id) => typeof id === 'string'))
+            for (const entry of all) {
+              if (addedChats >= 200) break
+              const header = (entry as { header?: unknown })?.header as { id?: unknown; cwd?: unknown; parentSession?: unknown } | undefined
+              if (typeof header?.id !== 'string' || header.id === '') continue
+              if (typeof header.cwd !== 'string' || normalizeWorkspace(header.cwd) !== wanted) continue
+              if (knownSessions.has(header.id)) continue
+              knownSessions.add(header.id)
+              const spot = nextSpot()
+              // 分叉子会话（头带 parentSession 且父在同图）加可区分标记，避免与父会话撞名
+              const isForkChild = typeof header.parentSession === 'string' && header.parentSession !== '' && header.parentSession !== header.id
+              nodes.push({
+                id: nextId(),
+                type: 'chat',
+                title: this.sessionTitleOf(header.id) + (isForkChild ? ' · 分叉' : ''),
+                x: spot.x, y: spot.y,
+                sessionId: header.id,
+                workspaceDir,
+                origin: 'imported',
+                createdAt,
+              })
+              addedChats += 1
+            }
+          } catch (error) {
+            // 会话枚举失败不阻断记忆节点导入
+            this.logDebug(`graphSync sessions failed: ${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
+
+        // ── 项目研究笔记 → memory 引用节点 ──
+        // 新笔记（source=note）解析到 memories/notes/<fileName>；旧 Observation
+        // 位于 memories/observations/<legacyDir>/，previewOf 的 note 分支不覆盖，
+        // 因此用相对工作区的 file 引用（<workspaceDir>/.evoresearch-data/memories/...）。
+        const notes = this.services.notes
+        if (notes !== undefined) {
+          const knownRefs = new Set(nodes.map((n) => {
+            const ref = (n as { ref?: { kind?: string; path?: string } }).ref
+            return `${ref?.kind ?? ''}:${ref?.path ?? ''}`
+          }))
+          let summaries: NoteSummary[] = []
+          try { summaries = notes.listNotes({ workspaceDir, limit: 200 }) } catch { summaries = [] }
+          for (const s of summaries) {
+            const isObservation = s.source === 'observation'
+            const refPath = isObservation
+              ? `.evoresearch-data/memories/observations/${s.legacyDir ? s.legacyDir + '/' : ''}${s.fileName}`
+              : s.fileName
+            const key = `note:${s.source}:${s.noteId}`
+            if (knownRefs.has(key)) continue
+            knownRefs.add(key)
+            const spot = nextSpot()
+            nodes.push({
+              id: nextId(),
+              type: 'resource', displayKind: 'memory',
+              title: s.title || s.noteId,
+              x: spot.x, y: spot.y,
+              scope: 'project', origin: 'imported',
+              ref: { kind: isObservation ? 'file' : 'note', path: refPath },
+              locator: `project:note:${s.noteId}`,
+              createdAt,
+            })
+            addedMemories += 1
+          }
+        }
+      }
+
+      // ── fork 子会话紧邻父节点放置（右侧一列、碰撞避让向下找空位）──
+      // 垂直同列布局会让 context 继承连线绕行大半张画布（视觉审计确认），并列布局让
+      // 连线成为父右缘→子左缘的短弧线。仅调整本次同步新增的 imported 节点，不动用户已有布局。
+      if (workspaceDir !== '') {
+        const collides = (x: number, y: number): boolean => nodes.some((n) => {
+          const nx = Number((n as { x?: unknown }).x ?? 0)
+          const ny = Number((n as { y?: unknown }).y ?? 0)
+          return Math.abs(nx - x) < 220 && Math.abs(ny - y) < 110
+        })
+        for (const n of [...nodes]) {
+          if ((n as { origin?: unknown }).origin !== 'imported') continue
+          const sessionId = (n as { sessionId?: unknown }).sessionId
+          if (typeof sessionId !== 'string') continue
+          const child = nodes.find((item) => item === n) as { id?: unknown; x?: unknown; y?: unknown } | undefined
+          if (child === undefined) continue
+          let parent: string | undefined
+          try {
+            const head = readSessionEvents(sessionId).find((e) => e.type === 'session') as
+              | { parentSession?: unknown; data?: { parentSession?: unknown; meta?: { parentSession?: unknown } } }
+              | undefined
+            parent = typeof head?.parentSession === 'string' && head.parentSession !== '' ? head.parentSession
+              : typeof head?.data?.parentSession === 'string' ? head.data.parentSession
+                : typeof head?.data?.meta?.parentSession === 'string' ? head.data.meta.parentSession : undefined
+          } catch { parent = undefined }
+          if (typeof parent !== 'string' || parent === sessionId) continue
+          const parentNode = nodes.find((item) => (item as { sessionId?: unknown }).sessionId === parent)
+          if (parentNode === undefined) continue
+          const px = Number((parentNode as { x?: unknown }).x ?? 0)
+          const py = Number((parentNode as { y?: unknown }).y ?? 0)
+          if (Number(child.x) === px + 240) continue
+          let nx = px + 240
+          let ny = py
+          let guard = 0
+          while (nodes.some((other) => other !== child && Math.abs(Number((other as { x?: unknown }).x ?? 0) - nx) < 220 && Math.abs(Number((other as { y?: unknown }).y ?? 0) - ny) < 110) && guard < 20) {
+            ny += 140
+            guard += 1
+          }
+          child.x = nx
+          child.y = ny
+        }
+      }
+
+      // ── 谱系连线：会话头部记录的真实 fork 血缘 → context 继承边 ──
+      // rewind/编辑分叉与 graph-inherit 都会在会话头写 parentSession（rewind.ts:277 / api graphInherit）。
+      // 只画两端都在图内的真实谱系；context 每目标唯一；用户删掉的视觉边下次同步会补回
+      //（谱系是客观事实，手动删除只影响当前视图）。
+      let addedEdges = 0
+      if (workspaceDir !== '') {
+        const nodeBySession = new Map<string, { id: string }>()
+        for (const n of nodes) {
+          const sessionId = (n as { sessionId?: unknown }).sessionId
+          if (typeof sessionId === 'string') nodeBySession.set(sessionId, n as { id: string })
+        }
+        const edges = [...graph.edges] as unknown as Array<Record<string, unknown>>
+        const hasContextTo = new Set(edges.filter((e) => (e as { toPort?: unknown }).toPort === 'context').map((e) => (e as { to?: unknown }).to))
+        for (const n of nodes) {
+          const sessionId = (n as { sessionId?: unknown }).sessionId
+          if (typeof sessionId !== 'string') continue
+          let parent: string | undefined
+          try {
+            const head = readSessionEvents(sessionId).find((e) => e.type === 'session') as
+              | { parentSession?: unknown; data?: { parentSession?: unknown; meta?: { parentSession?: unknown } } }
+              | undefined
+            parent = typeof head?.parentSession === 'string' && head.parentSession !== '' ? head.parentSession
+              : typeof head?.data?.parentSession === 'string' ? head.data.parentSession
+                : typeof head?.data?.meta?.parentSession === 'string' ? head.data.meta.parentSession : undefined
+          } catch { parent = undefined }
+          if (parent === undefined || parent === sessionId) continue
+          const parentNode = nodeBySession.get(parent)
+          if (parentNode === undefined || hasContextTo.has((n as { id: string }).id)) continue
+          edges.push({
+            id: `e${randomUUID().slice(0, 8)}`,
+            from: parentNode.id,
+            to: (n as { id: string }).id,
+            toPort: 'context',
+            behavior: 'fork',
+            forkAnchor: { sourceSessionId: parent, targetSessionId: sessionId },
+          })
+          hasContextTo.add((n as { id: string }).id)
+          addedEdges += 1
+        }
+        if (addedEdges > 0) nextEdges = edges
+      }
+
+      if (addedChats === 0 && addedMemories === 0 && addedEdges === 0) return { ok: true, addedChats: 0, addedMemories: 0, addedEdges: 0, rev: this.services.chatGraph.rev(name) }
+      const saved = this.services.chatGraph.save(name, { ...graph, nodes, ...(nextEdges === undefined ? {} : { edges: nextEdges }) } as never)
+      if (!saved.ok) return { ok: false, error: saved.error ?? '图谱保存失败' }
+      return { ok: true, addedChats, addedMemories, addedEdges, rev: this.services.chatGraph.rev(name) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 会话标题：优先最新 session/title 事件（与侧栏一致）；回退首条真实用户消息（剥离
+   * system-reminder 注入）；无则用短 id 兜底。 */
+  private sessionTitleOf(sessionId: string): string {
+    try {
+      const events = readSessionEvents(sessionId)
+      for (let i = events.length - 1; i >= 0; i -= 1) {
+        const ev = events[i] as { type?: unknown; data?: { title?: unknown } }
+        if (ev?.type !== 'session/title') continue
+        const title = ev.data?.title
+        if (typeof title === 'string' && title.trim() !== '') return title.trim().slice(0, 32)
+      }
+      for (const ev of events as Array<{ type?: unknown; data?: { content?: unknown; source?: { kind?: unknown } } }>) {
+        if (ev?.type !== 'user/message' || typeof ev.data?.content !== 'object') continue
+        if (ev.data.source?.kind !== undefined && ev.data.source.kind !== 'user') continue
+        if (!Array.isArray(ev.data.content)) continue
+        const text = (ev.data.content as Array<{ text?: unknown }>)
+          .map((b) => (typeof b?.text === 'string' ? b.text : ''))
+          .join('')
+          .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+          .trim()
+        if (text !== '') return text.slice(0, 32)
+      }
+    } catch { /* 会话不可读时用兜底标题 */ }
+    return `会话 ${sessionId.startsWith('session-') ? sessionId.slice(8, 16) : sessionId.slice(0, 8)}`
+  }
+
+  /** 调试日志（缺 log 服务时静默）。 */
+  private logDebug(message: string): void {
+    try {
+      const logger = this.hostCtx.get('log') as { debug?(...parts: unknown[]): void } | undefined
+      logger?.debug?.('[graphSync]', message)
+    } catch { /* 忽略日志失败 */ }
   }
 
   /**

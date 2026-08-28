@@ -2232,7 +2232,7 @@ export function registerWorkspaceApi(ctx: any): void {
         // ── Chat Graph（节点/连线图，按项目存储）──
         // 注：update-node/remove-node/update-edge/remove-edge/move-nodes/add-group/update-group
         // 七个粒度端点已随宿主一并移除（客户端编辑走 graph-save 全量写，仅 remove-group 在用）。
-        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write') {
+        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write' || method === 'graph-sync') {
           const serviceMethod = method === 'graph-get' ? 'graphGet'
             : method === 'graph-save' ? 'graphSave'
               : method === 'graph-add-node' ? 'graphAddNode'
@@ -2245,7 +2245,8 @@ export function registerWorkspaceApi(ctx: any): void {
                         : method === 'graph-memory-copy' ? 'graphMemoryCopy'
                           : method === 'graph-memory-collection' ? 'graphMemoryCollection'
                             : method === 'graph-memory-write' ? 'graphMemoryWrite'
-                              : 'graphConvertNote'
+                              : method === 'graph-sync' ? 'graphSync'
+                                : 'graphConvertNote'
           const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
           if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const args: Record<string, unknown> = {}

@@ -151,6 +151,33 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   }
   useEffect(() => { load() }, [cwd])
 
+  /** 项目会话/研究笔记补种（§graphSync）：幂等，宿主按 sessionId/笔记去重且不改动已有布局。 */
+  const syncSessions = async (manual: boolean): Promise<void> => {
+    if (cwd === null) { if (manual) setError(t('graphNeedProject')); return }
+    try {
+      const r = await api<{ ok?: boolean; addedChats?: number; addedMemories?: number; addedEdges?: number; error?: string }>('graph-sync', { workspaceDir: cwd })
+      if (typeof r?.error === 'string' && r.error !== '') { setError(r.error); return }
+      const added = (r?.addedChats ?? 0) + (r?.addedMemories ?? 0) + (r?.addedEdges ?? 0)
+      if (added > 0) {
+        toast(t('graphSyncDone').replace('{n}', String(added)))
+        load()
+      } else if (manual) {
+        toast(t('graphSyncNone'))
+      }
+    } catch (e: unknown) {
+      setError(String((e as Error)?.message ?? e))
+    }
+  }
+
+  /** 每个项目只在空图时自动同步一次（失败不循环重试；工具栏按钮可手动补拉）。 */
+  const syncedProjectRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (cwd === null || graph.nodes.length !== 0 || syncedProjectRef.current === cwd) return
+    syncedProjectRef.current = cwd
+    void syncSessions(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cwd, graph.nodes])
+
   // ChatArea publishes the question at the beginning of a turn.  A new turn
   // clears the previous temporary trace highlight; persisted graph data is
   // never changed by this visual state.
@@ -942,6 +969,11 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           'aria-pressed': advancedMode,
           onClick: () => setAdvancedMode((value) => !value),
           children: advancedMode ? t('graphAdvancedPorts') : t('graphNormalOps'),
+        }),
+        jsx('button', {
+          type: 'button', className: 'evo-graph-btn has-label', title: t('graphSyncBtnTitle'), disabled: busy,
+          onClick: () => { void syncSessions(true) },
+          children: t('graphSyncBtn'),
         }),
         jsx('button', {
           type: 'button', className: 'evo-graph-btn has-label', title: layoutPreview === null ? t('graphLayout') : t('graphRelayoutBtn'), disabled: busy,

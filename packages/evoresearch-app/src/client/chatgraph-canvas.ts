@@ -166,7 +166,7 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
           data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-ctx', style: { position: 'absolute', left: 16, top: 37 }, children: t('graphBranch') }),
           socket('memory', 'target', 'evo-graph-socket-in evo-graph-socket-mem', 62),
           data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-mem', style: { position: 'absolute', left: 16, top: 55 }, children: t('graphRef') }),
-          jsx('span', { className: 'evo-graph-node-sid', title: node.sessionId, children: (node.sessionId ?? '').slice(0, 8) }),
+          jsx('span', { className: 'evo-graph-node-sid', title: node.sessionId, children: (node.sessionId ?? '').replace(/^session-/, '').slice(0, 8) }),
           socket('output', 'source', 'evo-graph-socket-out', 53),
           data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', style: { position: 'absolute', right: 16, top: 46 }, children: t('graphConnect') }),
         ] })

@@ -487,6 +487,14 @@ export function neighborChatText(graph: ChatGraph, sessionId: string, maxChars =
 /**
  * Chat Graph 服务。dataRoot 与项目列表由 WorkspaceService 提供。
  */
+/** 剥离 Markdown frontmatter（--- ... ---）用于预览显示。 */
+function stripFrontmatter(text: string): string {
+  if (!text.startsWith('---')) return text
+  const end = text.indexOf('\n---', 3)
+  if (end < 0) return text
+  return text.slice(end + 4).replace(/^\r?\n+/, '')
+}
+
 export class ChatGraphService {
   private readonly dataRoot: string
   /** 进程内幂等缓存：避免网络重试重复应用同一个增量操作。 */
@@ -1084,6 +1092,8 @@ export class ChatGraphService {
     }
     try {
       let text = fs.readFileSync(target, 'utf8')
+      // Markdown 预览剥离 frontmatter：节点预览不把 YAML 头当正文显示（笔记首屏是标题/摘要而非 ---）
+      if (path.extname(target).toLowerCase() === '.md') text = stripFrontmatter(text)
       const truncated = text.length > maxChars
       if (truncated) text = text.slice(0, maxChars) + PREVIEW_TRUNC_SUFFIX
       return { ok: true, text, path: target, mtimeMs: stat.mtimeMs, truncated }
