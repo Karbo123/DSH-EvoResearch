@@ -6,8 +6,10 @@
  *   assistant/message、tool/call → tool/result。
  *
  * 交互（用户反馈后重构）：点击行本身即展开/收起，无全局展开按钮；
- * 工具栏仅保留时长模式（按耗时 / 等宽排列）与搜索；展开的详情用 Markdown
+ * 工具栏保留条长模式（按耗时 / 按回合）与搜索；展开的详情用 Markdown
  * 渲染完整对话文本与工具参数/结果。
+ * 按回合：条长归一化表示会话进度——共 n 个回合时，第 k 回合为 (k/n)×100%
+ * （首回合 1/n，末回合 100%）；同一回合内的 step/call 行沿用所在回合的进度。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useMemo, useState, useSyncExternalStore } from 'react'
@@ -183,7 +185,7 @@ export function TrajectoryPanel({ session }: { session: any }) {
   )
   const turns = useMemo(() => buildTrajectory(session?.events ?? []), [session, eventsLen])
 
-  const [actualTime, setActualTime] = useState(true)
+  const [barMode, setBarMode] = useState<'duration' | 'turn'>('duration')
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -198,11 +200,12 @@ export function TrajectoryPanel({ session }: { session: any }) {
     return max
   }, [turns])
 
-  // 等宽视图：所有操作共用一根等长的小条，只用样式锚定行、不表达任何量，
-  // 避免每个条目都渲染成「占满轨道」的 100% 满条而误导成进度条。
-  const EQ_BAR_WIDTH = '34px'
-  const barWidth = (start: number, end: number | null): string => {
-    if (!actualTime) return EQ_BAR_WIDTH
+  // 按回合：条长不再表示耗时，而是归一化的会话进度——总回合数为 n 时，
+  // 第 k 个回合的条长为 (k/n)×100%（首回合 1/n，末回合 100%）；同一回合内的
+  // step/call 行沿用所在回合的进度。3% 下限仅为可见性兜底，不改变归一化语义。
+  const totalTurns = turns.length
+  const barWidth = (start: number, end: number | null, turnPct?: number): string => {
+    if (barMode === 'turn') return `${Math.max(3, Math.round(turnPct ?? 100))}%`
     const dur = Math.max(0, (end ?? Date.now()) - start)
     return `${Math.max(3, Math.round((dur / maxDuration) * 100))}%`
   }
@@ -251,18 +254,18 @@ export function TrajectoryPanel({ session }: { session: any }) {
               jsx('button', {
                 type: 'button',
                 className: 'evo-traj-chip',
-                'data-on': actualTime || undefined,
+                'data-on': barMode === 'duration' || undefined,
                 title: t('trajActualTimeHint'),
-                onClick: () => setActualTime(true),
+                onClick: () => setBarMode('duration'),
                 children: t('trajActualTime'),
               }),
               jsx('button', {
                 type: 'button',
                 className: 'evo-traj-chip',
-                'data-on': !actualTime || undefined,
-                title: t('trajEqualWidthHint'),
-                onClick: () => setActualTime(false),
-                children: t('trajEqualWidth'),
+                'data-on': barMode === 'turn' || undefined,
+                title: t('trajByTurnHint'),
+                onClick: () => setBarMode('turn'),
+                children: t('trajByTurn'),
               }),
             ],
           }),
@@ -288,10 +291,12 @@ export function TrajectoryPanel({ session }: { session: any }) {
         className: 'evo-traj-body',
         children: turns.length === 0
           ? jsx('div', { className: 'evo-traj-empty', children: t('trajEmpty') })
-          : turns.map((turn) => {
+          : turns.map((turn, ti) => {
               if (!matchTurn(turn)) return null
               const turnKey = `t${turn.turn}`
               const turnOpen = expanded.has(turnKey) || q !== ''
+              // 按回合：第 k 个回合（k = ti+1）的归一化进度 = (k/n)×100%
+              const turnPct = totalTurns === 0 ? 100 : ((ti + 1) / totalTurns) * 100
               return jsxs('div', {
                 className: 'evo-traj-turn',
                 children: [
@@ -304,7 +309,7 @@ export function TrajectoryPanel({ session }: { session: any }) {
                       jsx(MessageSquareText, {}),
                       jsx('span', { className: 'evo-traj-label', children: `${t('turn')} ${turn.turn}` }),
                       jsx('span', { className: 'evo-traj-usertext', children: truncate(turn.userText, 60) }),
-                      jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(turn.start, turn.end) } }) }),
+                      jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(turn.start, turn.end, turnPct) } }) }),
                       jsx('span', { className: 'evo-traj-dur', children: fmtDuration(turn.start, turn.end) }),
                     ],
                   }),
@@ -336,7 +341,7 @@ export function TrajectoryPanel({ session }: { session: any }) {
                                 jsx('span', { className: 'evo-traj-label', children: `${t('step')} ${step.step}` }),
                                 step.usage !== null && jsx('span', { className: 'evo-traj-tokens', children: fmtTokens(step.usage) }),
                                 jsx('span', { className: 'evo-traj-steptext', children: truncate(step.text, 70) }),
-                                jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(step.start, step.end) } }) }),
+                                jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(step.start, step.end, turnPct) } }) }),
                                 jsx('span', { className: `evo-traj-dur${slow ? ' slow' : ''}`, children: fmtDuration(step.start, step.end) }),
                               ],
                             }),
@@ -386,7 +391,7 @@ export function TrajectoryPanel({ session }: { session: any }) {
                                           jsx('span', { className: 'evo-traj-label', children: call.name }),
                                           jsx('span', { className: 'evo-traj-args', children: truncate(call.args, 60) }),
                                           jsx('span', { className: `evo-traj-status${call.isError ? ' error' : ''}`, children: statusIcon }),
-                                          jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(call.start, call.end) } }) }),
+                                          jsx('span', { className: 'evo-traj-bar', children: jsx('span', { className: 'evo-traj-bar-fill', style: { width: barWidth(call.start, call.end, turnPct) } }) }),
                                           jsx('span', { className: `evo-traj-dur${callSlow ? ' slow' : ''}`, children: fmtDuration(call.start, call.end) }),
                                         ],
                                       }),
