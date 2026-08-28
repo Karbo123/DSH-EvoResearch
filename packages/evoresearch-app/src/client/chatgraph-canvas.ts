@@ -1,5 +1,5 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { t } from './i18n'
 import { MessageSquare, Database, FileText, Map as MapIcon } from 'lucide-react'
 import {
@@ -12,7 +12,6 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
-  useNodesState,
   useReactFlow,
   getBezierPath,
   type Connection,
@@ -85,7 +84,7 @@ function refDisplayName(refPath: string): string {
 }
 
 function nodeHeight(node: GraphNode): number {
-  return node.type === 'chat' ? 84 : node.ref !== undefined ? 84 : 66
+  return node.type === 'chat' ? 96 : node.ref !== undefined ? 116 : 96
 }
 
 function nodeKind(node: GraphNode): 'chat' | 'memory' | 'resource' {
@@ -129,14 +128,16 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
     id,
     type,
     position: type === 'source' ? Position.Right : Position.Left,
-    className: `evo-graph-socket ${className}${data.advancedMode ? '' : ' evo-graph-socket-hidden'}`,
+    // demo 端点常显：10px gray-400(#99a1af) 圆点、无边框、圆心压在卡片边线上
+    className: `evo-graph-socket ${className}`,
     style: { top, transform: 'translateY(-50%)' },
     'aria-label': id === 'context' ? t('graphSocketContext') : id === 'memory' ? t('graphSocketMemory') : t('graphSocketOutput'),
-    'aria-hidden': data.advancedMode ? undefined : true,
   })
   const shortPreview = node.ref !== undefined
     ? preview === undefined ? t('graphReading') : preview.ok ? (preview.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 24) : (preview.error ?? t('graphRefUnavailable')).slice(0, 24)
     : (node.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 24)
+  // reactflow.dev 首页 hero demo 的卡片结构：半透明圆角卡片 + 等宽小字标题条 + 实色圆角主体。
+  // 标题条 = 类型图标 + 等宽类型标签（demo 的 "shape color"/"output" 位），主体 = 标题 + 元信息。
   return jsxs('div', {
     className: `evo-graph-node evo-graph-node-${kind}${selected || data.focused ? ' evo-graph-node-sel' : ''}${data.highlighted ? ' evo-graph-node-trace' : ''}${node.origin === 'agent' ? ' evo-graph-node-candidate' : ''}`,
     style: { width: 200, height: nodeHeight(node) },
@@ -157,28 +158,37 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
     children: [
       jsxs('div', { className: 'evo-graph-node-titlebar', children: [
         jsx('span', { className: 'evo-graph-node-icon', 'aria-hidden': true, children: jsx(Icon, {}) }),
-        jsx('span', { className: 'evo-graph-node-title', title: node.title, children: node.title }),
-        node.origin === 'agent' && jsx('span', { className: 'evo-graph-node-candidate-badge', children: t('graphCandidateBadge') }),
+        jsx('span', { className: 'evo-graph-node-kind', children: kindLabel(node, isChat, isMemory) }),
+        jsxs('span', { className: 'evo-graph-node-headermeta', children: [
+          node.origin === 'agent' && jsx('span', { className: 'evo-graph-node-candidate-badge', children: t('graphCandidateBadge') }),
+          !isChat && node.scope === 'global' && jsx('span', { className: 'evo-graph-node-scopechip', children: t('graphGlobal') }),
+        ] }),
       ] }),
       isChat
         ? jsxs('div', { className: 'evo-graph-node-body', children: [
-          socket('context', 'target', 'evo-graph-socket-in evo-graph-socket-ctx', 44),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-ctx', style: { position: 'absolute', left: 16, top: 37 }, children: t('graphBranch') }),
-          socket('memory', 'target', 'evo-graph-socket-in evo-graph-socket-mem', 62),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-mem', style: { position: 'absolute', left: 16, top: 55 }, children: t('graphRef') }),
+          socket('context', 'target', 'evo-graph-socket-in evo-graph-socket-ctx', 47),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-ctx', style: { position: 'absolute', left: 16, top: 41 }, children: t('graphBranch') }),
+          socket('memory', 'target', 'evo-graph-socket-in evo-graph-socket-mem', 67),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-mem', style: { position: 'absolute', left: 16, top: 61 }, children: t('graphRef') }),
+          jsx('span', { className: 'evo-graph-node-title', title: node.title, children: node.title }),
           jsx('span', { className: 'evo-graph-node-sid', title: node.sessionId, children: (node.sessionId ?? '').replace(/^session-/, '').slice(0, 8) }),
-          socket('output', 'source', 'evo-graph-socket-out', 53),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', style: { position: 'absolute', right: 16, top: 46 }, children: t('graphConnect') }),
+          socket('output', 'source', 'evo-graph-socket-out', 65),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', style: { position: 'absolute', right: 16, top: 59 }, children: t('graphConnect') }),
         ] })
         : jsxs('div', { className: 'evo-graph-node-body', children: [
-          jsx('span', { className: 'evo-graph-node-tag', children: node.scope === 'global' ? t('graphGlobal') : (isMemory ? t('graphMemory') : t('graphProject')) }),
+          jsx('span', { className: 'evo-graph-node-title', title: node.title, children: node.title }),
           jsx('span', { className: node.ref === undefined && isMemory ? 'evo-graph-node-preview' : 'evo-graph-node-ref-name', title: node.ref?.path ?? node.content, children: node.ref === undefined ? shortPreview : refDisplayName(node.ref.path) }),
-          socket('output', 'source', 'evo-graph-socket-out', 38),
-          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', style: { position: 'absolute', right: 16, top: 31 }, children: t('graphConnect') }),
+          socket('output', 'source', 'evo-graph-socket-out', 54),
+          data.advancedMode && jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', style: { position: 'absolute', right: 16, top: 48 }, children: t('graphConnect') }),
           node.ref !== undefined && jsx('span', { className: `evo-graph-node-preview${preview?.ok === false ? ' evo-graph-node-preview-err' : ''}`, title: preview?.text ?? preview?.error, children: shortPreview }),
         ] }),
     ],
   })
+}
+
+function kindLabel(node: GraphNode, isChat: boolean, isMemory: boolean): string {
+  if (isChat) return t('graphChat')
+  return node.displayKind ?? (isMemory ? t('graphMemory') : t('graphResource'))
 }
 
 function routePath(points: readonly { x: number; y: number }[]): string {
@@ -224,23 +234,29 @@ function midpoint(points: readonly { x: number; y: number }[]): { x: number; y: 
   return points[points.length - 1]
 }
 
-function GraphEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd }: EdgeProps<XYEdge<{ graphEdge: GraphEdge; onContextMenu: (event: MouseEvent, edge: GraphEdge) => void }>>) {
+function GraphEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd }: EdgeProps<XYEdge<{ graphEdge: GraphEdge; interacting?: boolean; onContextMenu: (event: MouseEvent, edge: GraphEdge) => void }>>) {
   const graphEdge = data?.graphEdge
   const fallback = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
-  const stored = graphEdge?.routePoints ?? []
+  // 拖拽进行中忽略存储的路由拐点/旧标签位：端点实时更新而拐点陈旧会让曲线
+  // 「绕过旧位置」，视觉上即连线滞后。此时改用完全由实时端点生成的曲线。
+  const stored = data?.interacting ? [] : graphEdge?.routePoints ?? []
   const points = stored.length >= 2 ? [{ x: sourceX, y: sourceY }, ...stored.slice(1, -1), { x: targetX, y: targetY }] : []
   const path = points.length >= 2 ? routePath(points) : fallback[0]
   const label = graphEdge?.label?.trim() ?? ''
-  const labelPoint = graphEdge?.labelPosition ?? midpoint(points) ?? { x: fallback[1], y: fallback[2] }
+  const labelPoint = !data?.interacting && graphEdge?.labelPosition !== undefined ? graphEdge.labelPosition : midpoint(points) ?? { x: fallback[1], y: fallback[2] }
   const isFork = graphEdge?.behavior === 'fork' || graphEdge?.toPort === 'context'
   const relation = graphEdge?.behavior === 'relation'
   const enabled = isFork || graphEdge?.enabled !== false && !relation
+  // demo 同款：描边/线宽走内联样式（stroke #d2d2d2 系），选中类不改变颜色（与官网一致）；
+  // 虚线流动动画由 edge.animated + xyflow 基础 CSS（dashdraw .5s linear infinite）驱动。
+  const stroke = isFork ? 'var(--graph-fork)' : relation ? 'var(--graph-edge-default)' : 'var(--graph-reference)'
   return jsxs(Fragment, { children: [
     jsx('g', { onContextMenu: (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); if (graphEdge !== undefined) data?.onContextMenu(event, graphEdge) }, children: jsx(BaseEdge, {
       id,
       path,
       markerEnd,
-      interactionWidth: 24,
+      interactionWidth: 20,
+      style: { stroke, strokeWidth: 2 },
       className: `evo-graph-edge ${isFork ? 'evo-graph-edge-ctx' : relation ? 'evo-graph-edge-relation' : 'evo-graph-edge-mem'}${enabled ? '' : ' evo-graph-edge-disabled'}`,
     }) }),
     !isFork && label !== '' && jsx(EdgeLabelRenderer, { children: jsx('div', {
@@ -308,15 +324,15 @@ function groupBounds(graph: ChatGraph, group: GraphGroup, ancestry = new Set<str
     return false
   })
   if (group.collapsed === true) return { x: group.x ?? 40, y: group.y ?? 40, width: group.width ?? 208, height: group.height ?? 86 }
-  const rects = members.map((node) => ({ x: node.x, y: node.y, width: 200, height: node.type === 'chat' ? 84 : node.ref !== undefined ? 84 : 66 }))
+  const rects = members.map((node) => ({ x: node.x, y: node.y, width: 200, height: node.type === 'chat' ? 96 : node.ref !== undefined ? 116 : 96 }))
   for (const child of childGroups) {
     const bounds = groupBounds(graph, child, nextAncestry)
     rects.push({ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height })
   }
   const minX = rects.length === 0 ? group.x ?? 40 : Math.min(...rects.map((rect) => rect.x))
   const minY = rects.length === 0 ? group.y ?? 40 : Math.min(...rects.map((rect) => rect.y))
-  const maxX = rects.length === 0 ? minX + 176 : Math.max(...rects.map((rect) => rect.x + rect.width))
-  const maxY = rects.length === 0 ? minY + 76 : Math.max(...rects.map((rect) => rect.y + rect.height))
+  const maxX = rects.length === 0 ? minX + 200 : Math.max(...rects.map((rect) => rect.x + rect.width))
+  const maxY = rects.length === 0 ? minY + 96 : Math.max(...rects.map((rect) => rect.y + rect.height))
   const x = group.x ?? minX - 24
   const y = group.y ?? minY - 36
   return { x, y, width: group.width ?? Math.max(220, maxX - x + 24), height: group.height ?? Math.max(120, maxY - y + 24) }
@@ -331,6 +347,8 @@ function toXYNodes(props: ChatGraphCanvasProps): CanvasNode[] {
       position: { x: node.x, y: node.y },
       width: 200,
       height: nodeHeight(node),
+      // demo 节点 wrapper 同款淡入淡出过渡（transition-opacity duration-400）
+      className: 'evo-node-fade',
       selected: props.selectedId === node.id,
       data: {
         graphNode: node,
@@ -378,7 +396,7 @@ function toXYNodes(props: ChatGraphCanvasProps): CanvasNode[] {
   return nodes
 }
 
-function toXYEdges(props: ChatGraphCanvasProps, xyNodes: readonly CanvasNode[]): XYEdge<{ graphEdge: GraphEdge; onContextMenu: (event: MouseEvent, edge: GraphEdge) => void }>[] {
+function toXYEdges(props: ChatGraphCanvasProps, xyNodes: readonly CanvasNode[], interacting: boolean): XYEdge<{ graphEdge: GraphEdge; interacting?: boolean; onContextMenu: (event: MouseEvent, edge: GraphEdge) => void }>[] {
   const ids = new Set(xyNodes.map((node) => node.id))
   const nodeById = new Map(props.graph.nodes.map((node) => [node.id, node]))
   const endpoint = (id: string): string => {
@@ -392,14 +410,17 @@ function toXYEdges(props: ChatGraphCanvasProps, xyNodes: readonly CanvasNode[]):
     .map(({ edge, source, target }) => ({
       id: edge.id,
       source,
-      // Ordinary mode intentionally hides the technical handles. Use
-      // React Flow's default endpoints there so persisted edges remain
-      // visible; advanced mode binds the explicit semantic ports.
-      sourceHandle: !props.advancedMode || source.startsWith('group:') ? undefined : 'output',
+      // 端点常显（demo 同款），两种模式都绑定语义端口，连线终点落在圆心上；
+      // 折叠分组仍用默认端点。
+      sourceHandle: source.startsWith('group:') ? undefined : 'output',
       target,
-      targetHandle: !props.advancedMode || target.startsWith('group:') ? undefined : edge.toPort,
+      targetHandle: target.startsWith('group:') ? undefined : edge.toPort,
       type: 'graph',
-      data: { graphEdge: edge, onContextMenu: props.onEdgeContextMenu },
+      // demo 同款：全部连线 animated（xyflow 内置 dashdraw .5s 虚线流动）
+      // + transition-opacity duration-400（g 层淡入淡出）。
+      animated: true,
+      className: 'evo-edge-fade',
+      data: { graphEdge: edge, interacting, onContextMenu: props.onEdgeContextMenu },
     }))
 }
 
@@ -408,29 +429,47 @@ export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
 }
 
 function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
-  const initialNodes = toXYNodes(props)
-  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>(initialNodes)
-  const edges = toXYEdges(props, initialNodes)
-  const [minimapOpen, setMinimapOpen] = useState(false)
-  const { fitView } = useReactFlow()
-  // Async prop updates (file previews, trace highlights, selection) must not
-  // teleport cards back to their stored positions in the middle of a drag,
-  // so while the user interacts we keep whatever position the canvas shows;
-  // otherwise incoming graph positions (e.g. 整理布局 preview) must apply.
+  // 拖拽期间 onNodesChange 每帧触发本组件重渲染；节点/边对象必须只在数据变化时重建，
+  // 否则每帧都把全新 data/edges 传给 xyflow，全量调和导致连线跟随卡顿。
+  const propsRef = useRef(props)
+  propsRef.current = props
+  const initialNodes = useMemo(
+    () => toXYNodes(propsRef.current),
+    [props.graph, props.visibleIds, props.matchedIds, props.selectedId, props.focusedNodeId, props.advancedMode, props.traceHighlightedIds, props.refPreviews],
+  )
+  // 官方同款非受控模式（defaultNodes/defaultEdges）：triggerNodeChanges 在
+  // hasDefaultNodes 下同步 applyNodeChanges + 内部 setNodes —— 拖拽事件里节点与连线
+  // 在同一次同步 store 更新中渲染（官网线条实时跟手的关键）。受控模式（nodes prop +
+  // onNodesChange）会让变更绕 React state 一圈，连线端点明显慢半拍。
+  // 外部数据（图谱内容/选中/预览/轨迹/高级模式/拖拽状态）变化时用 useReactFlow
+  // 的 setNodes/setEdges 命令式同步，不再走受控 props。
+  const initialEdges = useMemo(
+    () => toXYEdges(propsRef.current, initialNodes, false),
+    [props.graph, props.advancedMode, initialNodes],
+  )
+  const { fitView, setNodes: setStoreNodes, setEdges: setStoreEdges, getNodes: getStoreNodes } = useReactFlow()
+  const xyNodesRef = useRef(initialNodes)
   const interactingRef = useRef(false)
+  const [interacting, setInteracting] = useState(false)
   useEffect(() => {
-    setNodes((current) => {
-      if (!interactingRef.current) return initialNodes
+    const fresh = toXYNodes(propsRef.current)
+    xyNodesRef.current = fresh
+    // 拖拽进行中保留画布当前位置（异步 props 更新不得把卡片传回存储位置）；
+    // 否则（如整理布局预览）直接采用新位置。
+    setStoreNodes((current) => {
+      if (!interactingRef.current) return fresh
       const positions = new Map(current.filter((node) => node.type === 'graph').map((node) => [node.id, node.position]))
-      return initialNodes.map((node) => (node.type === 'graph' && positions.has(node.id) ? { ...node, position: positions.get(node.id)! } : node))
+      return fresh.map((node) => (node.type === 'graph' && positions.has(node.id) ? { ...node, position: positions.get(node.id)! } : node))
     })
-  }, [props.graph, props.visibleIds, props.matchedIds, props.selectedId, props.focusedNodeId, props.advancedMode, props.traceHighlightedIds, props.refPreviews, setNodes])
+    setStoreEdges(toXYEdges(propsRef.current, fresh, interacting))
+  }, [props.graph, props.visibleIds, props.matchedIds, props.selectedId, props.focusedNodeId, props.advancedMode, props.traceHighlightedIds, props.refPreviews, interacting, setStoreNodes, setStoreEdges])
+  const [minimapOpen, setMinimapOpen] = useState(false)
   // XYFlow's MiniMap component does not forward arbitrary aria attributes.
   useEffect(() => {
     const minimap = document.querySelector<HTMLElement>('.evo-graph-canvas .react-flow__minimap')
     minimap?.setAttribute('role', 'img')
     minimap?.setAttribute('aria-label', t('graphMiniMap'))
-  })
+  }, [minimapOpen])
 
   // 整理布局确认保存后重新适配视野，避免新排布落在视口外。
   const refitSignal = props.refitSignal ?? 0
@@ -440,14 +479,58 @@ function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
 
   const handleDragStop = (_event: unknown, _node: CanvasNode, draggedNodes?: CanvasNode[]) => {
     interactingRef.current = false
-    const changed = (draggedNodes ?? nodes)
+    setInteracting(false)
+    const changed = (draggedNodes ?? getStoreNodes() as unknown as CanvasNode[])
       .filter((node) => node.type === 'graph' && 'graphNode' in node.data)
       .map((node) => ({ id: (node.data as GraphNodeData).graphNode.id, x: Math.round(node.position.x), y: Math.round(node.position.y) }))
     props.onNodePositionsChange(changed)
   }
-  const narrowNodes = props.graph.nodes.filter((node) => props.visibleIds.has(node.id) && collapsedGroupOf(props.graph, node) === undefined)
+  const narrowNodes = useMemo(
+    () => props.graph.nodes.filter((node) => props.visibleIds.has(node.id) && collapsedGroupOf(props.graph, node) === undefined),
+    [props.graph, props.visibleIds],
+  )
+  // 画布尺寸（ResizeObserver 跟随窗口/面板变化），用于推导内容感知的缩放范围。
+  const canvasRef = useRef<HTMLDivElement | null>(null)
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = canvasRef.current
+    if (el === null) return
+    const update = () => setCanvasSize({ w: el.clientWidth, h: el.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  // 缩放范围（用户定义，随实际内容与窗口动态推导，主画布与缩略图缩放共用）：
+  //   最远 minZoom：视口能容纳「全部节点 AABB × 5」；
+  //   最近 maxZoom：视口至多收到「最小节点 AABB × 2」。
+  const zoomBounds = useMemo(() => {
+    if (props.graph.nodes.length === 0 || canvasSize.w === 0 || canvasSize.h === 0) return { minZoom: 0.5, maxZoom: 2 }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    let smallest = Infinity
+    let nw = 200, nh = 96
+    for (const node of props.graph.nodes) {
+      if (collapsedGroupOf(props.graph, node) !== undefined) continue
+      const h = nodeHeight(node)
+      minX = Math.min(minX, node.x); minY = Math.min(minY, node.y)
+      maxX = Math.max(maxX, node.x + 200); maxY = Math.max(maxY, node.y + h)
+      if (200 * h < smallest) { smallest = 200 * h; nw = 200; nh = h }
+    }
+    for (const group of props.graph.groups ?? []) {
+      if (group.collapsed !== true) continue
+      const b = groupBounds(props.graph, group)
+      minX = Math.min(minX, b.x); minY = Math.min(minY, b.y)
+      maxX = Math.max(maxX, b.x + b.width); maxY = Math.max(maxY, b.y + b.height)
+    }
+    const aw = Math.max(1, maxX - minX)
+    const ah = Math.max(1, maxY - minY)
+    const minZoom = Math.max(0.02, Math.min(canvasSize.w / (5 * aw), canvasSize.h / (5 * ah)))
+    const maxZoom = Math.min(8, Math.max(minZoom + 0.2, Math.min(canvasSize.w / (2 * nw), canvasSize.h / (2 * nh))))
+    return { minZoom, maxZoom }
+  }, [props.graph, canvasSize])
   return jsxs('div', {
     className: 'evo-graph-canvas',
+    ref: canvasRef,
     onContextMenu: (event: MouseEvent) => {
       event.preventDefault()
       const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
@@ -466,18 +549,21 @@ function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
         ] }),
       }, node.id)) }),
       jsx(ReactFlow, {
-        nodes,
-        edges,
+        // 非受控：defaultNodes/defaultEdges + 命令式 setNodes/setEdges（见上方注释）。
+        // 拖拽变更由 triggerNodeChanges 同步应用到内部 store，节点与连线同帧更新。
+        defaultNodes: initialNodes,
+        defaultEdges: initialEdges,
         nodeTypes,
         edgeTypes,
         fitView: true,
         fitViewOptions: { padding: 0.18, duration: 180 },
+        minZoom: zoomBounds.minZoom,
+        maxZoom: zoomBounds.maxZoom,
         nodesDraggable: true,
         nodesConnectable: props.advancedMode,
         elementsSelectable: true,
         deleteKeyCode: null,
-        onNodesChange,
-        onNodeDragStart: () => { interactingRef.current = true },
+        onNodeDragStart: () => { interactingRef.current = true; setInteracting(true) },
         onNodeDragStop: handleDragStop,
         onNodeClick: (_event: MouseEvent, node: CanvasNode) => { if (node.type === 'graph') props.onSelect((node.data as GraphNodeData).graphNode.id) },
         onPaneClick: () => { props.onSelect(null); props.onContextMenu(null) },
@@ -487,9 +573,10 @@ function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
         'aria-label': t('graphCanvasAria'),
         proOptions: { hideAttribution: true },
         children: [
-          jsx(Background, { gap: 22, size: 1.1, color: 'var(--graph-grid)' }),
+          jsx(Background, {}),
           jsx(Controls, { showInteractive: true, position: 'bottom-right' as const, 'aria-label': t('graphControlsAria') }),
           minimapOpen && jsx(MiniMap, { pannable: true, zoomable: true, position: 'bottom-left' as const, 'aria-label': t('graphMiniMap'), nodeColor: (node: CanvasNode) => node.type === 'graphGroup' ? 'var(--graph-minimap-group)' : (node.data as GraphNodeData).graphNode.type === 'chat' ? 'var(--graph-minimap-chat)' : 'var(--graph-minimap-resource)' }),
+          // 缩略图开关：纯图标小按钮。收起时在画布左下角；展开时贴在缩略图右侧外、与底边对齐。
           jsx('button', {
             type: 'button',
             className: 'evo-graph-minimap-toggle',
@@ -497,8 +584,8 @@ function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
             'aria-label': minimapOpen ? t('graphMinimapHide') : t('graphMinimapShow'),
             title: minimapOpen ? t('graphMinimapHide') : t('graphMinimapShow'),
             onClick: (event: MouseEvent) => { event.stopPropagation(); setMinimapOpen((value) => !value) },
-            style: minimapOpen ? { left: 'auto', right: 12 } : undefined,
-            children: jsxs(Fragment, { children: [jsx(MapIcon, {}), jsx('span', { children: minimapOpen ? t('graphMinimapHide') : t('graphMinimapShow') })] }),
+            style: minimapOpen ? { left: 160, bottom: 12 } : { left: 12, bottom: 12 },
+            children: jsx(MapIcon, {}),
           }),
         ],
       }),

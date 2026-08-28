@@ -28,15 +28,15 @@ import { ContextTraceDrawer } from './context-trace'
  * 节点几何（Blender 节点编辑器风格）：
  * - 标题栏 24px（类型色渐变）+ 主体（socket 行 18px）；
  * - chat：标题 24 + padding 4 + ctx 行 + mem 行 + padding 6 → 总高 76；
- * - memory：标题 24 + 主体（标签/预览 两行）→ 总高 58。
+ * - 尺寸与 chatgraph-canvas 渲染保持一致：宽 200；chat/无引用 96；引用节点 116。
  * socket 圆心坐标（画布坐标）与 CSS 内边距对齐。
  */
-const NODE_W = 176
-const CHAT_H = 76
-const MEMORY_H = 58
-/** 引用节点：第一行（标签+文件名）+ 第二行（实时预览）→ 58 + 18 */
-const MEMORY_REF_H = 76
-const TITLE_H = 24
+const NODE_W = 200
+const CHAT_H = 96
+const MEMORY_H = 96
+/** 引用节点：标题条 + 标题 + 引用名 + 实时预览三行主体 */
+const MEMORY_REF_H = 116
+const TITLE_H = 33
 
 export interface GraphNodeRef {
   kind: 'note' | 'file' | 'pdf' | 'dir' | 'memory' | 'session' | 'paper' | 'experiment' | 'run' | 'log' | 'result' | 'code' | 'latex' | 'manuscript'

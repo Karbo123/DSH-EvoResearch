@@ -8,7 +8,13 @@
  * - 圆角 0.5rem、顶栏 h-14（56px）、聊天最大宽度 900px
  */
 
+import { FIRA_MONO_400, FIRA_MONO_700 } from './chatgraph-fonts'
+
 export const CSS = `
+/* Chat Graph 专用字体：Fira Mono（SIL OFL 1.1，latin 内嵌）——与 reactflow.dev
+   官网 demo 声明的 --font-firamono 同源；仅 --graph-font-mono 作用域内使用。 */
+@font-face { font-family: 'Fira Mono'; font-style: normal; font-weight: 400; font-display: block; src: url("${FIRA_MONO_400}") format('woff2'); }
+@font-face { font-family: 'Fira Mono'; font-style: normal; font-weight: 700; font-display: block; src: url("${FIRA_MONO_700}") format('woff2'); }
 :root {
   color-scheme: light;
   --color-primary: #33302a;
@@ -35,24 +41,33 @@ export const CSS = `
   --chat-max-width: 900px;
   --input-bg: #ffffff;
   --hover-bg: #f0ebe1;
-  /* Chat Graph tokens: reactflow.dev 风格——浅色画布、纯白圆角卡片、柔和阴影。 */
-  --graph-canvas: #f7f8fa;
-  --graph-grid: #dde3ec;
+  /* Chat Graph tokens：严格对齐 reactflow.dev 首页 hero demo 实测值。
+     卡片 = bg-background/70(白 70%) + border #eef2f6 + rounded-2xl(16px) + shadow 0 7px 9px rgba(0,0,0,.02)；
+     标题条 = mono 12px/600 纯黑 + border-b；muted(text-light) = #757575；
+     端点 = gray-400 #99a1af（明暗恒定）；连线 = #d2d2d2 内联 2px + dashdraw 虚线流动；
+     点阵 = xyflow Background 默认（gap 20 / size 1 / #91919a）；打底背景图 = bg-gradient-s.png 内嵌。 */
+  --graph-canvas: #ffffff;
+  --graph-glow-core: rgba(6, 102, 121, 0.15);
+  --graph-glow-mid: rgba(6, 102, 121, 0.055);
   --graph-node-surface: #ffffff;
-  --graph-node-surface-alt: #f8fafc;
-  --graph-node-border: #e2e8f0;
-  --graph-node-title: #1e293b;
+  --graph-node-surface-alt: #ffffff;
+  --graph-node-border: #eef2f6;
+  --graph-node-title: #000000;
+  --graph-muted: #757575;
+  --graph-font-mono: 'Fira Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Microsoft YaHei', monospace;
+  --graph-node-radius: 16px;
+  --graph-card-shadow: 0 7px 9px 0 rgba(0, 0, 0, 0.02);
+  --graph-handle: #99a1af;
+  --graph-edge-default: #d2d2d2;
   --graph-chat: #3b82f6;
   --graph-memory: #10b981;
   --graph-global: #8b5cf6;
   --graph-resource: #f59e0b;
   --graph-fork: #3b82f6;
   --graph-reference: #10b981;
-  --graph-relation: #94a3b8;
-  --graph-disabled: #cbd5e1;
-  --graph-edge-label: #334155;
+  --graph-edge-label: #505050;
   --graph-control: #ffffff;
-  --graph-control-border: #e2e8f0;
+  --graph-control-border: #ededed;
   --graph-minimap: rgb(255 255 255 / 94%);
   --graph-minimap-group: #8b5cf6;
   --graph-minimap-chat: #3b82f6;
@@ -88,24 +103,28 @@ html.dark {
   --brand-foreground: #ffffff;
   --input-bg: #1c1a17;
   --hover-bg: #332f2a;
-  --graph-canvas: #16181d;
-  --graph-grid: #262a33;
-  --graph-node-surface: #1f232b;
-  --graph-node-surface-alt: #1a1e25;
-  --graph-node-border: #2e3440;
-  --graph-node-title: #e8edf4;
+  --graph-canvas: #111111;
+  --graph-glow-core: rgba(255, 64, 120, 0.30);
+  --graph-glow-mid: rgba(168, 85, 247, 0.13);
+  --graph-node-surface: #111111;
+  --graph-node-surface-alt: #1a1b1e;
+  --graph-node-border: #333333;
+  --graph-node-title: #ffffff;
+  --graph-muted: #cccccc;
+  --graph-node-radius: 16px;
+  --graph-card-shadow: 0 7px 9px 0 rgba(0, 0, 0, 0.02);
+  --graph-handle: #99a1af;
+  --graph-edge-default: #d2d2d2;
   --graph-chat: #60a5fa;
   --graph-memory: #34d399;
   --graph-global: #a78bfa;
   --graph-resource: #fbbf24;
   --graph-fork: #60a5fa;
   --graph-reference: #34d399;
-  --graph-relation: #64748b;
-  --graph-disabled: #3d4557;
-  --graph-edge-label: #b9c2d0;
-  --graph-control: #1f232b;
-  --graph-control-border: #333a47;
-  --graph-minimap: rgb(24 27 33 / 88%);
+  --graph-edge-label: #e6e7ea;
+  --graph-control: #141519;
+  --graph-control-border: #303238;
+  --graph-minimap: rgb(20 21 25 / 88%);
   --graph-minimap-group: #a78bfa;
   --graph-minimap-chat: #60a5fa;
   --graph-minimap-resource: #34d399;
@@ -989,11 +1008,15 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-btn svg { width: 13px; height: 13px; }
 .evo-graph-btn .evo-graph-btn-label { display: none; }
 .evo-graph-btn.has-label .evo-graph-btn-label { display: inline; }
-/* 画布：reactflow.dev 风格浅色底 + 细点阵网格 */
-.evo-graph-canvas { position: relative; flex: 1; min-height: 300px; overflow: auto; background:
-  radial-gradient(circle, var(--graph-grid) 1px, transparent 1px) 0 0 / 22px 22px,
-  var(--graph-canvas); }
-.evo-graph-canvas .react-flow { position: absolute; inset: 0; direction: ltr; background: transparent; }
+/* 画布打底：纯白（暗色 #111111）+ CSS 绘制的倾斜椭圆光斑（::before）。
+   相对官网 demo 的偏差（应用户要求）：demo 是静态 PNG 光斑（品红→紫→蓝渐变，
+   浅色下会在白底透出 #edeffd 式蓝紫），这里改为按画布百分比定尺寸的 CSS 光斑
+   ——随窗口等比缩放，且按主题着色：暗色品红/红（还原 demo 观感并加大），
+   浅色品牌青（干净无脏蓝紫）。点阵由 xyflow Background 默认参数（gap 20 /
+   size 1 / #91919a）绘制并随视口平移，与官网 pattern 完全一致。 */
+.evo-graph-canvas { position: relative; flex: 1; min-height: 300px; overflow: hidden; background-color: var(--graph-canvas); }
+.evo-graph-canvas::before { content: ''; position: absolute; left: 65%; top: 50%; width: 85%; height: 60%; transform: translate(-50%, -50%) rotate(-18deg); border-radius: 50%; background: radial-gradient(closest-side, var(--graph-glow-core), var(--graph-glow-mid) 52%, transparent 100%); pointer-events: none; z-index: 0; }
+.evo-graph-canvas .react-flow { position: absolute; inset: 0; direction: ltr; background: transparent; z-index: 1; }
 .evo-graph-canvas .react-flow__container, .evo-graph-canvas .react-flow__renderer, .evo-graph-canvas .react-flow__pane { position: absolute; inset: 0; width: 100%; height: 100%; }
 .evo-graph-canvas .react-flow__viewport { transform-origin: 0 0; z-index: 2; pointer-events: none; }
 .evo-graph-canvas .react-flow__nodes { pointer-events: none; transform-origin: 0 0; }
@@ -1006,85 +1029,76 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-canvas .react-flow__panel { position: absolute; z-index: 5; margin: 15px; }
 .evo-graph-canvas .react-flow__node { cursor: grab; }
 .evo-graph-canvas .react-flow__node.dragging { cursor: grabbing; }
-.evo-graph-canvas .react-flow__handle { width: 10px; height: 10px; min-width: 10px; min-height: 10px; border-radius: 999px; border: 2px solid #ffffff; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25); }
+/* 端点（handle/socket）：demo 同款——10px gray-400(#99a1af) 圆点、border-radius 100%、
+   无边框无阴影、无 hover 视觉；圆心压在卡片边线上（±5px 偏移 + 垂直居中）。 */
+.evo-graph-canvas .react-flow__handle { width: 10px; height: 10px; min-width: 10px; min-height: 10px; border-radius: 100%; border: none; background: var(--graph-handle); box-shadow: none; }
 .evo-graph-canvas .react-flow__handle-left { left: -5px; }
 .evo-graph-canvas .react-flow__handle-right { right: -5px; }
-.evo-graph-canvas .react-flow__handle.evo-graph-socket-ctx { background: var(--graph-fork); }
-.evo-graph-canvas .react-flow__handle.evo-graph-socket-mem { background: var(--graph-memory); }
-.evo-graph-canvas .react-flow__handle.evo-graph-socket-out { background: var(--graph-chat); }
-.evo-graph-canvas .react-flow__handle:hover { transform: translateY(-50%) scale(1.45) !important; }
 .evo-graph-canvas .react-flow__controls { overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 8px; box-shadow: 0 2px 8px var(--graph-node-shadow); }
 .evo-graph-canvas .react-flow__controls-button { width: 26px; height: 26px; border: 0; border-bottom: 1px solid var(--graph-control-border); background: var(--graph-control); color: var(--color-text-primary); fill: var(--color-text-primary); }
 .evo-graph-canvas .react-flow__controls-button:last-child { border-bottom: 0; }
-/* MiniMap：左下角，默认隐藏，弹出按钮切换 */
-.evo-graph-canvas .react-flow__minimap { left: 12px; right: auto; bottom: 12px; transform: none; overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-minimap); box-shadow: 0 2px 10px var(--graph-node-shadow); }
-.evo-graph-minimap-toggle { position: absolute; z-index: 6; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-control); color: var(--color-text-secondary); font-size: 11.5px; cursor: pointer; font: inherit; white-space: nowrap; box-shadow: 0 2px 8px var(--graph-node-shadow); transition: color 0.15s, border-color 0.15s; }
+/* MiniMap：左下角，默认隐藏，图标按钮切换（按钮 26×26，与 Controls 同规格） */
+.evo-graph-canvas .react-flow__minimap.react-flow__panel { left: 12px; right: auto; bottom: 12px; top: auto; margin: 0; transform: none; overflow: hidden; width: 142px; height: 96px; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-minimap); box-shadow: 0 2px 10px var(--graph-node-shadow); }
+.evo-graph-minimap-toggle { position: absolute; z-index: 6; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-control); color: var(--color-text-secondary); cursor: pointer; font: inherit; box-shadow: 0 2px 8px var(--graph-node-shadow); transition: color 0.15s, border-color 0.15s; }
 .evo-graph-minimap-toggle:hover { color: var(--brand); border-color: var(--brand); }
-.evo-graph-minimap-toggle svg { width: 13px; height: 13px; }
+.evo-graph-minimap-toggle svg { width: 14px; height: 14px; }
 .evo-graph-minimap-toggle[aria-pressed='true'] { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--graph-control)); }
-.evo-graph-canvas .react-flow__edge-path { stroke: var(--graph-disabled); stroke-width: 2px; }
-.evo-graph-canvas .react-flow__edge.selected .react-flow__edge-path { stroke: var(--graph-trace); }
+/* 连线：demo 同款——描边 #d2d2d2 系经 BaseEdge 内联样式给出（hover/选中不改变颜色，
+   与官网一致）；虚线流动由 edge.animated + xyflow 基础 CSS 驱动：
+   .react-flow__edge.animated path { stroke-dasharray: 5; animation: .5s linear infinite dashdraw }。
+   transition-opacity duration-400 挂在 g 层（evo-edge-fade / evo-node-fade）。 */
+.react-flow__edge.evo-edge-fade, .react-flow__node.evo-node-fade { transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.evo-graph-edge-disabled { opacity: 0.35; }
+/* 虚线流速：官网 0.5s 的两倍速（用户要求） */
+.evo-graph-canvas .react-flow__edge.animated path,
+.evo-graph-canvas .react-flow__connection .animated { animation-duration: 0.25s; }
+/* 拖拽时节点位移走合成器层（will-change 仅拖拽期挂载，避免常驻层数开销） */
+.evo-graph-canvas .react-flow__node.dragging { will-change: transform; }
 .evo-graph-canvas .react-flow__node .evo-graph-node { position: relative; left: auto; top: auto; }
-.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-ctx { position: absolute; left: 16px; top: 29px; }
-.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-mem { position: absolute; left: 16px; top: 47px; }
-.evo-graph-canvas .evo-graph-node .evo-graph-socket-label-out { position: absolute; right: 16px; top: 38px; }
-.evo-graph-canvas .evo-graph-node .evo-graph-node-sid { position: absolute; right: 8px; top: 47px; max-width: 58px; }
+/* socket 标签/连线标签坐标由 JSX 内联样式给出（相对节点根定位），这里不再覆盖。 */
 .evo-graph-canvas .evo-graph-node > .evo-graph-node-body { position: static; }
 .evo-graph-canvas .react-flow__edge-textbg { fill: var(--graph-node-surface-alt); }
 .evo-graph-canvas .react-flow__edge-text { fill: var(--graph-edge-label); font-size: 10px; }
-/* 节点卡片：reactflow.dev 风格——纯白圆角卡片、柔和阴影、类型色图标徽章 */
-.evo-graph-node { position: absolute; background: var(--graph-node-surface); border: 1px solid var(--graph-node-border); border-radius: 10px; padding: 0; cursor: grab; user-select: none; box-shadow: 0 2px 8px var(--graph-node-shadow); transition: border-color 0.15s, box-shadow 0.15s; display: flex; flex-direction: column; }
-.evo-graph-node:hover { border-color: color-mix(in srgb, var(--graph-chat) 40%, var(--graph-node-border)); box-shadow: 0 4px 14px var(--graph-node-shadow); }
-.evo-graph-node-sel { border-color: var(--graph-chat); box-shadow: 0 0 0 2px color-mix(in srgb, var(--graph-chat) 28%, transparent), 0 4px 14px var(--graph-node-shadow); }
-.evo-graph-node[data-pinned] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-trace) 42%, transparent), 0 2px 8px var(--graph-node-shadow); }
-.evo-graph-node-dragging { z-index: 30; cursor: grabbing; box-shadow: 0 0 0 2px color-mix(in srgb, var(--graph-chat) 30%, transparent), 0 8px 22px var(--graph-node-shadow); }
-/* 标题栏：白底 + 类型色图标徽章（reactflow.dev 卡片头风格） */
-.evo-graph-node-titlebar { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; flex-shrink: 0; }
-.evo-graph-node-chat .evo-graph-node-titlebar { border-bottom: 1px solid color-mix(in srgb, var(--graph-chat) 14%, transparent); }
-.evo-graph-node-memory .evo-graph-node-titlebar { border-bottom: 1px solid color-mix(in srgb, var(--graph-memory) 14%, transparent); }
-.evo-graph-node-resource .evo-graph-node-titlebar { border-bottom: 1px solid color-mix(in srgb, var(--graph-resource) 14%, transparent); }
+/* 节点卡片：demo 卡片——bg-background/70（白/黑 70%）+ 1px #eef2f6/#333 边框 +
+   rounded-2xl(16px) + shadow-[0_7px_9px_0_rgba(0,0,0,0.02)]；无 hover 变色（demo 一致）；
+   选中仅 0.5px 发丝环（xyflow 默认选中语言），拖拽仅提层。 */
+.evo-graph-node { position: absolute; background: color-mix(in srgb, var(--graph-node-surface) 70%, transparent); border: 1px solid var(--graph-node-border); border-radius: var(--graph-node-radius); padding: 0; cursor: grab; user-select: none; box-shadow: var(--graph-card-shadow); transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
+.evo-graph-node-sel { box-shadow: var(--graph-card-shadow), 0 0 0 0.5px var(--graph-node-title); }
+.evo-graph-node[data-pinned] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-trace) 42%, transparent), var(--graph-card-shadow); }
+.evo-graph-node-dragging { z-index: 30; cursor: grabbing; }
+/* 标题条：demo header——px-3 py-2（8px 12px）、font-mono text-xs(12px) font-semibold、
+   border-b #eef2f6、上圆角 16px。 */
+.evo-graph-node-titlebar { display: flex; align-items: center; gap: 7px; padding: 8px 12px; flex-shrink: 0; border-bottom: 1px solid var(--graph-node-border); border-radius: var(--graph-node-radius) var(--graph-node-radius) 0 0; }
 .evo-graph-node-resource { border-style: solid; }
 .evo-graph-node[data-status='missing'], .evo-graph-node[data-status='failed'] { border-color: var(--graph-status-missing); }
 .evo-graph-node[data-status='running'], .evo-graph-node[data-status='indexing'] { border-color: var(--graph-status-running); }
 .evo-graph-node-candidate { border-style: dashed; border-color: var(--graph-candidate); }
-.evo-graph-node-trace::after { content: '本轮已读取'; position: absolute; right: 6px; bottom: 4px; padding: 1px 4px; border-radius: 3px; background: color-mix(in srgb, var(--graph-trace) 16%, var(--graph-node-surface)); color: var(--graph-trace); font-size: 8px; line-height: 1.2; }
-.evo-graph-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 6px; color: #ffffff; flex-shrink: 0; }
-.evo-graph-node-chat .evo-graph-node-icon { background: var(--graph-chat); }
-.evo-graph-node-memory .evo-graph-node-icon { background: var(--graph-memory); }
-.evo-graph-node-memory[data-global] .evo-graph-node-icon { background: var(--graph-global); }
-.evo-graph-node-resource .evo-graph-node-icon { background: var(--graph-resource); }
+.evo-graph-node-trace::after { content: '本轮已读取'; position: absolute; right: 6px; bottom: 4px; padding: 1px 4px; border-radius: 4px; background: color-mix(in srgb, var(--graph-trace) 16%, var(--graph-node-surface)); color: var(--graph-trace); font-size: 8px; line-height: 1.2; font-family: var(--graph-font-mono); }
+.evo-graph-node-icon { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; flex-shrink: 0; }
+.evo-graph-node-chat .evo-graph-node-icon { color: var(--graph-chat); }
+.evo-graph-node-memory .evo-graph-node-icon { color: var(--graph-memory); }
+.evo-graph-node-memory[data-global] .evo-graph-node-icon { color: var(--graph-global); }
+.evo-graph-node-resource .evo-graph-node-icon { color: var(--graph-resource); }
 .evo-graph-node-icon svg { width: 11px; height: 11px; }
-.evo-graph-node-title { font-size: 12px; font-weight: 600; color: var(--graph-node-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
-/* 主体：socket 行 */
-.evo-graph-node-body { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 8px; min-width: 0; }
+.evo-graph-node-kind { flex: 1; min-width: 0; font-family: var(--graph-font-mono); font-size: 12px; font-weight: 600; color: var(--graph-node-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evo-graph-node-headermeta { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; }
+.evo-graph-node-candidate-badge { padding: 1px 6px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--graph-candidate) 45%, transparent); color: var(--graph-candidate); font-size: 8.5px; line-height: 1.3; font-family: var(--graph-font-mono); white-space: nowrap; }
+.evo-graph-node-scopechip { padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--graph-global) 12%, transparent); color: var(--graph-global); font-size: 8.5px; line-height: 1.3; font-family: var(--graph-font-mono); white-space: nowrap; }
+/* 标题移入主体：12px/16px 半粗，ellipsis 截断。 */
+.evo-graph-node-title { flex: 0 1 auto; font-size: 12px; font-weight: 600; line-height: 16px; color: var(--graph-node-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* 主体：demo body——实色 bg-background、rounded-b-2xl(16px)、p-3(12px)。 */
+.evo-graph-node-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; padding: 12px; min-width: 0; background: var(--graph-node-surface); border-radius: 0 0 var(--graph-node-radius) var(--graph-node-radius); overflow: hidden; }
 .evo-graph-socket-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .evo-graph-socket-row-out { margin-top: 1px; }
-/* socket：reactflow.dev 风格——白描边实心圆点 */
-.evo-graph-socket { width: 10px; height: 10px; border-radius: 999px; border: 2px solid #ffffff; cursor: crosshair; flex-shrink: 0; transition: transform 0.12s, box-shadow 0.12s; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25); }
-.evo-graph-socket-ctx { background: var(--graph-fork); }
-.evo-graph-socket-mem { background: var(--graph-memory); }
-.evo-graph-socket-out { background: var(--graph-chat); }
-.evo-graph-socket-hidden { visibility: hidden; pointer-events: none; }
-.evo-graph-socket:hover { transform: scale(1.45); box-shadow: 0 0 0 3px color-mix(in srgb, var(--graph-chat) 18%, transparent); }
-.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--color-text-secondary); white-space: nowrap; }
-.evo-graph-node-tag { font-size: 9.5px; color: var(--color-text-secondary); background: color-mix(in srgb, var(--color-text-primary) 8%, transparent); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; }
-/* 普通模式自然语言操作按钮（分支/参考/关系）：不依赖技术端口 */
-.evo-graph-node-actions { position: absolute; right: 5px; bottom: 3px; display: flex; gap: 3px; }
-.evo-graph-node-action { padding: 1px 6px; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--color-text-primary) 10%, transparent); color: var(--color-text-secondary); font-size: 9px; line-height: 1.4; cursor: pointer; font: inherit; transition: background 0.12s, color 0.12s; white-space: nowrap; flex-shrink: 0; }
-.evo-graph-node-action:hover { background: color-mix(in srgb, var(--brand) 18%, transparent); color: var(--brand); }
-.evo-graph-node-sid { font-size: 9.5px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.evo-graph-node-preview { font-size: 10px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* 连线：粗贝塞尔 + 类型色（Blender 风格：线在 socket 处衔接） */
-.evo-graph-edge { fill: none; stroke: var(--graph-disabled); stroke-width: 2px; }
-.evo-graph-edge-ctx { stroke: var(--graph-fork); stroke-width: 2.2px; }
-.evo-graph-edge-mem { stroke: var(--graph-reference); stroke-width: 2px; }
-.evo-graph-edge-relation { stroke: var(--graph-relation); stroke-width: 1.6px; stroke-dasharray: 5 4; }
-.evo-graph-canvas .react-flow__edge-path.evo-graph-edge-ctx { stroke: var(--graph-fork) !important; stroke-width: 2.2px; }
-.evo-graph-canvas .react-flow__edge-path.evo-graph-edge-mem { stroke: var(--graph-reference) !important; stroke-width: 2px; }
-.evo-graph-canvas .react-flow__edge-path.evo-graph-edge-relation { stroke: var(--graph-relation) !important; stroke-width: 1.6px; stroke-dasharray: 5 4; }
-.evo-graph-edge-disabled { opacity: 0.35; }
+/* socket：demo handle 同款（颜色/几何与 .react-flow__handle 规则一致） */
+.evo-graph-socket { width: 10px; height: 10px; border-radius: 100%; border: none; background: var(--graph-handle); cursor: crosshair; flex-shrink: 0; box-shadow: none; }
+.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--graph-muted); white-space: nowrap; }
+.evo-graph-node-sid { font-size: 12px; line-height: 16px; color: var(--graph-muted); font-family: var(--graph-font-mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-graph-node-preview { font-size: 12px; line-height: 16px; color: var(--graph-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* 连线：demo 风格平滑贝塞尔；类型色仅保留 fork/引用/关系三类语义 */
+/* 连线类型类（evo-graph-edge-ctx/mem/relation）仅供脚本计数与语义标注，
+   颜色/线宽全部经 BaseEdge 内联样式给出（与 demo 的内联 stroke 一致）。 */
 .evo-graph-edge-label-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.evo-graph-edge-linking { stroke: var(--graph-trace); stroke-dasharray: 6 4; stroke-width: 2.2px; }
 .evo-graph-edge-linking { stroke: var(--graph-trace); stroke-dasharray: 6 4; stroke-width: 2.2px; }
 /* 右键菜单：与面板同语言 */
 .evo-graph-menu { position: absolute; z-index: 50; min-width: 176px; padding: 5px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); display: flex; flex-direction: column; gap: 2px; }
@@ -1097,14 +1111,14 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-hint { padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--color-text-tertiary); font-size: 12.5px; text-align: center; line-height: 1.6; }
 .evo-graph-hint svg { width: 34px; height: 34px; color: var(--color-border); }
 /* compound group：标题是原生按钮，折叠不依赖颜色或精确点击坐标 */
-.evo-graph-group { position: relative; width: 100%; height: 100%; overflow: visible; border: 1px solid color-mix(in srgb, var(--graph-global) 55%, var(--graph-node-border)); border-radius: 10px; background: color-mix(in srgb, var(--graph-global) 8%, transparent); pointer-events: all; }
+.evo-graph-group { position: relative; width: 100%; height: 100%; overflow: visible; border: 1px solid color-mix(in srgb, var(--graph-global) 45%, var(--graph-node-border)); border-radius: var(--graph-node-radius); background: color-mix(in srgb, var(--graph-node-surface) 55%, transparent); box-shadow: var(--graph-card-shadow); pointer-events: all; }
 .evo-graph-group-experiment { border-color: color-mix(in srgb, var(--graph-resource) 65%, var(--graph-node-border)); background: color-mix(in srgb, var(--graph-resource) 8%, transparent); }
 .evo-graph-group-exploration { border-color: color-mix(in srgb, var(--graph-candidate) 65%, var(--graph-node-border)); background: color-mix(in srgb, var(--graph-candidate) 8%, transparent); }
 .evo-graph-group.collapsed { background: color-mix(in srgb, var(--graph-global) 16%, var(--graph-node-surface)); box-shadow: 0 3px 12px rgb(0 0 0 / 18%); }
 .evo-graph-group-header { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 5px 3px 8px; }
 .evo-graph-group-toggle { display: inline-flex; align-items: center; min-width: 0; flex: 1; padding: 3px 5px; border: 0; border-radius: 5px; background: transparent; color: var(--color-text-primary); cursor: pointer; font: inherit; text-align: left; }
 .evo-graph-group-toggle:hover { background: color-mix(in srgb, var(--brand) 10%, transparent); }
-.evo-graph-group-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 650; }
+.evo-graph-group-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 650; font-family: var(--graph-font-mono); }
 .evo-graph-group-count { flex: 0 0 auto; min-width: 20px; padding: 1px 5px; border-radius: 999px; background: color-mix(in srgb, var(--color-text-primary) 10%, transparent); color: var(--color-text-secondary); font-size: 10px; text-align: center; }
 /* 记忆节点内容编辑弹窗 */
 .evo-graph-editor-mask { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; }
@@ -1117,7 +1131,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-editor-hint { font-size: 11px; color: var(--color-text-tertiary); }
 /* GRAPH-04/08：引用节点展示（图标 + 文件名 + 实时预览） */
 .evo-graph-node-ref-icon { width: 12px; height: 12px; color: var(--color-text-secondary); flex-shrink: 0; }
-.evo-graph-node-ref-name { font-size: 10px; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.evo-graph-node-ref-name { font-size: 12px; line-height: 16px; color: var(--graph-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .evo-graph-node-preview-muted { color: var(--color-text-tertiary); }
 .evo-graph-node-preview-err { color: var(--graph-status-missing); }
 /* GRAPH-11：工具栏节点搜索框 */
@@ -1338,6 +1352,13 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  /* 例外：图谱连线虚线流动是画布的核心动态语义（对齐 reactflow.dev 官网，
+     官网在 reduced-motion 下同样流动），此时降速降密而非禁用。 */
+  .evo-graph-canvas .react-flow__edge.animated path,
+  .react-flow__connection .animated {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 /* ── 页面级错误（§33.4）── */
