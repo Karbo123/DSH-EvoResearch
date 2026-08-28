@@ -325,6 +325,7 @@ node scripts/check-docs.mjs
 5. **截图/临时脚本产物**：一律 `.tmp-dev/images/`；一次性调试脚本可放 `scripts/.tmp-*`（gitignore）或直接 `.tmp-dev/`。不得污染项目根、用户目录或数据目录。
 6. **数据目录**：EvoResearch 开发 Web 数据只进 `.tmp-dev/.evoresearch-data/`（主仓库）或 `.tmp-dev/.evoresearch-data-<分支名>-<worktree标识>/`（worktree，见 §2.2）；正式 Web 数据只进仓库根 `.evoresearch-data/`；官方 DSH 数据只在 `C:\Users\Karbo\.dsh`（勿写勿删）；桌面版数据只在 exe 同级 `.evoresearch-data/`。
 7. **URL 短化**：面向用户的 URL 一律用短键与可读短值——会话是 `?t=<slug>`（英文别名或 `s-<uuid 前8位>` 兜底，映射持久化于 `plugins/session-meta.json`，经 `sessionSlugEnsure/sessionSlugLookup` 分配与反查），键名一律单/双字符：`v`（视图）/`i`（检查器）/`it`（检查子标签）/`sb`（窄屏抽屉）/`r`（编辑重发文本），且**枚举值同样缩写**：`v=ws|sk|mem|sch|ch|tm|exp|note|lib`、`it=ws|ag|ch`；完整单词的旧链接仍兼容读取并自动升级为短形式。禁止再往分享链接里塞完整 `session-<uuid>` 或 `threadId=/view=/inspector=` 长参数。DSH 引擎层的 `session-<uuid>` 目录名不动，slug 只是 UI 层别名。新增任何 URL 参数先走这条规则。更完整的约定见 `docs/` 下的 URL 短化设计文档。
+8. **自动 Git 管理（用户明确要求，必须遵守）**：Agent 完成一个完整改动后**必须自动 `git add` + `git commit`，不等用户提醒**；提交只在**当前 worktree 的分支**上进行，不碰 main、不混入他人未提交的 WIP。详细规则见 §9.0。
 
 ---
 
@@ -358,6 +359,18 @@ node scripts/check-docs.mjs
 ---
 
 ## 9. Git 与发布自动化
+
+### 9.0 自动 Git 管理（⚠️ 用户明确要求，Agent 必须执行）
+
+> **核心要求：不要等用户提醒，完成即提交。** Agent 对本仓库的每次有意义的改动，都要**自动**完成 git 提交，把"改动躺在工作区里未提交"视为异常状态。
+
+- **自动提交时机**：每当完成一个完整、自洽的改动（一个功能、一个修复、一批文档更新），并且经过基本验证（构建/测试通过）后，**立即自动 `git add` + `git commit`**。不要批量攒到会话结束，更不要问用户"要不要提交"。
+- **提交位置（关键）**：一律在**当前 worktree 对应的分支**上提交（如 `claude/dev`）；**绝不直接在 main 上提交**，绝不把提交混进主仓库里他人未提交的 WIP。因此**禁止 `git add -A` / `git add .`**——只精确 add 自己本次改动的文件，避免误收别人的草稿。
+- **提交信息**：中文 conventional commits，格式 `type(scope): 一句话说明改了什么、为什么`（如 `feat(trajectory): 条长模式改为「按耗时/按回合」`）；**不带任何 co-author trailer**（见 §9.1）。
+- **提交粒度**：一个功能/一个修复一个 commit；同一次改动不要拆成碎片提交，也不要把多个不相关改动塞进同一个 commit。
+- **push**：worktree 功能分支默认**不自动 push**（用户要求或需要备份时再推）；`git push origin main` 仍按下方"日常"规则执行（工作树干净、`ahead N` 时）。
+- **异常兜底**：若工作区里存在不属于本次任务的他人 WIP，提交时只 add 自己的文件并照常 commit；发现改动无法通过构建时先修复再提交，确实修不完就先提交草稿并在 commit message 里注明 `WIP:`。
+- **worktree 清理联动**：删除某个 worktree 前，先确认其分支上没有未提交的成果（见 §9.2"成果及时 commit"）；删除分支前用 `git branch -d`（而非 `-D`）让 git 帮忙校验已合并。
 
 - **日常**：工作树干净、`ahead N` 时 `git push origin main`。
 - **CI 发布流水线**（`.github/workflows/release.yml`，**仅手动触发** workflow_dispatch）：
@@ -421,4 +434,4 @@ node scripts/check-docs.mjs
 
 ---
 
-*最后更新：2026-08-24（worktree 数据根使用“清洗后分支名 + 稳定 worktree 标识”，并加载当前 worktree profile 和构建产物；每个 worktree 需独立执行 `npm install`、`npm run build`，可并行开发与验收；3080 官方 DSH / EvoResearch Web 数据严格隔离）*
+*最后更新：2026-08-28（新增 §9.0 自动 Git 管理强规则：完成即自动 commit、只在当前 worktree 分支提交、禁 `git add -A`；worktree 数据根使用“清洗后分支名 + 稳定 worktree 标识”，并加载当前 worktree profile 和构建产物；每个 worktree 需独立执行 `npm install`、`npm run build`，可并行开发与验收；3080 官方 DSH / EvoResearch Web 数据严格隔离）*
