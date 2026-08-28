@@ -1183,9 +1183,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           [{ transform: `translateX(${previous}px)` }, { transform: `translateX(${shift}px)` }],
           { duration: 210, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' },
         )
-        neighborAnimationsRef.current[id].addEventListener('finish', () => {
-          delete neighborAnimationsRef.current[id]
-        }, { once: true })
       }
       from[id] = shift
     }
@@ -1305,6 +1302,13 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     if (s === null || s.id !== tabId) return
     clearHoldTimer()
     detachWinListeners()
+    // 先移除 WAAPI 的预览效果，再提交真实数组顺序，避免 fill:forwards 残留覆盖新布局。
+    for (const [id, animation] of Object.entries(neighborAnimationsRef.current)) {
+      animation.cancel()
+      const el = tabElRefs.current[id]
+      if (el !== null && el !== undefined) el.style.removeProperty('transform')
+    }
+    neighborAnimationsRef.current = {}
     // 提交拖拽落点：把被拖 tab 一次性移动到目标 index
     const from = origIndexRef.current
     const to = Math.min(Math.max(targetIdxRef.current, 0), tabsRef.current.length - 1)
