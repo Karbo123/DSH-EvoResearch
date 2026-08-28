@@ -90,3 +90,6 @@ HANDOFF.md
 
 # 验收脚本运行产物（截图/调试脚本，不入库）
 scripts/.tmp-*
+
+# Chat Graph 重设计计划书（不入库）
+TODO-*.md
