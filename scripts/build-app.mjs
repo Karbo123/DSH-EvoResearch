@@ -49,6 +49,30 @@ function generateKatexCss() {
 }
 
 /**
+ * 生成 src/client/monaco-css.ts：Monaco 编辑器基础样式（min/vs/editor/editor.main.css，
+ * 纯 CSS 无外部资源引用），构建期内联，供 installCss 注入。
+ */
+function generateMonacoCss() {
+  const cssPath = join(ROOT, 'node_modules', 'monaco-editor', 'min', 'vs', 'editor', 'editor.main.css')
+  let css = readFileSync(cssPath, 'utf8')
+  // codicon 图标字体内联：editor.main.css 里是相对路径 url(codicon/codicon.ttf)，
+  // 运行时会被解析到站点根导致 404；构建期换成 data URL（同 katex 字体处理）。
+  const fontDir = join(ROOT, 'node_modules', 'monaco-editor', 'min', 'vs', 'editor')
+  css = css.replace(/url\((?:\.\.\/)*base\/browser\/ui\/codicons\/codicon\/codicon\.(ttf|woff|woff2)\)/g, (_m, ext) => {
+    // min 版 CSS 从 editor/ 目录出发写 ../base/...；统一以 monaco-editor 根解析
+    const data = readFileSync(join(ROOT, 'node_modules', 'monaco-editor', 'min', 'vs', 'base', 'browser', 'ui', 'codicons', 'codicon', `codicon.${ext}`)).toString('base64')
+    const mime = ext === 'woff2' ? 'font/woff2' : ext === 'woff' ? 'font/woff' : 'font/ttf'
+    return `url(data:${mime};base64,${data})`
+  })
+  writeFileSync(
+    join(PKG, 'src', 'client', 'monaco-css.ts'),
+    `// 由 scripts/build-app.mjs 构建期生成（monaco-editor editor.main.css），勿手改、勿入库。\nexport const MONACO_CSS = ${JSON.stringify(css)}\n`,
+    'utf8',
+  )
+  console.log(`[build-app] monaco css → src/client/monaco-css.ts（${Math.round(css.length / 1024)} KB）`)
+}
+
+/**
  * 生成 src/client/xyflow-css.ts：@xyflow/react 的 style.css（React Flow
  * 必需的画布/连线/控件基础样式）。纯 CSS 无 url() 资源，直接内联。
  */
@@ -103,6 +127,8 @@ async function buildClient() {
   generateKatexCss()
   // 生成 React Flow（@xyflow/react）必需样式，供客户端注入
   generateXyflowCss()
+  // 生成 Monaco 编辑器基础样式，供客户端注入
+  generateMonacoCss()
   // Chat Graph 的 ELK 布局独立打包为 Worker payload，再以内联字符串注入
   // client bundle。这样插件仍只需要 DSH 的单一 client.js 端点，布局不会
   // 回退到主线程，也不会依赖 WebView2 对额外静态资源路由的支持。
@@ -117,6 +143,20 @@ async function buildClient() {
   })
   const workerSource = worker.outputFiles?.[0]?.text ?? ''
   if (workerSource === '') throw new Error('Chat Graph layout worker bundle is empty')
+  // Monaco editor worker 同款处理：独立打包为 IIFE 字符串，运行时经 Blob URL
+  // 供 MonacoEnvironment.getWorker 创建（语法高亮的 tokenizer 在主线程，
+  // worker 承担 diagnostics/计算服务，缺失时 Monaco 降级仍可用但需显式提供）。
+  const monacoWorker = await build({
+    entryPoints: [join(ROOT, 'node_modules', 'monaco-editor', 'esm', 'vs', 'editor', 'editor.worker.js')],
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: 'es2022',
+    write: false,
+    minify: true,
+  })
+  const monacoWorkerSource = monacoWorker.outputFiles?.[0]?.text ?? ''
+  if (monacoWorkerSource === '') throw new Error('Monaco editor worker bundle is empty')
   const tmp = join(PKG, 'lib', 'client', '.bundle.tmp.js')
   const out = join(PKG, 'lib', 'client', 'index.js')
   await build({
@@ -129,8 +169,11 @@ async function buildClient() {
     external: ['@deepseek-ai/*', 'react', 'react-dom', 'react/jsx-runtime'],
     sourcemap: false,
     minify: false,
+    // Monaco codicon 图标字体等资源内联为 data URL
+    loader: { '.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' },
     define: {
       '__CHATGRAPH_WORKER_SOURCE__': JSON.stringify(workerSource),
+      '__MONACO_WORKER_SOURCE__': JSON.stringify(monacoWorkerSource),
     },
   })
   const body = readFileSync(tmp, 'utf8')

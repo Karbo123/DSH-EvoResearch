@@ -12,19 +12,21 @@
  * 后端能力（会话、模型、工具）由 dsh-base 提供 —— 不重复造轮子。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useState, useEffect, useRef, useSyncExternalStore, Component } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useSyncExternalStore, Component } from 'react'
 import {
   PanelLeft, PanelLeftClose, PanelRight, PanelRightClose, SquarePen,
-  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, Save, FolderOpen,
+  MessagesSquare, Moon, Sun, Settings, Languages, X, Plus, FileText, FileCode2, FolderOpen, Share2, Activity,
 } from 'lucide-react'
 import { CSS } from './styles'
 import { KATEX_CSS } from './katex-css'
 import { XYFLOW_CSS } from './xyflow-css'
+import { MONACO_CSS } from './monaco-css'
 import { applyTheme, resolvedTheme, toggleTheme } from './theme'
 import { ThreadList, normalizeSessionsSnapshot, MENU, type SideView } from './threadlist'
 import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
 import { TabFileEditor } from './tab-file'
+import { ConfirmDialog } from './session-actions'
 import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
@@ -138,6 +140,7 @@ function installCss() {
     ['@evoresearch/dsh-app/workspace.css', CSS],
     ['@evoresearch/dsh-app/katex.css', KATEX_CSS],
     ['@evoresearch/dsh-app/xyflow.css', XYFLOW_CSS],
+    ['@evoresearch/dsh-app/monaco.css', MONACO_CSS],
   ]
   for (const [tagId, css] of sheets) {
     if (typeof document !== 'undefined' && document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) {
@@ -602,6 +605,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     // §44 短化 URL：占位 ?t=<uuid 前8位> 保证刷新窗口内仍可恢复；slug 分配完成后原位替换为可读别名
     patchUrl({ [URL_KEY_THREAD]: id.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
     void ensureThreadAlias(id, sessions.byId[id]?.displayTitle)
+    // 左侧选中会话 → 中间区显示对话（若对话 tab 已被关闭则重新加回）
+    openFixedTab('chat', t('chatTab'))
   }
   const startNewChat = (projectCwd?: string) => {
     justCreatedSessionRef.current = null
@@ -1248,7 +1253,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     filePath?: string
     root?: string
     draft?: string
+    /** 磁盘上最近一次读写到的内容（dirty 基准）。未保存改动 = draft !== original。 */
+    original?: string
   }
+  /** 仿照 VSCode：斜体=干净（未改动/已保存），正体=有未保存改动。 */
+  const isTabDirty = (tab: WorkspaceTab): boolean =>
+    tab.kind === 'editor' && tab.draft !== undefined && tab.original !== undefined && tab.draft !== tab.original
   const [tabs, setTabs] = useState<WorkspaceTab[]>([
     { id: 'chat', kind: 'chat', title: t('chatTab') },
     { id: 'chatgraph', kind: 'chatgraph', title: t('chatGraphTab') },
@@ -1261,6 +1271,218 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [tabBusy, setTabBusy] = useState(false)
   const tabFileInputRef = useRef<HTMLInputElement | null>(null)
   const tabNewRef = useRef<HTMLDivElement | null>(null)
+  // ── Tab 长按拖拽重排（ghost 预览模型）──
+  // 拖拽中**不修改 tabs 数组**，避免频繁重排反复打断动画造成闪烁：
+  //  - 被拖 tab 用 translateX(dragGhostX) 跟随指针
+  //  - 其它 tab 用 translateX(±width) 平滑让位（CSS transition 接管，不会被打断）
+  //  - 松开时才一次性提交真实数组顺序 → 无闪烁、不抖动。
+  const dragRef = useRef<{
+    id: string; pointerId: number; grabX: number; width: number
+    holdTimer: ReturnType<typeof setTimeout> | null
+    onWinMove: ((e: PointerEvent) => void) | null
+    onWinUp: ((e: PointerEvent) => void) | null
+    onWinCancel: ((e: PointerEvent) => void) | null
+    capturedEl: HTMLElement | null
+    bar: HTMLElement | null
+  } | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)          // 正在拖拽的 tab id
+  const dragActiveRef = useRef(false)                                // 拖拽是否已激活（0.1s 后置位）
+  const [dragTargetIdx, setDragTargetIdx] = useState(0)              // 被拖 tab 的目标落点 index
+  const targetIdxRef = useRef(0)                                      // endDrag 通过 window 旧闭包调用，落点必须读 ref
+  const [dragGhostX, setDragGhostX] = useState(0)                    // 被拖 tab 跟随指针的 translateX
+  const origIndexRef = useRef(-1)                                    // 拖拽开始时被拖 tab 的原 index
+  const startGeoRef = useRef<Record<string, { left: number; width: number }>>({}) // 拖拽开始时的自然位置快照
+  const tabElRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const neighborFromRef = useRef<Record<string, number>>({})
+  const neighborAnimationsRef = useRef<Record<string, Animation>>({})
+  const readAnimatedShift = (el: HTMLDivElement, fallback: number) => {
+    const transform = getComputedStyle(el).transform
+    const match = transform.match(/^matrix\([^,]+,[^,]+,[^,]+,[^,]+,\s*(-?[\d.]+),/)
+    return match === null ? fallback : Number(match[1])
+  }
+  useLayoutEffect(() => {
+    if (dragId === null || origIndexRef.current < 0) return
+    const from = neighborFromRef.current
+    const geo = startGeoRef.current
+    const ids = tabsRef.current.map((tab) => tab.id)
+    const d = origIndexRef.current
+    const target = dragTargetIdx
+    const dragged = dragRef.current
+    const step = dragged === null ? 0 : dragged.width + 2
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i]
+      if (id === dragId) continue
+      const el = tabElRefs.current[id]
+      const g = geo[id]
+      if (el === null || el === undefined || g === undefined || step === 0) continue
+      let shift = 0
+      if (d < target && i > d && i <= target) shift = -step
+      else if (d > target && i < d && i >= target) shift = step
+      const animation = neighborAnimationsRef.current[id]
+      if (animation !== undefined) {
+        animation.commitStyles()
+        const previous = readAnimatedShift(el, from[id] ?? shift)
+        animation.cancel()
+        from[id] = previous
+      }
+      const previous = from[id] ?? shift
+      if (Math.abs(previous - shift) > 0.5) {
+        neighborAnimationsRef.current[id] = el.animate(
+          [{ transform: `translateX(${previous}px)` }, { transform: `translateX(${shift}px)` }],
+          { duration: 210, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' },
+        )
+      }
+      from[id] = shift
+    }
+  }, [dragId, dragTargetIdx])
+  useEffect(() => () => {
+    for (const animation of Object.values(neighborAnimationsRef.current)) animation.cancel()
+    neighborAnimationsRef.current = {}
+  }, [])
+
+  const clearHoldTimer = () => {
+    const s = dragRef.current
+    if (s !== null && s.holdTimer !== null) { clearTimeout(s.holdTimer); s.holdTimer = null }
+  }
+  const detachWinListeners = () => {
+    const s = dragRef.current
+    if (s === null) return
+    if (s.onWinMove) window.removeEventListener('pointermove', s.onWinMove)
+    if (s.onWinUp) window.removeEventListener('pointerup', s.onWinUp)
+    if (s.onWinCancel) window.removeEventListener('pointercancel', s.onWinCancel)
+    if (s.capturedEl !== null) { try { s.capturedEl.releasePointerCapture(s.pointerId) } catch { /* 忽略 */ } }
+    if (s.bar !== null) { try { s.bar.style.overflowX = '' } catch { /* 忽略 */ } }
+    document.body.style.userSelect = ''
+    s.onWinMove = null; s.onWinUp = null; s.onWinCancel = null; s.capturedEl = null; s.bar = null
+  }
+  // 左键按住 0.1s → 进入拖拽模式，并把 move/up/cancel 挂到 window
+  const beginDragHold = (tab: WorkspaceTab, el: HTMLDivElement, e: { pointerId: number; clientX: number }) => {
+    if (tab.kind !== 'editor' && tab.kind !== 'pdf' && tab.kind !== 'chat' && tab.kind !== 'chatgraph' && tab.kind !== 'trajectory') return
+    if (dragRef.current !== null) return // 已有拖拽会话，忽略
+    const rect = el.getBoundingClientRect()
+    const pid = e.pointerId
+    const id = tab.id
+    const onWinMove = (we: PointerEvent) => {
+      if (dragRef.current === null || dragRef.current.pointerId !== pid) return
+      onTabDragMove(id, we.clientX)
+    }
+    const onWinUp = (we: PointerEvent) => {
+      if (dragRef.current === null || dragRef.current.pointerId !== pid) return
+      endDrag(id)
+    }
+    const onWinCancel = (we: PointerEvent) => {
+      if (dragRef.current === null || dragRef.current.pointerId !== pid) return
+      endDrag(id)
+    }
+    dragRef.current = { id, pointerId: pid, grabX: e.clientX, width: rect.width, holdTimer: null, onWinMove, onWinUp, onWinCancel, capturedEl: el, bar: null }
+    try { el.setPointerCapture(pid) } catch { /* 忽略捕获失败 */ }
+    const tabbar = document.querySelector<HTMLElement>('.evo-tabbar')
+    if (tabbar !== null) { tabbar.style.overflowX = 'hidden'; dragRef.current.bar = tabbar }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onWinMove)
+    window.addEventListener('pointerup', onWinUp)
+    window.addEventListener('pointercancel', onWinCancel)
+    const sessionRef = dragRef.current
+    sessionRef.holdTimer = setTimeout(() => {
+      if (dragRef.current !== sessionRef || dragRef.current.pointerId !== pid) return
+      dragActiveRef.current = true
+      origIndexRef.current = tabsRef.current.findIndex((t) => t.id === id)
+      const geo: Record<string, { left: number; width: number }> = {}
+      for (const t of tabsRef.current) {
+        const tabEl = tabElRefs.current[t.id]
+        const r = tabEl !== null && tabEl !== undefined ? tabEl.getBoundingClientRect() : null
+        geo[t.id] = { left: r !== null ? r.left : 0, width: r !== null ? r.width : 0 }
+      }
+      startGeoRef.current = geo
+      neighborFromRef.current = {}
+      targetIdxRef.current = Math.max(0, origIndexRef.current)
+      setDragTargetIdx(Math.max(0, origIndexRef.current))
+      setDragId(id)                       // 0.1s 长按 → 进入拖拽模式
+      setDragGhostX(0)
+    }, 100)
+  }
+  const onTabDragMove = (tabId: string, clientX: number) => {
+    const s = dragRef.current
+    if (s === null || s.id !== tabId) return
+    const dx = Math.abs(clientX - s.grabX)
+    if (!dragActiveRef.current) {
+      // 0.1s 内大幅移动 → 视为普通点击/滚动，取消长按并结束
+      if (dx > 8) { dragActiveRef.current = false; clearHoldTimer(); detachWinListeners(); dragRef.current = null; setDragId(null); setDragGhostX(0) }
+      return
+    }
+    // 被拖 tab 跟随指针，钳制在标签栏可见区间内（不飞出、不触发滚动）
+    const bar = s.bar !== null ? s.bar : document.querySelector<HTMLElement>('.evo-tabbar')
+    const geo = startGeoRef.current
+    const dragGeo = geo[tabId]
+    // 用被拖 tab 的中心而不是鼠标热点判定落点，保留按下时的抓取偏移，体感更符合直觉。
+    let dragCenter = clientX + (dragGeo !== undefined ? dragGeo.left + dragGeo.width / 2 - s.grabX : 0)
+    if (dragGeo !== undefined) {
+      const barRect = bar !== null ? bar.getBoundingClientRect() : null
+      const half = Math.max(0, Math.min(dragGeo.width / 2, barRect !== null ? (barRect.right - barRect.left) / 2 : dragGeo.width / 2))
+      if (barRect !== null) {
+        if (dragCenter < barRect.left + half) dragCenter = barRect.left + half
+        if (dragCenter > barRect.right - half) dragCenter = barRect.right - half
+      }
+      setDragGhostX(dragCenter - (dragGeo.left + dragGeo.width / 2))
+    }
+    const ids = tabsRef.current.map((t) => t.id)
+    const idx = ids.indexOf(tabId)
+    if (idx < 0) return
+    let target = origIndexRef.current
+    // 固定使用拖拽开始时的中点，避免让位 transform 反过来影响落点判定。
+    for (let i = 0; i < idx; i++) {
+      const g = geo[ids[i]]
+      if (g !== undefined && dragCenter < g.left + g.width / 2) { target = i; break }
+    }
+    if (target === origIndexRef.current) {
+      for (let i = ids.length - 1; i > idx; i--) {
+        const g = geo[ids[i]]
+        if (g !== undefined && dragCenter > g.left + g.width / 2) { target = i; break }
+      }
+    }
+    if (target !== targetIdxRef.current) {
+      targetIdxRef.current = target
+      setDragTargetIdx(target)
+    }
+  }
+  const endDrag = (tabId: string) => {
+    const s = dragRef.current
+    if (s === null || s.id !== tabId) return
+    clearHoldTimer()
+    detachWinListeners()
+    // 先移除 WAAPI 的预览效果，再提交真实数组顺序，避免 fill:forwards 残留覆盖新布局。
+    for (const [id, animation] of Object.entries(neighborAnimationsRef.current)) {
+      animation.cancel()
+      const el = tabElRefs.current[id]
+      if (el !== null && el !== undefined) el.style.removeProperty('transform')
+    }
+    neighborAnimationsRef.current = {}
+    // 提交拖拽落点：把被拖 tab 一次性移动到目标 index
+    const from = origIndexRef.current
+    const to = Math.min(Math.max(targetIdxRef.current, 0), tabsRef.current.length - 1)
+    if (from >= 0 && from < tabsRef.current.length && to >= 0 && to < tabsRef.current.length && from !== to) {
+      setTabs((prev) => {
+        if (from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev
+        const next = prev.slice()
+        const [moved] = next.splice(from, 1)
+        next.splice(to, 0, moved)
+        return next
+      })
+    }
+    dragActiveRef.current = false
+    origIndexRef.current = -1
+    targetIdxRef.current = 0
+    startGeoRef.current = {}
+    neighborFromRef.current = {}
+    dragRef.current = null
+    setDragId(null)
+    setDragTargetIdx(0)
+    setDragGhostX(0)
+  }
+  // 卸载时兜底清理拖拽监听/指针捕获
+  useEffect(() => () => { detachWinListeners() }, [])
+  // 待确认关闭的「有未保存改动」文件 tab
+  const [closeTabConfirmId, setCloseTabConfirmId] = useState<string | null>(null)
   // + 菜单位置（fixed 定位：脱离 tabbar 的 overflow 裁剪）
   const [tabMenuPos, setTabMenuPos] = useState<{ top: number; left: number } | null>(null)
   const toggleTabMenu = () => {
@@ -1296,6 +1518,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   tabsRef.current = tabs
   const tabNameOf = (path: string): string => path.slice(Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/')) + 1) || path
   const activateTab = (id: string) => { setActiveTabId(id); setTabMenuOpen(false) }
+  /**
+   * 打开固定类型 tab（对话/图谱/轨迹，各自最多同时 1 个）：
+   * 不存在则重新加入，存在则聚焦。关闭后可用 + 菜单或此函数加回来。
+   * @param title 已翻译的标题字符串（调用方传 t('chatTab') 等）。
+   */
+  const openFixedTab = (kind: 'chat' | 'chatgraph' | 'trajectory', title: string) => {
+    setTabs((prev) => (prev.some((t) => t.kind === kind) ? prev : [...prev, { id: kind, kind, title }]))
+    setActiveTabId(kind)
+    setTabMenuOpen(false)
+  }
   const openTabPdf = (path: string, root: string) => {
     const existing = tabsRef.current.find((tab) => tab.kind === 'pdf' && tab.filePath === path)
     if (existing !== undefined) { setActiveTabId(existing.id); setTabMenuOpen(false); return }
@@ -1315,10 +1547,24 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const updateTabDraft = (id: string, draft: string) => {
     setTabs((prev) => prev.map((tab) => (tab.id === id ? { ...tab, draft } : tab)))
   }
+  /** TabFileEditor 首次读取磁盘内容后上报原始内容，作为 dirty 基准。 */
+  const setTabLoaded = (id: string, original: string) => {
+    setTabs((prev) => prev.map((tab) => (tab.id === id ? { ...tab, original } : tab)))
+  }
+  /** 关闭文件 tab：有未保存改动时先弹确认（仿 VSCode）。 */
+  const requestCloseTab = (id: string) => {
+    const tab = tabsRef.current.find((t) => t.id === id)
+    if (tab !== undefined && isTabDirty(tab)) {
+      setCloseTabConfirmId(id)
+      return
+    }
+    closeTab(id)
+  }
   const closeTab = (id: string) => {
     setTabs((prev) => {
       const next = prev.filter((tab) => tab.id !== id)
-      if (activeTabId === id) setActiveTabId('chat')
+      // 关闭的是当前激活 tab 时，落到剩余第一个 tab（不再硬编码 chat，因为 chat 也可能被关闭）
+      if (activeTabId === id) setActiveTabId(next[0]?.id ?? 'chat')
       return next
     })
   }
@@ -1373,7 +1619,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }, [])
   // 轨迹面板「查看对话」→ 切回对话标签
   useEffect(() => {
-    const onJumpChat = () => { setActiveTabId('chat'); setTabMenuOpen(false) }
+    const onJumpChat = () => { openFixedTab('chat', t('chatTab')) }
     window.addEventListener('evo-traj-jump-chat', onJumpChat)
     return () => window.removeEventListener('evo-traj-jump-chat', onJumpChat)
   }, [])
@@ -1421,8 +1667,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ root: tab.root, path: tab.filePath, text: tab.draft ?? '' }),
     }).then((res) => res.json()).then((json) => {
-      if (json.ok === true) toast(t('saved'), 'success')
-      else toast(json.error?.message ?? t('llmSaveFailed'), 'error')
+      if (json.ok === true) {
+        setTabs((prev) => prev.map((t) => (t.id === tab.id ? { ...t, original: t.draft } : t)))
+        toast(t('saved'), 'success')
+      } else toast(json.error?.message ?? t('llmSaveFailed'), 'error')
     }).catch(() => { toast(t('llmSaveFailed'), 'error') })
   }
 
@@ -1635,13 +1883,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
               jsx('button', {
                 type: 'button',
                 className: 'evo-icon-btn',
-                onClick: () => { setInspector(true); setInspectorTab('chats') },
-                title: t('sideChats'),
-                children: jsx(MessagesSquare, {}),
-              }),
-              jsx('button', {
-                type: 'button',
-                className: 'evo-icon-btn',
                 onClick: toggleLanguage,
                 title: t('language'),
                 children: jsx(Languages, {}),
@@ -1754,25 +1995,56 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                     jsxs('div', {
                       className: 'evo-tabbar',
                       children: [
-                        tabs.map((tab) => jsxs('div', {
-                          className: 'evo-tab',
-                          'data-active': activeTabId === tab.id || undefined,
-                          onClick: () => activateTab(tab.id),
-                          children: [
-                            jsx('span', { className: 'evo-tab-title', children: tab.title }),
-                            (tab.kind === 'pdf' || tab.kind === 'editor') && jsx('button', {
-                              type: 'button',
-                              className: 'evo-tab-close',
-                              title: t('closeTab'),
-                              'aria-label': t('closeTab'),
-                              onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); closeTab(tab.id) },
-                              children: jsx(X, {}),
-                            }),
-                          ],
-                        }, tab.id)),
+                        tabs.map((tab, i) => {
+                          const dragging = dragId === tab.id
+                          // ghost 让位：拖拽中不重排数组，仅用 transform 让其它 tab 平滑让出一个位置
+                          const d = origIndexRef.current
+                          const target = dragTargetIdx
+                          // 一个让位槽 = 被拖 tab 宽度 + tabbar 的 2px gap，确保滑动后正好落入相邻槽位
+                          const step = dragRef.current !== null ? dragRef.current.width + 2 : 0
+                          let shift = 0
+                          if (!dragging && step !== 0 && d >= 0) {
+                            if (d < target && i > d && i <= target) shift = -step
+                            else if (d > target && i < d && i >= target) shift = step
+                          }
+                          const previewing = dragId !== null && d >= 0
+                          return jsxs('div', {
+                            ref: (el: HTMLDivElement | null) => { tabElRefs.current[tab.id] = el },
+                            className: `evo-tab${dragging ? ' evo-tab-dragging' : ''}`,
+                            'data-active': activeTabId === tab.id || undefined,
+                            'data-dirty': (tab.kind === 'editor' && isTabDirty(tab)) || undefined,
+                            style: dragging
+                              ? { transform: `translateX(${dragGhostX}px)`, zIndex: 40, position: 'relative', transition: 'none' }
+                              : previewing
+                                ? { transition: 'none' }
+                                : undefined,
+                            onClick: () => activateTab(tab.id),
+                            // 鼠标中键（button 1）点击 tab → 等价于按关闭键（干净直接关，脏弹确认）
+                            onAuxClick: (e: { button?: number; preventDefault(): void }) => {
+                              if (e.button === 1) { e.preventDefault(); requestCloseTab(tab.id) }
+                            },
+                            // 左键按住 0.1s 进入拖拽；松开结束（move/up 由 window 级监听处理）；关闭键不触发拖拽
+                            onPointerDown: (e: { button?: number; pointerId: number; clientX: number; target: EventTarget | null; currentTarget: HTMLDivElement }) => {
+                              if ((e.button ?? 0) !== 0) return
+                              if ((e.target as HTMLElement | null)?.closest?.('.evo-tab-close')) return
+                              beginDragHold(tab, e.currentTarget, { pointerId: e.pointerId, clientX: e.clientX })
+                            },
+                            children: [
+                              jsx('span', { className: `evo-tab-title${tab.kind === 'editor' ? ' evo-tab-title-file' : ''}${tab.kind === 'editor' && isTabDirty(tab) ? ' evo-tab-title-dirty' : ''}`, children: tab.title }),
+                              jsx('button', {
+                                type: 'button',
+                                className: 'evo-tab-close',
+                                title: t('closeTab'),
+                                'aria-label': t('closeTab'),
+                                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); requestCloseTab(tab.id) },
+                                children: jsx(X, {}),
+                              }),
+                            ],
+                          }, tab.id)
+                        }),
                         jsxs('div', {
                           ref: tabNewRef,
-                          className: 'evo-tab-new-wrap',
+                          className: `evo-tab-new-wrap${dragId !== null && origIndexRef.current !== tabs.length - 1 && dragTargetIdx === tabs.length - 1 ? ' evo-tab-new-wrap-drop-target' : ''}`,
                           children: [
                             jsx('button', {
                               type: 'button',
@@ -1786,6 +2058,25 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                               className: 'evo-tab-menu',
                               style: tabMenuPos ?? undefined,
                               children: [
+                                // 重新加回已关闭的固定标签（对话/图谱/轨迹）：各自最多同时 1 个
+                                !tabs.some((t) => t.kind === 'chat') && jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tab-menu-item',
+                                  onClick: () => openFixedTab('chat', t('chatTab')),
+                                  children: jsxs(Fragment, { children: [jsx(MessagesSquare, {}), jsx('span', { children: t('chatTab') })] }),
+                                }),
+                                !tabs.some((t) => t.kind === 'chatgraph') && jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tab-menu-item',
+                                  onClick: () => openFixedTab('chatgraph', t('chatGraphTab')),
+                                  children: jsxs(Fragment, { children: [jsx(Share2, {}), jsx('span', { children: t('chatGraphTab') })] }),
+                                }),
+                                !tabs.some((t) => t.kind === 'trajectory') && jsx('button', {
+                                  type: 'button',
+                                  className: 'evo-tab-menu-item',
+                                  onClick: () => openFixedTab('trajectory', t('trajectoryTab')),
+                                  children: jsxs(Fragment, { children: [jsx(Activity, {}), jsx('span', { children: t('trajectoryTab') })] }),
+                                }),
                                 // 从工作区打开（懒加载目录树）
                                 jsx('button', {
                                   type: 'button',
@@ -1861,7 +2152,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           currentSessionId: current ?? null,
                           onOpenSession: (id: string) => {
                             openSession(id)
-                            setActiveTabId('chat')
+                            openFixedTab('chat', t('chatTab'))
                           },
                           onCreateSession: async () => {
                             const cwdNow = current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
@@ -1886,11 +2177,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         })
                       }
                       if (activeTab.kind === 'editor' && activeTab.filePath !== undefined && activeTab.root !== undefined) {
+                        // key=activeTab.id：切到不同文件 tab 时强制重挂载 TabFileEditor，
+                        // 避免 React 复用同一实例（Milkdown/Monaco 在 [] deps 的 effect 里只初始化一次，
+                        // 复用会导致显示上一个文件的内容——md/非 md 内容串台的根因）。
                         return jsx(TabFileEditor, {
+                          key: activeTab.id,
                           path: activeTab.filePath,
                           root: activeTab.root,
                           draft: activeTab.draft,
                           onDraft: (text) => updateTabDraft(activeTab.id, text),
+                          onLoaded: (original) => setTabLoaded(activeTab.id, original),
                           onSave: () => saveTabEditor(activeTab),
                         })
                       }
@@ -1948,6 +2244,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
           settingsOpen && jsx(SettingsDialog, {
             onClose: () => setSettingsOpen(false),
+          }),
+          closeTabConfirmId !== null && jsx(ConfirmDialog, {
+            title: t('closeUnsavedTitle'),
+            message: t('closeUnsavedMessage'),
+            confirmLabel: t('closeUnsavedConfirm'),
+            danger: true,
+            onConfirm: () => { closeTab(closeTabConfirmId) },
+            onClose: () => setCloseTabConfirmId(null),
           }),
           brandMenuOpen && jsx('div', {
             ref: brandMenuRef,
