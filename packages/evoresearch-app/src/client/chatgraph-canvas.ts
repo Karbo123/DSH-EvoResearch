@@ -1,5 +1,5 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { t } from './i18n'
 import { MessageSquare, Database, FileText, Map as MapIcon } from 'lucide-react'
 import {
@@ -13,6 +13,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStoreApi,
   getBezierPath,
   type Connection,
   type EdgeProps,
@@ -46,6 +47,12 @@ interface GraphGroupData extends Record<string, unknown> {
   onToggleGroup: (groupId: string) => void
 }
 
+interface GraphEdgeData extends Record<string, unknown> {
+  graphEdge: GraphEdge
+  interactionState: { current: boolean }
+  onContextMenu: (event: MouseEvent, edge: GraphEdge) => void
+}
+
 type CanvasNode = XYNode<GraphNodeData | GraphGroupData>
 
 export interface ChatGraphCanvasProps {
@@ -76,7 +83,6 @@ export interface ChatGraphCanvasProps {
 }
 
 const nodeTypes = { graph: GraphNodeView, graphGroup: GraphGroupView }
-const edgeTypes = { graph: GraphEdgeView }
 
 function refDisplayName(refPath: string): string {
   const base = refPath.split(/[\\/]/).filter((part) => part !== '').pop() ?? refPath
@@ -234,31 +240,25 @@ function midpoint(points: readonly { x: number; y: number }[]): { x: number; y: 
   return points[points.length - 1]
 }
 
-function GraphEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd }: EdgeProps<XYEdge<{ graphEdge: GraphEdge; interacting?: boolean; onContextMenu: (event: MouseEvent, edge: GraphEdge) => void }>>) {
+const GraphEdgeView = memo(function GraphEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd }: EdgeProps<XYEdge<GraphEdgeData>>) {
   const graphEdge = data?.graphEdge
+  const interacting = data?.interactionState?.current === true
   const fallback = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
-  // 拖拽进行中忽略存储的路由拐点/旧标签位：端点实时更新而拐点陈旧会让曲线
-  // 「绕过旧位置」，视觉上即连线滞后。此时改用完全由实时端点生成的曲线。
-  const stored = data?.interacting ? [] : graphEdge?.routePoints ?? []
+  // 拖拽中忽略持久化的旧拐点，直接用当前端点生成单段曲线；组件本身 memo 化，
+  // 静止时才恢复持久化避障路线与标签位。这样 edge DOM 在拖拽全程保持稳定。
+  const stored = interacting ? [] : graphEdge?.routePoints ?? []
   const points = stored.length >= 2 ? [{ x: sourceX, y: sourceY }, ...stored.slice(1, -1), { x: targetX, y: targetY }] : []
   const path = points.length >= 2 ? routePath(points) : fallback[0]
   const label = graphEdge?.label?.trim() ?? ''
-  const labelPoint = !data?.interacting && graphEdge?.labelPosition !== undefined ? graphEdge.labelPosition : midpoint(points) ?? { x: fallback[1], y: fallback[2] }
+  const labelPoint = !interacting && graphEdge?.labelPosition !== undefined ? graphEdge.labelPosition : midpoint(points) ?? { x: fallback[1], y: fallback[2] }
   const isFork = graphEdge?.behavior === 'fork' || graphEdge?.toPort === 'context'
   const relation = graphEdge?.behavior === 'relation'
   const enabled = isFork || graphEdge?.enabled !== false && !relation
-  // demo 同款：描边/线宽走内联样式（stroke #d2d2d2 系），选中类不改变颜色（与官网一致）；
-  // 虚线流动动画由 edge.animated + xyflow 基础 CSS（dashdraw .5s linear infinite）驱动。
+  // 描边/线宽走内联样式；animated 由外层 EdgeWrapper + xyflow dashdraw 驱动。
   const stroke = isFork ? 'var(--graph-fork)' : relation ? 'var(--graph-edge-default)' : 'var(--graph-reference)'
+  const edgeClassName = `evo-graph-edge ${isFork ? 'evo-graph-edge-ctx' : relation ? 'evo-graph-edge-relation' : 'evo-graph-edge-mem'}${enabled ? '' : ' evo-graph-edge-disabled'}`
   return jsxs(Fragment, { children: [
-    jsx('g', { onContextMenu: (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); if (graphEdge !== undefined) data?.onContextMenu(event, graphEdge) }, children: jsx(BaseEdge, {
-      id,
-      path,
-      markerEnd,
-      interactionWidth: 20,
-      style: { stroke, strokeWidth: 2 },
-      className: `evo-graph-edge ${isFork ? 'evo-graph-edge-ctx' : relation ? 'evo-graph-edge-relation' : 'evo-graph-edge-mem'}${enabled ? '' : ' evo-graph-edge-disabled'}`,
-    }) }),
+    jsx('g', { onContextMenu: (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); if (graphEdge !== undefined) data?.onContextMenu(event, graphEdge) }, children: jsx(BaseEdge, { id, path, markerEnd, interactionWidth: 20, style: { stroke, strokeWidth: 2 }, className: edgeClassName }) }),
     !isFork && label !== '' && jsx(EdgeLabelRenderer, { children: jsx('div', {
       className: `evo-graph-edge-label${graphEdge?.labelHidden === true ? ' evo-graph-edge-label-hidden' : ''}`,
       'aria-label': graphEdge?.labelHidden === true ? t('graphEdgeLabelHidden').replace('{label}', label) : t('graphEdgeLabel').replace('{label}', label),
@@ -271,7 +271,9 @@ function GraphEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
       children: label.length > 42 ? `${label.slice(0, 41)}…` : label,
     }) }),
   ] })
-}
+})
+
+const edgeTypes = { graph: GraphEdgeView }
 
 function collapsedGroupOf(graph: ChatGraph, node: GraphNode): GraphGroup | undefined {
   const groups = new Map((graph.groups ?? []).map((group) => [group.id, group]))
@@ -396,7 +398,7 @@ function toXYNodes(props: ChatGraphCanvasProps): CanvasNode[] {
   return nodes
 }
 
-function toXYEdges(props: ChatGraphCanvasProps, xyNodes: readonly CanvasNode[], interacting: boolean): XYEdge<{ graphEdge: GraphEdge; interacting?: boolean; onContextMenu: (event: MouseEvent, edge: GraphEdge) => void }>[] {
+function toXYEdges(props: ChatGraphCanvasProps, xyNodes: readonly CanvasNode[], interactionState: { current: boolean }): XYEdge<GraphEdgeData>[] {
   const ids = new Set(xyNodes.map((node) => node.id))
   const nodeById = new Map(props.graph.nodes.map((node) => [node.id, node]))
   const endpoint = (id: string): string => {
@@ -407,21 +409,29 @@ function toXYEdges(props: ChatGraphCanvasProps, xyNodes: readonly CanvasNode[], 
   return props.graph.edges
     .map((edge) => ({ edge, source: endpoint(edge.from), target: endpoint(edge.to) }))
     .filter(({ source, target }) => ids.has(source) && ids.has(target) && source !== target)
-    .map(({ edge, source, target }) => ({
-      id: edge.id,
-      source,
-      // 端点常显（demo 同款），两种模式都绑定语义端口，连线终点落在圆心上；
-      // 折叠分组仍用默认端点。
-      sourceHandle: source.startsWith('group:') ? undefined : 'output',
-      target,
-      targetHandle: target.startsWith('group:') ? undefined : edge.toPort,
-      type: 'graph',
-      // demo 同款：全部连线 animated（xyflow 内置 dashdraw .5s 虚线流动）
-      // + transition-opacity duration-400（g 层淡入淡出）。
-      animated: true,
-      className: 'evo-edge-fade',
-      data: { graphEdge: edge, interacting, onContextMenu: props.onEdgeContextMenu },
-    }))
+    .map(({ edge, source, target }) => {
+      const isFork = edge.behavior === 'fork' || edge.toPort === 'context'
+      const relation = edge.behavior === 'relation'
+      const enabled = isFork || edge.enabled !== false && !relation
+      const stroke = isFork ? 'var(--graph-fork)' : relation ? 'var(--graph-edge-default)' : 'var(--graph-reference)'
+      const semanticClass = isFork ? 'evo-graph-edge-ctx' : relation ? 'evo-graph-edge-relation' : 'evo-graph-edge-mem'
+      return {
+        id: edge.id,
+        source,
+        // 端点常显（demo 同款），两种模式都绑定语义端口，连线终点落在圆心上；
+        // 折叠分组仍用默认端点。
+        sourceHandle: source.startsWith('group:') ? undefined : 'output',
+        target,
+        targetHandle: target.startsWith('group:') ? undefined : edge.toPort,
+        // 自定义 graph edge 始终保持同一组件实例；拖拽只切换 path 数据，避免
+        // graph/default 类型切换导致 SVG 卸载、动画重置或出现一帧空边。
+        type: 'graph',
+        style: { stroke, strokeWidth: 2 },
+        animated: true,
+        className: `evo-edge-fade evo-graph-edge ${semanticClass}${enabled ? '' : ' evo-graph-edge-disabled'}`,
+        data: { graphEdge: edge, interactionState, onContextMenu: props.onEdgeContextMenu },
+      }
+    })
 }
 
 export function ChatGraphCanvas(props: ChatGraphCanvasProps) {
@@ -441,28 +451,38 @@ function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
   // hasDefaultNodes 下同步 applyNodeChanges + 内部 setNodes —— 拖拽事件里节点与连线
   // 在同一次同步 store 更新中渲染（官网线条实时跟手的关键）。受控模式（nodes prop +
   // onNodesChange）会让变更绕 React state 一圈，连线端点明显慢半拍。
-  // 外部数据（图谱内容/选中/预览/轨迹/高级模式/拖拽状态）变化时用 useReactFlow
-  // 的 setNodes/setEdges 命令式同步，不再走受控 props。
+  const interactingRef = useRef(false)
+  // 外部数据通过公开的 store API 同步到非受控画布；拖拽期间只保留内部位置与
+  // 测量值，避免异步 props 重置 handleBounds，令 EdgeWrapper 短暂失去端点。
   const initialEdges = useMemo(
-    () => toXYEdges(propsRef.current, initialNodes, false),
+    () => toXYEdges(propsRef.current, initialNodes, interactingRef),
     [props.graph, props.advancedMode, initialNodes],
   )
-  const { fitView, setNodes: setStoreNodes, setEdges: setStoreEdges, getNodes: getStoreNodes } = useReactFlow()
-  const xyNodesRef = useRef(initialNodes)
-  const interactingRef = useRef(false)
-  const [interacting, setInteracting] = useState(false)
+  const { fitView, getNodes: getStoreNodes } = useReactFlow()
+  const flowStore = useStoreApi<CanvasNode, XYEdge<GraphEdgeData>>()
   useEffect(() => {
-    const fresh = toXYNodes(propsRef.current)
-    xyNodesRef.current = fresh
+    const fresh = initialNodes
     // 拖拽进行中保留画布当前位置（异步 props 更新不得把卡片传回存储位置）；
     // 否则（如整理布局预览）直接采用新位置。
-    setStoreNodes((current) => {
-      if (!interactingRef.current) return fresh
-      const positions = new Map(current.filter((node) => node.type === 'graph').map((node) => [node.id, node.position]))
-      return fresh.map((node) => (node.type === 'graph' && positions.has(node.id) ? { ...node, position: positions.get(node.id)! } : node))
+    const current = flowStore.getState().nodes
+    const currentById = new Map(current.map((node) => [node.id, node]))
+    const internals = flowStore.getState().nodeLookup
+    const next = fresh.map((node) => {
+      const currentNode = currentById.get(node.id)
+      const currentPosition = currentNode?.position
+      const measured = internals.get(node.id)?.measured
+      return {
+        ...node,
+        ...(measured?.width !== undefined && measured.height !== undefined ? { measured } : {}),
+        ...(interactingRef.current && node.type === 'graph' && currentPosition !== undefined ? { position: currentPosition } : {}),
+        ...(interactingRef.current && currentNode?.dragging === true ? { dragging: true } : {}),
+      }
     })
-    setStoreEdges(toXYEdges(propsRef.current, fresh, interacting))
-  }, [props.graph, props.visibleIds, props.matchedIds, props.selectedId, props.focusedNodeId, props.advancedMode, props.traceHighlightedIds, props.refPreviews, interacting, setStoreNodes, setStoreEdges])
+    flowStore.getState().setNodes(next)
+  }, [initialNodes, flowStore])
+  useEffect(() => {
+    flowStore.getState().setEdges(toXYEdges(propsRef.current, initialNodes, interactingRef))
+  }, [props.graph, props.advancedMode, initialNodes, flowStore])
   const [minimapOpen, setMinimapOpen] = useState(false)
   // XYFlow's MiniMap component does not forward arbitrary aria attributes.
   useEffect(() => {
@@ -479,7 +499,6 @@ function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
 
   const handleDragStop = (_event: unknown, _node: CanvasNode, draggedNodes?: CanvasNode[]) => {
     interactingRef.current = false
-    setInteracting(false)
     const changed = (draggedNodes ?? getStoreNodes() as unknown as CanvasNode[])
       .filter((node) => node.type === 'graph' && 'graphNode' in node.data)
       .map((node) => ({ id: (node.data as GraphNodeData).graphNode.id, x: Math.round(node.position.x), y: Math.round(node.position.y) }))
@@ -562,8 +581,15 @@ function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
         nodesDraggable: true,
         nodesConnectable: props.advancedMode,
         elementsSelectable: true,
+        preventScrolling: false,
+        zoomOnScroll: false,
+        panOnDrag: canvasSize.w > 1024,
+        // 官网 hero 明确关闭自动平移；否则拖到画布边缘时 viewport 在另一个
+        // requestAnimationFrame 管线移动，视觉上会把边的跟随误认为延迟。
+        autoPanOnNodeDrag: false,
+        autoPanOnConnect: false,
         deleteKeyCode: null,
-        onNodeDragStart: () => { interactingRef.current = true; setInteracting(true) },
+        onNodeDragStart: () => { interactingRef.current = true },
         onNodeDragStop: handleDragStop,
         onNodeClick: (_event: MouseEvent, node: CanvasNode) => { if (node.type === 'graph') props.onSelect((node.data as GraphNodeData).graphNode.id) },
         onPaneClick: () => { props.onSelect(null); props.onContextMenu(null) },

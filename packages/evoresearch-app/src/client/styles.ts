@@ -1052,8 +1052,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* 虚线流速：官网 0.5s 的两倍速（用户要求） */
 .evo-graph-canvas .react-flow__edge.animated path,
 .evo-graph-canvas .react-flow__connection .animated { animation-duration: 0.25s; }
-/* 拖拽时节点位移走合成器层（will-change 仅拖拽期挂载，避免常驻层数开销） */
-.evo-graph-canvas .react-flow__node.dragging { will-change: transform; }
 .evo-graph-canvas .react-flow__node .evo-graph-node { position: relative; left: auto; top: auto; }
 /* socket 标签/连线标签坐标由 JSX 内联样式给出（相对节点根定位），这里不再覆盖。 */
 .evo-graph-canvas .evo-graph-node > .evo-graph-node-body { position: static; }
