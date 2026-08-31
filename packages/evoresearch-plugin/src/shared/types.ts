@@ -217,7 +217,7 @@ export interface ChannelStatus {
   readonly error?: string
 }
 
-/** 模型设置（设置面板，参照 ResearchOS）：代码三档 / 视觉 / 图片生成 / 语音。 */
+/** 模型设置（设置面板）：文本四角色（杂活工/编码者/规划者/写作者）/ 视觉 / 图片生成。 */
 export interface ModelTierSetting {
   readonly model: string
   readonly provider: string
@@ -225,27 +225,36 @@ export interface ModelTierSetting {
   readonly reasoningEffort?: string
 }
 
+/** 文本模型四角色键：utility 杂活工 / coder 编码者 / planner 规划者 / writer 写作者。 */
+export const TEXT_MODEL_ROLES = ['utility', 'coder', 'planner', 'writer'] as const
+export type TextModelRole = (typeof TEXT_MODEL_ROLES)[number]
+
+/** 旧三档 → 新四角色迁移映射：simple→utility、medium→coder、complex→planner；writer 需另行配置。 */
+export const LEGACY_TIER_TO_ROLE: Record<string, TextModelRole> = { simple: 'utility', medium: 'coder', complex: 'planner' }
+
 export interface ModelSettings {
-  /** 写代码模型三档（§：lightweight/balanced/advanced）。 */
+  /** 文本模型四角色（按任务分工，非能力档位）。 */
   readonly code: {
-    readonly simple: ModelTierSetting
-    readonly medium: ModelTierSetting
-    readonly complex: ModelTierSetting
+    readonly utility: ModelTierSetting
+    readonly coder: ModelTierSetting
+    readonly planner: ModelTierSetting
+    readonly writer: ModelTierSetting
   }
   /** 图片识别（视觉）模型。 */
   readonly vision: ModelTierSetting
   /** 图片生成模型。 */
   readonly image: ModelTierSetting
-  /** 最近一次“应用/设为默认”选择的代码档；三档模型相同时仍能区分用户选择。 */
-  readonly defaultTier?: 'simple' | 'medium' | 'complex'
+  /** 最近一次“应用/设为默认”选择的角色；多个角色模型相同时仍能区分用户选择。 */
+  readonly defaultTier?: TextModelRole
 }
 
-/** 默认模型设置（与 ResearchOS 三档语义对齐）。 */
+/** 默认模型设置（文本四角色全部留空，由用户配置）。 */
 export const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   code: {
-    simple: { model: '', provider: '', reasoningEffort: '' },
-    medium: { model: '', provider: '', reasoningEffort: '' },
-    complex: { model: '', provider: '', reasoningEffort: '' },
+    utility: { model: '', provider: '', reasoningEffort: '' },
+    coder: { model: '', provider: '', reasoningEffort: '' },
+    planner: { model: '', provider: '', reasoningEffort: '' },
+    writer: { model: '', provider: '', reasoningEffort: '' },
   },
   vision: { model: '', provider: '' },
   image: { model: '', provider: '' },

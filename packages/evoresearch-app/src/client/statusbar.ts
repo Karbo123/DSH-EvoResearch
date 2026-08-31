@@ -130,7 +130,7 @@ export function StatusBar({ session }: { session: any }) {
   })
 }
 
-/** 输入框内右下侧的模型徽章：当前模型 + 推理强度，点击弹出三档模型下拉（与设置面板下拉同风格）。 */
+/** 输入框内右下侧的模型徽章：当前模型 + 推理强度，点击弹出文本四角色模型下拉（与设置面板下拉同风格）。 */
 export function ComposerModelInfo() {
   const [info, setInfo] = useState<{
     provider?: string | null
@@ -250,7 +250,8 @@ export function ComposerModelInfo() {
     const r = btnRef.current?.getBoundingClientRect()
     if (r !== undefined) {
       const menuWidth = Math.min(400, window.innerWidth - 24)
-      const upward = r.bottom + 360 > window.innerHeight && r.top > 360
+      // 四个角色选项约 480px 高（每项 ~110px + 提示行），超出视口或放不下时向上展开。
+      const upward = r.bottom + 480 > window.innerHeight && r.top > 480
       setPos({
         left: Math.min(Math.max(8, r.left), window.innerWidth - menuWidth - 8),
         top: upward ? r.top - 6 : r.bottom + 6,

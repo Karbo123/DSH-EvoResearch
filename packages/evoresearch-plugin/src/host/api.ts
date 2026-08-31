@@ -65,8 +65,9 @@ import type { ContextAssembler, AssembleInput, EffectQuery, AssemblyResult, Refe
 import type { CompactionQuery, GraphConnectionInfo, PressureReport, CompactionRecord, ContextSourceReport, SurfaceEventInfo } from './context/types.js'
 import { readSessionEvents } from './rewind.js'
 import { isLowInformationInput } from './core/title.js'
-import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ExperimentManifest, ExperimentSummary, ObservationEdgeType } from '../shared/types.js'
-import { DEFAULT_MODEL_SETTINGS } from '../shared/types.js'
+import type { ProjectInfo, MemoryPacket, TurnRecord, TopicState, GoalContract, GoalProposal, ScheduledTask, AutoSkillProposal, ModelSettings, ModelTierSetting, ExperimentManifest, ExperimentSummary, ObservationEdgeType } from '../shared/types.js'
+import { DEFAULT_MODEL_SETTINGS, TEXT_MODEL_ROLES, LEGACY_TIER_TO_ROLE } from '../shared/types.js'
+import type { TextModelRole } from '../shared/types.js'
 import type { ApprovalPolicy, ApprovalDecision } from './platform/approval-policy.js'
 import { decideApproval, defaultApprovalPolicy, validateApprovalPolicy } from './platform/approval-policy.js'
 import { unmarkUnattendedSession } from './platform/unattended-registry.js'
@@ -631,12 +632,31 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   readModelSettings(): ModelSettings {
     try {
-      const raw = JSON.parse(readFileSync(this.modelSettingsFile(), 'utf8')) as Partial<ModelSettings>
+      const raw = JSON.parse(readFileSync(this.modelSettingsFile(), 'utf8')) as Record<string, unknown>
+      const rawCode = (raw.code ?? {}) as Record<string, Partial<ModelTierSetting> | undefined>
+      // 旧三档（simple/medium/complex）→ 新四角色迁移：simple→utility、medium→coder、complex→planner；
+      // 新键已配置时以新键为准（不覆盖），writer 无旧档对应，保持留空待用户配置。
+      const migratedCode: Partial<Record<TextModelRole, Partial<ModelTierSetting>>> = {}
+      for (const [legacyKey, role] of Object.entries(LEGACY_TIER_TO_ROLE)) {
+        const legacy = rawCode[legacyKey]
+        if (legacy?.provider !== undefined || legacy?.model !== undefined) migratedCode[role] = legacy
+      }
+      const pick = (role: TextModelRole): Partial<ModelTierSetting> =>
+        rawCode[role] ?? migratedCode[role] ?? {}
+      const rawDefaultTier = typeof raw.defaultTier === 'string' ? raw.defaultTier : ''
+      const defaultRole = (rawDefaultTier in LEGACY_TIER_TO_ROLE
+        ? LEGACY_TIER_TO_ROLE[rawDefaultTier]
+        : (TEXT_MODEL_ROLES as readonly string[]).includes(rawDefaultTier) ? rawDefaultTier as TextModelRole : undefined)
       const merged: ModelSettings = {
-        code: { ...DEFAULT_MODEL_SETTINGS.code, ...(raw.code ?? {}) },
-        vision: { ...DEFAULT_MODEL_SETTINGS.vision, ...(raw.vision ?? {}) },
-        image: { ...DEFAULT_MODEL_SETTINGS.image, ...(raw.image ?? {}) },
-        ...(raw.defaultTier === 'simple' || raw.defaultTier === 'medium' || raw.defaultTier === 'complex' ? { defaultTier: raw.defaultTier } : {}),
+        code: {
+          utility: { model: '', provider: '', reasoningEffort: '', ...pick('utility') },
+          coder: { model: '', provider: '', reasoningEffort: '', ...pick('coder') },
+          planner: { model: '', provider: '', reasoningEffort: '', ...pick('planner') },
+          writer: { model: '', provider: '', reasoningEffort: '', ...pick('writer') },
+        },
+        vision: { model: '', provider: '', ...(raw.vision as Partial<ModelTierSetting> | undefined ?? {}) },
+        image: { model: '', provider: '', ...(raw.image as Partial<ModelTierSetting> | undefined ?? {}) },
+        ...(defaultRole !== undefined ? { defaultTier: defaultRole } : {}),
       }
       return merged
     } catch {
@@ -655,11 +675,23 @@ export class EvoResearchApiService extends TypertRemoteService {
     mkdirSync(path.dirname(file), { recursive: true })
     const current = this.readModelSettings()
     const patch = args?.patch ?? {}
+    // patch.code 若仍带旧三档键，先映射成新四角色再合并。
+    const rawPatchCode = (patch.code ?? {}) as Record<string, ModelTierSetting | undefined>
+    const patchCode: Record<string, ModelTierSetting | undefined> = {}
+    for (const [key, value] of Object.entries(rawPatchCode)) {
+      const role: string = LEGACY_TIER_TO_ROLE[key] ?? key
+      if ((TEXT_MODEL_ROLES as readonly string[]).includes(role)) patchCode[role] = value
+    }
     const merged: ModelSettings = {
-      code: { ...current.code, ...(patch.code ?? {}) },
+      code: {
+        utility: patchCode.utility ?? current.code.utility,
+        coder: patchCode.coder ?? current.code.coder,
+        planner: patchCode.planner ?? current.code.planner,
+        writer: patchCode.writer ?? current.code.writer,
+      },
       vision: { ...current.vision, ...(patch.vision ?? {}) },
       image: { ...current.image, ...(patch.image ?? {}) },
-      ...(patch.defaultTier === 'simple' || patch.defaultTier === 'medium' || patch.defaultTier === 'complex'
+      ...((patch.defaultTier !== undefined && TEXT_MODEL_ROLES.includes(patch.defaultTier))
         ? { defaultTier: patch.defaultTier }
         : (current.defaultTier !== undefined ? { defaultTier: current.defaultTier } : {})),
     }
@@ -669,19 +701,19 @@ export class EvoResearchApiService extends TypertRemoteService {
     return { ok: true }
   }
 
-  /** 应用代码模型某档为当前默认模型（agentDefaultModel.saveSelection）。 */
+  /** 应用文本模型某角色为当前默认模型（agentDefaultModel.saveSelection）。 */
   @Remote('modelSettingsApply')
-  modelSettingsApply(args: { tier: 'simple' | 'medium' | 'complex' }): { ok: boolean; provider?: string; model?: string; error?: string } {
+  modelSettingsApply(args: { tier: TextModelRole }): { ok: boolean; provider?: string; model?: string; error?: string } {
     const tier = args?.tier
-    if (tier !== 'simple' && tier !== 'medium' && tier !== 'complex') return { ok: false, error: 'tier 必须是 simple/medium/complex' }
+    if (!TEXT_MODEL_ROLES.includes(tier)) return { ok: false, error: 'tier 必须是 utility/coder/planner/writer' }
     const setting = this.readModelSettings().code[tier]
-    if (!setting.model || !setting.provider) return { ok: false, error: '该档未配置模型' }
+    if (!setting.model || !setting.provider) return { ok: false, error: '该角色未配置模型' }
     const agentDefaultModel = this.hostCtx?.get('agentDefaultModel')
     if (!agentDefaultModel || typeof agentDefaultModel.saveSelection !== 'function') {
       return { ok: false, error: 'agentDefaultModel 服务不可用' }
     }
     agentDefaultModel.saveSelection({ provider: setting.provider, model: setting.model })
-    // 记录用户实际选择的档位：三档模型相同时，仅靠“当前模型”无法区分档位。
+    // 记录用户实际选择的角色：多个角色模型相同时，仅靠“当前模型”无法区分角色。
     try {
       const file = this.modelSettingsFile()
       mkdirSync(path.dirname(file), { recursive: true })
@@ -689,7 +721,7 @@ export class EvoResearchApiService extends TypertRemoteService {
       const tmp = `${file}.tmp-${process.pid}`
       writeFileSync(tmp, JSON.stringify({ ...current, defaultTier: tier }, null, 2), 'utf8')
       renameSync(tmp, file)
-    } catch { /* 档位持久化失败不阻塞默认模型应用 */ }
+    } catch { /* 角色持久化失败不阻塞默认模型应用 */ }
     return { ok: true, provider: setting.provider, model: setting.model }
   }
 

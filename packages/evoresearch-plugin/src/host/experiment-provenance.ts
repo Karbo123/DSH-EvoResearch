@@ -6,6 +6,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { LEGACY_TIER_TO_ROLE } from '../shared/types.js'
 
 export interface Provenance {
   app: { name: string; version: string }
@@ -73,9 +74,19 @@ export function captureProvenance(opts: {
     const raw = JSON.parse(fs.readFileSync(settingsFile, 'utf8')) as Record<string, unknown>
     const code = raw.code as Record<string, { provider?: string; model?: string; reasoningEffort?: string }> | undefined
     if (code !== undefined) {
-      const tier = (raw.defaultTier as string | undefined) ?? 'medium'
+      // defaultTier 可能是旧三档（simple/medium/complex）或新四角色（utility/coder/planner/writer），
+      // 旧值按映射转换；未记录时按 coder（原 medium 的语义对应角色）兜底。
+      const rawTier = raw.defaultTier as string | undefined
+      const tier = rawTier !== undefined && LEGACY_TIER_TO_ROLE[rawTier] !== undefined
+        ? LEGACY_TIER_TO_ROLE[rawTier]
+        : (rawTier ?? 'coder')
       const selected = code[tier as keyof typeof code]
-      if (selected?.provider && selected?.model) model = { provider: selected.provider, model: selected.model }
+      if (selected === undefined || !selected.provider || !selected.model) {
+        // 新角色键不存在或未配置时，再尝试旧键兜底（未迁移的历史文件）
+        const legacyKey = Object.entries(LEGACY_TIER_TO_ROLE).find(([, r]) => r === tier)?.[0] ?? ''
+        const legacySel = code[legacyKey as keyof typeof code]
+        if (legacySel?.provider && legacySel?.model) model = { provider: legacySel.provider, model: legacySel.model }
+      } else if (selected?.provider && selected?.model) model = { provider: selected.provider, model: selected.model }
     }
     // 同时尝试读取 evoresearch 段的 memoryTokenBudget / auxiliaryModel（若存在）
     let memoryTokenBudget = (raw as { memoryTokenBudget?: unknown }).memoryTokenBudget

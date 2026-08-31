@@ -2,7 +2,7 @@
  * 设置面板：左侧 tab 导航 + 右侧配置 + 左上角「返回」（图标 + 文字）。
  * - 通用：权限模式 / 默认模型 / 插件清单 / 关于（主题与语言在顶栏，不重复）；
  * - 模型设置：1）模型提供商（Provider 接口配置 + 统一「已获取模型」列表）；
- *   2）模型分配（代码三档 / 图片识别 / 图片生成，从 Provider
+ *   2）模型分配（文本四角色 / 图片识别 / 图片生成，从 Provider
  *   模型列表选择并设置推理强度）；
  * - 清除数据。
  */
@@ -638,7 +638,7 @@ function AcademicSearchSection() {
   })
 }
 
-/** 模型分配（代码三档 + 视觉/图片）：provider / model / reasoningEffort 等。 */
+/** 模型分配（文本四角色 + 视觉/图片）：provider / model / reasoningEffort 等。 */
 interface AssignSetting {
   provider: string
   model: string
@@ -688,7 +688,7 @@ function ModelAssignSection() {
   const [error, setError] = useState<string | null>(null)
   const [migrated, setMigrated] = useState<Record<string, string>>({})
   const loadSeq = useRef(0)
-  /** 最近一次“应用/设为默认”选择的代码档（三档模型相同时也以此为准）。 */
+  /** 最近一次“应用/设为默认”选择的角色（多个角色模型相同时也以此为准）。 */
   const [storedDefaultTier, setStoredDefaultTier] = useState<string | null>(null)
 
   const providerModels = (providerId: string): AssignModelOption[] => {
@@ -751,7 +751,7 @@ function ModelAssignSection() {
       setProviders(providerList)
       setCatalog(groups)
       const raw = (ms.ok === true ? ms.value : {}) as Record<string, unknown>
-      setStoredDefaultTier(raw.defaultTier === 'simple' || raw.defaultTier === 'medium' || raw.defaultTier === 'complex' ? raw.defaultTier : null)
+      setStoredDefaultTier(raw.defaultTier === 'utility' || raw.defaultTier === 'coder' || raw.defaultTier === 'planner' || raw.defaultTier === 'writer' ? raw.defaultTier : null)
       const rawCode = (raw.code ?? {}) as Record<string, unknown>
       const ids = new Set(providerList.map((p) => p.id))
       const modelsOf = (providerId: string): AssignModelOption[] => {
@@ -761,9 +761,10 @@ function ModelAssignSection() {
         return (providerList.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ id: m.id, name: m.name !== '' ? m.name : m.id, supportedReasoning: m.supportedReasoning, input: null, output: null }))
       }
       const entries: Array<[string, Record<string, unknown>]> = [
-        ['simple', (rawCode.simple ?? {}) as Record<string, unknown>],
-        ['medium', (rawCode.medium ?? {}) as Record<string, unknown>],
-        ['complex', (rawCode.complex ?? {}) as Record<string, unknown>],
+        ['utility', (rawCode.utility ?? {}) as Record<string, unknown>],
+        ['coder', (rawCode.coder ?? {}) as Record<string, unknown>],
+        ['planner', (rawCode.planner ?? {}) as Record<string, unknown>],
+        ['writer', (rawCode.writer ?? {}) as Record<string, unknown>],
         ['vision', (raw.vision ?? {}) as Record<string, unknown>],
         ['image', (raw.image ?? {}) as Record<string, unknown>],
       ]
@@ -854,11 +855,12 @@ function ModelAssignSection() {
     setSaving(cardKey)
     setError(null)
     setSaveMsg((s) => ({ ...s, [cardKey]: '' }))
-    const patch: Record<string, unknown> = keys[0] === 'simple'
+    const patch: Record<string, unknown> = keys[0] === 'utility'
       ? { code: {
-          simple: { provider: assign.simple?.provider ?? '', model: assign.simple?.model ?? '', reasoningEffort: assign.simple?.reasoningEffort ?? '' },
-          medium: { provider: assign.medium?.provider ?? '', model: assign.medium?.model ?? '', reasoningEffort: assign.medium?.reasoningEffort ?? '' },
-          complex: { provider: assign.complex?.provider ?? '', model: assign.complex?.model ?? '', reasoningEffort: assign.complex?.reasoningEffort ?? '' },
+          utility: { provider: assign.utility?.provider ?? '', model: assign.utility?.model ?? '', reasoningEffort: assign.utility?.reasoningEffort ?? '' },
+          coder: { provider: assign.coder?.provider ?? '', model: assign.coder?.model ?? '', reasoningEffort: assign.coder?.reasoningEffort ?? '' },
+          planner: { provider: assign.planner?.provider ?? '', model: assign.planner?.model ?? '', reasoningEffort: assign.planner?.reasoningEffort ?? '' },
+          writer: { provider: assign.writer?.provider ?? '', model: assign.writer?.model ?? '', reasoningEffort: assign.writer?.reasoningEffort ?? '' },
         } }
       : { [keys[0]]: assign[keys[0]] }
     void (async () => {
@@ -869,14 +871,14 @@ function ModelAssignSection() {
           body: JSON.stringify({ patch }),
         }).then((r) => r.json())
         if (saved.ok !== true) throw new Error(saved.error?.message ?? t('assignSaveFailed'))
-        // 代码模型卡片：配置即默认——保存后自动把“当前档位”设为默认模型。
-        // 以用户最近一次选择的档位为准（修改模型配置不改变档位归属）；
-        // 尚未选过档位时才按均衡档 > 轻量档 > 深度档的优先级兜底。
-        if (keys[0] === 'simple') {
-          const stored = storedDefaultTier === 'simple' || storedDefaultTier === 'medium' || storedDefaultTier === 'complex' ? storedDefaultTier : null
+        // 文本模型卡片：配置即默认——保存后自动把“当前角色”设为默认模型。
+        // 以用户最近一次选择的角色为准（修改模型配置不改变角色归属）；
+        // 尚未选过角色时才按 coder > planner > utility > writer 的优先级兜底。
+        if (keys[0] === 'utility') {
+          const stored = storedDefaultTier === 'utility' || storedDefaultTier === 'coder' || storedDefaultTier === 'planner' || storedDefaultTier === 'writer' ? storedDefaultTier : null
           const defaultTier = (stored !== null && assign[stored] !== undefined && assign[stored]?.provider !== '' && assign[stored]?.model !== ''
             ? stored
-            : (['medium', 'simple', 'complex'] as const).find((tier) => {
+            : (['coder', 'planner', 'utility', 'writer'] as const).find((tier) => {
             const v = assign[tier]
             return v !== undefined && v.provider !== '' && v.model !== ''
           }))
@@ -975,9 +977,10 @@ function ModelAssignSection() {
     return p !== undefined && p.displayName !== '' ? p.displayName : id
   }
   const tierMeta: Record<string, { name: string; desc: string }> = {
-    simple: { name: t('tierSimple'), desc: t('tierSimpleDesc') },
-    medium: { name: t('tierMedium'), desc: t('tierMediumDesc') },
-    complex: { name: t('tierComplex'), desc: t('tierComplexDesc') },
+    utility: { name: t('tierUtility'), desc: t('tierUtilityDesc') },
+    coder: { name: t('tierCoder'), desc: t('tierCoderDesc') },
+    planner: { name: t('tierPlanner'), desc: t('tierPlannerDesc') },
+    writer: { name: t('tierWriter'), desc: t('tierWriterDesc') },
   }
 
   /** 连通性测试：对卡片内已选模型逐个发极短请求（相同 provider+model 只测一次）。 */
@@ -1054,7 +1057,7 @@ function ModelAssignSection() {
                   jsx('span', { className: 'evo-assign-head-title', children: t('settingsCodeModel') }),
                   jsx('span', { className: 'evo-assign-head-desc', children: t('codeModelHint') }),
                 ] }),
-                ['simple', 'medium', 'complex'].map((tier) => jsxs('div', { className: 'evo-assign-tier', children: [
+                ['utility', 'coder', 'planner', 'writer'].map((tier) => jsxs('div', { className: 'evo-assign-tier', children: [
                   jsxs('div', { className: 'evo-assign-tier-head', children: [
                     jsx('span', { className: 'evo-assign-tier-name', children: tierMeta[tier].name }),
                     jsx('span', { className: 'evo-assign-tier-desc', children: tierMeta[tier].desc }),
@@ -1070,20 +1073,20 @@ function ModelAssignSection() {
                   jsx('button', {
                     type: 'button',
                     className: 'evo-btn evo-btn-test',
-                    disabled: saving !== null || testState['simple+medium+complex']?.busy === true,
-                    onClick: () => testCard(['simple', 'medium', 'complex']),
-                    children: jsxs(Fragment, { children: [jsx(Zap, {}), jsx('span', { children: testState['simple+medium+complex']?.busy === true ? t('testModelBusy') : t('testModel') })] }),
+                    disabled: saving !== null || testState['utility+coder+planner+writer']?.busy === true,
+                    onClick: () => testCard(['utility', 'coder', 'planner', 'writer']),
+                    children: jsxs(Fragment, { children: [jsx(Zap, {}), jsx('span', { children: testState['utility+coder+planner+writer']?.busy === true ? t('testModelBusy') : t('testModel') })] }),
                   }),
                   jsx('button', {
                     type: 'button',
                     className: 'evo-btn evo-btn-ok',
                     disabled: saving !== null,
-                    onClick: () => saveCard(['simple', 'medium', 'complex']),
+                    onClick: () => saveCard(['utility', 'coder', 'planner', 'writer']),
                     children: jsxs(Fragment, { children: [jsx(Cpu, {}), jsx('span', { children: saving !== null ? t('saving') : t('save') })] }),
                   }),
                 ] }),
                 (() => {
-                  const key = 'simple+medium+complex'
+                  const key = 'utility+coder+planner+writer'
                   const saved = saveMsg[key] ?? ''
                   const tst = testState[key]
                   if (saved !== '') return jsx('div', { className: 'evo-assign-test ok', children: saved })

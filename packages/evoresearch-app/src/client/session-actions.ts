@@ -292,11 +292,13 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   })
 }
 
-export const TIER_KEYS = ['simple', 'medium', 'complex'] as const
+/** 文本模型四角色键（与后端 TEXT_MODEL_ROLES 对齐）。 */
+export const TIER_KEYS = ['utility', 'coder', 'planner', 'writer'] as const
 export const tierMeta: Record<string, { name: string; desc: string }> = {
-  simple: { name: t('tierSimple'), desc: t('tierSimpleDesc') },
-  medium: { name: t('tierMedium'), desc: t('tierMediumDesc') },
-  complex: { name: t('tierComplex'), desc: t('tierComplexDesc') },
+  utility: { name: t('tierUtility'), desc: t('tierUtilityDesc') },
+  coder: { name: t('tierCoder'), desc: t('tierCoderDesc') },
+  planner: { name: t('tierPlanner'), desc: t('tierPlannerDesc') },
+  writer: { name: t('tierWriter'), desc: t('tierWriterDesc') },
 }
 
 export function effortLabel(level: string): string | null {

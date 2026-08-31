@@ -804,7 +804,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-model svg { width: 11px; height: 11px; flex-shrink: 0; }
 .evo-composer-model-name { min-width: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .evo-composer-model-effort { min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; font-weight: 400; opacity: 0.88; }
-.evo-composer-model-menu { position: fixed; z-index: 3000; width: min(400px, calc(100vw - 24px)); max-height: 340px; overflow-y: auto; padding: 6px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; gap: 4px; }
+.evo-composer-model-menu { position: fixed; z-index: 3000; width: min(400px, calc(100vw - 24px)); max-height: 440px; overflow-y: auto; padding: 6px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; gap: 4px; }
 .evo-composer-model-menu-hint { padding: 4px 8px 6px; font-size: 11px; color: var(--color-text-tertiary); line-height: 1.5; }
 .evo-composer-model-menu .evo-tier-option { padding: 9px 12px; gap: 5px; }
 .evo-composer-model-menu .evo-setting-hint { padding: 6px 8px; font-size: 12px; }

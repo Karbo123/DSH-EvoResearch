@@ -797,20 +797,22 @@ export function registerWorkspaceApi(ctx: any): void {
             if (evoresearch?.modelSettingsGet !== undefined) {
               const settings = await evoresearch.modelSettingsGet() as { code?: Record<string, { provider?: string; model?: string; reasoningEffort?: string }>; defaultTier?: string } | undefined
               const code = settings?.code ?? {}
-              // 档位是权威：用户最近一次实际选择的档位决定“当前”归属，
-              // 不按模型名重新匹配——即使三档模型相同、或之后在设置面板里
-              // 修改了各档位对应的模型，档位身份保持不变（defaultTier 在应用档位时持久化）。
-              const stored = settings?.defaultTier
-              if (stored === 'simple' || stored === 'medium' || stored === 'complex') {
+              // 角色是权威：用户最近一次实际选择的角色决定“当前”归属，
+              // 不按模型名重新匹配——即使多个角色模型相同、或之后在设置面板里
+              // 修改了各角色对应的模型，角色身份保持不变（defaultTier 在应用角色时持久化）。
+              const stored = typeof settings?.defaultTier === 'string' && ['utility', 'coder', 'planner', 'writer'].includes(settings.defaultTier)
+                ? settings.defaultTier
+                : null
+              if (stored !== null) {
                 const cfg = code[stored]
                 if (cfg !== undefined && cfg.provider !== undefined && cfg.provider !== '' && cfg.model !== undefined && cfg.model !== '') {
                   tier = stored
                   reasoningEffort = cfg.reasoningEffort ?? null
                 }
               }
-              // 未记录档位或当前模型已变化（不再匹配已存档位）时，回退到按模型匹配。
+              // 未记录角色或当前模型已变化（不再匹配已存角色）时，回退到按模型匹配。
               if (tier === null) {
-                for (const t of ['simple', 'medium', 'complex'] as const) {
+                for (const t of ['utility', 'coder', 'planner', 'writer'] as const) {
                   const cfg = code[t]
                   if (cfg !== undefined && cfg.provider === selection.provider && cfg.model === selection.model) {
                     tier = t
@@ -1268,13 +1270,13 @@ export function registerWorkspaceApi(ctx: any): void {
                   if (ms !== undefined && typeof ms === 'object') {
                     const patchMs: Record<string, unknown> = {}
                     const code = (ms.code ?? {}) as Record<string, { provider?: string } | undefined>
-                    const codeChanged = ['simple', 'medium', 'complex'].some((tier) => code[tier]?.provider === oldId)
+                    // 新旧键都检查：历史文件可能仍存旧三档键（后端读取时会迁移，但文件未重写前旧键仍在）。
+                    const codeKeys = ['utility', 'coder', 'planner', 'writer', 'simple', 'medium', 'complex']
+                    const codeChanged = codeKeys.some((tier) => code[tier]?.provider === oldId)
                     if (codeChanged) {
-                      patchMs.code = {
-                        simple: { ...(code.simple ?? {}), ...(code.simple?.provider === oldId ? { provider: newId } : {}) },
-                        medium: { ...(code.medium ?? {}), ...(code.medium?.provider === oldId ? { provider: newId } : {}) },
-                        complex: { ...(code.complex ?? {}), ...(code.complex?.provider === oldId ? { provider: newId } : {}) },
-                      }
+                      patchMs.code = Object.fromEntries(codeKeys
+                        .filter((tier) => code[tier] !== undefined)
+                        .map((tier) => [tier, { ...code[tier], ...(code[tier]?.provider === oldId ? { provider: newId } : {}) }]))
                     }
                     for (const key of ['vision', 'image']) {
                       const entry = ms[key] as Record<string, unknown> | undefined
@@ -1593,7 +1595,8 @@ export function registerWorkspaceApi(ctx: any): void {
           for (const key of ['code', 'vision', 'image']) {
             const entry = (patch as Record<string, unknown>)[key]
             if (key === 'code' && entry !== null && typeof entry === 'object') {
-              for (const tier of ['simple', 'medium', 'complex']) collect((entry as Record<string, unknown>)[tier])
+              // 新四角色键 + 旧三档键都收集（旧键由后端读取时迁移，但注册模型仍需覆盖）。
+              for (const tier of ['utility', 'coder', 'planner', 'writer', 'simple', 'medium', 'complex']) collect((entry as Record<string, unknown>)[tier])
             } else {
               collect(entry)
             }
@@ -1612,9 +1615,12 @@ export function registerWorkspaceApi(ctx: any): void {
         if (method === 'model-settings-apply') {
           if (evoresearch?.modelSettingsApply === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const tier = payload.tier
-          if (tier !== 'simple' && tier !== 'medium' && tier !== 'complex') throw httpError(400, 'bad-tier', 'tier 必须是 simple/medium/complex')
+          // 旧三档键兼容：映射到新四角色（simple→utility、medium→coder、complex→planner）。
+          const legacyMap: Record<string, string> = { simple: 'utility', medium: 'coder', complex: 'planner' }
+          const role = typeof tier === 'string' && legacyMap[tier] !== undefined ? legacyMap[tier] : tier
+          if (role !== 'utility' && role !== 'coder' && role !== 'planner' && role !== 'writer') throw httpError(400, 'bad-tier', 'tier 必须是 utility/coder/planner/writer')
           try {
-            const result = await (evoresearch.modelSettingsApply as (a: { tier: string }) => Promise<unknown>).call(evoresearch, { tier })
+            const result = await (evoresearch.modelSettingsApply as (a: { tier: string }) => Promise<unknown>).call(evoresearch, { tier: role })
             writeOk(res, result)
           } catch (error) {
             writeError(res, error)
