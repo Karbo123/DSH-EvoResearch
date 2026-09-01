@@ -182,6 +182,33 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
     rmSync(koffiMusl, { recursive: true, force: true })
     console.log('[bundle-sidecar] 裁剪 koffi musl 变体（glibc 环境无用且阻断 AppImage 打包）')
   }
+  // koffi 全平台变体裁剪（open-websearch 依赖的嵌套 koffi 在 build/koffi/ 下带 18 个
+  // 平台的 prebuilds）：只保留当前 OS 家族。openbsd/freebsd 等 ELF 变体会让 AppImage
+  // 的 linuxdeploy 解析依赖直接失败（openbsd_x64 链接的 libc++.so.9.0 在 runner 上
+  // 不存在，2026-09 release 首次暴露）；非本平台变体运行时也永远不会加载。
+  const keepKoffiPrefix = process.platform === 'win32' ? 'win32_' : process.platform === 'darwin' ? 'darwin_' : 'linux_'
+  const pruneKoffiBuilds = (dir, depth = 0) => {
+    if (depth > 10) return
+    let entries = []
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const full = join(dir, entry.name)
+      if (entry.name === 'koffi' && existsSync(join(full, 'build', 'koffi'))) {
+        const platformsDir = join(full, 'build', 'koffi')
+        let removed = 0
+        for (const platform of readdirSync(platformsDir, { withFileTypes: true })) {
+          if (!platform.isDirectory() || platform.name.startsWith(keepKoffiPrefix)) continue
+          rmSync(join(platformsDir, platform.name), { recursive: true, force: true })
+          removed += 1
+        }
+        if (removed > 0) console.log(`[bundle-sidecar] 裁剪 koffi 非本平台变体 ×${removed}（仅保留 ${keepKoffiPrefix}*）：${full.replace(nodeModules, '')}`)
+        continue
+      }
+      pruneKoffiBuilds(full, depth + 1)
+    }
+  }
+  pruneKoffiBuilds(nodeModules)
 })
 
 step('复制 launch.js', () => {

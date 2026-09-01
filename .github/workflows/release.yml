@@ -239,7 +239,7 @@ jobs:
 
       - name: 初始化 Android 工程（gen/android 不入库）
         working-directory: desktop/src-tauri
-        run: cargo tauri android init || echo "gen/android 已存在"
+        run: npx tauri android init || echo "gen/android 已存在"
 
       - name: Tauri Android 构建（APK，--config 套用 android 配置）
         working-directory: desktop/src-tauri
@@ -255,7 +255,7 @@ jobs:
           else
             echo "::notice::未配置签名密钥（ANDROID_KEYSTORE_BASE64 等 secrets），产出 unsigned/debug APK"
           fi
-          cargo tauri android build --apk --split-per-abi $CONFIG_ARGS
+          npx tauri android build --apk --split-per-abi $CONFIG_ARGS
 
       - name: 收集 APK 产物
         id: collect_apks
