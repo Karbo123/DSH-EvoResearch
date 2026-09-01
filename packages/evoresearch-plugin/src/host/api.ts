@@ -703,7 +703,7 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   /** 应用文本模型某角色为当前默认模型（agentDefaultModel.saveSelection）。 */
   @Remote('modelSettingsApply')
-  modelSettingsApply(args: { tier: TextModelRole }): { ok: boolean; provider?: string; model?: string; error?: string } {
+  async modelSettingsApply(args: { tier: TextModelRole }): Promise<{ ok: boolean; provider?: string; model?: string; error?: string }> {
     const tier = args?.tier
     if (!TEXT_MODEL_ROLES.includes(tier)) return { ok: false, error: 'tier 必须是 utility/coder/planner/writer' }
     const setting = this.readModelSettings().code[tier]
@@ -712,7 +712,9 @@ export class EvoResearchApiService extends TypertRemoteService {
     if (!agentDefaultModel || typeof agentDefaultModel.saveSelection !== 'function') {
       return { ok: false, error: 'agentDefaultModel 服务不可用' }
     }
-    agentDefaultModel.saveSelection({ provider: setting.provider, model: setting.model })
+    // saveSelection 内部走 settings 写队列（异步落盘+commit），必须等它完成后再返回，
+    // 否则前端紧随其后的 /models 读取仍拿到旧模型（徽章显示不切换）。
+    await agentDefaultModel.saveSelection({ provider: setting.provider, model: setting.model })
     // 记录用户实际选择的角色：多个角色模型相同时，仅靠“当前模型”无法区分角色。
     try {
       const file = this.modelSettingsFile()

@@ -166,18 +166,30 @@ export function ComposerModelInfo() {
     }
   }, [])
 
-  // 打开时惰性加载三档配置（与设置面板同一数据源），只加载一次。
+  // 打开时惰性加载四角色配置（与设置面板同一数据源）；
+  // tiers/names 只加载一次，但 current（「当前」高亮）每次打开都刷新——
+  // 否则切换角色后再次打开菜单，高亮仍停留在旧角色。
   useEffect(() => {
-    if (!open || tiers !== null) return
+    if (!open) return
     let cancelled = false
+    const loadCurrent = fetch('/evoresearch/fs/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((r) => r.json()).catch(() => ({ ok: false }))
+      .then((currentJson) => {
+        if (!cancelled && currentJson.ok === true) {
+          setCurrent({ provider: currentJson.value?.provider ?? null, model: currentJson.value?.model ?? null, tier: currentJson.value?.tier ?? null })
+        }
+      })
+    if (tiers !== null && names.providers.size > 0) {
+      void loadCurrent
+      return () => { cancelled = true }
+    }
     void Promise.all([
       fetch('/evoresearch/fs/model-settings-get', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
         .then((r) => r.json()).catch(() => ({ ok: false })),
-      fetch('/evoresearch/fs/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-        .then((r) => r.json()).catch(() => ({ ok: false })),
+      Promise.resolve(loadCurrent),
       fetch('/evoresearch/fs/models-catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
         .then((r) => r.json()).catch(() => ({ ok: false })),
-    ]).then(([settingsJson, currentJson, catalogJson]) => {
+    ]).then(([settingsJson, , catalogJson]) => {
       if (cancelled) return
       if (settingsJson.ok === true) {
         const code = settingsJson.value?.code ?? {}
@@ -187,9 +199,6 @@ export function ComposerModelInfo() {
         }))
       } else {
         setTiers([])
-      }
-      if (currentJson.ok === true) {
-        setCurrent({ provider: currentJson.value?.provider ?? null, model: currentJson.value?.model ?? null, tier: currentJson.value?.tier ?? null })
       }
       if (catalogJson.ok === true) {
         const providers = new Map<string, string>()
@@ -202,7 +211,7 @@ export function ComposerModelInfo() {
       }
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [open, tiers])
+  }, [open, tiers, names])
 
   // 浮层关闭行为与设置面板 Dropdown 一致：外部点击 / Escape / 页面滚动关闭；
   // 菜单自身滚动与滚轮不冒泡，避免一滚就收起。
