@@ -345,10 +345,11 @@ export function ComposerModelInfo() {
                 onClick: () => apply(entry.key),
                 children: [
                   jsxs('div', { className: 'evo-tier-option-head', children: [
-                    jsx('span', { className: 'evo-tier-option-name', children: tierMeta[entry.key].name }),
-                    // 徽标紧跟角色名：描述文字较长换行时不会把徽标挤成孤行
+                    jsxs('div', { className: 'evo-tier-option-main', children: [
+                      jsx('span', { className: 'evo-tier-option-name', children: tierMeta[entry.key].name }),
+                      jsx('span', { className: 'evo-tier-option-desc', children: tierMeta[entry.key].desc }),
+                    ] }),
                     active && jsx('span', { className: 'evo-tier-option-current', children: t('currentModel') }),
-                    jsx('span', { className: 'evo-tier-option-desc', children: tierMeta[entry.key].desc }),
                   ] }),
                   jsx('div', {
                     className: 'evo-tier-option-detail',

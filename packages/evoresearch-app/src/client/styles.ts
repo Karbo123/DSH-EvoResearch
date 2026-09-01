@@ -638,10 +638,11 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tier-option:hover:not(:disabled) { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 5%, var(--color-background)); }
 .evo-tier-option[data-active] { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); }
 .evo-tier-option:disabled { opacity: 0.55; cursor: not-allowed; }
-.evo-tier-option-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
-.evo-tier-option-name { font-size: 14px; font-weight: 700; }
-.evo-tier-option-desc { font-size: 12px; color: var(--color-text-tertiary); }
-.evo-tier-option-current { margin-left: auto; padding: 1px 9px; border-radius: 999px; background: var(--brand-solid); color: var(--brand-foreground); font-size: 11px; font-weight: 600; }
+.evo-tier-option-head { display: flex; align-items: flex-start; gap: 10px; }
+.evo-tier-option-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.evo-tier-option-name { font-size: 14px; font-weight: 700; line-height: 1.4; }
+.evo-tier-option-desc { font-size: 12px; color: var(--color-text-tertiary); line-height: 1.55; }
+.evo-tier-option-current { flex-shrink: 0; margin-top: 2px; padding: 1px 9px; border-radius: 999px; background: var(--brand-solid); color: var(--brand-foreground); font-size: 11px; font-weight: 600; }
 .evo-tier-option-detail { font-size: 12.5px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ── 业务面板（记忆/调度/团队/通道/技能）── */
 .evo-panel { max-width: 760px; margin: 0 auto; padding: 28px 28px 40px; }
