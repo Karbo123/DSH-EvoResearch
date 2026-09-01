@@ -10,7 +10,8 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Cpu, HardDrive, Info, Puzzle, Code2, Eye, Image as ImageIcon, Trash2, Server, Plus, X, Zap, FolderOpen, ChevronRight, ArrowUp, Home, Copy, Search } from 'lucide-react'
 import { t } from './i18n'
-import { clientStateClear } from './client-state'
+import { clientStateClear, clientStateSet } from './client-state'
+import { GRAPH_LAYOUT_ALGO_STATE_KEY, getGraphLayoutAlgorithm, type GraphLayoutAlgorithm } from './chatgraph-layout'
 import { toast } from './toast'
 import { ConfirmDialog } from './session-actions'
 import { Dropdown } from './dropdown'
@@ -51,6 +52,36 @@ function pluginStateLabel(state: string): string {
     case 'loading': return t('pluginStateIdle')
     default: return state
   }
+}
+
+/** 图谱自动布局算法（ChatGraph 三算法切换；持久化于 client-state.json，缺省紧凑树）。 */
+function GraphLayoutSection() {
+  const [algo, setAlgo] = useState<GraphLayoutAlgorithm>(() => getGraphLayoutAlgorithm())
+  const options: Array<{ value: GraphLayoutAlgorithm; name: string; desc: string }> = [
+    { value: 'tree', name: t('graphAlgoNameTree'), desc: t('graphAlgoDescTree') },
+    { value: 'dagre', name: t('graphAlgoNameDagre'), desc: t('graphAlgoDescDagre') },
+    { value: 'relax', name: t('graphAlgoNameRelax'), desc: t('graphAlgoDescRelax') },
+  ]
+  const selected = options.find((option) => option.value === algo) ?? options[0]!
+  return jsxs('div', {
+    className: 'evo-setting evo-graph-layout-setting',
+    children: [
+      jsxs('label', { className: 'evo-setting-field evo-web-search-select', children: [
+        jsx('span', { className: 'evo-setting-field-label', children: t('graphAlgoLabel') }),
+        jsx(Dropdown, {
+          value: algo,
+          onChange: (value: string) => {
+            const next: GraphLayoutAlgorithm = value === 'relax' || value === 'dagre' ? value : 'tree'
+            setAlgo(next)
+            clientStateSet(GRAPH_LAYOUT_ALGO_STATE_KEY, next)
+          },
+          ariaLabel: t('graphAlgoLabel'),
+          options: options.map((option) => ({ value: option.value, label: option.name })),
+        }),
+      ] }),
+      jsx('div', { className: 'evo-setting-hint', children: selected.desc }),
+    ],
+  })
 }
 
 function PluginListSection() {
@@ -2084,6 +2115,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
                       jsx(DataPathsSection, {}),
                       jsx(WebSearchSection, {}),
                       jsx(AcademicSearchSection, {}),
+                      jsx(GraphLayoutSection, {}),
                       jsx(PluginListSection, {}),
                       jsx(AboutSection, {}),
                     ] })

@@ -65,6 +65,7 @@ export const CSS = `
   --graph-resource: #f59e0b;
   --graph-fork: #3b82f6;
   --graph-reference: #10b981;
+  --graph-write: #f97316;
   --graph-edge-label: #505050;
   --graph-control: #ffffff;
   --graph-control-border: #ededed;
@@ -121,6 +122,7 @@ html.dark {
   --graph-resource: #fbbf24;
   --graph-fork: #60a5fa;
   --graph-reference: #34d399;
+  --graph-write: #fb923c;
   --graph-edge-label: #e6e7ea;
   --graph-control: #141519;
   --graph-control-border: #303238;
@@ -1039,11 +1041,37 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-canvas .react-flow__controls-button { width: 26px; height: 26px; border: 0; border-bottom: 1px solid var(--graph-control-border); background: var(--graph-control); color: var(--color-text-primary); fill: var(--color-text-primary); }
 .evo-graph-canvas .react-flow__controls-button:last-child { border-bottom: 0; }
 /* MiniMap：左下角，默认隐藏，图标按钮切换（按钮 26×26，与 Controls 同规格） */
-.evo-graph-canvas .react-flow__minimap.react-flow__panel { left: 12px; right: auto; bottom: 12px; top: auto; margin: 0; transform: none; overflow: hidden; width: 142px; height: 96px; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-minimap); box-shadow: 0 2px 10px var(--graph-node-shadow); }
+.evo-graph-canvas .react-flow__minimap.react-flow__panel { left: 12px; right: auto; bottom: 12px; top: auto; margin: 0; transform: none; overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-minimap); box-shadow: 0 2px 10px var(--graph-node-shadow); }
 .evo-graph-minimap-toggle { position: absolute; z-index: 6; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-control); color: var(--color-text-secondary); cursor: pointer; font: inherit; box-shadow: 0 2px 8px var(--graph-node-shadow); transition: color 0.15s, border-color 0.15s; }
 .evo-graph-minimap-toggle:hover { color: var(--brand); border-color: var(--brand); }
 .evo-graph-minimap-toggle svg { width: 14px; height: 14px; }
 .evo-graph-minimap-toggle[aria-pressed='true'] { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--graph-control)); }
+/* 图例（Legend）：右下角 Info 按钮 + 悬浮说明卡（与右键菜单同语言） */
+.evo-graph-legend-toggle { position: absolute; z-index: 6; right: 12px; bottom: 96px; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--graph-control-border); border-radius: 8px; background: var(--graph-control); color: var(--color-text-secondary); cursor: pointer; font: inherit; box-shadow: 0 2px 8px var(--graph-node-shadow); transition: color 0.15s, border-color 0.15s; }
+.evo-graph-legend-toggle:hover, .evo-graph-legend-toggle[aria-pressed='true'] { color: var(--brand); border-color: var(--brand); }
+.evo-graph-legend-toggle svg { width: 14px; height: 14px; }
+.evo-graph-legend { position: absolute; z-index: 7; width: min(340px, calc(100% - 24px)); max-height: min(430px, 72%); overflow: auto; padding: 10px 12px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 10px 30px var(--graph-node-shadow); display: flex; flex-direction: column; gap: 6px; }
+.evo-graph-legend-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.evo-graph-legend-head strong { font-size: 12.5px; color: var(--color-text-primary); }
+.evo-graph-legend-close { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: 6px; background: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 12px; }
+.evo-graph-legend-close:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-graph-legend-note { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+.evo-graph-legend-row { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.evo-graph-legend-text { font-size: 12px; line-height: 15px; color: var(--color-text-secondary); min-width: 0; }
+.evo-graph-legend-sample { position: relative; flex-shrink: 0; width: 30px; height: 0; border-top: 2.2px solid var(--graph-reference); border-radius: 2px; }
+.evo-graph-legend-sample::after { content: ''; position: absolute; right: -2px; top: -3.6px; border-left: 6px solid var(--graph-reference); border-top: 3.4px solid transparent; border-bottom: 3.4px solid transparent; }
+.evo-graph-legend-sample.sample-system { opacity: 0.45; }
+.evo-graph-legend-sample.sample-hit { border-top-style: dashed; animation: evo-legend-hit 1.6s ease-in-out infinite; }
+.evo-graph-legend-sample.sample-write { border-top-color: var(--graph-write); }
+.evo-graph-legend-sample.sample-write::after { border-left-color: var(--graph-write); }
+.evo-graph-legend-sample.sample-fork { border-top-color: var(--graph-fork); }
+.evo-graph-legend-sample.sample-fork::after { border-left-color: var(--graph-fork); }
+@keyframes evo-legend-hit { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.evo-graph-legend-chip { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 18px; padding: 0 5px; border-radius: 5px; font-size: 10px; }
+.evo-graph-legend-chip.chip-chat { border: 1px solid var(--graph-fork); color: var(--graph-fork); background: color-mix(in srgb, var(--graph-fork) 8%, transparent); }
+.evo-graph-legend-chip.chip-memory { border: 1px solid var(--graph-reference); color: var(--graph-reference); background: color-mix(in srgb, var(--graph-reference) 8%, transparent); }
+.evo-graph-legend-chip.chip-empty { border: 1px dashed var(--color-border); color: var(--color-text-tertiary); background: none; }
+.evo-graph-legend-tips { margin-top: 2px; padding-top: 7px; border-top: 1px solid var(--color-border); font-size: 11px; color: var(--color-text-tertiary); }
 /* 连线：demo 同款——描边 #d2d2d2 系经 BaseEdge 内联样式给出（hover/选中不改变颜色，
    与官网一致）；虚线流动由 edge.animated + xyflow 基础 CSS 驱动：
    .react-flow__edge.animated path { stroke-dasharray: 5; animation: .5s linear infinite dashdraw }。
@@ -1091,7 +1119,44 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-socket-row-out { margin-top: 1px; }
 /* socket：demo handle 同款（颜色/几何与 .react-flow__handle 规则一致） */
 .evo-graph-socket { width: 10px; height: 10px; border-radius: 100%; border: none; background: var(--graph-handle); cursor: crosshair; flex-shrink: 0; box-shadow: none; }
-.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--graph-muted); white-space: nowrap; }
+/* 节点缩放：手柄默认隐形——光标悬到角落变成缩放指针即提示。
+   xyflow 把手柄中心放在包围盒直角点上（比圆角弧线外凸约 r(√2−1)≈6.6px），
+   视觉上「直角凸出的空白区」会误触发；内移 5px 让命中区中心落在圆角曲线上，
+   悬停真正的圆角边缘才出现缩放光标与倒角三角（包围盒外凸角点恰好移出命中圆）。 */
+.evo-graph-canvas .react-flow__resize-control { z-index: 30; }
+.evo-graph-canvas .react-flow__resize-control.handle { width: 10px; height: 10px; border-radius: 100%; background: transparent; border: none; box-shadow: none; }
+.evo-graph-canvas .react-flow__resize-control.handle.top.left { transform: translate(4.7px, 4.7px); }
+.evo-graph-canvas .react-flow__resize-control.handle.top.right { transform: translate(-4.7px, 4.7px); }
+.evo-graph-canvas .react-flow__resize-control.handle.bottom.left { transform: translate(4.7px, -4.7px); }
+.evo-graph-canvas .react-flow__resize-control.handle.bottom.right { transform: translate(-4.7px, -4.7px); }
+/* 边线控件（选中时的矩形描边）整体隐藏：它会在四个圆角处露出线框三角形缺口 */
+.evo-graph-canvas .react-flow__resize-control.line { display: none; }
+/* 角落缩放提示（内侧倒角三角）：悬停某角手柄时，该角淡入节点类型色的直角三角形。
+   颜色：跟随节点图标同款类型色（chat 蓝 / memory 绿 / 全局 memory 紫），半透明融入卡片。
+   几何：块 21×21、圆角 16px、外扩 1px 顶到卡片边框外沿。圆心恒为卡片角内 (16,16)
+   与外圆角曲线同心同径 → 三角外弧就是卡片最外沿本身，与选中描边环严丝合缝，零间隙；
+   斜边腿长 21px > 半径 → 两腿沿卡片边缘、斜边平直、外角沿圆弧的厚实倒角三角。
+   悬停透明度 0.7（与卡片 70% 半透明表面同一语言，描边在外层仍隐约可读）。
+   拖拽缩放进行中：按下的手柄在松开前始终匹配 :active（指针甩离手柄也一样），
+   因此 :active 分支保证被拖角的倒角全程常显——不依赖 :hover、无需 JS 状态。
+   常态与聚焦态完全不显示；只亮一个角。 */
+.evo-resize-chamfer { position: absolute; width: 21px; height: 21px; background: var(--graph-chat); opacity: 0; transition: opacity 0.12s; pointer-events: none; z-index: 6; }
+.evo-graph-node-memory .evo-resize-chamfer { background: var(--graph-memory); }
+.evo-graph-node-memory[data-global] .evo-resize-chamfer { background: var(--graph-global); }
+.evo-graph-node:has(.react-flow__resize-control.handle.top.left:hover) .evo-resize-chamfer-tl,
+.evo-graph-node:has(.react-flow__resize-control.handle.top.left:active) .evo-resize-chamfer-tl,
+.evo-graph-node:has(.react-flow__resize-control.handle.top.right:hover) .evo-resize-chamfer-tr,
+.evo-graph-node:has(.react-flow__resize-control.handle.top.right:active) .evo-resize-chamfer-tr,
+.evo-graph-node:has(.react-flow__resize-control.handle.bottom.left:hover) .evo-resize-chamfer-bl,
+.evo-graph-node:has(.react-flow__resize-control.handle.bottom.left:active) .evo-resize-chamfer-bl,
+.evo-graph-node:has(.react-flow__resize-control.handle.bottom.right:hover) .evo-resize-chamfer-br,
+.evo-graph-node:has(.react-flow__resize-control.handle.bottom.right:active) .evo-resize-chamfer-br { opacity: 0.7; }
+.evo-resize-chamfer-tl { top: -1px; left: -1px; border-top-left-radius: 16px; clip-path: polygon(0 0, 100% 0, 0 100%); }
+.evo-resize-chamfer-tr { top: -1px; right: -1px; border-top-right-radius: 16px; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+.evo-resize-chamfer-bl { bottom: -1px; left: -1px; border-bottom-left-radius: 16px; clip-path: polygon(0 0, 0 100%, 100% 100%); }
+.evo-resize-chamfer-br { bottom: -1px; right: -1px; border-bottom-right-radius: 16px; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--graph-muted); white-space: nowrap; opacity: 0.9; pointer-events: none; background: var(--graph-node-surface); border: 1px solid var(--graph-control-border); border-radius: 4px; padding: 0 4px; }
+.evo-graph-node:hover .evo-graph-socket-label, .evo-graph-node-sel .evo-graph-socket-label { opacity: 1; color: var(--color-text-secondary); }
 .evo-graph-node-sid { font-size: 12px; line-height: 16px; color: var(--graph-muted); font-family: var(--graph-font-mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-graph-node-preview { font-size: 12px; line-height: 16px; color: var(--graph-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* 连线：demo 风格平滑贝塞尔；类型色仅保留 fork/引用/关系三类语义 */
@@ -1143,6 +1208,45 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* GRAPH-07/09：连线可右键（编辑说明/删除）；svg 层 pointer-events:none，仅 path 命中 stroke */
 .evo-graph-edge-hit { pointer-events: stroke; cursor: pointer; }
 .evo-graph-edge-hit:hover { filter: brightness(1.35); }
+/* ── ChatGraph v2：写线（橙）/ 系统默认连线（同色细半透明）/ 双向平行线 ──
+   颜色仍由 BaseEdge 内联样式给出（--graph-write）；此处只做透明度/徽标等补充语义。 */
+.evo-graph-edge-system { opacity: 0.45; }
+.evo-graph-edge-badge { position: absolute; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--graph-write) 42%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--graph-node-surface) 92%, transparent); color: var(--graph-write); font-size: 9px; line-height: 1.4; font-family: var(--graph-font-mono); white-space: nowrap; pointer-events: none; user-select: none; }
+/* 命中脉冲：这份记忆这一轮真的被读到了——流动发光约 2 秒后消退（纯 CSS，不持久化） */
+@keyframes evo-graph-hit-pulse {
+  0% { box-shadow: var(--graph-card-shadow), 0 0 0 0 color-mix(in srgb, var(--graph-trace) 55%, transparent); }
+  70% { box-shadow: var(--graph-card-shadow), 0 0 0 12px transparent; }
+  100% { box-shadow: var(--graph-card-shadow), 0 0 0 0 transparent; }
+}
+.evo-graph-node-hit { animation: evo-graph-hit-pulse 2s ease-out; border-color: color-mix(in srgb, var(--graph-trace) 55%, var(--graph-node-border)); }
+/* 常驻节点空态：同款卡片淡样式 + "空"角标（点击可创建内容） */
+.evo-graph-node-empty { border-style: dashed; opacity: 0.62; }
+.evo-graph-node-empty-chip { padding: 1px 6px; border-radius: 999px; border: 1px dashed color-mix(in srgb, var(--graph-muted) 55%, transparent); color: var(--graph-muted); font-size: 8.5px; line-height: 1.3; font-family: var(--graph-font-mono); white-space: nowrap; }
+/* 节点小徽标（收纳的系统连线数 / 压缩次数 / 最后活跃） */
+.evo-graph-node-badge { padding: 1px 5px; border-radius: 999px; background: color-mix(in srgb, var(--graph-muted) 14%, transparent); color: var(--graph-muted); font-size: 8.5px; line-height: 1.3; font-family: var(--graph-font-mono); white-space: nowrap; }
+.evo-graph-node-badge-warn { color: var(--graph-trace); background: color-mix(in srgb, var(--graph-trace) 12%, transparent); }
+/* 写线落点：不可见输入端口（拖 chat → memory 建沉淀通道；不新增可见元素） */
+.evo-graph-socket-ghost { opacity: 0; }
+/* 右键菜单分组：小节标题 / 分隔线 / 辅注（"由系统自动生成"） / 长列表滚动 */
+.evo-graph-menu-title { padding: 4px 10px 2px; font-size: 10px; letter-spacing: 0.4px; color: var(--color-text-tertiary); }
+.evo-graph-menu-sep { height: 1px; margin: 4px 6px; background: var(--color-border); flex-shrink: 0; }
+.evo-graph-menu-note { margin-left: auto; font-size: 10px; color: var(--color-text-tertiary); white-space: nowrap; }
+.evo-graph-menu-scroll { max-height: 300px; overflow-y: auto; }
+/* 上下文体检卡（Inspector 内；机制词只出现在"给想深究的人"折叠区） */
+.evo-graph-health { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 8px; font-size: 11px; }
+.evo-graph-health-head { display: flex; align-items: center; gap: 6px; }
+.evo-graph-health-head strong { font-size: 12px; color: var(--color-text-primary); }
+.evo-graph-health-time { color: var(--color-text-tertiary); font-size: 10px; }
+.evo-graph-health-empty { color: var(--color-text-tertiary); }
+.evo-graph-health-section { display: flex; flex-direction: column; gap: 3px; }
+.evo-graph-health-section > span { font-weight: 600; color: var(--color-text-secondary); }
+.evo-graph-health-row { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.evo-graph-health-row-main { min-width: 0; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.evo-graph-health-row-meta { flex-shrink: 0; color: var(--color-text-tertiary); font-size: 10px; }
+.evo-graph-health-hit { border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; background: var(--color-background); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 11px; text-align: left; overflow-wrap: anywhere; }
+.evo-graph-health-hit:hover { border-color: var(--brand); color: var(--brand); }
+.evo-graph-health-deep summary { cursor: pointer; color: var(--color-text-tertiary); font-size: 10.5px; }
+.evo-graph-health-deep pre { max-height: 180px; overflow: auto; margin: 6px 0 0; padding: 6px; border-radius: 6px; background: var(--color-background); color: var(--color-text-secondary); font-size: 10px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
 /* GRAPH-04/08：引用只读预览弹窗 */
 .evo-graph-viewer { width: min(640px, calc(100vw - 48px)); }
 .evo-graph-viewer-path { font-size: 11px; color: var(--color-text-tertiary); font-family: ui-monospace, Consolas, monospace; margin-left: 8px; }

@@ -21,7 +21,7 @@ import { GitBranch, X, FileText, Check, Search } from 'lucide-react'
 import { ChatGraphCanvas } from './chatgraph-canvas'
 import type { GraphCanvasMenu } from './chatgraph-canvas'
 import type { Connection } from '@xyflow/react'
-import { runChatGraphLayout } from './chatgraph-layout'
+import { runChatGraphLayout, getGraphLayoutAlgorithm } from './chatgraph-layout'
 import { ContextTraceDrawer } from './context-trace'
 
 /**
@@ -37,6 +37,28 @@ const MEMORY_H = 96
 /** 引用节点：标题条 + 标题 + 引用名 + 实时预览三行主体 */
 const MEMORY_REF_H = 116
 const TITLE_H = 33
+/** 节点缩放上限（用户可拖拽右下角缩放：下限=设计尺寸，上限=3 倍）。 */
+export const NODE_SCALE_MAX = 3
+
+/** 节点默认尺寸（按类型；也是缩放下限）。 */
+export function defaultNodeSize(node: Pick<GraphNode, 'type' | 'ref'>): { width: number; height: number } {
+  return {
+    width: NODE_W,
+    height: node.type === 'chat' ? CHAT_H : node.ref !== undefined ? MEMORY_REF_H : MEMORY_H,
+  }
+}
+
+/** 节点实际尺寸（用户缩放值优先，夹在 [默认, 3×默认] 内）。 */
+export function nodeSize(node: Pick<GraphNode, 'type' | 'ref' | 'width' | 'height'>): { width: number; height: number } {
+  const def = defaultNodeSize(node)
+  return {
+    width: Math.min(Math.max(node.width ?? def.width, def.width), def.width * NODE_SCALE_MAX),
+    height: Math.min(Math.max(node.height ?? def.height, def.height), def.height * NODE_SCALE_MAX),
+  }
+}
+
+/** 命中脉冲空集（主面板未接入 graph-recent-hits 轮询：共享同一实例避免画布无谓重算）。 */
+const EMPTY_PULSE_IDS = new Set<string>()
 
 export interface GraphNodeRef {
   kind: 'note' | 'file' | 'pdf' | 'dir' | 'memory' | 'session' | 'paper' | 'experiment' | 'run' | 'log' | 'result' | 'code' | 'latex' | 'manuscript'
@@ -59,9 +81,20 @@ export interface GraphNode {
   groupId?: string
   pinned?: boolean
   origin?: 'user' | 'agent' | 'imported'
+  /** 用户拖拽缩放后的节点尺寸（缺失 = 默认设计尺寸；上限 3×默认）。 */
+  width?: number
+  height?: number
   createdAt?: number
   updatedAt?: number
   status?: 'available' | 'missing' | 'running' | 'failed' | 'indexing'
+  /** 系统常驻节点（身份画像/项目指引/对话台账等；后端 v4 图谱写入，前端只读渲染）。 */
+  system?: boolean
+  /** 常驻节点内容为空（淡样式 + "空"角标，点击可创建内容）。 */
+  empty?: boolean
+  /** 发生过上下文压缩的次数（chat 节点徽标；缺失不显示）。 */
+  compactionCount?: number
+  /** 最近活跃时间戳（节点徽标；缺失时回退 updatedAt）。 */
+  lastActiveAt?: number
 }
 export interface GraphEdge {
   id: string
@@ -69,7 +102,14 @@ export interface GraphEdge {
   to: string
   toPort: 'context' | 'memory'
   label?: string
-  behavior?: 'fork' | 'reference' | 'relation'
+  /** fork=分叉；reference=读；write=写（沉淀通道）；relation=存量（兼容显示为带说明的读线）。 */
+  behavior?: 'fork' | 'reference' | 'write' | 'relation'
+  /** 系统默认连线（新会话自动生成的常驻记忆读线；后端 v4 图谱写入，前端只读渲染）。 */
+  system?: boolean
+  /** 写线已写入次数（线上小徽标；缺失不显示）。 */
+  writeCount?: number
+  /** 写线最近写入时间戳。 */
+  lastWriteAt?: number
   enabled?: boolean
   routePoints?: Array<{ x: number; y: number }>
   labelPosition?: { x: number; y: number }
@@ -130,7 +170,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const [layoutPreview, setLayoutPreview] = useState<{ previous: ChatGraph; next: ChatGraph; warning?: string } | null>(null)
   const [refitSignal, setRefitSignal] = useState(0)
   const [inspectorOpen, setInspectorOpen] = useState(true)
-  const [advancedMode, setAdvancedMode] = useState(false)
+  // 端口小字已改为常显：端口用途一目了然，不再需要高级模式开关
   const [contextDrawerOpen, setContextDrawerOpen] = useState(false)
   const [contextQuestion, setContextQuestion] = useState('')
   const [traceHighlightedIds, setTraceHighlightedIds] = useState<Set<string>>(new Set())
@@ -298,7 +338,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   // ── 操作 ──
   /** 新节点坐标：优先菜单位置；否则找画布空白区域（避开已有节点矩形）。 */
   const freeSpot = (fallbackX: number, fallbackY: number): { x: number; y: number } => {
-    const occupied = graph.nodes.map((n) => ({ x: n.x, y: n.y, w: NODE_W, h: n.type === 'chat' ? CHAT_H : (n.ref !== undefined ? MEMORY_REF_H : MEMORY_H) }))
+    const occupied = graph.nodes.map((n) => { const s = nodeSize(n); return { x: n.x, y: n.y, w: s.width, h: s.height } })
     const hit = (x: number, y: number) => occupied.some((o) => x < o.x + o.w + 16 && x + NODE_W + 16 > o.x && y < o.y + o.h + 16 && y + MEMORY_H + 16 > o.y)
     if (!hit(fallbackX, fallbackY)) return { x: fallbackX, y: fallbackY }
     // 螺旋搜索空白（步长 40，半径 4 圈）
@@ -674,8 +714,11 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     if (targets.length === 0) return
     setBusy(true)
     void runChatGraphLayout({
+      // 算法偏好：设置面板「自动布局算法」可切换（tree 紧凑树 / dagre 有向分层 / relax 约束松弛）
+      algorithm: getGraphLayoutAlgorithm(),
       nodes: graph.nodes.filter((node) => visibleIds.has(node.id)).map((node) => ({
-        id: node.id, x: node.x, y: node.y, width: NODE_W, height: node.type === 'chat' ? CHAT_H : node.ref !== undefined ? MEMORY_REF_H : MEMORY_H,
+        id: node.id, x: node.x, y: node.y, width: nodeSize(node).width, height: nodeSize(node).height,
+        kind: node.type === 'chat' ? 'chat' as const : 'memory' as const,
         createdAt: node.createdAt, pinned: node.pinned, selected: selected.has(node.id), groupId: node.groupId,
       })),
       groups: (graph.groups ?? []).filter((group) => graph.nodes.some((node) => node.groupId === group.id && visibleIds.has(node.id))).map((group) => ({
@@ -686,7 +729,6 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     }).then((result) => {
       const changes = new Map(result.positions.map((position) => [position.id, position]))
       const groupChanges = new Map((result.groupPositions ?? []).map((position) => [position.id.replace(/^group:/, ''), position]))
-      const routeChanges = new Map((result.routes ?? []).map((route) => [route.id, route]))
       const next = {
         ...graph,
         nodes: graph.nodes.map((node) => { const position = changes.get(node.id); return position === undefined ? node : { ...node, x: position.x, y: position.y } }),
@@ -694,16 +736,15 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           const position = groupChanges.get(group.id)
           return position === undefined ? group : { ...group, x: position.x, y: position.y }
         }),
-        edges: graph.edges.map((edge) => {
-          const route = routeChanges.get(edge.id)
-          return route === undefined ? edge : {
-            ...edge,
-            routePoints: route.points,
-            ...(route.labelPosition === undefined ? {} : { labelPosition: route.labelPosition }),
-            labelHidden: route.labelHidden === true,
-            routingVersion: (edge.routingVersion ?? 0) + 1,
-          }
-        }),
+        edges: graph.edges.map((edge) => ({
+          ...edge,
+          // 连线形状 = 节点位置的连续函数（渲染时实时推导）：布局后不再持久化路由/标签位，
+          // 杜绝"方案失配"导致的连线剧变。
+          routePoints: undefined,
+          labelPosition: undefined,
+          labelHidden: undefined,
+          routingVersion: (edge.routingVersion ?? 0) + 1,
+        })),
       }
       setGraph(next)
       setLayoutPreview({ previous: graph, next, ...(result.warning === undefined ? {} : { warning: result.warning }) })
@@ -919,6 +960,21 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       return next
     })
   }
+  // 节点缩放（右下角手柄，下限=设计尺寸/上限=3×默认）：持久化尺寸并清除该节点的旧连线路由
+  const onCanvasNodeResize = (id: string, width: number, height: number) => {
+    setGraph((previous) => {
+      const next = {
+        ...previous,
+        nodes: previous.nodes.map((node) => node.id === id ? { ...node, width, height } : node),
+        // 旧拐点按旧尺寸计算：缩放后直接清掉与该节点相连边的路由，回落贝塞尔曲线
+        edges: previous.edges.map((edge) => edge.from === id || edge.to === id
+          ? { ...edge, routePoints: undefined, labelPosition: undefined }
+          : edge),
+      }
+      saveGraph(next)
+      return next
+    })
+  }
   const graphMenu = menu === null ? null : jsxs('div', {
     className: 'evo-graph-menu',
     style: { left: menu.x, top: menu.y },
@@ -965,12 +1021,6 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           }),
         ]}),
         jsx('button', {
-          type: 'button', className: `evo-graph-btn${advancedMode ? ' active' : ''}`, title: advancedMode ? t('graphHidePortsTitle') : t('graphShowPortsTitle'),
-          'aria-pressed': advancedMode,
-          onClick: () => setAdvancedMode((value) => !value),
-          children: advancedMode ? t('graphAdvancedPorts') : t('graphNormalOps'),
-        }),
-        jsx('button', {
           type: 'button', className: 'evo-graph-btn has-label', title: t('graphSyncBtnTitle'), disabled: busy,
           onClick: () => { void syncSessions(true) },
           children: t('graphSyncBtn'),
@@ -1006,8 +1056,9 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         focusedNodeId,
         selectedId,
         refPreviews,
-        advancedMode,
         traceHighlightedIds,
+        pulseIds: EMPTY_PULSE_IDS,
+        collapseSystem: false,
         menu,
         menuElement: graphMenu,
         busy,
@@ -1021,6 +1072,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         onConnect: onCanvasConnect,
         onToggleGroup: toggleGroup,
         onNodePositionsChange: onCanvasPositionsChange,
+        onNodeResize: onCanvasNodeResize,
         onNarrowOpen: (node: GraphNode) => { setSelectedId(node.id); if (node.type === 'chat') openChatNode(node); else if (node.displayKind === 'memory' || node.displayKind === 'memory-collection' || node.type === 'memory') startEditMemory(node); else if (node.ref !== undefined) openRefViewer(node); else startEditMemory(node) },
         refitSignal,
       }),
@@ -1047,7 +1099,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
             jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('graphCloseInspector'), 'aria-label': t('graphCloseInspector'), onClick: () => setInspectorOpen(false), children: jsx(X, {}) }),
           ]}),
           jsxs('div', { className: 'evo-graph-inspector-meta', children: [
-            jsx('span', { children: selectedNode.type === 'chat' ? t('graphChat') : (selectedNode.displayKind ?? t('graphResource')) }),
+            jsx('span', { children: selectedNode.type === 'chat' ? t('graphChat') : displayKindLabel(selectedNode.displayKind, selectedNode.type) }),
             jsx('span', { children: selectedNode.scope === 'global' ? t('graphGlobal') : t('graphProject') }),
             selectedNode.status !== undefined && jsx('span', { className: `evo-graph-status evo-graph-status-${selectedNode.status}`, children: selectedNode.status }),
           ]}),
@@ -1162,6 +1214,39 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 export function refDisplayName(refPath: string): string {
   const base = refPath.split(/[\\/]/).filter((s) => s !== '').pop() ?? refPath
   return base.length > 18 ? `${base.slice(0, 17)}…` : base
+}
+
+/** displayKind → 中文名映射键（画布标题条与检查器共用；未知值原样显示）。 */
+const DISPLAY_KIND_LABEL_KEYS: Record<string, string> = {
+  profile: 'graphKindProfile',
+  guidance: 'graphKindGuidance',
+  observation: 'graphKindObservation',
+  note: 'graphKindNote',
+  turns: 'graphKindTurns',
+  science: 'graphKindScience',
+  library: 'graphKindLibrary',
+  skill: 'graphKindSkill',
+  file: 'graphKindFile',
+  paper: 'graphKindPaper',
+  experiment: 'graphKindExperiment',
+  run: 'graphKindRun',
+  log: 'graphKindLog',
+  result: 'graphKindResult',
+  code: 'graphKindCode',
+  latex: 'graphKindLatex',
+  manuscript: 'graphKindManuscript',
+  idea: 'graphKindIdea',
+  candidate: 'graphKindCandidate',
+  'memory-collection': 'graphKindCollection',
+  memory: 'graphMemory',
+}
+
+/** 节点子类型中文名：chat 固定「聊天」，displayKind 有映射用映射，否则回退原值/大类名。 */
+export function displayKindLabel(displayKind: string | undefined, type: GraphNode['type']): string {
+  if (type === 'chat') return t('graphChat')
+  const key = displayKind === undefined ? undefined : DISPLAY_KIND_LABEL_KEYS[displayKind]
+  if (key !== undefined) return t(key)
+  return displayKind ?? (type === 'memory' ? t('graphMemory') : t('graphResource'))
 }
 
 /** 简单 POST JSON 封装（与 panels.ts 同款）。 */
