@@ -1,0 +1,1034 @@
+# EvoResearch 全仓审计检查清单（生成于 2026-09-04，分支 claude/audit-20260904）
+
+> 生成方式：脚本枚举全部源码文件逐文件派生检查项（后端 5 类/前端 7 类/桌面与脚本 4 类）+ 领域手工清单 + 视觉走查 + 端到端场景。
+> 配套：docs/audit-202609/FINDINGS.md 记录发现问题与修复；审计分支上逐项勾选。
+> 总项数：1023（要求 ≥1000）。
+
+## 图例
+- 【后端】= packages/evoresearch-plugin；【前端】= packages/evoresearch-app；【桌面】【脚本】【CI/Profile】【测试覆盖】【领域清单】【视觉走查】【端到端场景】【可维护性】
+- 每项格式：AUD-序号【区域｜检查类别】检查内容（文件）
+
+## 检查项
+- [ ] AUD-0001 【后端 academic-search.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/academic-search.ts）
+- [ ] AUD-0002 【后端 academic-search.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/academic-search.ts）
+- [ ] AUD-0003 【后端 academic-search.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/academic-search.ts）
+- [ ] AUD-0004 【后端 academic-search.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/academic-search.ts）
+- [ ] AUD-0005 【后端 academic-search.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/academic-search.ts）
+- [ ] AUD-0006 【后端 api.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/api.ts）
+- [ ] AUD-0007 【后端 api.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/api.ts）
+- [ ] AUD-0008 【后端 api.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/api.ts）
+- [ ] AUD-0009 【后端 api.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/api.ts）
+- [ ] AUD-0010 【后端 api.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/api.ts）
+- [ ] AUD-0011 【后端 autorelatedwork-ai-providers.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-ai-providers.ts）
+- [ ] AUD-0012 【后端 autorelatedwork-ai-providers.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-ai-providers.ts）
+- [ ] AUD-0013 【后端 autorelatedwork-ai-providers.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-ai-providers.ts）
+- [ ] AUD-0014 【后端 autorelatedwork-ai-providers.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-ai-providers.ts）
+- [ ] AUD-0015 【后端 autorelatedwork-ai-providers.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-ai-providers.ts）
+- [ ] AUD-0016 【后端 autorelatedwork-compat.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-compat.ts）
+- [ ] AUD-0017 【后端 autorelatedwork-compat.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-compat.ts）
+- [ ] AUD-0018 【后端 autorelatedwork-compat.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-compat.ts）
+- [ ] AUD-0019 【后端 autorelatedwork-compat.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-compat.ts）
+- [ ] AUD-0020 【后端 autorelatedwork-compat.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-compat.ts）
+- [ ] AUD-0021 【后端 autorelatedwork-search.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-search.ts）
+- [ ] AUD-0022 【后端 autorelatedwork-search.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-search.ts）
+- [ ] AUD-0023 【后端 autorelatedwork-search.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-search.ts）
+- [ ] AUD-0024 【后端 autorelatedwork-search.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-search.ts）
+- [ ] AUD-0025 【后端 autorelatedwork-search.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autorelatedwork-search.ts）
+- [ ] AUD-0026 【后端 autoskills.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autoskills.ts）
+- [ ] AUD-0027 【后端 autoskills.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autoskills.ts）
+- [ ] AUD-0028 【后端 autoskills.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autoskills.ts）
+- [ ] AUD-0029 【后端 autoskills.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autoskills.ts）
+- [ ] AUD-0030 【后端 autoskills.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/autoskills.ts）
+- [ ] AUD-0031 【后端 adapters.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/adapters.ts）
+- [ ] AUD-0032 【后端 adapters.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/adapters.ts）
+- [ ] AUD-0033 【后端 adapters.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/adapters.ts）
+- [ ] AUD-0034 【后端 adapters.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/adapters.ts）
+- [ ] AUD-0035 【后端 adapters.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/adapters.ts）
+- [ ] AUD-0036 【后端 base.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/base.ts）
+- [ ] AUD-0037 【后端 base.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/base.ts）
+- [ ] AUD-0038 【后端 base.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/base.ts）
+- [ ] AUD-0039 【后端 base.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/base.ts）
+- [ ] AUD-0040 【后端 base.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/base.ts）
+- [ ] AUD-0041 【后端 index.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/index.ts）
+- [ ] AUD-0042 【后端 index.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/index.ts）
+- [ ] AUD-0043 【后端 index.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/index.ts）
+- [ ] AUD-0044 【后端 index.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/index.ts）
+- [ ] AUD-0045 【后端 index.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/channels/index.ts）
+- [ ] AUD-0046 【后端 chat-graph.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/chat-graph.ts）
+- [ ] AUD-0047 【后端 chat-graph.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/chat-graph.ts）
+- [ ] AUD-0048 【后端 chat-graph.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/chat-graph.ts）
+- [ ] AUD-0049 【后端 chat-graph.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/chat-graph.ts）
+- [ ] AUD-0050 【后端 chat-graph.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/chat-graph.ts）
+- [ ] AUD-0051 【后端 commands.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/commands.ts）
+- [ ] AUD-0052 【后端 commands.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/commands.ts）
+- [ ] AUD-0053 【后端 commands.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/commands.ts）
+- [ ] AUD-0054 【后端 commands.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/commands.ts）
+- [ ] AUD-0055 【后端 commands.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/commands.ts）
+- [ ] AUD-0056 【后端 assembler.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/assembler.ts）
+- [ ] AUD-0057 【后端 assembler.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/assembler.ts）
+- [ ] AUD-0058 【后端 assembler.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/assembler.ts）
+- [ ] AUD-0059 【后端 assembler.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/assembler.ts）
+- [ ] AUD-0060 【后端 assembler.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/assembler.ts）
+- [ ] AUD-0061 【后端 compaction-log.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/compaction-log.ts）
+- [ ] AUD-0062 【后端 compaction-log.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/compaction-log.ts）
+- [ ] AUD-0063 【后端 compaction-log.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/compaction-log.ts）
+- [ ] AUD-0064 【后端 compaction-log.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/compaction-log.ts）
+- [ ] AUD-0065 【后端 compaction-log.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/compaction-log.ts）
+- [ ] AUD-0066 【后端 guard.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/guard.ts）
+- [ ] AUD-0067 【后端 guard.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/guard.ts）
+- [ ] AUD-0068 【后端 guard.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/guard.ts）
+- [ ] AUD-0069 【后端 guard.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/guard.ts）
+- [ ] AUD-0070 【后端 guard.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/guard.ts）
+- [ ] AUD-0071 【后端 history-repair.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/history-repair.ts）
+- [ ] AUD-0072 【后端 history-repair.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/history-repair.ts）
+- [ ] AUD-0073 【后端 history-repair.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/history-repair.ts）
+- [ ] AUD-0074 【后端 history-repair.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/history-repair.ts）
+- [ ] AUD-0075 【后端 history-repair.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/history-repair.ts）
+- [ ] AUD-0076 【后端 index.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/index.ts）
+- [ ] AUD-0077 【后端 index.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/index.ts）
+- [ ] AUD-0078 【后端 index.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/index.ts）
+- [ ] AUD-0079 【后端 index.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/index.ts）
+- [ ] AUD-0080 【后端 index.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/index.ts）
+- [ ] AUD-0081 【后端 link-resolver.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/link-resolver.ts）
+- [ ] AUD-0082 【后端 link-resolver.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/link-resolver.ts）
+- [ ] AUD-0083 【后端 link-resolver.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/link-resolver.ts）
+- [ ] AUD-0084 【后端 link-resolver.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/link-resolver.ts）
+- [ ] AUD-0085 【后端 link-resolver.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/link-resolver.ts）
+- [ ] AUD-0086 【后端 overflow-watch.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/overflow-watch.ts）
+- [ ] AUD-0087 【后端 overflow-watch.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/overflow-watch.ts）
+- [ ] AUD-0088 【后端 overflow-watch.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/overflow-watch.ts）
+- [ ] AUD-0089 【后端 overflow-watch.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/overflow-watch.ts）
+- [ ] AUD-0090 【后端 overflow-watch.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/overflow-watch.ts）
+- [ ] AUD-0091 【后端 pruner.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/pruner.ts）
+- [ ] AUD-0092 【后端 pruner.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/pruner.ts）
+- [ ] AUD-0093 【后端 pruner.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/pruner.ts）
+- [ ] AUD-0094 【后端 pruner.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/pruner.ts）
+- [ ] AUD-0095 【后端 pruner.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/pruner.ts）
+- [ ] AUD-0096 【后端 render.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/render.ts）
+- [ ] AUD-0097 【后端 render.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/render.ts）
+- [ ] AUD-0098 【后端 render.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/render.ts）
+- [ ] AUD-0099 【后端 render.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/render.ts）
+- [ ] AUD-0100 【后端 render.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/render.ts）
+- [ ] AUD-0101 【后端 search.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/search.ts）
+- [ ] AUD-0102 【后端 search.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/search.ts）
+- [ ] AUD-0103 【后端 search.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/search.ts）
+- [ ] AUD-0104 【后端 search.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/search.ts）
+- [ ] AUD-0105 【后端 search.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/search.ts）
+- [ ] AUD-0106 【后端 sources.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/sources.ts）
+- [ ] AUD-0107 【后端 sources.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/sources.ts）
+- [ ] AUD-0108 【后端 sources.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/sources.ts）
+- [ ] AUD-0109 【后端 sources.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/sources.ts）
+- [ ] AUD-0110 【后端 sources.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/sources.ts）
+- [ ] AUD-0111 【后端 types.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/types.ts）
+- [ ] AUD-0112 【后端 types.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/types.ts）
+- [ ] AUD-0113 【后端 types.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/types.ts）
+- [ ] AUD-0114 【后端 types.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/types.ts）
+- [ ] AUD-0115 【后端 types.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/types.ts）
+- [ ] AUD-0116 【后端 window.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/window.ts）
+- [ ] AUD-0117 【后端 window.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/window.ts）
+- [ ] AUD-0118 【后端 window.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/window.ts）
+- [ ] AUD-0119 【后端 window.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/window.ts）
+- [ ] AUD-0120 【后端 window.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/context/window.ts）
+- [ ] AUD-0121 【后端 cron.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/cron.ts）
+- [ ] AUD-0122 【后端 cron.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/cron.ts）
+- [ ] AUD-0123 【后端 cron.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/cron.ts）
+- [ ] AUD-0124 【后端 cron.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/cron.ts）
+- [ ] AUD-0125 【后端 cron.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/cron.ts）
+- [ ] AUD-0126 【后端 db.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/db.ts）
+- [ ] AUD-0127 【后端 db.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/db.ts）
+- [ ] AUD-0128 【后端 db.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/db.ts）
+- [ ] AUD-0129 【后端 db.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/db.ts）
+- [ ] AUD-0130 【后端 db.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/db.ts）
+- [ ] AUD-0131 【后端 llm.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/llm.ts）
+- [ ] AUD-0132 【后端 llm.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/llm.ts）
+- [ ] AUD-0133 【后端 llm.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/llm.ts）
+- [ ] AUD-0134 【后端 llm.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/llm.ts）
+- [ ] AUD-0135 【后端 llm.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/llm.ts）
+- [ ] AUD-0136 【后端 paths.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/paths.ts）
+- [ ] AUD-0137 【后端 paths.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/paths.ts）
+- [ ] AUD-0138 【后端 paths.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/paths.ts）
+- [ ] AUD-0139 【后端 paths.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/paths.ts）
+- [ ] AUD-0140 【后端 paths.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/paths.ts）
+- [ ] AUD-0141 【后端 title.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/title.ts）
+- [ ] AUD-0142 【后端 title.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/title.ts）
+- [ ] AUD-0143 【后端 title.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/title.ts）
+- [ ] AUD-0144 【后端 title.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/title.ts）
+- [ ] AUD-0145 【后端 title.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/core/title.ts）
+- [ ] AUD-0146 【后端 daily-report.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/daily-report.ts）
+- [ ] AUD-0147 【后端 daily-report.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/daily-report.ts）
+- [ ] AUD-0148 【后端 daily-report.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/daily-report.ts）
+- [ ] AUD-0149 【后端 daily-report.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/daily-report.ts）
+- [ ] AUD-0150 【后端 daily-report.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/daily-report.ts）
+- [ ] AUD-0151 【后端 data-paths.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/data-paths.ts）
+- [ ] AUD-0152 【后端 data-paths.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/data-paths.ts）
+- [ ] AUD-0153 【后端 data-paths.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/data-paths.ts）
+- [ ] AUD-0154 【后端 data-paths.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/data-paths.ts）
+- [ ] AUD-0155 【后端 data-paths.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/data-paths.ts）
+- [ ] AUD-0156 【后端 evaluator.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/evaluator.ts）
+- [ ] AUD-0157 【后端 evaluator.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/evaluator.ts）
+- [ ] AUD-0158 【后端 evaluator.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/evaluator.ts）
+- [ ] AUD-0159 【后端 evaluator.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/evaluator.ts）
+- [ ] AUD-0160 【后端 evaluator.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/evaluator.ts）
+- [ ] AUD-0161 【后端 registry.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/registry.ts）
+- [ ] AUD-0162 【后端 registry.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/registry.ts）
+- [ ] AUD-0163 【后端 registry.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/registry.ts）
+- [ ] AUD-0164 【后端 registry.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/registry.ts）
+- [ ] AUD-0165 【后端 registry.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/registry.ts）
+- [ ] AUD-0166 【后端 signals.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/signals.ts）
+- [ ] AUD-0167 【后端 signals.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/signals.ts）
+- [ ] AUD-0168 【后端 signals.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/signals.ts）
+- [ ] AUD-0169 【后端 signals.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/signals.ts）
+- [ ] AUD-0170 【后端 signals.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/evolution/signals.ts）
+- [ ] AUD-0171 【后端 experiment-ledger.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-ledger.ts）
+- [ ] AUD-0172 【后端 experiment-ledger.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-ledger.ts）
+- [ ] AUD-0173 【后端 experiment-ledger.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-ledger.ts）
+- [ ] AUD-0174 【后端 experiment-ledger.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-ledger.ts）
+- [ ] AUD-0175 【后端 experiment-ledger.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-ledger.ts）
+- [ ] AUD-0176 【后端 experiment-process.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-process.ts）
+- [ ] AUD-0177 【后端 experiment-process.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-process.ts）
+- [ ] AUD-0178 【后端 experiment-process.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-process.ts）
+- [ ] AUD-0179 【后端 experiment-process.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-process.ts）
+- [ ] AUD-0180 【后端 experiment-process.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-process.ts）
+- [ ] AUD-0181 【后端 experiment-provenance.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-provenance.ts）
+- [ ] AUD-0182 【后端 experiment-provenance.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-provenance.ts）
+- [ ] AUD-0183 【后端 experiment-provenance.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-provenance.ts）
+- [ ] AUD-0184 【后端 experiment-provenance.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-provenance.ts）
+- [ ] AUD-0185 【后端 experiment-provenance.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-provenance.ts）
+- [ ] AUD-0186 【后端 experiment-rounds.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-rounds.ts）
+- [ ] AUD-0187 【后端 experiment-rounds.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-rounds.ts）
+- [ ] AUD-0188 【后端 experiment-rounds.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-rounds.ts）
+- [ ] AUD-0189 【后端 experiment-rounds.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-rounds.ts）
+- [ ] AUD-0190 【后端 experiment-rounds.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-rounds.ts）
+- [ ] AUD-0191 【后端 experiment-workspace.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-workspace.ts）
+- [ ] AUD-0192 【后端 experiment-workspace.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-workspace.ts）
+- [ ] AUD-0193 【后端 experiment-workspace.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-workspace.ts）
+- [ ] AUD-0194 【后端 experiment-workspace.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-workspace.ts）
+- [ ] AUD-0195 【后端 experiment-workspace.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiment-workspace.ts）
+- [ ] AUD-0196 【后端 experiments.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiments.ts）
+- [ ] AUD-0197 【后端 experiments.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiments.ts）
+- [ ] AUD-0198 【后端 experiments.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiments.ts）
+- [ ] AUD-0199 【后端 experiments.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiments.ts）
+- [ ] AUD-0200 【后端 experiments.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experiments.ts）
+- [ ] AUD-0201 【后端 experts.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experts.ts）
+- [ ] AUD-0202 【后端 experts.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experts.ts）
+- [ ] AUD-0203 【后端 experts.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experts.ts）
+- [ ] AUD-0204 【后端 experts.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experts.ts）
+- [ ] AUD-0205 【后端 experts.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/experts.ts）
+- [ ] AUD-0206 【后端 figures.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/figures.ts）
+- [ ] AUD-0207 【后端 figures.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/figures.ts）
+- [ ] AUD-0208 【后端 figures.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/figures.ts）
+- [ ] AUD-0209 【后端 figures.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/figures.ts）
+- [ ] AUD-0210 【后端 figures.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/figures.ts）
+- [ ] AUD-0211 【后端 index.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/index.ts）
+- [ ] AUD-0212 【后端 index.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/index.ts）
+- [ ] AUD-0213 【后端 index.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/index.ts）
+- [ ] AUD-0214 【后端 index.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/index.ts）
+- [ ] AUD-0215 【后端 index.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/index.ts）
+- [ ] AUD-0216 【后端 jobs.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/jobs.ts）
+- [ ] AUD-0217 【后端 jobs.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/jobs.ts）
+- [ ] AUD-0218 【后端 jobs.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/jobs.ts）
+- [ ] AUD-0219 【后端 jobs.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/jobs.ts）
+- [ ] AUD-0220 【后端 jobs.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/jobs.ts）
+- [ ] AUD-0221 【后端 bibtex.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/bibtex.ts）
+- [ ] AUD-0222 【后端 bibtex.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/bibtex.ts）
+- [ ] AUD-0223 【后端 bibtex.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/bibtex.ts）
+- [ ] AUD-0224 【后端 bibtex.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/bibtex.ts）
+- [ ] AUD-0225 【后端 bibtex.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/bibtex.ts）
+- [ ] AUD-0226 【后端 index.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/index.ts）
+- [ ] AUD-0227 【后端 index.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/index.ts）
+- [ ] AUD-0228 【后端 index.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/index.ts）
+- [ ] AUD-0229 【后端 index.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/index.ts）
+- [ ] AUD-0230 【后端 index.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/index.ts）
+- [ ] AUD-0231 【后端 indexer.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/indexer.ts）
+- [ ] AUD-0232 【后端 indexer.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/indexer.ts）
+- [ ] AUD-0233 【后端 indexer.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/indexer.ts）
+- [ ] AUD-0234 【后端 indexer.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/indexer.ts）
+- [ ] AUD-0235 【后端 indexer.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/indexer.ts）
+- [ ] AUD-0236 【后端 search.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/search.ts）
+- [ ] AUD-0237 【后端 search.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/search.ts）
+- [ ] AUD-0238 【后端 search.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/search.ts）
+- [ ] AUD-0239 【后端 search.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/search.ts）
+- [ ] AUD-0240 【后端 search.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/search.ts）
+- [ ] AUD-0241 【后端 store.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/store.ts）
+- [ ] AUD-0242 【后端 store.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/store.ts）
+- [ ] AUD-0243 【后端 store.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/store.ts）
+- [ ] AUD-0244 【后端 store.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/store.ts）
+- [ ] AUD-0245 【后端 store.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/store.ts）
+- [ ] AUD-0246 【后端 tools.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/tools.ts）
+- [ ] AUD-0247 【后端 tools.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/tools.ts）
+- [ ] AUD-0248 【后端 tools.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/tools.ts）
+- [ ] AUD-0249 【后端 tools.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/tools.ts）
+- [ ] AUD-0250 【后端 tools.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/tools.ts）
+- [ ] AUD-0251 【后端 types.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/types.ts）
+- [ ] AUD-0252 【后端 types.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/types.ts）
+- [ ] AUD-0253 【后端 types.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/types.ts）
+- [ ] AUD-0254 【后端 types.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/types.ts）
+- [ ] AUD-0255 【后端 types.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/library/types.ts）
+- [ ] AUD-0256 【后端 manuscript.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/manuscript.ts）
+- [ ] AUD-0257 【后端 manuscript.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/manuscript.ts）
+- [ ] AUD-0258 【后端 manuscript.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/manuscript.ts）
+- [ ] AUD-0259 【后端 manuscript.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/manuscript.ts）
+- [ ] AUD-0260 【后端 manuscript.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/manuscript.ts）
+- [ ] AUD-0261 【后端 supervisor.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/mcp/supervisor.ts）
+- [ ] AUD-0262 【后端 supervisor.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/mcp/supervisor.ts）
+- [ ] AUD-0263 【后端 supervisor.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/mcp/supervisor.ts）
+- [ ] AUD-0264 【后端 supervisor.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/mcp/supervisor.ts）
+- [ ] AUD-0265 【后端 supervisor.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/mcp/supervisor.ts）
+- [ ] AUD-0266 【后端 backfill.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/backfill.ts）
+- [ ] AUD-0267 【后端 backfill.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/backfill.ts）
+- [ ] AUD-0268 【后端 backfill.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/backfill.ts）
+- [ ] AUD-0269 【后端 backfill.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/backfill.ts）
+- [ ] AUD-0270 【后端 backfill.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/backfill.ts）
+- [ ] AUD-0271 【后端 classifier.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/classifier.ts）
+- [ ] AUD-0272 【后端 classifier.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/classifier.ts）
+- [ ] AUD-0273 【后端 classifier.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/classifier.ts）
+- [ ] AUD-0274 【后端 classifier.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/classifier.ts）
+- [ ] AUD-0275 【后端 classifier.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/classifier.ts）
+- [ ] AUD-0276 【后端 goals.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/goals.ts）
+- [ ] AUD-0277 【后端 goals.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/goals.ts）
+- [ ] AUD-0278 【后端 goals.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/goals.ts）
+- [ ] AUD-0279 【后端 goals.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/goals.ts）
+- [ ] AUD-0280 【后端 goals.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/goals.ts）
+- [ ] AUD-0281 【后端 index.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/index.ts）
+- [ ] AUD-0282 【后端 index.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/index.ts）
+- [ ] AUD-0283 【后端 index.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/index.ts）
+- [ ] AUD-0284 【后端 index.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/index.ts）
+- [ ] AUD-0285 【后端 index.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/index.ts）
+- [ ] AUD-0286 【后端 packet.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/packet.ts）
+- [ ] AUD-0287 【后端 packet.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/packet.ts）
+- [ ] AUD-0288 【后端 packet.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/packet.ts）
+- [ ] AUD-0289 【后端 packet.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/packet.ts）
+- [ ] AUD-0290 【后端 packet.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/packet.ts）
+- [ ] AUD-0291 【后端 read.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/read.ts）
+- [ ] AUD-0292 【后端 read.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/read.ts）
+- [ ] AUD-0293 【后端 read.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/read.ts）
+- [ ] AUD-0294 【后端 read.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/read.ts）
+- [ ] AUD-0295 【后端 read.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/read.ts）
+- [ ] AUD-0296 【后端 recovery.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/recovery.ts）
+- [ ] AUD-0297 【后端 recovery.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/recovery.ts）
+- [ ] AUD-0298 【后端 recovery.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/recovery.ts）
+- [ ] AUD-0299 【后端 recovery.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/recovery.ts）
+- [ ] AUD-0300 【后端 recovery.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/recovery.ts）
+- [ ] AUD-0301 【后端 retrieval.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/retrieval.ts）
+- [ ] AUD-0302 【后端 retrieval.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/retrieval.ts）
+- [ ] AUD-0303 【后端 retrieval.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/retrieval.ts）
+- [ ] AUD-0304 【后端 retrieval.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/retrieval.ts）
+- [ ] AUD-0305 【后端 retrieval.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/retrieval.ts）
+- [ ] AUD-0306 【后端 store.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/store.ts）
+- [ ] AUD-0307 【后端 store.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/store.ts）
+- [ ] AUD-0308 【后端 store.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/store.ts）
+- [ ] AUD-0309 【后端 store.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/store.ts）
+- [ ] AUD-0310 【后端 store.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/store.ts）
+- [ ] AUD-0311 【后端 tools.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/tools.ts）
+- [ ] AUD-0312 【后端 tools.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/tools.ts）
+- [ ] AUD-0313 【后端 tools.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/tools.ts）
+- [ ] AUD-0314 【后端 tools.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/tools.ts）
+- [ ] AUD-0315 【后端 tools.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/memory/tools.ts）
+- [ ] AUD-0316 【后端 notes.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/notes.ts）
+- [ ] AUD-0317 【后端 notes.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/notes.ts）
+- [ ] AUD-0318 【后端 notes.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/notes.ts）
+- [ ] AUD-0319 【后端 notes.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/notes.ts）
+- [ ] AUD-0320 【后端 notes.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/notes.ts）
+- [ ] AUD-0321 【后端 paper-navigator.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/paper-navigator.ts）
+- [ ] AUD-0322 【后端 paper-navigator.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/paper-navigator.ts）
+- [ ] AUD-0323 【后端 paper-navigator.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/paper-navigator.ts）
+- [ ] AUD-0324 【后端 paper-navigator.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/paper-navigator.ts）
+- [ ] AUD-0325 【后端 paper-navigator.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/paper-navigator.ts）
+- [ ] AUD-0326 【后端 adapters.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/adapters.ts）
+- [ ] AUD-0327 【后端 adapters.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/adapters.ts）
+- [ ] AUD-0328 【后端 adapters.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/adapters.ts）
+- [ ] AUD-0329 【后端 adapters.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/adapters.ts）
+- [ ] AUD-0330 【后端 adapters.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/adapters.ts）
+- [ ] AUD-0331 【后端 approval-policy.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/approval-policy.ts）
+- [ ] AUD-0332 【后端 approval-policy.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/approval-policy.ts）
+- [ ] AUD-0333 【后端 approval-policy.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/approval-policy.ts）
+- [ ] AUD-0334 【后端 approval-policy.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/approval-policy.ts）
+- [ ] AUD-0335 【后端 approval-policy.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/approval-policy.ts）
+- [ ] AUD-0336 【后端 capabilities.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/capabilities.ts）
+- [ ] AUD-0337 【后端 capabilities.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/capabilities.ts）
+- [ ] AUD-0338 【后端 capabilities.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/capabilities.ts）
+- [ ] AUD-0339 【后端 capabilities.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/capabilities.ts）
+- [ ] AUD-0340 【后端 capabilities.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/capabilities.ts）
+- [ ] AUD-0341 【后端 context-runtime.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/context-runtime.ts）
+- [ ] AUD-0342 【后端 context-runtime.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/context-runtime.ts）
+- [ ] AUD-0343 【后端 context-runtime.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/context-runtime.ts）
+- [ ] AUD-0344 【后端 context-runtime.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/context-runtime.ts）
+- [ ] AUD-0345 【后端 context-runtime.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/context-runtime.ts）
+- [ ] AUD-0346 【后端 diagnostics.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/diagnostics.ts）
+- [ ] AUD-0347 【后端 diagnostics.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/diagnostics.ts）
+- [ ] AUD-0348 【后端 diagnostics.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/diagnostics.ts）
+- [ ] AUD-0349 【后端 diagnostics.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/diagnostics.ts）
+- [ ] AUD-0350 【后端 diagnostics.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/diagnostics.ts）
+- [ ] AUD-0351 【后端 models-selector.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/models-selector.ts）
+- [ ] AUD-0352 【后端 models-selector.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/models-selector.ts）
+- [ ] AUD-0353 【后端 models-selector.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/models-selector.ts）
+- [ ] AUD-0354 【后端 models-selector.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/models-selector.ts）
+- [ ] AUD-0355 【后端 models-selector.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/models-selector.ts）
+- [ ] AUD-0356 【后端 subagents.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/subagents.ts）
+- [ ] AUD-0357 【后端 subagents.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/subagents.ts）
+- [ ] AUD-0358 【后端 subagents.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/subagents.ts）
+- [ ] AUD-0359 【后端 subagents.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/subagents.ts）
+- [ ] AUD-0360 【后端 subagents.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/subagents.ts）
+- [ ] AUD-0361 【后端 tools-selector.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/tools-selector.ts）
+- [ ] AUD-0362 【后端 tools-selector.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/tools-selector.ts）
+- [ ] AUD-0363 【后端 tools-selector.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/tools-selector.ts）
+- [ ] AUD-0364 【后端 tools-selector.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/tools-selector.ts）
+- [ ] AUD-0365 【后端 tools-selector.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/tools-selector.ts）
+- [ ] AUD-0366 【后端 unattended-registry.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/unattended-registry.ts）
+- [ ] AUD-0367 【后端 unattended-registry.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/unattended-registry.ts）
+- [ ] AUD-0368 【后端 unattended-registry.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/unattended-registry.ts）
+- [ ] AUD-0369 【后端 unattended-registry.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/unattended-registry.ts）
+- [ ] AUD-0370 【后端 unattended-registry.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/platform/unattended-registry.ts）
+- [ ] AUD-0371 【后端 project-env.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/project-env.ts）
+- [ ] AUD-0372 【后端 project-env.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/project-env.ts）
+- [ ] AUD-0373 【后端 project-env.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/project-env.ts）
+- [ ] AUD-0374 【后端 project-env.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/project-env.ts）
+- [ ] AUD-0375 【后端 project-env.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/project-env.ts）
+- [ ] AUD-0376 【后端 rewind.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/rewind.ts）
+- [ ] AUD-0377 【后端 rewind.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/rewind.ts）
+- [ ] AUD-0378 【后端 rewind.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/rewind.ts）
+- [ ] AUD-0379 【后端 rewind.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/rewind.ts）
+- [ ] AUD-0380 【后端 rewind.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/rewind.ts）
+- [ ] AUD-0381 【后端 scheduler.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/scheduler.ts）
+- [ ] AUD-0382 【后端 scheduler.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/scheduler.ts）
+- [ ] AUD-0383 【后端 scheduler.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/scheduler.ts）
+- [ ] AUD-0384 【后端 scheduler.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/scheduler.ts）
+- [ ] AUD-0385 【后端 scheduler.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/scheduler.ts）
+- [ ] AUD-0386 【后端 chat-graph-bridge.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/chat-graph-bridge.ts）
+- [ ] AUD-0387 【后端 chat-graph-bridge.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/chat-graph-bridge.ts）
+- [ ] AUD-0388 【后端 chat-graph-bridge.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/chat-graph-bridge.ts）
+- [ ] AUD-0389 【后端 chat-graph-bridge.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/chat-graph-bridge.ts）
+- [ ] AUD-0390 【后端 chat-graph-bridge.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/chat-graph-bridge.ts）
+- [ ] AUD-0391 【后端 loops.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/loops.ts）
+- [ ] AUD-0392 【后端 loops.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/loops.ts）
+- [ ] AUD-0393 【后端 loops.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/loops.ts）
+- [ ] AUD-0394 【后端 loops.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/loops.ts）
+- [ ] AUD-0395 【后端 loops.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/loops.ts）
+- [ ] AUD-0396 【后端 memory.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/memory.ts）
+- [ ] AUD-0397 【后端 memory.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/memory.ts）
+- [ ] AUD-0398 【后端 memory.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/memory.ts）
+- [ ] AUD-0399 【后端 memory.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/memory.ts）
+- [ ] AUD-0400 【后端 memory.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/memory.ts）
+- [ ] AUD-0401 【后端 roles.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/roles.ts）
+- [ ] AUD-0402 【后端 roles.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/roles.ts）
+- [ ] AUD-0403 【后端 roles.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/roles.ts）
+- [ ] AUD-0404 【后端 roles.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/roles.ts）
+- [ ] AUD-0405 【后端 roles.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/science/roles.ts）
+- [ ] AUD-0406 【后端 session-text.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/session-text.ts）
+- [ ] AUD-0407 【后端 session-text.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/session-text.ts）
+- [ ] AUD-0408 【后端 session-text.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/session-text.ts）
+- [ ] AUD-0409 【后端 session-text.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/session-text.ts）
+- [ ] AUD-0410 【后端 session-text.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/session-text.ts）
+- [ ] AUD-0411 【后端 registry.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/skills/registry.ts）
+- [ ] AUD-0412 【后端 registry.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/skills/registry.ts）
+- [ ] AUD-0413 【后端 registry.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/skills/registry.ts）
+- [ ] AUD-0414 【后端 registry.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/skills/registry.ts）
+- [ ] AUD-0415 【后端 registry.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/skills/registry.ts）
+- [ ] AUD-0416 【后端 teams.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/teams.ts）
+- [ ] AUD-0417 【后端 teams.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/teams.ts）
+- [ ] AUD-0418 【后端 teams.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/teams.ts）
+- [ ] AUD-0419 【后端 teams.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/teams.ts）
+- [ ] AUD-0420 【后端 teams.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/teams.ts）
+- [ ] AUD-0421 【后端 thread-preview.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/thread-preview.ts）
+- [ ] AUD-0422 【后端 thread-preview.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/thread-preview.ts）
+- [ ] AUD-0423 【后端 thread-preview.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/thread-preview.ts）
+- [ ] AUD-0424 【后端 thread-preview.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/thread-preview.ts）
+- [ ] AUD-0425 【后端 thread-preview.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/thread-preview.ts）
+- [ ] AUD-0426 【后端 ask.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/tools/ask.ts）
+- [ ] AUD-0427 【后端 ask.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/tools/ask.ts）
+- [ ] AUD-0428 【后端 ask.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/tools/ask.ts）
+- [ ] AUD-0429 【后端 ask.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/tools/ask.ts）
+- [ ] AUD-0430 【后端 ask.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/tools/ask.ts）
+- [ ] AUD-0431 【后端 vision.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/vision.ts）
+- [ ] AUD-0432 【后端 vision.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/vision.ts）
+- [ ] AUD-0433 【后端 vision.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/vision.ts）
+- [ ] AUD-0434 【后端 vision.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/vision.ts）
+- [ ] AUD-0435 【后端 vision.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/vision.ts）
+- [ ] AUD-0436 【后端 web-search-manager.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search-manager.ts）
+- [ ] AUD-0437 【后端 web-search-manager.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search-manager.ts）
+- [ ] AUD-0438 【后端 web-search-manager.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search-manager.ts）
+- [ ] AUD-0439 【后端 web-search-manager.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search-manager.ts）
+- [ ] AUD-0440 【后端 web-search-manager.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search-manager.ts）
+- [ ] AUD-0441 【后端 web-search.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search.ts）
+- [ ] AUD-0442 【后端 web-search.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search.ts）
+- [ ] AUD-0443 【后端 web-search.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search.ts）
+- [ ] AUD-0444 【后端 web-search.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search.ts）
+- [ ] AUD-0445 【后端 web-search.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/web-search.ts）
+- [ ] AUD-0446 【后端 workspace.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/workspace.ts）
+- [ ] AUD-0447 【后端 workspace.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/workspace.ts）
+- [ ] AUD-0448 【后端 workspace.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/workspace.ts）
+- [ ] AUD-0449 【后端 workspace.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/workspace.ts）
+- [ ] AUD-0450 【后端 workspace.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/workspace.ts）
+- [ ] AUD-0451 【后端 worktrees.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/worktrees.ts）
+- [ ] AUD-0452 【后端 worktrees.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/worktrees.ts）
+- [ ] AUD-0453 【后端 worktrees.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/worktrees.ts）
+- [ ] AUD-0454 【后端 worktrees.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/worktrees.ts）
+- [ ] AUD-0455 【后端 worktrees.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/host/worktrees.ts）
+- [ ] AUD-0456 【后端 types.ts｜逻辑正确性】边界条件（空输入/空列表/超长字符串/Unicode）、分支与错误路径、返回值语义是否正确（packages/evoresearch-plugin/packages/evoresearch-plugin/src/shared/types.ts）
+- [ ] AUD-0457 【后端 types.ts｜错误处理】I/O 失败是否被捕获并给出可诊断错误；失败时是否留下半写状态；错误信息是否可定位（packages/evoresearch-plugin/packages/evoresearch-plugin/src/shared/types.ts）
+- [ ] AUD-0458 【后端 types.ts｜异步与并发】await 缺失、竞态窗口、读-改-写非原子、多进程/多实例并发写同一文件、SQLite 连接生命周期（packages/evoresearch-plugin/packages/evoresearch-plugin/src/shared/types.ts）
+- [ ] AUD-0459 【后端 types.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/packages/evoresearch-plugin/src/shared/types.ts）
+- [ ] AUD-0460 【后端 types.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/packages/evoresearch-plugin/src/shared/types.ts）
+- [ ] AUD-0461 【前端 chat.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/chat.ts）
+- [ ] AUD-0462 【前端 chat.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chat.ts）
+- [ ] AUD-0463 【前端 chat.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/chat.ts）
+- [ ] AUD-0464 【前端 chat.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/chat.ts）
+- [ ] AUD-0465 【前端 chat.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/chat.ts）
+- [ ] AUD-0466 【前端 chat.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chat.ts）
+- [ ] AUD-0467 【前端 chat.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/chat.ts）
+- [ ] AUD-0468 【前端 chatgraph-canvas.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-canvas.ts）
+- [ ] AUD-0469 【前端 chatgraph-canvas.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-canvas.ts）
+- [ ] AUD-0470 【前端 chatgraph-canvas.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-canvas.ts）
+- [ ] AUD-0471 【前端 chatgraph-canvas.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-canvas.ts）
+- [ ] AUD-0472 【前端 chatgraph-canvas.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-canvas.ts）
+- [ ] AUD-0473 【前端 chatgraph-canvas.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-canvas.ts）
+- [ ] AUD-0474 【前端 chatgraph-canvas.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-canvas.ts）
+- [ ] AUD-0475 【前端 chatgraph-fonts.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-fonts.ts）
+- [ ] AUD-0476 【前端 chatgraph-fonts.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-fonts.ts）
+- [ ] AUD-0477 【前端 chatgraph-fonts.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-fonts.ts）
+- [ ] AUD-0478 【前端 chatgraph-fonts.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-fonts.ts）
+- [ ] AUD-0479 【前端 chatgraph-fonts.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-fonts.ts）
+- [ ] AUD-0480 【前端 chatgraph-fonts.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-fonts.ts）
+- [ ] AUD-0481 【前端 chatgraph-fonts.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-fonts.ts）
+- [ ] AUD-0482 【前端 chatgraph-layout-worker.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout-worker.ts）
+- [ ] AUD-0483 【前端 chatgraph-layout-worker.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout-worker.ts）
+- [ ] AUD-0484 【前端 chatgraph-layout-worker.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout-worker.ts）
+- [ ] AUD-0485 【前端 chatgraph-layout-worker.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout-worker.ts）
+- [ ] AUD-0486 【前端 chatgraph-layout-worker.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout-worker.ts）
+- [ ] AUD-0487 【前端 chatgraph-layout-worker.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout-worker.ts）
+- [ ] AUD-0488 【前端 chatgraph-layout-worker.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout-worker.ts）
+- [ ] AUD-0489 【前端 chatgraph-layout.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout.ts）
+- [ ] AUD-0490 【前端 chatgraph-layout.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout.ts）
+- [ ] AUD-0491 【前端 chatgraph-layout.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout.ts）
+- [ ] AUD-0492 【前端 chatgraph-layout.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout.ts）
+- [ ] AUD-0493 【前端 chatgraph-layout.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout.ts）
+- [ ] AUD-0494 【前端 chatgraph-layout.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout.ts）
+- [ ] AUD-0495 【前端 chatgraph-layout.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph-layout.ts）
+- [ ] AUD-0496 【前端 chatgraph.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph.ts）
+- [ ] AUD-0497 【前端 chatgraph.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph.ts）
+- [ ] AUD-0498 【前端 chatgraph.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph.ts）
+- [ ] AUD-0499 【前端 chatgraph.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph.ts）
+- [ ] AUD-0500 【前端 chatgraph.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph.ts）
+- [ ] AUD-0501 【前端 chatgraph.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph.ts）
+- [ ] AUD-0502 【前端 chatgraph.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/chatgraph.ts）
+- [ ] AUD-0503 【前端 client-state.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/client-state.ts）
+- [ ] AUD-0504 【前端 client-state.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/client-state.ts）
+- [ ] AUD-0505 【前端 client-state.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/client-state.ts）
+- [ ] AUD-0506 【前端 client-state.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/client-state.ts）
+- [ ] AUD-0507 【前端 client-state.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/client-state.ts）
+- [ ] AUD-0508 【前端 client-state.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/client-state.ts）
+- [ ] AUD-0509 【前端 client-state.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/client-state.ts）
+- [ ] AUD-0510 【前端 composer-assist.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/composer-assist.ts）
+- [ ] AUD-0511 【前端 composer-assist.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/composer-assist.ts）
+- [ ] AUD-0512 【前端 composer-assist.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/composer-assist.ts）
+- [ ] AUD-0513 【前端 composer-assist.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/composer-assist.ts）
+- [ ] AUD-0514 【前端 composer-assist.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/composer-assist.ts）
+- [ ] AUD-0515 【前端 composer-assist.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/composer-assist.ts）
+- [ ] AUD-0516 【前端 composer-assist.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/composer-assist.ts）
+- [ ] AUD-0517 【前端 context-trace.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/context-trace.ts）
+- [ ] AUD-0518 【前端 context-trace.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/context-trace.ts）
+- [ ] AUD-0519 【前端 context-trace.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/context-trace.ts）
+- [ ] AUD-0520 【前端 context-trace.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/context-trace.ts）
+- [ ] AUD-0521 【前端 context-trace.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/context-trace.ts）
+- [ ] AUD-0522 【前端 context-trace.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/context-trace.ts）
+- [ ] AUD-0523 【前端 context-trace.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/context-trace.ts）
+- [ ] AUD-0524 【前端 conversation.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/conversation.ts）
+- [ ] AUD-0525 【前端 conversation.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/conversation.ts）
+- [ ] AUD-0526 【前端 conversation.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/conversation.ts）
+- [ ] AUD-0527 【前端 conversation.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/conversation.ts）
+- [ ] AUD-0528 【前端 conversation.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/conversation.ts）
+- [ ] AUD-0529 【前端 conversation.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/conversation.ts）
+- [ ] AUD-0530 【前端 conversation.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/conversation.ts）
+- [ ] AUD-0531 【前端 desktop.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/desktop.ts）
+- [ ] AUD-0532 【前端 desktop.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/desktop.ts）
+- [ ] AUD-0533 【前端 desktop.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/desktop.ts）
+- [ ] AUD-0534 【前端 desktop.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/desktop.ts）
+- [ ] AUD-0535 【前端 desktop.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/desktop.ts）
+- [ ] AUD-0536 【前端 desktop.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/desktop.ts）
+- [ ] AUD-0537 【前端 desktop.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/desktop.ts）
+- [ ] AUD-0538 【前端 dropdown.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/dropdown.ts）
+- [ ] AUD-0539 【前端 dropdown.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/dropdown.ts）
+- [ ] AUD-0540 【前端 dropdown.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/dropdown.ts）
+- [ ] AUD-0541 【前端 dropdown.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/dropdown.ts）
+- [ ] AUD-0542 【前端 dropdown.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/dropdown.ts）
+- [ ] AUD-0543 【前端 dropdown.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/dropdown.ts）
+- [ ] AUD-0544 【前端 dropdown.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/dropdown.ts）
+- [ ] AUD-0545 【前端 experiment-workspace.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/experiment-workspace.ts）
+- [ ] AUD-0546 【前端 experiment-workspace.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/experiment-workspace.ts）
+- [ ] AUD-0547 【前端 experiment-workspace.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/experiment-workspace.ts）
+- [ ] AUD-0548 【前端 experiment-workspace.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/experiment-workspace.ts）
+- [ ] AUD-0549 【前端 experiment-workspace.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/experiment-workspace.ts）
+- [ ] AUD-0550 【前端 experiment-workspace.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/experiment-workspace.ts）
+- [ ] AUD-0551 【前端 experiment-workspace.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/experiment-workspace.ts）
+- [ ] AUD-0552 【前端 experiments.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/experiments.ts）
+- [ ] AUD-0553 【前端 experiments.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/experiments.ts）
+- [ ] AUD-0554 【前端 experiments.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/experiments.ts）
+- [ ] AUD-0555 【前端 experiments.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/experiments.ts）
+- [ ] AUD-0556 【前端 experiments.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/experiments.ts）
+- [ ] AUD-0557 【前端 experiments.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/experiments.ts）
+- [ ] AUD-0558 【前端 experiments.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/experiments.ts）
+- [ ] AUD-0559 【前端 i18n.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/i18n.ts）
+- [ ] AUD-0560 【前端 i18n.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/i18n.ts）
+- [ ] AUD-0561 【前端 i18n.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/i18n.ts）
+- [ ] AUD-0562 【前端 i18n.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/i18n.ts）
+- [ ] AUD-0563 【前端 i18n.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/i18n.ts）
+- [ ] AUD-0564 【前端 i18n.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/i18n.ts）
+- [ ] AUD-0565 【前端 i18n.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/i18n.ts）
+- [ ] AUD-0566 【前端 index.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/index.ts）
+- [ ] AUD-0567 【前端 index.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/index.ts）
+- [ ] AUD-0568 【前端 index.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/index.ts）
+- [ ] AUD-0569 【前端 index.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/index.ts）
+- [ ] AUD-0570 【前端 index.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/index.ts）
+- [ ] AUD-0571 【前端 index.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/index.ts）
+- [ ] AUD-0572 【前端 index.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/index.ts）
+- [ ] AUD-0573 【前端 inspector.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/inspector.ts）
+- [ ] AUD-0574 【前端 inspector.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/inspector.ts）
+- [ ] AUD-0575 【前端 inspector.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/inspector.ts）
+- [ ] AUD-0576 【前端 inspector.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/inspector.ts）
+- [ ] AUD-0577 【前端 inspector.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/inspector.ts）
+- [ ] AUD-0578 【前端 inspector.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/inspector.ts）
+- [ ] AUD-0579 【前端 inspector.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/inspector.ts）
+- [ ] AUD-0580 【前端 library-panel.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/library-panel.ts）
+- [ ] AUD-0581 【前端 library-panel.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/library-panel.ts）
+- [ ] AUD-0582 【前端 library-panel.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/library-panel.ts）
+- [ ] AUD-0583 【前端 library-panel.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/library-panel.ts）
+- [ ] AUD-0584 【前端 library-panel.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/library-panel.ts）
+- [ ] AUD-0585 【前端 library-panel.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/library-panel.ts）
+- [ ] AUD-0586 【前端 library-panel.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/library-panel.ts）
+- [ ] AUD-0587 【前端 markdown.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/markdown.ts）
+- [ ] AUD-0588 【前端 markdown.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/markdown.ts）
+- [ ] AUD-0589 【前端 markdown.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/markdown.ts）
+- [ ] AUD-0590 【前端 markdown.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/markdown.ts）
+- [ ] AUD-0591 【前端 markdown.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/markdown.ts）
+- [ ] AUD-0592 【前端 markdown.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/markdown.ts）
+- [ ] AUD-0593 【前端 markdown.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/markdown.ts）
+- [ ] AUD-0594 【前端 panels.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/panels.ts）
+- [ ] AUD-0595 【前端 panels.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/panels.ts）
+- [ ] AUD-0596 【前端 panels.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/panels.ts）
+- [ ] AUD-0597 【前端 panels.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/panels.ts）
+- [ ] AUD-0598 【前端 panels.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/panels.ts）
+- [ ] AUD-0599 【前端 panels.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/panels.ts）
+- [ ] AUD-0600 【前端 panels.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/panels.ts）
+- [ ] AUD-0601 【前端 research-notes.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/research-notes.ts）
+- [ ] AUD-0602 【前端 research-notes.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/research-notes.ts）
+- [ ] AUD-0603 【前端 research-notes.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/research-notes.ts）
+- [ ] AUD-0604 【前端 research-notes.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/research-notes.ts）
+- [ ] AUD-0605 【前端 research-notes.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/research-notes.ts）
+- [ ] AUD-0606 【前端 research-notes.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/research-notes.ts）
+- [ ] AUD-0607 【前端 research-notes.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/research-notes.ts）
+- [ ] AUD-0608 【前端 session-actions.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/session-actions.ts）
+- [ ] AUD-0609 【前端 session-actions.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/session-actions.ts）
+- [ ] AUD-0610 【前端 session-actions.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/session-actions.ts）
+- [ ] AUD-0611 【前端 session-actions.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/session-actions.ts）
+- [ ] AUD-0612 【前端 session-actions.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/session-actions.ts）
+- [ ] AUD-0613 【前端 session-actions.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/session-actions.ts）
+- [ ] AUD-0614 【前端 session-actions.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/session-actions.ts）
+- [ ] AUD-0615 【前端 session-dock.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/session-dock.ts）
+- [ ] AUD-0616 【前端 session-dock.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/session-dock.ts）
+- [ ] AUD-0617 【前端 session-dock.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/session-dock.ts）
+- [ ] AUD-0618 【前端 session-dock.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/session-dock.ts）
+- [ ] AUD-0619 【前端 session-dock.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/session-dock.ts）
+- [ ] AUD-0620 【前端 session-dock.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/session-dock.ts）
+- [ ] AUD-0621 【前端 session-dock.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/session-dock.ts）
+- [ ] AUD-0622 【前端 settings.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/settings.ts）
+- [ ] AUD-0623 【前端 settings.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/settings.ts）
+- [ ] AUD-0624 【前端 settings.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/settings.ts）
+- [ ] AUD-0625 【前端 settings.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/settings.ts）
+- [ ] AUD-0626 【前端 settings.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/settings.ts）
+- [ ] AUD-0627 【前端 settings.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/settings.ts）
+- [ ] AUD-0628 【前端 settings.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/settings.ts）
+- [ ] AUD-0629 【前端 statusbar.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/statusbar.ts）
+- [ ] AUD-0630 【前端 statusbar.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/statusbar.ts）
+- [ ] AUD-0631 【前端 statusbar.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/statusbar.ts）
+- [ ] AUD-0632 【前端 statusbar.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/statusbar.ts）
+- [ ] AUD-0633 【前端 statusbar.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/statusbar.ts）
+- [ ] AUD-0634 【前端 statusbar.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/statusbar.ts）
+- [ ] AUD-0635 【前端 statusbar.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/statusbar.ts）
+- [ ] AUD-0636 【前端 styles.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/styles.ts）
+- [ ] AUD-0637 【前端 styles.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/styles.ts）
+- [ ] AUD-0638 【前端 styles.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/styles.ts）
+- [ ] AUD-0639 【前端 styles.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/styles.ts）
+- [ ] AUD-0640 【前端 styles.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/styles.ts）
+- [ ] AUD-0641 【前端 styles.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/styles.ts）
+- [ ] AUD-0642 【前端 styles.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/styles.ts）
+- [ ] AUD-0643 【前端 tab-file.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-file.ts）
+- [ ] AUD-0644 【前端 tab-file.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-file.ts）
+- [ ] AUD-0645 【前端 tab-file.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-file.ts）
+- [ ] AUD-0646 【前端 tab-file.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-file.ts）
+- [ ] AUD-0647 【前端 tab-file.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-file.ts）
+- [ ] AUD-0648 【前端 tab-file.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-file.ts）
+- [ ] AUD-0649 【前端 tab-file.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-file.ts）
+- [ ] AUD-0650 【前端 tab-files.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-files.ts）
+- [ ] AUD-0651 【前端 tab-files.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-files.ts）
+- [ ] AUD-0652 【前端 tab-files.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-files.ts）
+- [ ] AUD-0653 【前端 tab-files.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-files.ts）
+- [ ] AUD-0654 【前端 tab-files.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-files.ts）
+- [ ] AUD-0655 【前端 tab-files.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-files.ts）
+- [ ] AUD-0656 【前端 tab-files.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-files.ts）
+- [ ] AUD-0657 【前端 tab-monaco.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-monaco.ts）
+- [ ] AUD-0658 【前端 tab-monaco.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-monaco.ts）
+- [ ] AUD-0659 【前端 tab-monaco.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-monaco.ts）
+- [ ] AUD-0660 【前端 tab-monaco.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-monaco.ts）
+- [ ] AUD-0661 【前端 tab-monaco.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-monaco.ts）
+- [ ] AUD-0662 【前端 tab-monaco.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-monaco.ts）
+- [ ] AUD-0663 【前端 tab-monaco.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/tab-monaco.ts）
+- [ ] AUD-0664 【前端 theme.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/theme.ts）
+- [ ] AUD-0665 【前端 theme.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/theme.ts）
+- [ ] AUD-0666 【前端 theme.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/theme.ts）
+- [ ] AUD-0667 【前端 theme.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/theme.ts）
+- [ ] AUD-0668 【前端 theme.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/theme.ts）
+- [ ] AUD-0669 【前端 theme.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/theme.ts）
+- [ ] AUD-0670 【前端 theme.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/theme.ts）
+- [ ] AUD-0671 【前端 threadlist.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/threadlist.ts）
+- [ ] AUD-0672 【前端 threadlist.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/threadlist.ts）
+- [ ] AUD-0673 【前端 threadlist.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/threadlist.ts）
+- [ ] AUD-0674 【前端 threadlist.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/threadlist.ts）
+- [ ] AUD-0675 【前端 threadlist.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/threadlist.ts）
+- [ ] AUD-0676 【前端 threadlist.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/threadlist.ts）
+- [ ] AUD-0677 【前端 threadlist.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/threadlist.ts）
+- [ ] AUD-0678 【前端 toast.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/toast.ts）
+- [ ] AUD-0679 【前端 toast.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/toast.ts）
+- [ ] AUD-0680 【前端 toast.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/toast.ts）
+- [ ] AUD-0681 【前端 toast.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/toast.ts）
+- [ ] AUD-0682 【前端 toast.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/toast.ts）
+- [ ] AUD-0683 【前端 toast.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/toast.ts）
+- [ ] AUD-0684 【前端 toast.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/toast.ts）
+- [ ] AUD-0685 【前端 trajectory.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/trajectory.ts）
+- [ ] AUD-0686 【前端 trajectory.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/trajectory.ts）
+- [ ] AUD-0687 【前端 trajectory.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/trajectory.ts）
+- [ ] AUD-0688 【前端 trajectory.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/trajectory.ts）
+- [ ] AUD-0689 【前端 trajectory.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/trajectory.ts）
+- [ ] AUD-0690 【前端 trajectory.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/trajectory.ts）
+- [ ] AUD-0691 【前端 trajectory.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/trajectory.ts）
+- [ ] AUD-0692 【前端 workspace-files.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/packages/evoresearch-app/src/client/workspace-files.ts）
+- [ ] AUD-0693 【前端 workspace-files.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/packages/evoresearch-app/src/client/workspace-files.ts）
+- [ ] AUD-0694 【前端 workspace-files.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/packages/evoresearch-app/src/client/workspace-files.ts）
+- [ ] AUD-0695 【前端 workspace-files.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/packages/evoresearch-app/src/client/workspace-files.ts）
+- [ ] AUD-0696 【前端 workspace-files.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/packages/evoresearch-app/src/client/workspace-files.ts）
+- [ ] AUD-0697 【前端 workspace-files.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/packages/evoresearch-app/src/client/workspace-files.ts）
+- [ ] AUD-0698 【前端 workspace-files.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/packages/evoresearch-app/src/client/workspace-files.ts）
+- [ ] AUD-0699 【桌面 lib.rs｜逻辑正确性】边界与错误路径（desktop/src-tauri/src/lib.rs）
+- [ ] AUD-0700 【桌面 lib.rs｜跨平台】win32/POSIX 分支与硬编码路径（desktop/src-tauri/src/lib.rs）
+- [ ] AUD-0701 【桌面 lib.rs｜死代码与冗余】未引用/重复/过期注释（desktop/src-tauri/src/lib.rs）
+- [ ] AUD-0702 【桌面 lib.rs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（desktop/src-tauri/src/lib.rs）
+- [ ] AUD-0703 【桌面 main.rs｜逻辑正确性】边界与错误路径（desktop/src-tauri/src/main.rs）
+- [ ] AUD-0704 【桌面 main.rs｜跨平台】win32/POSIX 分支与硬编码路径（desktop/src-tauri/src/main.rs）
+- [ ] AUD-0705 【桌面 main.rs｜死代码与冗余】未引用/重复/过期注释（desktop/src-tauri/src/main.rs）
+- [ ] AUD-0706 【桌面 main.rs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（desktop/src-tauri/src/main.rs）
+- [ ] AUD-0707 【桌面 launch.js｜逻辑正确性】边界与错误路径（desktop/sidecar/launch.js）
+- [ ] AUD-0708 【桌面 launch.js｜跨平台】win32/POSIX 分支与硬编码路径（desktop/sidecar/launch.js）
+- [ ] AUD-0709 【桌面 launch.js｜死代码与冗余】未引用/重复/过期注释（desktop/sidecar/launch.js）
+- [ ] AUD-0710 【桌面 launch.js｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（desktop/sidecar/launch.js）
+- [ ] AUD-0711 【桌面 build.mjs｜逻辑正确性】边界与错误路径（desktop/scripts/build.mjs）
+- [ ] AUD-0712 【桌面 build.mjs｜跨平台】win32/POSIX 分支与硬编码路径（desktop/scripts/build.mjs）
+- [ ] AUD-0713 【桌面 build.mjs｜死代码与冗余】未引用/重复/过期注释（desktop/scripts/build.mjs）
+- [ ] AUD-0714 【桌面 build.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（desktop/scripts/build.mjs）
+- [ ] AUD-0715 【桌面 bundle-sidecar.mjs｜逻辑正确性】边界与错误路径（desktop/scripts/bundle-sidecar.mjs）
+- [ ] AUD-0716 【桌面 bundle-sidecar.mjs｜跨平台】win32/POSIX 分支与硬编码路径（desktop/scripts/bundle-sidecar.mjs）
+- [ ] AUD-0717 【桌面 bundle-sidecar.mjs｜死代码与冗余】未引用/重复/过期注释（desktop/scripts/bundle-sidecar.mjs）
+- [ ] AUD-0718 【桌面 bundle-sidecar.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（desktop/scripts/bundle-sidecar.mjs）
+- [ ] AUD-0719 【脚本 package.json｜逻辑正确性】边界与错误路径（package.json）
+- [ ] AUD-0720 【脚本 package.json｜跨平台】win32/POSIX 分支与硬编码路径（package.json）
+- [ ] AUD-0721 【脚本 package.json｜死代码与冗余】未引用/重复/过期注释（package.json）
+- [ ] AUD-0722 【脚本 package.json｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（package.json）
+- [ ] AUD-0723 【脚本 start-web.mjs｜逻辑正确性】边界与错误路径（scripts/start-web.mjs）
+- [ ] AUD-0724 【脚本 start-web.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/start-web.mjs）
+- [ ] AUD-0725 【脚本 start-web.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/start-web.mjs）
+- [ ] AUD-0726 【脚本 start-web.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/start-web.mjs）
+- [ ] AUD-0727 【脚本 web-port.mjs｜逻辑正确性】边界与错误路径（scripts/web-port.mjs）
+- [ ] AUD-0728 【脚本 web-port.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/web-port.mjs）
+- [ ] AUD-0729 【脚本 web-port.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/web-port.mjs）
+- [ ] AUD-0730 【脚本 web-port.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/web-port.mjs）
+- [ ] AUD-0731 【脚本 build-plugin.mjs｜逻辑正确性】边界与错误路径（scripts/build-plugin.mjs）
+- [ ] AUD-0732 【脚本 build-plugin.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/build-plugin.mjs）
+- [ ] AUD-0733 【脚本 build-plugin.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/build-plugin.mjs）
+- [ ] AUD-0734 【脚本 build-plugin.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/build-plugin.mjs）
+- [ ] AUD-0735 【脚本 build-app.mjs｜逻辑正确性】边界与错误路径（scripts/build-app.mjs）
+- [ ] AUD-0736 【脚本 build-app.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/build-app.mjs）
+- [ ] AUD-0737 【脚本 build-app.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/build-app.mjs）
+- [ ] AUD-0738 【脚本 build-app.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/build-app.mjs）
+- [ ] AUD-0739 【脚本 build-client.mjs｜逻辑正确性】边界与错误路径（scripts/build-client.mjs）
+- [ ] AUD-0740 【脚本 build-client.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/build-client.mjs）
+- [ ] AUD-0741 【脚本 build-client.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/build-client.mjs）
+- [ ] AUD-0742 【脚本 build-client.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/build-client.mjs）
+- [ ] AUD-0743 【脚本 verify-chatgraph-xyflow.mjs｜逻辑正确性】边界与错误路径（scripts/verify-chatgraph-xyflow.mjs）
+- [ ] AUD-0744 【脚本 verify-chatgraph-xyflow.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/verify-chatgraph-xyflow.mjs）
+- [ ] AUD-0745 【脚本 verify-chatgraph-xyflow.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/verify-chatgraph-xyflow.mjs）
+- [ ] AUD-0746 【脚本 verify-chatgraph-xyflow.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/verify-chatgraph-xyflow.mjs）
+- [ ] AUD-0747 【脚本 verify-bundle.mjs｜逻辑正确性】边界与错误路径（scripts/verify-bundle.mjs）
+- [ ] AUD-0748 【脚本 verify-bundle.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/verify-bundle.mjs）
+- [ ] AUD-0749 【脚本 verify-bundle.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/verify-bundle.mjs）
+- [ ] AUD-0750 【脚本 verify-bundle.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/verify-bundle.mjs）
+- [ ] AUD-0751 【脚本 check-docs.mjs｜逻辑正确性】边界与错误路径（scripts/check-docs.mjs）
+- [ ] AUD-0752 【脚本 check-docs.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/check-docs.mjs）
+- [ ] AUD-0753 【脚本 check-docs.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/check-docs.mjs）
+- [ ] AUD-0754 【脚本 check-docs.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/check-docs.mjs）
+- [ ] AUD-0755 【脚本 verify-domain-e2e.mjs｜逻辑正确性】边界与错误路径（scripts/verify-domain-e2e.mjs）
+- [ ] AUD-0756 【脚本 verify-domain-e2e.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/verify-domain-e2e.mjs）
+- [ ] AUD-0757 【脚本 verify-domain-e2e.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/verify-domain-e2e.mjs）
+- [ ] AUD-0758 【脚本 verify-domain-e2e.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/verify-domain-e2e.mjs）
+- [ ] AUD-0759 【脚本 verify-acceptance.mjs｜逻辑正确性】边界与错误路径（scripts/verify-acceptance.mjs）
+- [ ] AUD-0760 【脚本 verify-acceptance.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/verify-acceptance.mjs）
+- [ ] AUD-0761 【脚本 verify-acceptance.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/verify-acceptance.mjs）
+- [ ] AUD-0762 【脚本 verify-acceptance.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/verify-acceptance.mjs）
+- [ ] AUD-0763 【脚本 verify.mjs｜逻辑正确性】边界与错误路径（scripts/verify.mjs）
+- [ ] AUD-0764 【脚本 verify.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/verify.mjs）
+- [ ] AUD-0765 【脚本 verify.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/verify.mjs）
+- [ ] AUD-0766 【脚本 verify.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/verify.mjs）
+- [ ] AUD-0767 【CI/Profile release.yml｜逻辑正确性】边界与错误路径（.github/workflows/release.yml）
+- [ ] AUD-0768 【CI/Profile release.yml｜死代码与冗余】未引用/重复/过期注释（.github/workflows/release.yml）
+- [ ] AUD-0769 【CI/Profile release.yml｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（.github/workflows/release.yml）
+- [ ] AUD-0770 【CI/Profile cordis.yml｜逻辑正确性】边界与错误路径（profiles/evoresearch/cordis.yml）
+- [ ] AUD-0771 【CI/Profile cordis.yml｜死代码与冗余】未引用/重复/过期注释（profiles/evoresearch/cordis.yml）
+- [ ] AUD-0772 【CI/Profile cordis.yml｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（profiles/evoresearch/cordis.yml）
+- [ ] AUD-0773 【CI/Profile cordis.patch.yml｜逻辑正确性】边界与错误路径（profiles/evoresearch/cordis.patch.yml）
+- [ ] AUD-0774 【CI/Profile cordis.patch.yml｜死代码与冗余】未引用/重复/过期注释（profiles/evoresearch/cordis.patch.yml）
+- [ ] AUD-0775 【CI/Profile cordis.patch.yml｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（profiles/evoresearch/cordis.patch.yml）
+- [ ] AUD-0776 【CI/Profile package.json｜逻辑正确性】边界与错误路径（profiles/evoresearch/package.json）
+- [ ] AUD-0777 【CI/Profile package.json｜死代码与冗余】未引用/重复/过期注释（profiles/evoresearch/package.json）
+- [ ] AUD-0778 【CI/Profile package.json｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（profiles/evoresearch/package.json）
+- [ ] AUD-0779 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/academic-search.test.ts）
+- [ ] AUD-0780 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/api.test.ts）
+- [ ] AUD-0781 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/ask-tool.test.ts）
+- [ ] AUD-0782 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/autorelatedwork-search.test.ts）
+- [ ] AUD-0783 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/backfill.test.ts）
+- [ ] AUD-0784 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/classifier.test.ts）
+- [ ] AUD-0785 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/context-assembler.test.ts）
+- [ ] AUD-0786 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/context-integration.test.ts）
+- [ ] AUD-0787 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/context-window.test.ts）
+- [ ] AUD-0788 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/cron.test.ts）
+- [ ] AUD-0789 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/daily-report.test.ts）
+- [ ] AUD-0790 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/data-paths.test.ts）
+- [ ] AUD-0791 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/db.test.ts）
+- [ ] AUD-0792 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/evolution.test.ts）
+- [ ] AUD-0793 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/experiment-process.test.ts）
+- [ ] AUD-0794 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/figures.test.ts）
+- [ ] AUD-0795 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/flow.test.ts）
+- [ ] AUD-0796 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/graph-context-links.test.ts）
+- [ ] AUD-0797 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/graph-notes-bridge.test.ts）
+- [ ] AUD-0798 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/graph-semantics.test.ts）
+- [ ] AUD-0799 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/jobs-hub.test.ts）
+- [ ] AUD-0800 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/latex-env.test.ts）
+- [ ] AUD-0801 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/ledger.test.ts）
+- [ ] AUD-0802 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/library-graph-ref.test.ts）
+- [ ] AUD-0803 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/library-tools.test.ts）
+- [ ] AUD-0804 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/library-write.test.ts）
+- [ ] AUD-0805 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/memory-text.test.ts）
+- [ ] AUD-0806 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/notes-memory-paths.test.ts）
+- [ ] AUD-0807 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/notes.test.ts）
+- [ ] AUD-0808 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/overflow-watch.test.ts）
+- [ ] AUD-0809 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/paper-navigator.test.ts）
+- [ ] AUD-0810 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/paths.test.ts）
+- [ ] AUD-0811 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/platform-context.test.ts）
+- [ ] AUD-0812 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/platform-models-agents.test.ts）
+- [ ] AUD-0813 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/platform-skills-mcp.test.ts）
+- [ ] AUD-0814 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/recovery.test.ts）
+- [ ] AUD-0815 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/retrieval-detail.test.ts）
+- [ ] AUD-0816 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/science.test.ts）
+- [ ] AUD-0817 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/session-slug.test.ts）
+- [ ] AUD-0818 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/store-edge-types.test.ts）
+- [ ] AUD-0819 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/store.test.ts）
+- [ ] AUD-0820 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/teams.test.ts）
+- [ ] AUD-0821 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/thread-preview.test.ts）
+- [ ] AUD-0822 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/title.test.ts）
+- [ ] AUD-0823 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/unattended-shell.test.ts）
+- [ ] AUD-0824 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/web-search.test.ts）
+- [ ] AUD-0825 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）、失败路径是否有用例（packages/evoresearch-plugin/packages/evoresearch-plugin/test/worktrees-env.test.ts）
+- [ ] AUD-0826 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）（packages/evoresearch-app/packages/evoresearch-app/test/chatgraph-layout.test.ts）
+- [ ] AUD-0827 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）（packages/evoresearch-app/packages/evoresearch-app/test/composer-assist.test.ts）
+- [ ] AUD-0828 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）（packages/evoresearch-app/packages/evoresearch-app/test/settings.test.ts）
+- [ ] AUD-0829 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）（packages/evoresearch-app/packages/evoresearch-app/test/workspace-api.test.ts）
+- [ ] AUD-0830 【测试缺口｜补测评估】host/experiment-rounds.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0831 【测试缺口｜补测评估】host/commands.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0832 【测试缺口｜补测评估】host/core/llm.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0833 【测试缺口｜补测评估】host/science/chat-graph-bridge.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0834 【测试缺口｜补测评估】host/platform/unattended-registry.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0835 【测试缺口｜补测评估】host/memory/packet.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0836 【测试缺口｜补测评估】host/channels/adapters.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0837 【测试缺口｜补测评估】host/vision.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0838 【测试缺口｜补测评估】host/rewind.ts：评估风险并决定是否补最小回归测试
+- [ ] AUD-0839 【测试缺口｜补测评估】host/api.ts（283 端点仅 3 用例）：评估风险并决定是否补最小回归测试
+- [ ] AUD-0840 【测试缺口｜补测评估】desktop/src-tauri/src/lib.rs（零 Rust 测试）：评估风险并决定是否补最小回归测试
+- [ ] AUD-0841 【测试缺口｜补测评估】desktop/sidecar/launch.js（零测试）：评估风险并决定是否补最小回归测试
+- [ ] AUD-0842 【测试缺口｜补测评估】前端 React 组件（零渲染测试）：评估风险并决定是否补最小回归测试
+- [ ] AUD-0843 【领域清单｜数据隔离】main 仓库 start:web 数据根为 .tmp-dev\.evoresearch-data，实际启动日志 dataRoot 与之一致
+- [ ] AUD-0844 【领域清单｜数据隔离】worktree 内 start:web 自动切到 .tmp-dev\.evoresearch-data-<分支>-<标识> 独立根，日志验证
+- [ ] AUD-0845 【领域清单｜数据隔离】worktree 数据根目录名的分支非法字符收敛与短标识防碰撞逻辑正确（sanitizeBranch）
+- [ ] AUD-0846 【领域清单｜数据隔离】detached HEAD 时数据根用 detached-<标识> 命名
+- [ ] AUD-0847 【领域清单｜数据隔离】--root <绝对路径> 显式覆盖在 worktree 中优先生效（不被自动隔离覆盖）
+- [ ] AUD-0848 【领域清单｜数据隔离】启动器强制 DSH_HOME=EVORESEARCH_ROOT=EVORESEARCH_DATA_ROOT 三同值
+- [ ] AUD-0849 【领域清单｜数据隔离】端口探测从 3081 起、占用递增、绝不绑定 3080（RESERVED_PORTS）
+- [ ] AUD-0850 【领域清单｜数据隔离】并发启动多实例时端口分配行为可接受（TOCTOU 窗口的实际影响评估）
+- [ ] AUD-0851 【领域清单｜数据隔离】正式 Web 根 .evoresearch-data 与开发根互不读写（启动参数核对）
+- [ ] AUD-0852 【领域清单｜数据隔离】EvoResearch 不触碰 C:\Users\Karbo\.dsh 与 3080（代码层确认无任何硬编码引用）
+- [ ] AUD-0853 【领域清单｜数据隔离】profile junction 由启动器自动建立在数据根下，target 不符自动重建
+- [ ] AUD-0854 【领域清单｜数据隔离】profiles junction 断裂/缺失时启动报错信息能引导 npm install
+- [ ] AUD-0855 【领域清单｜数据隔离】EVORESEARCH_PATHS_CONFIG 与 .evoresearch-paths.json 兼容读取（含旧字段 evoResearchDataRoot）
+- [ ] AUD-0856 【领域清单｜数据隔离】restart 文件机制（EVORESEARCH_RESTART_FILE）重启后端口重选不残留旧进程
+- [ ] AUD-0857 【领域清单｜数据隔离】stopChild 超时后 Windows taskkill /t /f 树杀生效且不误杀其他进程
+- [ ] AUD-0858 【领域清单｜数据隔离】桌面版数据根在 exe 同级 .evoresearch-data（resource_dir 下），随程序目录迁移
+- [ ] AUD-0859 【领域清单｜数据隔离】桌面版 EVORESEARCH_DATA_HOME / EVORESEARCH_PORT_FILE 正确传入 sidecar
+- [ ] AUD-0860 【领域清单｜数据隔离】桌面版启动即删旧 port.json 的双实例影响评估
+- [ ] AUD-0861 【领域清单｜数据隔离】插件 dataRoot 解析优先级：config.dataRoot > EVORESEARCH_ROOT > EVORESEARCH_DATA_ROOT > cwd
+- [ ] AUD-0862 【领域清单｜数据隔离】migrateLegacyPluginData 旧 .evoresearch-data 迁移到 plugins/ 的冲突处理
+- [ ] AUD-0863 【领域清单｜URL 短化】?t=<slug> 打开会话；slug 为英文别名或 s-<8hex> 兜底
+- [ ] AUD-0864 【领域清单｜URL 短化】旧参数 threadId=/view=/inspector=/sidebar=/resend= 完整单词链接自动升级为短形式并清理 URL
+- [ ] AUD-0865 【领域清单｜URL 短化】v=ws|sk|mem|sch|ch|tm|exp|note|lib 九个视图枚举全部可开且写入短值
+- [ ] AUD-0866 【领域清单｜URL 短化】it=ws|ag|ch 检查器子标签枚举与 i= 开关联动正确
+- [ ] AUD-0867 【领域清单｜URL 短化】sb=1/0 强制展开/收起窄屏抽屉并持久化
+- [ ] AUD-0868 【领域清单｜URL 短化】r=<文本> 编辑重发参数在会话打开后正确填充 composer 并清理
+- [ ] AUD-0869 【领域清单｜URL 短化】未知视图值透传不崩溃；未知参数不破坏解析
+- [ ] AUD-0870 【领域清单｜URL 短化】session-slug-ensure 并发去重（同一会话重复调用不产生重复映射）
+- [ ] AUD-0871 【领域清单｜URL 短化】session-slug-lookup 对未映射 slug 的兜底行为（s-<8hex> 直开）
+- [ ] AUD-0872 【领域清单｜URL 短化】slug 冲突（不同会话生成同名 slug）处理策略验证
+- [ ] AUD-0873 【领域清单｜URL 短化】URL 中不出现完整 session-<uuid> 或长参数（grep 验证写入路径）
+- [ ] AUD-0874 【领域清单｜URL 短化】删除会话后其 slug 在 session-meta.json 的残留清理（对照 api.ts dropSessionRefs 可疑点）
+- [ ] AUD-0875 【领域清单｜会话与项目】新建项目：名限小写字母数字连字符 ≤64；非法名被拒并有提示
+- [ ] AUD-0876 【领域清单｜会话与项目】项目导入：临时目录+原子改名，中途失败不留半成品目录
+- [ ] AUD-0877 【领域清单｜会话与项目】项目自动创建（LLM 生成 slug）失败时的兜底名
+- [ ] AUD-0878 【领域清单｜会话与项目】项目删除级联：projects/<name>、ledgers/<slug>、chat-graphs、session 缓存一致性
+- [ ] AUD-0879 【领域清单｜会话与项目】projectDeleteDisk 的 dataRoot 越界保护（构造 ../ 项目名验证拒绝）
+- [ ] AUD-0880 【领域清单｜会话与项目】会话置顶/标签色/归档/删除在刷新后持久（client-state.json 写穿）
+- [ ] AUD-0881 【领域清单｜会话与项目】拖拽手动排序持久化与并发写合并（80ms 防抖队列）
+- [ ] AUD-0882 【领域清单｜会话与项目】会话删除级联取消 JobHub 任务（sessionDeleteCascade）
+- [ ] AUD-0883 【领域清单｜会话与项目】threadsSearch 全文检索命中与中文子串兜底路径
+- [ ] AUD-0884 【领域清单｜记忆系统】会话事件→Turn Catalog 落库（research_turns+FTS）端到端验证
+- [ ] AUD-0885 【领域清单｜记忆系统】分类状态机（category_states）与记忆包生成正确
+- [ ] AUD-0886 【领域清单｜记忆系统】Profile 读写/删除/重命名与 systemPrompt identity-profile 注入联动
+- [ ] AUD-0887 【领域清单｜记忆系统】observations 列表与边（observation_links）展示一致
+- [ ] AUD-0888 【领域清单｜记忆系统】goals/goal_proposals 提案-响应闭环
+- [ ] AUD-0889 【领域清单｜记忆系统】长文本 MEM-06 archives/<turnId> 落盘与读回
+- [ ] AUD-0890 【领域清单｜记忆系统】启动对账备份 memories/backups 触发条件与恢复路径
+- [ ] AUD-0891 【领域清单｜记忆系统】同会话并发两条用户消息的 activeTurns 覆盖问题（可疑点复现）
+- [ ] AUD-0892 【领域清单｜记忆系统】worktree 各自独立 research_memory.db 互不串（双根对比）
+- [ ] AUD-0893 【领域清单｜图谱】graphGet/Save/AddNode/AddEdge/Sync 保存到 plugins/chat-graphs/<project|_global_>.json
+- [ ] AUD-0894 【领域清单｜图谱】三种布局算法（tree/dagre/relax）切换持久化（设置面板下拉）
+- [ ] AUD-0895 【领域清单｜图谱】graphInherit 分叉源会话历史一次性继承
+- [ ] AUD-0896 【领域清单｜图谱】graphForkFromMessage 从消息分叉生成图谱节点
+- [ ] AUD-0897 【领域清单｜图谱】graphRemoveGroup 成组删除与边清理
+- [ ] AUD-0898 【领域清单｜图谱】Context Trace 抽屉 include/exclude 投影与“固定到图”
+- [ ] AUD-0899 【领域清单｜图谱】画布缩放/平移/小地图/框选/NodeResizer 交互正常
+- [ ] AUD-0900 【领域清单｜图谱】A* 避障曲线在密集图上无交叉重叠回归（布局测试基线）
+- [ ] AUD-0901 【领域清单｜实验与账本】实验工作区创建/导入（sidecar .evoresearch-import.json）
+- [ ] AUD-0902 【领域清单｜实验与账本】LAB_NOTE.md 读写与产物登记
+- [ ] AUD-0903 【领域清单｜实验与账本】运行启动/停止/日志读取（win32 ComSpec /d /s /c 与 taskkill 树杀）
+- [ ] AUD-0904 【领域清单｜实验与账本】裸 git 账本 init/trial/log/restore/export/reject/provenance
+- [ ] AUD-0905 【领域清单｜实验与账本】账本 slug 截断 20 字符的前缀碰撞风险（可疑点验证）
+- [ ] AUD-0906 【领域清单｜实验与账本】四阶段回合 observe→propose→act→reflect 状态机与取消
+- [ ] AUD-0907 【领域清单｜实验与账本】checkpoint/rollback/branch/switch 对工作区 git 的实际影响
+- [ ] AUD-0908 【领域清单｜文献与稿件】注册 PDF→索引→四路搜索→精读笔记→BibTeX 导入导出全链
+- [ ] AUD-0909 【领域清单｜文献与稿件】GetTextRange/GetPageText/ScanPages 页码边界
+- [ ] AUD-0910 【领域清单｜文献与稿件】manuscript 创建/文件读写/LaTeX 编译降级/引用核对/DiffDraft
+- [ ] AUD-0911 【领域清单｜笔记与日报】notes CRUD+搜索+索引重建；drafts 两段式 apply/discard
+- [ ] AUD-0912 【领域清单｜笔记与日报】全局笔记（plugins/memories）与项目笔记路径互不串
+- [ ] AUD-0913 【领域清单｜笔记与日报】日报生成/列表/定时 schedule/启停；产出 reports/daily/*.md
+- [ ] AUD-0914 【领域清单｜笔记与日报】dailyReportGenerate llm:true 参数当前为假功能（tryPolishMarkdown 直返）——确认并决定修复方向
+- [ ] AUD-0915 【领域清单｜调度与通道】cron 解析（自研 core/cron.ts）与 parseNaturalCron 中文表达
+- [ ] AUD-0916 【领域清单｜调度与通道】tick 逐任务 await 串行：一任务卡住推迟后续（可疑点验证与修复方向）
+- [ ] AUD-0917 【领域清单｜调度与通道】runTask 无人值守会话创建与结果回写
+- [ ] AUD-0918 【领域清单｜调度与通道】channels Telegram start/stop 与 deliverToAgent
+- [ ] AUD-0919 【领域清单｜模型与平台】model-settings.json 四角色绑定读写与 Apply 生效
+- [ ] AUD-0920 【领域清单｜模型与平台】modelsSelectorState/SelectRoute 与模型 fallback（recordModelFailure/Success）
+- [ ] AUD-0921 【领域清单｜模型与平台】toolsSelectForTurn/Whitelist 审批策略三处实现一致性（可疑点）
+- [ ] AUD-0922 【领域清单｜模型与平台】subagents 谱系创建/继续/中断/取消
+- [ ] AUD-0923 【领域清单｜模型与平台】MCP supervisor add/remove/start/stop/reconnect 与 mcp-servers.json 持久化
+- [ ] AUD-0924 【领域清单｜模型与平台】skills 分层（builtin/workspace/custom）安装/卸载/Git 安装
+- [ ] AUD-0925 【领域清单｜模型与平台】evolution signals/candidates 提案-评估-激活-回滚
+- [ ] AUD-0926 【领域清单｜安全红线】projectFileRead 任意 projectDir 读取（≤2MB）越权面评估与修复方向
+- [ ] AUD-0927 【领域清单｜安全红线】findReportPath reportId 路径穿越读任意 .md（可疑点 PoC）
+- [ ] AUD-0928 【领域清单｜安全红线】workspace-api /evoresearch/fs/* 回环+trustedHosts 栅栏与 isWithin 根限制
+- [ ] AUD-0929 【领域清单｜安全红线】artifactImage base64 ≤5MB 上限与 MIME 检测
+- [ ] AUD-0930 【领域清单｜安全红线】credentials 不入 Git（.gitignore 核对）与前端不可达性
+- [ ] AUD-0931 【领域清单｜安全红线】桌面 capability remote http://127.0.0.1:* 通配与 CSP null 风险评估
+- [ ] AUD-0932 【领域清单｜桌面体验】?desktop=1 标题栏 36px 渲染、拖拽区、最小化/最大化/关闭
+- [ ] AUD-0933 【领域清单｜桌面体验】设置面板返回按钮 top:46 不被标题栏遮挡
+- [ ] AUD-0934 【领域清单｜桌面体验】modal 从 36px 下开始（html.evo-desktop 分支）
+- [ ] AUD-0935 【领域清单｜桌面体验】窗口 1280x820 极小尺寸（如 800x600）下布局降级
+- [ ] AUD-0936 【领域清单｜桌面体验】sidecar 崩溃时窗口表现（about:blank 无提示）——修复方向
+- [ ] AUD-0937 【领域清单｜桌面体验】port.json 残留/损坏时启动自愈
+- [ ] AUD-0938 【领域清单｜构建流水】npm run build 0 warning 0 error
+- [ ] AUD-0939 【领域清单｜构建流水】npm run verify 全绿（build+test+domain+acceptance+xyflow+bundle+docs）
+- [ ] AUD-0940 【领域清单｜构建流水】npm test（plugin 544+）与 app 4 测试文件全部通过
+- [ ] AUD-0941 【领域清单｜构建流水】test:launcher（web-port 单测）纳入 verify 链的缺口评估
+- [ ] AUD-0942 【领域清单｜构建流水】verify.mjs 与 package.json verify 链双入口不一致的收敛方向
+- [ ] AUD-0943 【领域清单｜构建流水】bundle-sidecar Node 版本固定 v24.19.0 的升级策略
+- [ ] AUD-0944 【领域清单｜CI 发布】release.yml 仅手动触发；TAG 恒 v0.1.0-rc.1；prerelease
+- [ ] AUD-0945 【领域清单｜CI 发布】prepare-release 删旧 Release/孤儿 draft/旧 tag 的幂等性
+- [ ] AUD-0946 【领域清单｜CI 发布】desktop 矩阵 fail-fast:false 与 publish-notes 只看 desktop 的 Android 盲区
+- [ ] AUD-0947 【领域清单｜CI 发布】Android 签名 secrets 缺失时 unsigned APK 降级路径
+- [ ] AUD-0948 【领域清单｜CI 发布】iOS 无证书时真机 target 仅告警不阻塞
+- [ ] AUD-0949 【领域清单｜CI 发布】Notes 固定模板与资产文件名硬编码一致性
+- [ ] AUD-0950 【领域清单｜性能】threadsSearch 非 ASCII 全量串行扫描的会话多时延（基准+修复方向）
+- [ ] AUD-0951 【领域清单｜性能】PDF 预览 execFileSync 同步阻塞事件循环（3s）影响评估
+- [ ] AUD-0952 【领域清单｜性能】前端 bundle 19MB（client/index.js）首屏加载与代码分割机会
+- [ ] AUD-0953 【领域清单｜性能】chatgraph 大图（500+ 节点）布局耗时与 Worker 迁移可行性
+- [ ] AUD-0954 【领域清单｜性能】client-state.json 高频写（80ms 防抖）的磁盘磨损与丢失窗口
+- [ ] AUD-0955 【领域清单｜文档】AGENTS.md ≤24000 字符且与实际行为一致（抽查 5 条规则）
+- [ ] AUD-0956 【领域清单｜文档】README 与 docs/ 链接无悬空（check-docs 覆盖面）
+- [ ] AUD-0957 【领域清单｜文档】docs/ 12 篇设计与实现现状是否漂移（抽查 chatgraph/URL/隔离三篇）
+- [ ] AUD-0958 【领域清单｜文档】过时注释清理：launch.js 数据根/端口路径注释、verify.mjs 指引
+- [ ] AUD-0959 【视觉走查｜宽屏适配 1920x1080 桌面宽屏】整体三栏布局不破、无横向滚动条、内容不遮挡
+- [ ] AUD-0960 【视觉走查｜宽屏适配 1920x1080 桌面宽屏】顶栏/标签栏/状态栏元素完整可用
+- [ ] AUD-0961 【视觉走查｜宽屏适配 1920x1080 桌面宽屏】composer 输入区高度与发送/模型按钮可达
+- [ ] AUD-0962 【视觉走查｜视觉一致性 1920x1080 桌面宽屏】按钮风格（主/次/危险）圆角、色板、悬停态一致
+- [ ] AUD-0963 【视觉走查｜视觉一致性 1920x1080 桌面宽屏】弹窗/下拉/ toast 层级与遮罩正确
+- [ ] AUD-0964 【视觉走查｜宽屏适配 1366x768 小笔记本】整体三栏布局不破、无横向滚动条、内容不遮挡
+- [ ] AUD-0965 【视觉走查｜宽屏适配 1366x768 小笔记本】顶栏/标签栏/状态栏元素完整可用
+- [ ] AUD-0966 【视觉走查｜宽屏适配 1366x768 小笔记本】composer 输入区高度与发送/模型按钮可达
+- [ ] AUD-0967 【视觉走查｜视觉一致性 1366x768 小笔记本】按钮风格（主/次/危险）圆角、色板、悬停态一致
+- [ ] AUD-0968 【视觉走查｜视觉一致性 1366x768 小笔记本】弹窗/下拉/ toast 层级与遮罩正确
+- [ ] AUD-0969 【视觉走查｜宽屏适配 1024x768 平板横】整体三栏布局不破、无横向滚动条、内容不遮挡
+- [ ] AUD-0970 【视觉走查｜宽屏适配 1024x768 平板横】顶栏/标签栏/状态栏元素完整可用
+- [ ] AUD-0971 【视觉走查｜宽屏适配 1024x768 平板横】composer 输入区高度与发送/模型按钮可达
+- [ ] AUD-0972 【视觉走查｜视觉一致性 1024x768 平板横】按钮风格（主/次/危险）圆角、色板、悬停态一致
+- [ ] AUD-0973 【视觉走查｜视觉一致性 1024x768 平板横】弹窗/下拉/ toast 层级与遮罩正确
+- [ ] AUD-0974 【视觉走查｜宽屏适配 768x1024 平板竖（临界）】整体三栏布局不破、无横向滚动条、内容不遮挡
+- [ ] AUD-0975 【视觉走查｜宽屏适配 768x1024 平板竖（临界）】顶栏/标签栏/状态栏元素完整可用
+- [ ] AUD-0976 【视觉走查｜宽屏适配 768x1024 平板竖（临界）】composer 输入区高度与发送/模型按钮可达
+- [ ] AUD-0977 【视觉走查｜视觉一致性 768x1024 平板竖（临界）】按钮风格（主/次/危险）圆角、色板、悬停态一致
+- [ ] AUD-0978 【视觉走查｜视觉一致性 768x1024 平板竖（临界）】弹窗/下拉/ toast 层级与遮罩正确
+- [ ] AUD-0979 【视觉走查｜宽屏适配 414x896 手机大屏】整体三栏布局不破、无横向滚动条、内容不遮挡
+- [ ] AUD-0980 【视觉走查｜宽屏适配 414x896 手机大屏】顶栏/标签栏/状态栏元素完整可用
+- [ ] AUD-0981 【视觉走查｜宽屏适配 414x896 手机大屏】composer 输入区高度与发送/模型按钮可达
+- [ ] AUD-0982 【视觉走查｜视觉一致性 414x896 手机大屏】按钮风格（主/次/危险）圆角、色板、悬停态一致
+- [ ] AUD-0983 【视觉走查｜视觉一致性 414x896 手机大屏】弹窗/下拉/ toast 层级与遮罩正确
+- [ ] AUD-0984 【视觉走查｜宽屏适配 375x667 手机小屏】整体三栏布局不破、无横向滚动条、内容不遮挡
+- [ ] AUD-0985 【视觉走查｜宽屏适配 375x667 手机小屏】顶栏/标签栏/状态栏元素完整可用
+- [ ] AUD-0986 【视觉走查｜宽屏适配 375x667 手机小屏】composer 输入区高度与发送/模型按钮可达
+- [ ] AUD-0987 【视觉走查｜视觉一致性 375x667 手机小屏】按钮风格（主/次/危险）圆角、色板、悬停态一致
+- [ ] AUD-0988 【视觉走查｜视觉一致性 375x667 手机小屏】弹窗/下拉/ toast 层级与遮罩正确
+- [ ] AUD-0989 【视觉走查｜窄屏抽屉】左栏滑入/滑出动画与遮罩点击关闭
+- [ ] AUD-0990 【视觉走查｜窄屏抽屉】右栏 inspector 抽屉行为与左栏互斥逻辑
+- [ ] AUD-0991 【视觉走查｜窄屏抽屉】抽屉打开时主体不可滚动、关闭后焦点还原
+- [ ] AUD-0992 【视觉走查｜暗色主题】全视图暗色对比度与图表可读性
+- [ ] AUD-0993 【视觉走查｜亮色主题】切换后所有视图无残留暗色块
+- [ ] AUD-0994 【视觉走查｜桌面标题栏】?desktop=1 36px 标题栏、按钮热区、拖拽区
+- [ ] AUD-0995 【视觉走查｜设置面板】general/models/clear 三 tab 全部控件可用、返回按钮可见
+- [ ] AUD-0996 【视觉走查｜模型菜单】角色名+描述两列、「当前」徽标右上角固定（9c080af 回归）
+- [ ] AUD-0997 【视觉走查｜空态】无项目/无会话/无笔记/无图谱各空态页引导文案与插画
+- [ ] AUD-0998 【视觉走查｜加载态】骨架/spinner 覆盖所有异步面板、无白屏闪烁
+- [ ] AUD-0999 【视觉走查｜错误态】后端不可达/请求失败 toast 与重试入口
+- [ ] AUD-1000 【端到端场景｜功能验证】新建项目→新建会话→发送消息（无 LLM 凭据时优雅报错）→消息持久化刷新后仍在
+- [ ] AUD-1001 【端到端场景｜功能验证】会话重命名/置顶/标签色/归档/删除全操作循环
+- [ ] AUD-1002 【端到端场景｜功能验证】9 个视图（ws/sk/mem/sch/ch/tm/exp/note/lib）逐个打开无报错
+- [ ] AUD-1003 【端到端场景｜功能验证】检查器 i=1 + it 三子标签切换数据加载
+- [ ] AUD-1004 【端到端场景｜功能验证】图谱面板打开→切换三种布局→保存→刷新恢复
+- [ ] AUD-1005 【端到端场景｜功能验证】设置面板改主题/语言→刷新持久→client-state.json 落盘核对
+- [ ] AUD-1006 【端到端场景｜功能验证】研究笔记新建/编辑/搜索/删除循环
+- [ ] AUD-1007 【端到端场景｜功能验证】记忆面板目录/Profile/observations 展示与真实 DB 一致
+- [ ] AUD-1008 【端到端场景｜功能验证】实验面板三 tab 与后端服务降级提示
+- [ ] AUD-1009 【端到端场景｜功能验证】日报抽屉手动生成（llm 关路径）与列表
+- [ ] AUD-1010 【端到端场景｜功能验证】调度面板添加任务→列表→移除（cron 校验）
+- [ ] AUD-1011 【端到端场景｜功能验证】会话搜索（标题+内容）命中高亮与跳转
+- [ ] AUD-1012 【端到端场景｜功能验证】导出会话 Markdown 成功且内容完整
+- [ ] AUD-1013 【端到端场景｜功能验证】trajectory 轨迹条 按耗时/按回合 切换渲染正确
+- [ ] AUD-1014 【端到端场景｜功能验证】数据清除面板路径枚举与确认流程（不实际删除生产根）
+- [ ] AUD-1015 【端到端场景｜功能验证】移动端 375px 全部上述关键路径可达（抽屉模式）
+- [ ] AUD-1016 【可维护性｜结构评估】chat.ts ChatArea ~1900 行与 index.ts EvoFrame ~1930 行拆分可行性评估（不强制本次重构，给出方案）
+- [ ] AUD-1017 【可维护性｜结构评估】重复的 api() POST 封装（5 处）收敛为共享模块方案
+- [ ] AUD-1018 【可维护性｜结构评估】TEXT_EXT/fileKind 双份实现统一方案（含扩展名集合不一致修复）
+- [ ] AUD-1019 【可维护性｜结构评估】suppressKeyWarning console.error 劫持的保留/移除决策
+- [ ] AUD-1020 【可维护性｜结构评估】worker 命名与主线程 import 语义不符的更名/重组
+- [ ] AUD-1021 【可维护性｜结构评估】scripts/ 130 个 mjs 中一次性调试脚本归档清单（不删，移动 legacy 归档）
+- [ ] AUD-1022 【可维护性｜结构评估】experts/active-teams 与 AGENTS.md 注入的可配置性
+- [ ] AUD-1023 【可维护性｜结构评估】类型安全：ctx:any/session:any 重点面收敛路线

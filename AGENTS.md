@@ -118,7 +118,7 @@ bash 等价形式：以上三个变量取同值（`D:\\DSH-Research\\.tmp-dev\\.
 
 **验证启动成功**：① 日志出现 `[evoresearch] host 插件激活（dataRoot: …）` 且 dataRoot 符合 §2（主仓库或分支独立根）；② 用启动器日志打印的实际 URL（3081 起，占用自动递增）访问返回 200；③ 左侧项目列表来自对应 dataRoot。
 
-**profile 就绪判定**：当前 worktree `profiles\evoresearch\` 须有 `cordis.yml`、`cordis.patch.yml`、`package.json`、`node_modules`，且 `node_modules/@evoresearch/*` 指向本 worktree workspace 包；缺失就先在当前 worktree `npm install` + `npm run build`。profile 的 `file:../../packages/...` 相对当前 worktree 解析；不要把 profile junction 到主仓库、不要复制到数据目录（启动器自动挂载）。**`--profile evoresearch` 只认裸名**，不能传路径形式（rc.2 报 invalid profile name）。
+**profile 就绪判定**：当前 worktree `profiles\evoresearch\` 须有 `cordis.yml`、`cordis.patch.yml`、`package.json`、`node_modules`，且 `node_modules/@evoresearch/*` 指向本 worktree workspace 包；缺失就先在当前 worktree `npm install` + `npm run build`，**再在 `profiles/evoresearch/` 内执行 `pnpm install`**（profile 是独立 pnpm 工程，根 npm install 不会装它的依赖；start-web.mjs 报「profile 依赖不完整」即指此项）。profile 的 `file:../../packages/...` 相对当前 worktree 解析；不要把 profile junction 到主仓库、不要复制到数据目录（启动器自动挂载）。**`--profile evoresearch` 只认裸名**，不能传路径形式（rc.2 报 invalid profile name）。
 
 #### 4.2.1 正式 Web（同一 profile，只切数据根）
 
