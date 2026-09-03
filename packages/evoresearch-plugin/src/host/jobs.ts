@@ -157,6 +157,23 @@ export class JobHubService {
     return targets.length
   }
 
+  /**
+   * 取消单条任务：先调注册时的 cancel() 真正终止底层进程/会话，再走完结流转。
+   * 仅 markCancelled 只改状态不终止任务（jobsCancel 此前即因此"假取消"）；
+   * 无 cancel 实现的任务退化为仅完结流转。
+   */
+  async cancel(jobId: string, detail?: string): Promise<boolean> {
+    const entry = this.active.get(jobId)
+    if (entry !== undefined && entry.cancel) {
+      try {
+        await entry.cancel()
+      } catch {
+        // 取消失败仍走完结流转，避免条目永久滞留 active
+      }
+    }
+    return this.markCancelled(jobId, detail)
+  }
+
   /** 插件卸载：对所有 active 尝试 cancel 并清空（不等待异步取消完成）。 */
   dispose(): void {
     const entries = [...this.active.values()]

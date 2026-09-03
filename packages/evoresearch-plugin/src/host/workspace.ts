@@ -65,6 +65,11 @@ export class WorkspaceService {
    */
   createProject(name: string): ProjectInfo {
     const safe = isValidProjectName(name) ? name : slugifyProjectName(name)
+    // 碰撞守卫：同目录静默并入会让两个项目共享一个工作区（slug 化/截断后
+    // 尤其隐蔽，如 deep-learning-pipeline-alpha/beta 都落到同一目录）。
+    if (this.hasProject(safe)) {
+      throw new Error(`项目已存在: ${safe}`)
+    }
     const dir = projectDir(this.config.dataRoot, safe)
     fs.mkdirSync(dir, { recursive: true })
     this.prepareProjectGit(dir)

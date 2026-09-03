@@ -272,6 +272,16 @@ export class LibrarySearch {
     return store
   }
 
+  /** 关闭指定项目的缓存连接（项目删除/数据清理前调用：Windows 下打开的 SQLite 句柄会阻止目录删除）。 */
+  closeStore(projectPath: string): void {
+    const key = normPath(projectPath)
+    const store = this.stores.get(key)
+    if (store !== undefined) {
+      this.stores.delete(key)
+      store.close()
+    }
+  }
+
   /** 关闭全部缓存连接（插件生命周期释放时调用）。 */
   dispose(): void {
     for (const store of this.stores.values()) store.close()

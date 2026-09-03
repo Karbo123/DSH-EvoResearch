@@ -22,7 +22,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { AssembleContext, PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
-import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -394,7 +393,16 @@ function apply(ctx: Context): void {
           try {
             const handle = await agents.create({ sessionId, cwd: request.cwd })
             const created = (handle as { session?: { id?: string } }).session?.id ?? sessionId
-            liveHandles.set(created, (handle as any).agent ?? handle)
+            const agent = (handle as any).agent ?? handle
+            liveHandles.set(created, agent)
+            // prompt 必须投递：否则子代理建出空会话，调用方拿到一个不发首个
+            // 消息的"哑"子代理（对照 deliverToAgent 的 initialMessage 流程）。
+            if (request.prompt !== undefined && request.prompt !== '') {
+              await Promise.resolve((agent as { followup?: (msg: unknown) => unknown }).followup?.(createUserMessage({
+                content: [{ type: 'text', text: request.prompt }],
+                source: { kind: 'user' },
+              })) ?? Promise.resolve())
+            }
             return { ok: true, subagentId: created, sessionId: created }
           } catch (error) {
             return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -769,7 +777,6 @@ function apply(ctx: Context): void {
   // ContextAssembler 在 user/message 到达时按当前问题同步选择候选，并提供
   // Context Trace；这里不保留旧的 graphMemoryText contributor，避免“所有相连
   // 节点全文注入”破坏 token 预算与 relation 不注入语义。
-  const disposeGraphMemory: (() => void) | undefined = undefined
 
   // 8.8.2) 项目级自然语言专家说明（PLAT-10）：AGENTS.md 是可选背景资料，
   // 按当前会话 cwd 读取，不把安装/运行元数据混入研究笔记。
@@ -834,7 +841,6 @@ function apply(ctx: Context): void {
   // P1-1 AutoSkills 定时挖掘：仅在显式配置 cron 时注册内置任务。
   // 未配置时清理历史版本遗留的重复内置任务，避免后台会话悄悄出现在侧栏。
   // 结果经 deliverToAgent 回报主对话（通知也走对话，F1）。
-  let disposeAutoskillsMining: (() => void) | undefined
   {
     const scheduleSetting = (config as { autoskillsSchedule?: string }).autoskillsSchedule
     const builtinPrompt = '执行一次全项目技能挖掘（mineAllWorkspaces）：汇总各项目观测聚类与笔记重复做法，生成待审技能提案。完成后汇报新增提案数与名称列表。'
@@ -901,7 +907,6 @@ function apply(ctx: Context): void {
       disposeLayeredSkills()
       subagentProviders.disposeAll()
       disposeDshProvider?.()
-      void disposeAutoskillsMining
     }
   })
 }

@@ -296,32 +296,6 @@ function sessionStoreRoot(): string {
 }
 
 /**
- * DSH 会话目录键：与 @deepseek-ai/dsh-session-persistence-jsonl 的 projectKey
- * 完全一致 —— 连续分隔符（/ \\ :）折叠为单个 `-`，不安全码元转义为 ~XXXX，
- * 去掉前导 `-` 并截断到 251 字符，最后以 `--` 包裹。
- */
-function sessionKeyOf(cwd: string): string {
-  if (cwd.length === 0) throw new Error('cannot encode an empty project path')
-  let readable = ''
-  let separatorRun = false
-  for (let i = 0; i < cwd.length; i += 1) {
-    const code = cwd.charCodeAt(i)
-    const ch = String.fromCharCode(code)
-    if (ch === '/' || ch === '\\' || ch === ':') {
-      if (!separatorRun) readable += '-'
-      separatorRun = true
-    } else if (ch !== '~' && /^[A-Za-z0-9._-]$/.test(ch)) {
-      readable += ch
-      separatorRun = false
-    } else {
-      readable += `~${code.toString(16).toUpperCase().padStart(4, '0')}`
-      separatorRun = false
-    }
-  }
-  return `--${(readable.replace(/^-+/, '') || 'root').slice(0, 251)}--`
-}
-
-/**
  * §29 会话元数据条目：置顶/标签色/归档 + URL 短别名 slug（§44 thread alias）。
  * slug 一经分配不再变更（会话标题后来怎么改都不影响已分享的 ?t= 链接），
  * 删除会话时随 dropSessionRefs 一起清理。
@@ -385,6 +359,22 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   /**
+   * projectFilesList/projectFileRead 的读边界（此前 projectDir 完全不设限，
+   * 等于全盘任意目录列表+读文本）。允许范围：dataRoot 内（根工作区/projects/…）
+   * 或任一既有会话的 cwd（工作区文件面板本就按当前会话 cwd 读取，属正常路径）。
+   */
+  private assertReadableWorkspaceRoot(root: string): void {
+    const resolved = path.resolve(root)
+    if (isSameOrInside(resolved, this.services.memory.config.dataRoot)) return
+    const sessions = (this.hostCtx.get('sessions') as { list?(): Array<{ header?: { cwd?: string } }> } | undefined)?.list?.() ?? []
+    for (const s of sessions) {
+      const cwd = s.header?.cwd
+      if (cwd !== undefined && cwd !== '' && path.resolve(cwd) === resolved) return
+    }
+    throw new Error(`目录不在部署根内，也不是任何既有会话的工作区: ${root}`)
+  }
+
+  /**
    * 列出项目根目录文件树（工作区「项目文件」入口 + AI 回复文件链接共用）。
    * 递归 2 层、上限 200 项；跳过 .git/.evoresearch-data/隐藏项/常见依赖目录。
    * 返回相对路径（/ 分隔），dir=false 表示目录。
@@ -395,6 +385,11 @@ export class EvoResearchApiService extends TypertRemoteService {
       const root = String(args?.projectDir ?? '')
       if (root === '' || !existsSync(root) || !statSync(root).isDirectory()) {
         return { error: '项目目录不存在' }
+      }
+      try {
+        this.assertReadableWorkspaceRoot(root)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
       }
       // 与 workspace 导入同款跳过集合；项目私有数据目录也不展示
       const walk = (current: string, depth: number): Array<{ path: string; dir?: boolean; bytes?: number }> => {
@@ -436,6 +431,11 @@ export class EvoResearchApiService extends TypertRemoteService {
       const root = String(args?.projectDir ?? '')
       const rel = String(args?.relPath ?? '')
       if (root === '' || rel === '') return { error: '缺少参数' }
+      try {
+        this.assertReadableWorkspaceRoot(root)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
       const target = path.join(root, rel)
       if (!target.startsWith(root + path.sep) && target !== root) return { error: '路径越界' }
       if (!existsSync(target) || !statSync(target).isFile()) return { error: '文件不存在' }
@@ -1007,6 +1007,12 @@ export class EvoResearchApiService extends TypertRemoteService {
         // 会话文件/项目目录，Windows 下无法删除，先拦截并提示。
         const busy = (live?.list?.() ?? []).some((s) => agents?.get?.(s.id ?? '')?.status === 'running')
         if (busy) return { ok: false, error: '有会话正在运行，请先停止任务再清除' }
+        // 隔离红线护栏：会话存储根在 DSH_HOME（未经理器设置时回退 ~/.dsh）。
+        // 清除范围包含整个 sessions 根，一旦 DSH_HOME 不等于本部署 dataRoot，
+        // 就可能清掉其它部署（乃至官方 DSH）的会话数据，直接拒绝。
+        if (path.resolve(resolveDshHomePath()) !== path.resolve(this.services.memory.config.dataRoot)) {
+          return { ok: false, error: `DSH_HOME（${resolveDshHomePath()}）与数据根（${this.services.memory.config.dataRoot}）不一致，拒绝清除会话数据；请经启动器重启后再试` }
+        }
 
         console.log(`[evoresearch:data-clear] projects=${projects.length} live=${live?.list?.()?.length ?? 0} root=${sessionStoreRoot()}`)
 
@@ -1018,6 +1024,7 @@ export class EvoResearchApiService extends TypertRemoteService {
           } catch {
             // 关闭失败不阻塞
           }
+          this.closeProjectCaches(p.path)
         }
         // 根工作区（dataRoot 自身）的记忆库同样标记删除中，随后会整目录清空
         try {
@@ -1287,6 +1294,17 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   /** 删除项目磁盘目录（删除项目时可选；带路径越界保护，禁止删 dataRoot 本身或外部路径）。 */
+  /** 关闭项目级缓存连接（library indexer/search；Windows 下打开的 SQLite 句柄会让目录删除失败）。 */
+  private closeProjectCaches(projectPath: string): void {
+    for (const svc of [this.services.libraryIndexer, this.services.librarySearch]) {
+      try {
+        svc?.closeStore(projectPath)
+      } catch {
+        // 关闭失败不阻塞删除主流程
+      }
+    }
+  }
+
   @Remote('projectDeleteDisk')
   projectDeleteDisk(args: { path: string }): { ok: boolean; deleted?: boolean; reason?: string } {
     const raw = String(args?.path ?? '')
@@ -1298,7 +1316,10 @@ export class EvoResearchApiService extends TypertRemoteService {
     if (!targetNorm.startsWith(rootNorm + path.sep)) return { ok: false, reason: 'path outside data root' }
     if (!existsSync(targetNorm)) return { ok: false, reason: 'not found' }
     try {
+      try { this.services.memory.beginDeletion(targetNorm) } catch { /* 连接关闭失败不阻塞 */ }
+      this.closeProjectCaches(targetNorm)
       rmSync(targetNorm, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 })
+      try { this.services.memory.endDeletion(targetNorm) } catch { /* 标记清理失败不阻塞 */ }
       return { ok: true, deleted: true }
     } catch (error) {
       return { ok: false, reason: error instanceof Error ? error.message : String(error) }
@@ -2551,7 +2572,10 @@ export class EvoResearchApiService extends TypertRemoteService {
             const refPath = isObservation
               ? `.evoresearch-data/memories/observations/${s.legacyDir ? s.legacyDir + '/' : ''}${s.fileName}`
               : s.fileName
-            const key = `note:${s.source}:${s.noteId}`
+            // 去重键必须与 knownRefs 的键同构：knownRefs 存的是 `${ref.kind}:${ref.path}`
+            //（note 节点 → `note:<fileName>`，observation → `file:<相对路径>`）；
+            // 此前拼成 `note:<source>:<noteId>` 与集合永不相交，同步每次重复追加节点。
+            const key = `${isObservation ? 'file' : 'note'}:${refPath}`
             if (knownRefs.has(key)) continue
             knownRefs.add(key)
             const spot = nextSpot()
@@ -4208,8 +4232,8 @@ export class EvoResearchApiService extends TypertRemoteService {
     if (hub === undefined) return { ok: false, error: 'jobHub 服务不可用' }
     const job = hub.get(String(args?.jobId ?? ''))
     if (job === undefined) return { ok: false, error: `任务不存在: ${String(args?.jobId ?? '')}` }
-    // cancel 实现挂在注册表内部；这里经 markCancelled 走完结流转
-    const cancelled = hub.markCancelled(String(args.jobId))
+    // 经 hub.cancel 先调注册的 cancel() 真正终止底层任务，再走完结流转
+    const cancelled = await hub.cancel(String(args.jobId))
     return { ok: cancelled, ...(cancelled ? {} : { error: '任务已不在运行中' }) }
   }
 
@@ -4232,19 +4256,31 @@ export class EvoResearchApiService extends TypertRemoteService {
       const sessionId = String(args?.sessionId ?? '')
       if (sessionId === '') return { error: '缺少 sessionId' }
       const cancelled = hub !== undefined ? await hub.cancelBySession(sessionId) : 0
-      // 复用既有持久化数据删除路径（与客户端 session-delete 同源）
+      // 会话目录有两级布局：sessions/<编码cwd>/<sessionId>/（现行，与 rewind.findSessionDir 同构），
+      // 以及早期扁平 sessions/<sessionId>/（兜底）。顶层目录名是工作区编码而非 sessionId，
+      // 直接拿顶层与 sessionId 比较永远不命中（删除整体失效）。
       const sessionsRoot = sessionStoreRoot()
       let removed = 0
       try {
         const entries = readdirSync(sessionsRoot)
         for (const name of entries) {
-          if (name !== sessionId) continue
-          rmSync(path.join(sessionsRoot, name), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-          removed += 1
+          const dir = path.join(sessionsRoot, name)
+          if (name === sessionId) {
+            rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+            removed += 1
+            continue
+          }
+          const candidate = path.join(dir, sessionId)
+          if (statSync(candidate, { throwIfNoEntry: false })?.isDirectory()) {
+            rmSync(candidate, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+            removed += 1
+          }
         }
       } catch { /* 会话目录不存在 */ }
+      if (removed > 0) this.dropSessionRefs(new Set([sessionId]))
       unmarkUnattendedSession(sessionId)
-      return { ok: removed > 0 || cancelled > 0, cancelled }
+      // 已不存在也视为成功（幂等删除），避免前端把重复删除误报为失败
+      return { ok: true, cancelled }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

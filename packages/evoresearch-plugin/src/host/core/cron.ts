@@ -22,15 +22,6 @@ export interface CronSchedule {
   readonly raw: string
 }
 
-const WEEKDAY_NAME: Record<string, number> = {
-  sun: 0,
-  mon: 1,
-  tue: 2,
-  wed: 3,
-  thu: 4,
-  fri: 5,
-  sat: 6,
-}
 
 /** 解析单个字段（允许值范围 [min, max]），返回位图集合。 */
 function parseField(field: string, min: number, max: number): Set<number> {
@@ -79,16 +70,11 @@ export function parseCron(expression: string): CronSchedule {
     hours: parseField(hours!, 0, 23),
     days: parseField(days!, 1, 31),
     months: parseField(months!, 1, 12),
-    weekdays: normalizeWeekdays(parseField(weekdays!, 0, 6)),
+    weekdays: parseField(weekdays!, 0, 6),
     daysWildcard: days === '*',
     weekdaysWildcard: weekdays === '*',
     raw: expression,
   }
-}
-
-/** 周字段支持英文缩写（mon/tue/...）。 */
-function normalizeWeekdays(set: Set<number>): Set<number> {
-  return set
 }
 
 /**

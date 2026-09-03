@@ -323,10 +323,13 @@ export class DailyReportService {
   }
 
   private findReportPath(reportId: string): string | null {
+    // reportId 来自远端入参：白名单消毒，防 `..\` 穿越读任意 .md
+    const safe = reportId.replace(/[^A-Za-z0-9._-]/g, '_')
+    if (safe === '' || safe === '.' || safe === '..') return null
     const projects = listProjects(this.dataRoot)
     const roots: string[] = [this.dataRoot, ...projects.map((name) => path.join(this.dataRoot, 'projects', name))]
     for (const root of roots) {
-      const p = path.join(workspaceDataDir(this.dataRoot, root), 'reports', 'daily', `${reportId}.md`)
+      const p = path.join(workspaceDataDir(this.dataRoot, root), 'reports', 'daily', `${safe}.md`)
       if (fs.existsSync(p)) return p
     }
     return null

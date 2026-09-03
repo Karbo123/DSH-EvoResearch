@@ -1219,6 +1219,10 @@ export class ResearchMemoryStore {
     /** P1-2：与 relatedObservationIds 同序对齐的边类型（缺省 relates）。 */
     edgeTypes?: readonly ObservationEdgeType[]
     projectId?: string
+    /** 更新既有记录时透传，避免 update 路径把 superseded 复活/重置时间线。 */
+    status?: 'active' | 'superseded'
+    supersededBy?: string
+    createdAt?: number
   }): ObservationMeta {
     const fileName = `${input.observationId}.md`
     const dir = input.projectId
@@ -1226,6 +1230,7 @@ export class ResearchMemoryStore {
       : path.join(observationsDir, 'global')
     fs.mkdirSync(dir, { recursive: true })
     const now = Date.now()
+    const createdAt = input.createdAt ?? now
     const content = renderObservationFile({
       title: input.title,
       body: input.body,
@@ -1236,9 +1241,10 @@ export class ResearchMemoryStore {
       sourceTurnIds: input.sourceTurnIds,
       relatedObservationIds: input.relatedObservationIds,
       edgeTypes: input.edgeTypes,
-      status: 'active',
+      status: input.status ?? 'active',
+      supersededBy: input.supersededBy,
       projectId: input.projectId,
-      createdAt: now,
+      createdAt,
       updatedAt: now,
     })
     // 原子写：先写临时文件再改名，避免半成品。
@@ -1258,9 +1264,10 @@ export class ResearchMemoryStore {
       sourceTurnIds: input.sourceTurnIds,
       relatedObservationIds: input.relatedObservationIds ?? [],
       ...(input.edgeTypes === undefined ? {} : { edgeTypes: input.edgeTypes }),
-      status: 'active',
+      status: input.status ?? 'active',
+      ...(input.supersededBy === undefined ? {} : { supersededBy: input.supersededBy }),
       projectId: input.projectId,
-      createdAt: now,
+      createdAt,
       updatedAt: now,
     }
     this.upsertObservationIndex(meta)
