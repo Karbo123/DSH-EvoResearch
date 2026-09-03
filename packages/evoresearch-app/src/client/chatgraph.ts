@@ -149,6 +149,14 @@ interface ChatGraphPanelProps {
 export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateSession }: ChatGraphPanelProps) {
   const [graph, setGraph] = useState<ChatGraph>({ nodes: [], edges: [] })
   const [error, setError] = useState<string | null>(null)
+  // 「未绑定项目工作区」属于引导性空态而非错误：用中性提示呈现，避免红色错误条吓退用户
+  const [unboundHint, setUnboundHint] = useState<string | null>(null)
+
+  /** 后端「未绑定项目工作区/不在部署根」类错误 = 引导性空态，走中性提示而非错误红条。 */
+  const showGraphError = (msg: string): void => {
+    if (/未绑定项目工作区|工作区必须是部署根/.test(msg)) setUnboundHint(t('graphNeedProject'))
+    else setError(msg)
+  }
   const [busy, setBusy] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // 右键菜单：nodeId 或 edgeId 二选一（都是画布坐标弹层）
@@ -181,22 +189,23 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const load = () => {
     setError(null)
+    setUnboundHint(null)
     void api<{ graph?: ChatGraph; rev?: number; error?: string }>('graph-get', { workspaceDir: cwd ?? undefined })
       .then((r) => {
-        if (typeof r?.error === 'string' && r.error !== '') { setError(r.error); return }
+        if (typeof r?.error === 'string' && r.error !== '') { showGraphError(r.error); return }
         setGraph({ nodes: r?.graph?.nodes ?? [], edges: r?.graph?.edges ?? [], groups: r?.graph?.groups })
         revRef.current = typeof r?.rev === 'number' ? r.rev : null
       })
-      .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
+      .catch((e: unknown) => showGraphError(String((e as Error)?.message ?? e)))
   }
   useEffect(() => { load() }, [cwd])
 
   /** 项目会话/研究笔记补种（§graphSync）：幂等，宿主按 sessionId/笔记去重且不改动已有布局。 */
   const syncSessions = async (manual: boolean): Promise<void> => {
-    if (cwd === null) { if (manual) setError(t('graphNeedProject')); return }
+    if (cwd === null) { if (manual) setUnboundHint(t('graphNeedProject')); return }
     try {
       const r = await api<{ ok?: boolean; addedChats?: number; addedMemories?: number; addedEdges?: number; error?: string }>('graph-sync', { workspaceDir: cwd })
-      if (typeof r?.error === 'string' && r.error !== '') { setError(r.error); return }
+      if (typeof r?.error === 'string' && r.error !== '') { showGraphError(r.error); return }
       const added = (r?.addedChats ?? 0) + (r?.addedMemories ?? 0) + (r?.addedEdges ?? 0)
       if (added > 0) {
         toast(t('graphSyncDone').replace('{n}', String(added)))
@@ -235,6 +244,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 整图保存（乐观并发 + FIFO 串行）。冲突 → 提示并重新加载最新状态。 */
   const saveGraph = (next: ChatGraph): Promise<boolean> => {
     setError(null)
+    setUnboundHint(null)
     const pending = saveChainRef.current.then(async () => {
       try {
         const r = await api<{ ok: boolean; conflict?: boolean; rev?: number; error?: string }>('graph-save', {
@@ -369,7 +379,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const createChatNode = async () => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     setBusy(true)
     try {
       const sessionId = await onCreateSession()
@@ -401,7 +411,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const createMemoryNode = (scope: 'project' | 'global') => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
     void api<{ node: GraphNode; rev?: number }>('graph-memory-create', {
       workspaceDir: cwd,
@@ -414,7 +424,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const createMemoryCollection = (scope: 'project' | 'global' = 'project') => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
     void api<{ node: GraphNode; rev?: number }>('graph-memory-collection', {
       workspaceDir: cwd,
@@ -427,7 +437,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const copyMemoryNode = (nodeId: string) => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const source = nodeById(nodeId)
     if (source === undefined) return
     void api<{ node: GraphNode; rev?: number }>('graph-memory-copy', {
@@ -441,7 +451,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** Reuse a single existing Memory locator; when not on the graph, add one reference node. */
   const useExistingMemory = () => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const raw = window.prompt(t('graphUseMemoryPrompt'), '')
     if (raw === null || raw.trim() === '') return
     const value = raw.trim().toLowerCase()
@@ -551,7 +561,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 从当前聊天分出新方向（GRAPH-10 语义的图内入口）：新建 chat 节点 + context 继承连线。 */
   const forkDirection = async (nodeId: string) => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const source = nodeById(nodeId)
     if (source === undefined) return
     setBusy(true)
@@ -592,7 +602,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 内嵌文本 memory node → Markdown 笔记（GRAPH-06；Remote graph-convert-note）。 */
   const convertNodeToNote = (nodeId: string) => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     void api<{ ok: boolean; noteId?: string; error?: string }>('graph-convert-note', { workspaceDir: cwd, nodeId })
       .then((r) => {
         if (r.ok !== true) { setError(r.error ?? t('graphConvertFailed')); return }
@@ -776,7 +786,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 可选人工固定资料入口；自动 Memory 链接发现不依赖此操作。 */
   const addResourceNode = () => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const rawPath = window.prompt(t('graphResourcePathPrompt'), '')
     if (rawPath === null || rawPath.trim() === '') return
     const value = rawPath.trim()
@@ -1048,6 +1058,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           children: `${group.collapsed || collapsedGroups.has(group.id) ? t('graphExpand') : t('graphCollapse')} ${group.title}`,
         }, `group-${group.id}`)),
       ]}),
+      unboundHint !== null && jsx('div', { className: 'evo-graph-hint-banner', children: unboundHint }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
       jsx(ChatGraphCanvas, {
         graph,

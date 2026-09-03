@@ -1185,17 +1185,20 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
   // 挂载即加载（而非仅展开时）：折叠态头部应显示真实环境状态（未创建/版本），而不是永远"加载中…"
   useEffect(() => { load() }, [projectDir])
 
-  // UV 缺失 → 自动安装（官方脚本；一次成功即刷新状态）
+  // UV 缺失 → 自动安装（官方脚本；一次成功即刷新状态）。
+  // 失败后必须退出自动安装（uvFailedRef），否则 setUvBusy(true→false) 会让本 effect
+  // 的守卫每次都重新放行，形成「安装失败→重试→刷错误条」的无限循环。
+  const uvFailedRef = useRef(false)
   useEffect(() => {
-    if (!expanded || info === null || info.uv !== null || uvBusy) return
+    if (!expanded || info === null || info.uv !== null || uvBusy || uvFailedRef.current) return
     setUvBusy(true)
     void api<{ ok: boolean; installed: boolean; error?: string }>('uv-ensure', {})
       .then((result) => {
         setUvBusy(false)
         if (result.ok) load()
-        else onError(`${t('uvInstallFailed')}: ${result.error ?? ''}`)
+        else { uvFailedRef.current = true; onError(`${t('uvInstallFailed')}: ${result.error ?? ''}`) }
       })
-      .catch((e: any) => { setUvBusy(false); onError(String(e?.message ?? e)) })
+      .catch((e: any) => { setUvBusy(false); uvFailedRef.current = true; onError(String(e?.message ?? e)) })
   }, [expanded, info, uvBusy])
 
   const doCreate = () => {

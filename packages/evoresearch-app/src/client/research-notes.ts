@@ -178,7 +178,7 @@ function NoteReader({ workspaceDir, noteId, initialOffset, onBack, onChanged, on
       .catch((e: any) => onError(String(e?.message ?? e)))
       .finally(() => setBusy(false))
   }
-  useEffect(() => { load(initialOffset) }, [noteId])
+  useEffect(() => { load(initialOffset) }, [noteId, initialOffset])
 
   const save = () => {
     if (draftBody.trim() === '' || saving) return
@@ -513,7 +513,7 @@ function DocBlock({ workspaceDir, kind, onError }: { workspaceDir: string; kind:
       .then((row) => { setDoc(row); setDraft(row.content) })
       .catch((e: any) => onError(String(e?.message ?? e)))
   }
-  useEffect(() => { load() }, [kind])
+  useEffect(() => { load() }, [kind, workspaceDir])
 
   const save = () => {
     if (saving) return

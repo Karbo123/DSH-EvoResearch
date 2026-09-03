@@ -368,7 +368,17 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     if (t === ENC_VALUE_TAB.chats || t === 'chats') return 'chats'
     return 'workspace'
   })
-  const [view, setView] = useState<SideView>(null)
+  const [view, setView] = useState<SideView>(() => {
+    // §43.5 ?v= 可分享/可恢复：此前只有写入方、无读取方，分享 ?v=mem 打开仍是欢迎页。
+    if (typeof window === 'undefined') return null
+    const v = new URLSearchParams(location.search).get(URL_KEY_VIEW)
+    if (v === null || v === '') return null
+    for (const [full, short] of Object.entries(ENC_VALUE_VIEW)) {
+      if (v === short) return full as SideView
+    }
+    // 旧链接的完整单词同样识别；未知值忽略
+    return (Object.keys(ENC_VALUE_VIEW) as SideView[]).includes(v as SideView) ? (v as SideView) : null
+  })
   // 首次发送（欢迎页无会话时）：乐观渲染「用户消息 + AI 加载中」，让界面立即响应，
   // 不等后台建会话/LLM 标题/建项目等串行链完成。真实快照出现后自动被覆盖。
   const [pendingFirst, setPendingFirst] = useState<{ text: string; ts: number } | null>(null)
@@ -641,59 +651,30 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       setHomeMode(false)
       if (params.get(URL_KEY_RESEND) !== null) {
         // 编辑重发：清除参数，打开会话后自动发送修正文本（走官方 prompt 流程）
-        history.replaceState(null, '', `${location.pathname}${location.search.replace(new RegExp(`[?&]${URL_KEY_RESEND}=[^&]*`), '$1').replace(/[?&]$/, '')}${location.hash}`)
+        history.replaceState(null, '', `${location.pathname}${location.search.replace(new RegExp(`([?&])${URL_KEY_RESEND}=[^&]*`), '$1').replace(/[?&]$/, '')}${location.hash}`)
       } else if (params.get('resend') !== null) {
         history.replaceState(null, '', `${location.pathname}${location.search.replace(/([?&])resend=[^&]*/, '$1').replace(/[?&]$/, '')}${location.hash}`)
       }
       let cancelled = false
       let attempts = 0
-      const tryOpen = () => {
+      let resolvedFlag = false
+      const tryOpen = (id: string) => {
         if (cancelled) return
         if (sessionsService === null || attempts > 30) return
         attempts += 1
         try {
-          sessionsService.open(threadParamRaw)
+          sessionsService.open(id)
         } catch {
-          setTimeout(tryOpen, 300)
+          setTimeout(() => tryOpen(id), 300)
         }
       }
-      void resolveThreadIdParam(threadParamRaw).then((resolved) => {
-        if (cancelled) return
-        if (resolved === null) return
-        // 会话 id 解析完成后再开始重试打开（服务未就绪时定时重试）
-        const tryOpenResolved = () => {
-          if (cancelled) return
-          if (sessionsService === null || attempts > 30) return
-          attempts += 1
-          try {
-            sessionsService.open(resolved)
-          } catch {
-            setTimeout(tryOpenResolved, 300)
-          }
-        }
-        tryOpenResolved()
-        if (resend !== null && resend !== '') {
-          // 等会话绑定就绪后自动重发
-          const timer = setInterval(() => {
-            if (cancelled) { clearInterval(timer); return }
-            const s = sessionsService?.binding(resolved)?.session
-            if (s !== undefined) {
-              clearInterval(timer)
-              void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
-            }
-          }, 200)
-          setTimeout(() => clearInterval(timer), 20000)
-        }
-        // URL 归一化：清掉旧 threadId=/占位哈希，换正式 ?t=
-        patchUrl({ threadId: null, [URL_KEY_THREAD]: threadSlugOf(resolved) ?? resolved.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
-      })
-      // slug 反查失败时的兜底直开路径（旧链接 / 未登记参数）
-      tryOpen()
-      if (resend !== null && resend !== '') {
-        // 等会话绑定就绪后自动重发（解析失败兜底）
+      // 重发定时器只允许一条：解析成功路径与兜底路径互斥触发，避免同一段
+      // 修正文本被两个 timer 先后 prompt 两次。
+      const armResend = (id: string) => {
+        if (resend === null || resend === '') return
         const timer = setInterval(() => {
           if (cancelled) { clearInterval(timer); return }
-          const s = sessionsService?.binding(threadParamRaw)?.session
+          const s = sessionsService?.binding(id)?.session
           if (s !== undefined) {
             clearInterval(timer)
             void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
@@ -701,6 +682,24 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         }, 200)
         setTimeout(() => clearInterval(timer), 20000)
       }
+      void resolveThreadIdParam(threadParamRaw).then((resolved) => {
+        if (cancelled || resolved === null) return
+        resolvedFlag = true
+        // 会话 id 解析完成后再开始重试打开（服务未就绪时定时重试）
+        tryOpen(resolved)
+        armResend(resolved)
+        // URL 归一化：清掉旧 threadId=/占位哈希，换正式 ?t=（此时先落占位，
+        // ensureThreadAlias 拿到会话后原位升级为正式 slug）
+        patchUrl({ threadId: null, [URL_KEY_THREAD]: threadSlugOf(resolved) ?? resolved.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
+        void ensureThreadAlias(resolved, undefined)
+      })
+      // 解析失败 1.5s 后按原参数兜底直开（旧链接/未登记参数）；解析成功则不执行，
+      // 修复此前"直开 + 解析后重开"双通道并行导致的重复 prompt 风险。
+      setTimeout(() => {
+        if (cancelled || resolvedFlag) return
+        tryOpen(threadParamRaw)
+        armResend(threadParamRaw)
+      }, 1500)
       return () => { cancelled = true }
     }, [])
 
@@ -739,14 +738,14 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         .then((json) => {
           const tasks: Array<{ taskId?: string; name?: string; lastRunAt?: number }> = json?.value ?? []
           let changed = false
-          for (const t of tasks) {
-            if (t.taskId === undefined || t.lastRunAt === undefined) continue
-            const key = `${t.taskId}:${t.lastRunAt}`
+          for (const task of tasks) {
+            if (task.taskId === undefined || task.lastRunAt === undefined) continue
+            const key = `${task.taskId}:${task.lastRunAt}`
             if (known.has(key)) continue
             known.add(key)
             changed = true
             if (!baseline) {
-              try { new Notification(`Scheduled 任务完成：${t.name ?? t.taskId}`) } catch { /* 静默退化 */ }
+              try { new Notification(`${t('schedDone')}${task.name ?? task.taskId}`) } catch { /* 静默退化 */ }
             }
           }
           if (changed) {
@@ -766,8 +765,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const fresh = [...keys].filter((k) => !prevPendingRef.current.has(k))
     prevPendingRef.current = keys
     if (fresh.length > 0 && notifyEnabled() && current !== undefined) {
-      const labels = fresh.map((k) => (k.startsWith('question') ? 'Ask User 提问' : '工具审批'))
-      try { new Notification(`${labels.join('、')} 等待处理`) } catch { /* 静默退化 */ }
+      const labels = fresh.map((k) => (k.startsWith('question') ? t('askUserQuestion') : t('toolApproval')))
+      try { new Notification(`${labels.join('、')}${t('pendingApprovalSuffix')}`) } catch { /* 静默退化 */ }
     }
   }, [sessionSnapshot])
 
@@ -805,7 +804,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           try { await workspacesService?.rename(state.workspaceId, title) } catch { /* 会话标题已保存 */ }
         }
       }
-      toast('会话已重命名', 'success')
+      toast(t('sessionRenamed'), 'success')
     }
     return result?.ok === true
   }
@@ -965,7 +964,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       return next
     })
     persistProjectMeta(path, { tagColor: color })
-    toast(color === null ? '已清除标签颜色' : '已设置标签颜色', 'success')
+    toast(color === null ? t('tagColorCleared') : t('tagColorSet'), 'success')
   }
   /** 归档/恢复项目：同步归档/恢复其全部子聊天（后端 session-meta 持久化）。 */
   const toggleProjectArchive = (path: string) => {
@@ -987,10 +986,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     })
     persistProjectMeta(path, { archived: !isArchived })
     if (!isArchived) {
-      toast('项目已归档，可在底部“已归档项目”中恢复', 'success')
+      toast(t('projectArchivedHint'), 'success')
       window.dispatchEvent(new CustomEvent('evo:project-archived'))
     } else {
-      toast('项目已恢复', 'success')
+      toast(t('projectRestored'), 'success')
     }
   }
   /** 项目重命名：改 Workspace 显示标题；同时终止项目内会话的自动标题。 */
@@ -1015,7 +1014,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         }
       }
       if (changed) writeAutoTitleStates(states)
-      toast('项目已重命名', 'success')
+      toast(t('projectRenamed'), 'success')
       return true
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error), 'error')
@@ -1109,11 +1108,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         body: JSON.stringify({ sessionId: id }),
       })
       const json = await res.json()
-      if (json.ok !== true) return { ok: false, error: (json.error as { message?: string } | undefined)?.message ?? '删除失败' }
+      if (json.ok !== true) return { ok: false, error: (json.error as { message?: string } | undefined)?.message ?? t('deleteFailed') }
       const cwd = sessions.byId[id]?.cwd ?? null
       markDeleted(id, cwd)
       const cancelled = typeof json.value?.cancelled === 'number' ? json.value.cancelled : 0
-      toast(cancelled > 0 ? `会话已删除（已取消 ${cancelled} 个后台任务）` : '会话已删除', 'success')
+      toast(cancelled > 0 ? t('sessionDeletedCancelled').replace('{n}', String(cancelled)) : t('sessionDeleted'), 'success')
       // 删除的是当前会话 → 跳到新会话
       if (sessions.current === id) startNewChat()
       window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
@@ -1137,7 +1136,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     let failed: string | null = null
     for (const id of ids) {
       const result = await deleteSessionById(id)
-      if (!result.ok && failed === null) failed = result.error ?? '删除失败'
+      if (!result.ok && failed === null) failed = result.error ?? t('deleteFailed')
     }
     setProjectTagColors((prev) => {
       const next = { ...prev }
@@ -1165,12 +1164,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           body: JSON.stringify({ path }),
         })
         const json = await res.json()
-        if (json.value?.ok !== true) failed = json.value?.reason ?? '磁盘文件删除失败'
+        if (json.value?.ok !== true) failed = json.value?.reason ?? t('diskDeleteFailed')
       } catch {
-        failed = '磁盘文件删除失败'
+        failed = t('diskDeleteFailed')
       }
     }
-    if (failed === null) toast(opts?.deleteDisk === true ? '项目已删除（对话与磁盘文件均已移除）' : '项目已删除（对话已移除，磁盘文件保留）', 'success')
+    if (failed === null) toast(opts?.deleteDisk === true ? t('projectDeletedFull') : t('projectDeletedChatOnly'), 'success')
     else toast(failed, 'error')
     window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
     return { ok: failed === null, error: failed ?? undefined }
@@ -1582,8 +1581,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }).then((res) => res.json()).then((json) => {
       setTabBusy(false)
       if (json.ok === true) { setNewFileName(''); openTabEditor(path, root, '') }
-      else toast(json.error?.message ?? '创建文件失败', 'error')
-    }).catch(() => { setTabBusy(false); toast('创建文件失败', 'error') })
+      else toast(json.error?.message ?? t('createFileFailed'), 'error')
+    }).catch(() => { setTabBusy(false); toast(t('createFileFailed'), 'error') })
   }
   const uploadPdfTab = (root: string, file: File) => {
     if (root === '') return
@@ -1600,8 +1599,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       }).then((r) => r.json()).then((json) => {
         setTabBusy(false)
         if (json.ok === true) openTabPdf(json.value.path, root)
-        else toast(json.error?.message ?? '上传失败', 'error')
-      }).catch(() => { setTabBusy(false); toast('上传失败', 'error') })
+        else toast(json.error?.message ?? t('uploadFailed'), 'error')
+      }).catch(() => { setTabBusy(false); toast(t('uploadFailed'), 'error') })
     }
     reader.readAsDataURL(file)
   }
@@ -1742,13 +1741,17 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       writeAutoTitleStates(states)
       setHomeMode(false)
       sessionsService?.open(id)
+      // 首条消息创建的会话同样写 URL（裸 8 位占位，resolveThreadIdParam 可还原；
+      // ensureThreadAlias 稍后原位升级为正式 slug）——此前不写 ?t=，刷新即丢会话定位。
+      patchUrl({ [URL_KEY_THREAD]: id.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
+      void ensureThreadAlias(id, initialTitle.title ?? undefined)
       for (let i = 0; i < 30; i++) {
         const created = sessionsService?.binding(id)?.session
         if (created !== undefined) {
           if (initialTitle.title === null) {
-            try { await created.rename(kind === 'subchat' ? '新子对话' : '新项目') } catch { /* 占位标题失败不影响消息 */ }
+            try { await created.rename(t(kind === 'subchat' ? 'newSubchatTitle' : 'newProjectTitle')) } catch { /* 占位标题失败不影响消息 */ }
             if (workspaceId !== undefined && kind === 'project') {
-              try { await workspacesService?.rename(workspaceId, '新项目') } catch { /* 占位标题失败不影响消息 */ }
+              try { await workspacesService?.rename(workspaceId, t('newProjectTitle')) } catch { /* 占位标题失败不影响消息 */ }
             }
           }
           await created.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
@@ -1775,12 +1778,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       body: JSON.stringify({ workspaceDir: cwdNow, sourceSessionId: current, sourceEventSeq: seq }),
     }).then((res) => res.json()).then(async (json) => {
       if (json.ok !== true || typeof json.value?.sessionId !== 'string') {
-        toast(json.error?.message ?? '从消息分支失败', 'error')
+        toast(json.error?.message ?? t('branchFromMessageFailed'), 'error')
         return
       }
       try { await (sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined)?.refreshList?.() } catch { /* 依赖会话服务下次刷新 */ }
       openSession(json.value.sessionId)
-    }).catch(() => toast('从消息分支失败', 'error'))
+    }).catch(() => toast(t('branchFromMessageFailed'), 'error'))
   }
 
   const persistPanels = (p: { left: number; right: number }) => {
@@ -2217,7 +2220,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
           inspector && jsxs(Fragment, {
             children: [
-              narrow && jsx('div', { className: 'evo-drawer-mask', onClick: () => setInspector(false) }),
+              narrow && jsx('div', { className: 'evo-drawer-mask', onClick: () => { setInspector(false); patchUrl({ [URL_KEY_INSPECTOR]: null, [URL_KEY_INSPECTOR_TAB]: null }) } }),
               jsx('div', {
                 className: 'evo-resize-handle evo-resize-right',
                 'data-dragging': dragging === 'right' || undefined,
@@ -2231,7 +2234,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 children: jsx(Inspector, {
                   tab: inspectorTab,
                   onTab: setInspectorTabUrl,
-                  onClose: () => setInspector(false),
+                  onClose: () => { setInspector(false); patchUrl({ [URL_KEY_INSPECTOR]: null, [URL_KEY_INSPECTOR_TAB]: null }) },
                   cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
                   sessionId: current ?? null,
                   sideChats,

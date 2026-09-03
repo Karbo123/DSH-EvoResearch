@@ -32,15 +32,15 @@ export const MENU = [
  */
 function formatWhen(iso: string | undefined): string {
   if (!iso) return ''
-  const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return ''
-  const diff = Date.now() - t
+  const ts = new Date(iso).getTime()
+  if (Number.isNaN(ts)) return ''
+  const diff = Date.now() - ts
   const min = Math.floor(diff / 60000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min}m ago`
+  if (min < 1) return t('timeJustNow')
+  if (min < 60) return t('timeMinAgo').replace('{n}', String(min))
   const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h ago`
-  const d = new Date(t)
+  if (hr < 24) return t('timeHourAgo').replace('{n}', String(hr))
+  const d = new Date(ts)
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
@@ -290,7 +290,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
     setDeleteError(null)
     void onDelete(id).then((result) => {
       if (!result.ok) {
-        setDeleteError(result.error ?? '删除失败')
+        setDeleteError(result.error ?? t('deleteFailed'))
         setTimeout(() => setDeleteError(null), 5000)
       }
       setDelArm(null)
@@ -301,7 +301,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
     setDeleteError(null)
     void onDeleteProject(path, { deleteDisk }).then((result) => {
       if (!result.ok) {
-        setDeleteError(result.error ?? '删除项目失败')
+        setDeleteError(result.error ?? t('projectDeleteFailed'))
         setTimeout(() => setDeleteError(null), 5000)
       } else {
         const nextOrder: ManualOrder = { projects: manualOrder.projects.filter((p) => p !== path), chats: { ...manualOrder.chats } }
@@ -318,7 +318,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
     setForkError(null)
     void onForkSideChat(id).then((result) => {
       if (result.ok && result.id !== undefined) { onOpen(result.id); return }
-      setForkError(result.error ?? 'Side chat 创建失败')
+      setForkError(result.error ?? t('sidechatCreateFailed'))
       setTimeout(() => setForkError(null), 5000)
     })
   }
@@ -327,7 +327,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
     setForkError(null)
     void onCopyHistory(id).then((result) => {
       if (result.ok && result.id !== undefined) { onOpen(result.id); return }
-      setForkError(result.error ?? '复制历史失败')
+      setForkError(result.error ?? t('copyHistoryFailed'))
       setTimeout(() => setForkError(null), 5000)
     })
   }

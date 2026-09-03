@@ -256,6 +256,18 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
     }).catch((e) => { setZipBusy(false); setError(String(e)) })
   }
 
+  // inspector 工具条的刷新/下载按钮经自定义事件接入（此前两个按钮无 onClick，点了没反应）
+  useEffect(() => {
+    const onRefresh = () => setRev((v) => v + 1)
+    const onDownload = () => downloadZip()
+    window.addEventListener('evo-workspace-files-refresh', onRefresh)
+    window.addEventListener('evo-workspace-files-download', onDownload)
+    return () => {
+      window.removeEventListener('evo-workspace-files-refresh', onRefresh)
+      window.removeEventListener('evo-workspace-files-download', onDownload)
+    }
+  })
+
   // 点击文件 → 在工作区中央 tab 打开（md 渲染/编辑、pdf 独立预览、文本编辑）；
   // 图片仍在侧边栏内嵌预览（中央无图片 tab）。派发 evo-open-tab 给 main 区。
   const openFileInMainArea = (path: string) => {

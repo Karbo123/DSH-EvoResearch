@@ -2057,7 +2057,13 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
     const previous = document.activeElement as HTMLElement | null
     const el = shellRef.current?.querySelector<HTMLElement>('button, input, textarea, [tabindex]')
     el?.focus()
-    return () => { previous?.focus?.() }
+    // Esc 关闭（与品牌菜单/context-trace 一致；此前只能点遮罩或「返回」）
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previous?.focus?.()
+    }
   }, [])
   return jsxs('div', {
     className: 'evo-modal-mask',
