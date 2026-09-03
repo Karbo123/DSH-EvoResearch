@@ -1,9 +1,9 @@
 /**
  * sidecar 启动脚本（由桌面壳 spawn；CommonJS，node.exe 直接运行）：
- * 1. 数据根 = exe 同级 <程序目录>/evoresearch-data（壳经 EVORESEARCH_DATA_HOME 传入；
+ * 1. 数据根 = exe 同级 <程序目录>/.evoresearch-data（壳经 EVORESEARCH_DATA_HOME 传入；
  *    未传入时回退当前目录）——用户数据集中一处、一目了然、随程序目录迁移；
  * 2. 启动 DSH web profile（evoresearch），绑定 127.0.0.1 随机端口；
- * 3. 将端口写入 %LOCALAPPDATA%/EvoResearch/port.json（壳轮询读取）；
+ * 3. 将端口写入 %LOCALAPPDATA%/com.evoresearch.desktop/port.json（壳轮询读取）；
  * 4. 进程退出时清理端口文件；Windows 下父进程消失时自动退出（防孤儿）。
  */
 'use strict'
@@ -36,7 +36,9 @@ function ensureProfilesLink() {
   const source = join(process.cwd(), 'profiles')
   if (!existsSync(source)) return
   try {
-    execSync(`cmd /c mklink /J "${target}" "${source}"`, { stdio: 'ignore' })
+    // fs API 建 junction（此前 spawn cmd /c mklink，POSIX 必抛 ENOENT 才落到复制，
+    // macOS/Linux 桌面升级后永远运行数据根里的陈旧代码副本）
+    require('node:fs').symlinkSync(source, target, platform === 'win32' ? 'junction' : 'dir')
     console.log(`EvoResearch data home: ${dataHome} (profiles junction → 程序目录)`)
   } catch {
     // junction 不可用（非 NTFS 等）：整体复制（profiles 含依赖，较慢但兜底）
@@ -70,7 +72,7 @@ function ensureEvoModules() {
       // 已存在的正确 junction 保持；错误/普通目录则重建
       try {
         const lstat = require('node:fs').lstatSync(link)
-        if (lstat.isSymbolicLink() && readlinkSafe(link) === target) continue
+        if (lstat.isSymbolicLink() && readlinkSafe(link) === target.replace(/\\/g, '/').toLowerCase()) continue
         require('node:fs').rmSync(link, { recursive: true, force: true })
       } catch (e) {
         if (e.code !== 'ENOENT') {
@@ -79,7 +81,7 @@ function ensureEvoModules() {
       }
     }
     try {
-      execSync(`cmd /c mklink /J "${link}" "${target}"`, { stdio: 'ignore' })
+      require('node:fs').symlinkSync(target, link, platform === 'win32' ? 'junction' : 'dir')
       console.log(`EvoResearch modules link: ${pkg} → ${target}`)
     } catch {
       // junction 不可用（非 NTFS 等）：整体复制（慢但兜底）
@@ -91,10 +93,13 @@ function ensureEvoModules() {
 }
 ensureEvoModules()
 
-/** 读取 link 的 target（兼容 readlinkSync 抛错场景）。 */
+/** 读取 link 的 target（兼容 readlinkSync 抛错场景）；归一化前缀/分隔符/大小写便于比较。 */
 function readlinkSafe(path) {
   try {
     return require('node:fs').readlinkSync(path)
+      .replace(/^\\\\\?\\/, '')
+      .replace(/\\/g, '/')
+      .toLowerCase()
   } catch {
     return ''
   }
@@ -130,7 +135,9 @@ function startDsh() {
 }
 
 /** 从 dsh stdout 解析监听端口（JSON 行 {"port": N}、"Listening on ...:N" 或 "dsh web: http://127.0.0.1:N"）。 */
+let portWritten = false
 function parseOutput(chunk) {
+  if (portWritten) return
   for (const line of chunk.split(/\r?\n/)) {
     const json = /{"port":\s*(\d+)}/.exec(line)
     if (json) {
@@ -149,8 +156,10 @@ function parseOutput(chunk) {
   }
 }
 
-/** 写端口文件（幂等）。 */
+/** 写端口文件（只写一次：后续无关日志行不再覆写）。 */
 function writePortFile(port) {
+  if (portWritten) return
+  portWritten = true
   writeFileSync(portFile, JSON.stringify({ port: Number(port) }), 'utf8')
   console.log(`EvoResearch ready on port ${port}`)
 }

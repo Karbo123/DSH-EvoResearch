@@ -67,14 +67,14 @@ const wt = detectWorktreeIsolation()
 // 主仓库默认根不变；worktree 则落到主仓库 .tmp-dev 下按分支命名的独立根。
 const defaultEvoResearchRoot = wt.isolatedRoot
   || join(wt.mainRoot, '.tmp-dev', '.evoresearch-data')
-if (wt.isolatedRoot) {
+const explicitEnvRoot = (process.env.EVORESEARCH_ROOT || '').trim()
+const explicitLauncherRoot = option('--root', '').trim()
+if (wt.isolatedRoot && explicitLauncherRoot === '') {
   console.log(`[evoresearch] ★ worktree 环境（分支 ${wt.branch}）→ 数据根隔离到 ${wt.isolatedRoot}`)
   console.log(`[evoresearch] 这样可以并行开发/验收多个独立功能，互不冲突。`)
 }
 // 主仓库可读取 EVORESEARCH_ROOT；worktree 默认忽略继承值以保持隔离。
 // 只有显式 --root 能让 worktree 有意共享自定义数据根。
-const explicitEnvRoot = (process.env.EVORESEARCH_ROOT || '').trim()
-const explicitLauncherRoot = option('--root', '').trim()
 const configEnv = process.env.EVORESEARCH_PATHS_CONFIG
 const restartEnv = process.env.EVORESEARCH_RESTART_FILE
 const configPath = resolve(configEnv && configEnv.trim() !== '' ? configEnv : join(root, '.evoresearch-paths.json'))
@@ -85,8 +85,15 @@ const profileSource = join(root, 'profiles', 'evoresearch')
 const dshVersion = '@deepseek-ai/dsh@0.1.1-rc.2'
 
 function option(name, fallback) {
-  const index = process.argv.indexOf(name)
-  return index >= 0 && process.argv[index + 1] !== undefined ? process.argv[index + 1] : fallback
+  // 取最后一个匹配（package.json 的 start:web 预置 --port 3081 在前，
+  // 用户 `npm run start:web -- --port 4000` 必须能覆盖）；--name=value 同样识别。
+  let value = fallback
+  const argv = process.argv
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === name && argv[i + 1] !== undefined) value = argv[i + 1]
+    else if (argv[i].startsWith(`${name}=`)) value = argv[i].slice(name.length + 1)
+  }
+  return value
 }
 
 const requestedPort = parsePort(option('--port', process.env.EVORESEARCH_PORT || '3081'))
@@ -219,7 +226,14 @@ function stopChild(child) {
       done()
     }
     child.once('exit', finish)
-    child.kill()
+    // Windows：启动链是 cmd.exe /c npx.cmd → node(DSH)，child.kill() 只杀直属
+    // cmd.exe，孙进程 node 会孤儿化并继续占用端口。先 taskkill /t /f 树杀整棵
+    // 进程树，成功后 child 的 'exit' 事件自然触发 finish；非 Windows 仍先 SIGTERM。
+    if (process.platform === 'win32' && child.pid !== undefined) {
+      execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], () => { /* exit 事件收尾 */ })
+    } else {
+      child.kill()
+    }
     const timer = setTimeout(() => {
       if (process.platform === 'win32' && child.pid !== undefined) {
         execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], () => finish())
@@ -298,8 +312,8 @@ async function bootstrap() {
     process.on('SIGTERM', () => shutdown('SIGTERM'))
     console.log(`[evoresearch] Web launcher ready: http://127.0.0.1:${activePort}`)
     console.log(`[evoresearch] EVORESEARCH_ROOT=${paths.evoresearchRoot}`)
-    console.log(`[evoresearch] DSH_HOME=EVORESEARCH_ROOT`)
-    console.log(`[evoresearch] EVORESEARCH_DATA_ROOT=EVORESEARCH_ROOT`)
+    console.log(`[evoresearch] DSH_HOME=${paths.dshHome}`)
+    console.log(`[evoresearch] EVORESEARCH_DATA_ROOT=${paths.evoResearchDataRoot}`)
   } catch (error) {
     console.error(`[evoresearch] Web 启动失败: ${error.message}`)
     process.exitCode = 1
