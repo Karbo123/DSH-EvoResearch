@@ -52,52 +52,42 @@
 - **verify-bundle.mjs**：缺构建产物时裸 ENOENT 崩溃 → 明确报错并指引 `npm run build`。
 - **死代码清理**：`sessionKeyOf`（api.ts）、`disposeGraphMemory`/`disposeAutoskillsMining`/`randomUUID` 导入（host/index.ts）、`WEEKDAY_NAME`+`normalizeWeekdays` 恒等函数（cron.ts）、`SessionStatsLine` 组件+孤立 formatDuration+死 CSS（session-dock.ts/styles.ts）；`dropSessionRefs` 由死代码变为已接线。
 
+## 七·二、第二轮修复（同日继续：把 §四 遗留项全部处理）
+
+**后端（plugin）**
+- MCP supervisor：connect 加 15s 整体超时，child exit 时 reject 该 server 全部 pending（不再永久卡 starting）。
+- 实验任务：JobHub 注册补 cancel（真实 stop 进程）+ 轮询 24h 上限（jobsCancel 对实验任务真实生效，僵死任务不再永久 running）。
+- PDF 同步提取阻塞热路径：快速投影区间抑制 pdftotext 子进程（index.ts resourceReader + assembler readPdf + link-resolver paper 惰性），每条消息不再被 3N 秒阻塞。
+- 审批策略双实现收敛：删除 decisionFromPolicy，统一走 approval-policy.decideApproval。
+- threadsSearch 非 ASCII 兜底加双上限（200 会话或 2s，truncated 标记）。
+- dataClear('projects') 范围补齐：plugins/ledgers、plugins/evolution、plugins/science-loops、project-meta.json 重置。
+- graphInherit 落盘带 expectedRev（fork 前捕获，冲突返回可读错误）；chat-graph rev 改 JSON 内持久化自增（旧文件回退 mtime 方案，消除同毫秒盲区）。
+- project-env 全面跨平台（POSIX uv/python/where/download 分支，此前 Linux/macOS 环境功能整体空转）。
+- core/paths normPath 改平台感知大小写（POSIX 不再错误折叠）；memory：countByCategory SQL 聚合、respondGoalProposal 事务化、Store.open 失败关句柄、profile mtime 缓存、segments 请求级缓存、searchObservations 行内组装（N+1 消除）、supersede 校验目标存在、死向量路径删除；library：searchFts 退化回退、importBibtex 候选 2000；manuscript 编译超时树杀 + quoteCheck 路径包含校验；experiments manifest 容错 + checkpoint 源回写；rounds cancel 保留 done 产物；ledger runGit 超时 + 删死代码；channels 回发防崩 + 指数退避；vision 去硬编码盘符/超时/MIME 白名单；skills git 超时 + watch 泄漏修复；web-search 错误信息张冠李戴/JSONCache 原子写/deepseekEnrich 显式 opt-in。
+
+**前端（app）**
+- 共享模块收敛：新建 fs-api.ts（替换 9 份 POST 封装复制）与 file-kind.ts（统一扩展名分类，.env/.csv 一致）。
+- tab-file 保存 CAS：写前重读比对，外部修改不再被静默覆盖；非文本文件只读打开成为事实（Monaco/textarea readonly + 写回双保险）。
+- workspace-api 加固：file 读取先 stat 上限（GET 32MiB）、zip 逐文件预检、全响应 nosniff、trustedHosts IPv6 解析修复 + 带端口条目精确比较、commands-execute 120s 超时。
+- chatgraph：system 常驻节点禁改名/删除、rev 未加载禁盲写、load 请求序号守卫（防旧图覆盖新图）、fallback 布局尺寸与真实节点一致、锚点原样输出；删除 Worker 入口地雷（self.onmessage 劫持 window）+ 构建期 worker 打包段 + 校验断言同步更新。
+- markdown JSON 折叠补键盘（Enter/Space）与双向收起；panels/rounds/ledger/experiments/library/experiment-workspace 一批小修（死请求、key 兜底、loading 态表单、模板文案 i18n、logText 上限、记忆列表追加语义、fileHits key 等）。
+- settings/panels/workspace-files/experiments 硬编码文案全部进 DICT；clearPathDetail 未知 id 显示原文；dsh-settings-file 描述改为与实现一致。
+
+**桌面 / CI / 脚本**
+- lib.rs：sidecar 失败页从 about:blank 改为内嵌诊断页（指向 shell 日志）；macOS 数据根改 app_local_data_dir（不再写进 .app 破坏 ad-hoc 签名封印）；stderr 日志改追加不再截断；启动不再删除 port.json（消除双实例互踩）；cargo check 通过。
+- release.yml：publish-notes 增加 android 成功条件；draft 清理过滤本 TAG（不再误删人工草稿）。
+- package.json：verify 链接入 launcher 单测；scripts/ 111 个一次性脚本 git mv 归档到 scripts/legacy/（白名单 22 个长期脚本保留）。
+
 ## 四、已确认、留待后续（📋，按优先级）
 
-1. **前端巨石组件**：EvoFrame ~1930 行、ChatArea ~1900 行、ThreadList ~1000 行。建议按「composer/气泡/标签栏/URL 状态」拆分（本次不做，防止大范围回归）。
-2. **文件 tab 保存为最后写入者胜**（tab-file Ctrl+S 裸覆盖写）：智能体并发改动会被静默覆盖。建议后端 /fs/write 提供 hash CAS 或前端写前重读比对。
-3. **账本 slug 20 字符截断碰撞**（experiment-ledger 等）：超 20 字符的项目名前缀相同会共享裸 git 账本库。createProject 碰撞守卫已挡住新建，存量数据迁移需单独设计。
-4. **dailyReportGenerate 的 llm:true 是假功能**（tryPolishMarkdown 恒等返回）：建议接线 LLM 或移除开关。
-5. **MCP supervisor connect 无超时**：stdio 服务器挂起时 start() 永久 await。建议 Promise.race 超时 + child exit reject pending。
-6. **project-env POSIX 全链路失效**（uv.exe/Scripts/python.exe/where.exe 硬编码）：CI 已产 AppImage/deb/dmg，Linux 桌面用户环境功能空转。建议按 platform 分支。
-7. **审批策略双实现**（index.ts decisionFromPolicy 与 platform/approval-policy decideApproval 等价并存）：建议门面改调 decideApproval 后删除。
-8. **threadsSearch 非 ASCII 全量串行扫描**：会话多时卡顿，建议限扫描数/并行分批。
-9. **macOS 桌面数据根在 .app bundle 内**（resource_dir 下 + ad-hoc 签名）：运行期写入破坏签名封印、卸载即删数据。建议 macOS 用 app_local_data_dir。
-10. **tauri.conf.json version 0.1.0 与 Release v0.1.0-rc.1 双源**：NSIS 产物名与 Notes 模板硬编码一致，改动需两处联动，留待版本策略统一时处理。
-11. **release.yml**：publish-notes 不看 android 结果（Android 失败仍发含 APK 表的 Notes）；prepare-release 删全部 draft 不限本 tag。建议各加条件/过滤。
-12. **scripts/ 130 个 mjs 中约 107 个一次性脚本**（verify-round*/shot*/vision*/cdp*/probe* 等）建议移 `scripts/legacy/` 归档（本次不动，避免破坏既有引用）。
-13. **console.error 劫持压制 React key 警告**（app index.ts apply）：后台标签页 rAF 节流期会吞掉其他错误，建议仅 dev 构建启用。
-14. **AGENTS.md 文档缺口**：worktree 就绪除 `npm install + npm run build` 外，还需在 `profiles/evoresearch` 执行 `pnpm install`（本次已在 AGENTS.md 补充）。
-15. **web-search 大量 P3**：学术 Provider 校验错误信息张冠李戴、JSONCache 非原子写、`deepseekEnrich !== false` 把 undefined 当 true 等（见审计清单）。
+1. **前端巨石组件**：EvoFrame ~1930 行、ChatArea ~1900 行、ThreadList ~1000 行。建议按「composer/气泡/标签栏/URL 状态」拆分（防止大范围回归，需独立重构分支）。
+2. **账本 slug 20 字符截断碰撞的存量数据迁移**：新建项目已被 createProject 碰撞守卫挡住，历史长名项目的账本键合并需单独设计迁移。
+3. **dailyReportGenerate 的 llm:true 是假功能**（tryPolishMarkdown 恒等返回）：建议接线 LLM（服务需注入 ctx 调 callText）或移除开关与 UI 入参。
+4. **tauri.conf.json version 0.1.0 与 Release v0.1.0-rc.1 双源**：NSIS 产物名与 Notes 模板硬编码一致，改动需两处联动，留待版本策略统一时处理。
+5. **console.error 劫持压制 React key 警告**（app index.ts apply）：后台标签页 rAF 节流期会延长压制窗口，建议仅 dev 构建启用。
+6. **ScienceMemory 死类与 roles 死函数**：生产零引用但测试大量引用，删除需连测试一起清理（本轮为不破坏 npm test 暂留）。
+7. **data-paths `dsh-settings-file` effect 类型与实现差异**：effect 枚举为前后端共享类型（settings.ts 镜像），描述文案已改为与实现一致，类型层面收敛需前后端联动。
+8. **platform/adapters.ts 602 行适配层仅 probes 被消费**、context PLAT-04 工具结果裁剪管线零接线：建议接入或裁剪（涉及上下文管线语义，需设计评审）。
 
-## 五、验证基线（修复后，本分支）
+> 其余 P3 级（5s 确认定时器不清理、trajectory 行键盘可达、library import 50MB 流式预检等）记录于各代理审计原始报告，影响面小，按需处理。
 
-| 套件 | 结果 |
-|---|---|
-| `npm run build` | ✅ 0 warning / 0 error |
-| `npm test`（插件单测） | ✅ 616/616 |
-| `npm run test -w @evoresearch/dsh-app` | ✅ 52/52 |
-| `node --test scripts/web-port.test.mjs` | ✅ 5/5 |
-| `npm run verify:domain` | ✅ 27 checks PASS |
-| `npm run verify:acceptance` | ✅ 19/19（42 断言） |
-| `verify-chatgraph-xyflow` | ✅ 6 PASS |
-| `verify-bundle` | ✅ 通过（修复 mock 后） |
-| `check-docs` | ✅ 通过 |
-| **`npm run verify` 全链** | ✅ exit 0 |
-
-## 六、UI 黑盒测试（Playwright，修复后复验）
-
-| 检查 | 结果 |
-|---|---|
-| `?v=mem` 直开恢复视图 | ✅ PASS |
-| 设置面板 Esc 关闭 | ✅ PASS |
-| 检查器关闭后 `i=` 残留清除 | ✅ PASS |
-| 图谱空态不再红色错误条 | ✅ PASS |
-| 首条消息后 URL 写入 `?t=<slug>` | ✅ PASS（`/?t=s-ba8aa3dd`） |
-| 全程 pageerror | 0 |
-
-修复前的首轮黑盒测试：146 项检查 128 通过，暴露本文档所列 4 个 URL bug 与 2 个 UX 问题，全部已修。多视口（1920/1366/1024/768/414/375）视觉走查无布局破裂、无 console error、暗/亮主题一致、桌面 36px 标题栏正常。
-
-## 七、视觉走查截图
-
-`.tmp-dev/images/audit-main/`（本 worktree，gitignore）与 `.tmp-dev/images/audit-f1/`（F1 代理 146 项测试证据）。
