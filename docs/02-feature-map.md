@@ -150,7 +150,7 @@
 |---|---|---|
 | context 一次性 fork 原子化（graphInherit）、memory 持续参考注入、global 跨项目共享、旧递归 graphContextText 已删、语义单测（GRAPH-01..03） | `chat-graph.ts` + graph-semantics.test.ts 38/38 | ✅ |
 | 文件/PDF/代码/目录引用节点 + previewOf 实时预览、convertToNote、neighborChatText 多聊天汇合、连线自然语言说明（context 边禁 label）、删除不删资料、前端分出新方向/搜索框（GRAPH-04..10、12） | t11 完成，前端 E2E 脚本（verify-graph*）存在 | ✅ |
-| 大型图节点搜索/分支折叠/邻域视图、检查器、XYFlow 缩略图和窄屏列表（GRAPH-11 / CG-CANVAS-04..10） | `client/chatgraph.ts` + `client/chatgraph-canvas.ts` + `client/chatgraph-layout-worker.ts` + `styles.ts`；ELK Worker 已接入 | ✅ |
+| 大型图节点搜索/分支折叠/邻域视图、检查器、XYFlow 缩略图和窄屏列表（GRAPH-11 / CG-CANVAS-04..10） | `client/chatgraph.ts` + `client/chatgraph-canvas.ts` + `client/chatgraph-layout-worker.ts`（ELK 主线程布局引擎，经动态 import） + `styles.ts` | ✅ |
 
 ### J.5 CTX ContextAssembler 与上下文窗口保护（§15.6，CTX-01..19）
 

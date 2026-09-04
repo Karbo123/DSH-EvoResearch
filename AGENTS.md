@@ -195,7 +195,7 @@ node scripts/verify-chatgraph-xyflow.mjs / verify-bundle.mjs / check-docs.mjs
 - **修改本文件（AGENTS.md）后**：先按文件头部规则复查字符数 ≤ 24,000，超限继续精简，然后再自动提交。
 
 - **日常**：工作树干净、`ahead N` 时 `git push origin main`。
-- **CI 发布流水线**（`.github/workflows/release.yml`，仅手动 workflow_dispatch；push main 不触发构建）：prepare-release（删旧 tag/Release 重建）→ desktop 三平台矩阵（NSIS / AppImage+deb / dmg）∥ android ∥ ios → publish-notes；**Release 恒为 `v0.1.0-rc.1`**（prerelease），资产同名覆盖，Notes 由 publish-notes 固定模板生成；iOS `npx tauri ios build --target aarch64-sim|aarch64`，.app 打 zip 走 artifact `ios-build`（无签名，正式 IPA 需配证书 secrets）；Android unsigned APK 挂 Release，配 `ANDROID_KEYSTORE_*` 四个 secrets 后自动签名。
+- **CI 发布流水线**（`.github/workflows/release.yml`，仅手动 workflow_dispatch；push main 不触发构建）：prepare-release（删旧 tag/Release 重建）→ desktop 三平台矩阵（NSIS / AppImage+deb / dmg）∥ android ∥ ios → publish-notes；**Release 恒为 `v0.1.0-rc.1`**（正式版，展示为 Latest；release.yml `-F prerelease=false`），资产同名覆盖，Notes 由 publish-notes 固定模板生成；iOS `npx tauri ios build --target aarch64-sim|aarch64`，.app 打 zip 走 artifact `ios-build`（无签名，正式 IPA 需配证书 secrets）；Android unsigned APK 挂 Release，配 `ANDROID_KEYSTORE_*` 四个 secrets 后自动签名。
 
 ### 9.1 Git 历史重写（去 Claude co-author）
 

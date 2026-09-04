@@ -52,7 +52,7 @@ export async function callText(ctx: Context, options: SimpleCallOptions): Promis
     provider: options.provider,
     model: options.model,
     system: options.system,
-    messages: options.messages.map((text, index) => textMessage(index === 0 ? 'user' : 'user', text)),
+    messages: options.messages.map((text) => textMessage('user', text)),
     maxTokens: options.maxTokens,
     signal: options.signal,
     ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort as GenerateOptions['reasoningEffort'] } : {}),

@@ -47,7 +47,6 @@ interface GraphNodeData extends Record<string, unknown> {
   /** 收纳系统连线后，该节点被收起的系统默认连线数（角落小徽标）。 */
   systemEdgeCount: number
   onOpen: (node: GraphNode) => void
-  onEdit: (node: GraphNode) => void
   onContextMenu: (event: MouseEvent, node: GraphNode) => void
   /** 右下角拖拽缩放开始/结束：开始时置 interacting 保护（轮询刷新不得把卡片拍回旧尺寸）。 */
   onResizeStart: () => void
@@ -89,8 +88,6 @@ export interface ChatGraphCanvasProps {
   busy: boolean
   onSelect: (id: string | null) => void
   onOpen: (node: GraphNode) => void
-  onEdit: (node: GraphNode) => void
-  onDelete: (id: string) => void
   onContextMenu: (menu: GraphCanvasMenu | null) => void
   onNodeContextMenu: (event: MouseEvent, node: GraphNode) => void
   onEdgeContextMenu: (event: MouseEvent, edge: GraphEdge) => void
@@ -700,7 +697,6 @@ function toXYNodes(props: ChatGraphCanvasProps, resizeHooks?: { onResizeStart: (
         pulsing: props.pulseIds.has(node.id),
         systemEdgeCount: hiddenSystemCounts.get(node.id) ?? 0,
         onOpen: props.onOpen,
-        onEdit: props.onEdit,
         onContextMenu: props.onNodeContextMenu,
         onResizeStart: resizeHooks?.onResizeStart ?? (() => {}),
         onResizeStop: resizeHooks?.onResizeStop ?? props.onNodeResize,

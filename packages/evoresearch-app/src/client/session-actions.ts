@@ -245,7 +245,7 @@ export function SearchDialog({
         historyHits !== null && jsxs('div', {
           className: 'evo-search-section',
           children: [
-            jsx('div', { className: 'evo-search-section-title', children: `Full history（${historyHits.length}）` }),
+            jsx('div', { className: 'evo-search-section-title', children: `${t('fullHistory')}（${historyHits.length}）` }),
             historyHits.length === 0
               ? jsx('div', { className: 'evo-search-empty', children: t('noMatches') })
               : jsx('div', {
@@ -270,11 +270,11 @@ export function SearchDialog({
 /** Shortcuts 弹窗（§23.2 键盘规则）。 */
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const rows: Array<[string, string]> = [
-    ['Enter', '换行'],
-    ['Ctrl/Cmd+Enter', '发送'],
-    ['Tab', '应用命令、文件或历史候选'],
-    ['↑ / ↓', '移动候选；空输入时浏览输入历史'],
-    ['Esc', '关闭候选；运行中打开停止确认'],
+    ['Enter', t('shortcutNewline')],
+    ['Ctrl/Cmd+Enter', t('shortcutSend')],
+    ['Tab', t('shortcutApplyCandidates')],
+    ['↑ / ↓', t('shortcutMoveCandidates')],
+    ['Esc', t('shortcutEscClose')],
   ]
   return jsx(ModalShell, {
     title: t('shortcuts'),

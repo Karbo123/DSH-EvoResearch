@@ -370,7 +370,6 @@ export class McpSupervisor {
     status: McpServerStatus
     client: McpClientLike
     disposed: boolean
-    reconnectTimer: ReturnType<typeof setTimeout> | null
     desiredState: 'running' | 'stopped'
   }>()
 
@@ -428,7 +427,6 @@ export class McpSupervisor {
       },
       client: this.clientFactory(config),
       disposed: desiredState === 'stopped',
-      reconnectTimer: null,
       desiredState,
     }
   }
@@ -529,10 +527,6 @@ export class McpSupervisor {
     if (!record) throw new Error(`MCP 服务器不存在: ${serverId}`)
     record.disposed = true
     record.desiredState = 'stopped'
-    if (record.reconnectTimer) {
-      clearTimeout(record.reconnectTimer)
-      record.reconnectTimer = null
-    }
     try {
       record.client.disconnect()
     } catch {
@@ -579,10 +573,6 @@ export class McpSupervisor {
     const record = this.servers.get(serverId)
     if (!record) return false
     record.disposed = true
-    if (record.reconnectTimer) {
-      clearTimeout(record.reconnectTimer)
-      record.reconnectTimer = null
-    }
     try {
       record.client.disconnect()
     } catch {
@@ -636,10 +626,6 @@ export class McpSupervisor {
   disposeAll(): void {
     for (const record of this.servers.values()) {
       record.disposed = true
-      if (record.reconnectTimer) {
-        clearTimeout(record.reconnectTimer)
-        record.reconnectTimer = null
-      }
       try {
         record.client.disconnect()
       } catch {

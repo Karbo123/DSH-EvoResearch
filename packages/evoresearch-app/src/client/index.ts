@@ -247,7 +247,12 @@ class ErrorBoundary extends (Component as any) {
 function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
   const workspaces = useWorkspaces((w) => w)
   const [projectScope, setProjectScope] = useState<{ name: string; path: string } | null>(null)
-  const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get(URL_KEY_INSPECTOR) === '1' : false)
+  const [inspector, setInspector] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const params = new URLSearchParams(location.search)
+    // 兼容短化前的旧长键 inspector=（现仅写 i=）
+    return params.get(URL_KEY_INSPECTOR) === '1' || params.get('inspector') === '1'
+  })
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() => {
     if (typeof window === 'undefined') return 'workspace'
     const params = new URLSearchParams(location.search)
@@ -260,7 +265,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [view, setView] = useState<SideView>(() => {
     // §43.5 ?v= 可分享/可恢复：此前只有写入方、无读取方，分享 ?v=mem 打开仍是欢迎页。
     if (typeof window === 'undefined') return null
-    const v = new URLSearchParams(location.search).get(URL_KEY_VIEW)
+    const params = new URLSearchParams(location.search)
+    // 兼容短化前的旧长键 view=（现仅写 v=）
+    const v = params.get(URL_KEY_VIEW) ?? params.get('view')
     if (v === null || v === '') return null
     for (const [full, short] of Object.entries(ENC_VALUE_VIEW)) {
       if (v === short) return full as SideView
@@ -1075,7 +1082,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       promoteSession(result.id)
       sessionsService?.open(result.id)
       window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
-      toast('History copied to new chat', 'success')
+      toast(t('historyCopiedToNewChat'), 'success')
       return result
     }
     return result

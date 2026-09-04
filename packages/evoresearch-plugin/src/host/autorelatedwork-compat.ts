@@ -52,14 +52,6 @@ function bounded(value: unknown, fallback: number, min: number, max: number): nu
   return Math.min(max, Math.max(min, n))
 }
 
-function sourceCount(papers: AutoRelatedWorkPaper[]): Record<string, number> {
-  const counts: Record<string, number> = {}
-  for (const paper of papers) {
-    const source = paper.source ?? 'unknown'
-    counts[source] = (counts[source] ?? 0) + 1
-  }
-  return counts
-}
 
 function paperKey(paper: AutoRelatedWorkPaper): string {
   // 原 app.py 的 _merge_papers 只按完整归一化标题去重；DOI 不能改变
@@ -861,7 +853,7 @@ export async function* autoRelatedWorkRelatedSearchEvents(input: {
     const seeds = quick.papers.map(autoRelatedWorkPaperFromRecord)
     if (seeds.length === 0) { yield { event: 'result', data: { type: 'related', papers: [], search_info: { query, type: 'related', timestamp: timestamp(), fetched: 0, elapsed_s: Math.round((Date.now() - startedAt) / 100) / 10, depth, width }, warnings: [...warnings, '未找到种子论文'] } }; return }
     yield progress('search', `种子 ${seeds.length} 篇，按引用递归 ${depth} 层（每篇 top-${width}）...`, 12)
-    const graph = await recursiveCollectAutoRelatedWork(seeds, { query, config: input.config, credentials: input.credentials, dataRoot: input.dataRoot, fetchImpl: input.fetchImpl, signal: input.signal, depth, width, maxTotal, fetchRefs: true, onRecursiveProgress: (level, count, total) => input.config?.fast !== true && undefined })
+    const graph = await recursiveCollectAutoRelatedWork(seeds, { query, config: input.config, credentials: input.credentials, dataRoot: input.dataRoot, fetchImpl: input.fetchImpl, signal: input.signal, depth, width, maxTotal, fetchRefs: true, onRecursiveProgress: () => {} })
     const sources = sourceCounts(graph.papers.map((paper) => [paper]))
     yield progress('search', `引用图构建完成：${graph.papers.length} 篇论文、${graph.edges.length} 条引用`, 28)
     yield { event: 'partial_result', data: { papers: graph.papers.map((paper) => ({ ...cleanWithReport(paper), _depth: paper.depth ?? 0 })), search_info: { query, type: 'related', timestamp: timestamp(), fetched: graph.papers.length, elapsed_s: Math.round((Date.now() - startedAt) / 100) / 10, sources, depth, width, edges: graph.edges.length, status: 'graph_built' } } }

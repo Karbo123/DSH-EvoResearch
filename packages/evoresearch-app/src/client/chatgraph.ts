@@ -254,7 +254,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       // rev 尚未就绪（graph-get 未返回或失败）时禁止保存：携带 rev:undefined
       // 会绕过服务端乐观并发检查，造成盲写覆盖。先重新 load 拿到最新 rev。
       if (revRef.current === null) {
-        toast(readLang() === 'zh' ? '图谱尚未加载完成，已重新拉取，请稍后重试' : 'Graph not loaded yet — reloading, please retry')
+        toast(t('graphRevMissing'))
         load()
         return false
       }
@@ -1088,8 +1088,6 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         busy,
         onSelect: (id: string | null) => { setSelectedId(id); setMenu(null) },
         onOpen: (node: GraphNode) => { if (node.type === 'chat') openChatNode(node); else if (node.displayKind === 'memory' || node.displayKind === 'memory-collection' || node.type === 'memory') startEditMemory(node); else if (node.ref !== undefined) openRefViewer(node); else startEditMemory(node) },
-        onEdit: startEditMemory,
-        onDelete: deleteNode,
         onContextMenu: setMenu,
         onNodeContextMenu: onCanvasNodeContextMenu,
         onEdgeContextMenu: onCanvasEdgeContextMenu,
@@ -1232,12 +1230,6 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       }),
     ],
   })
-}
-
-/** 引用显示名：路径 basename（截断）。 */
-export function refDisplayName(refPath: string): string {
-  const base = refPath.split(/[\\/]/).filter((s) => s !== '').pop() ?? refPath
-  return base.length > 18 ? `${base.slice(0, 17)}…` : base
 }
 
 /** displayKind → 中文名映射键（画布标题条与检查器共用；未知值原样显示）。 */

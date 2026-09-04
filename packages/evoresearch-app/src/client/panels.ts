@@ -429,7 +429,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                                 o.status === 'superseded' && jsx('span', { className: 'evo-skill-status rejected', children: t('superseded') }),
                               ],
                             }),
-                            o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: `superseded by ${o.supersededBy.slice(0, 18)}` }),
+                            o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: t('skillSupersededBy').replace('{v}', o.supersededBy.slice(0, 18)) }),
                             o.content !== '' && jsx('div', { className: 'evo-skill-desc', children: o.content.slice(0, 220) }),
                             (o.categories ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: categoryLabel(c) }, c)) }),
                             (o.relatedObservationIds ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.relatedObservationIds ?? []).map((rid) => {
@@ -889,7 +889,7 @@ function MarketplaceView() {
             onInput: (e) => setQuery(e.currentTarget.value),
             'aria-label': t('searchSkills'),
           }),
-          jsx('span', { className: 'evo-panel-hint', children: `${rows.length} skills` }),
+          jsx('span', { className: 'evo-panel-hint', children: t('skillsCount').replace('{n}', String(rows.length)) }),
         ],
       }),
       skills === null

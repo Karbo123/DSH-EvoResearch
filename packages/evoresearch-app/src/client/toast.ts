@@ -46,6 +46,8 @@ export function ToastHost() {
     children: list.length > 0
       ? jsx('div', {
           className: 'evo-toast-host',
+          role: 'status',
+          'aria-live': 'polite',
           children: list.map((item) => jsx('div', {
             className: `evo-toast evo-toast-${item.kind}`,
             children: item.text,

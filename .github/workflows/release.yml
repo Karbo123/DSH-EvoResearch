@@ -54,7 +54,9 @@ jobs:
           # 会永久残留并让仓库首页 Releases 侧栏显示异常（如只剩「1 tag」）。
           # 仅删除本 TAG 的 draft（TAG 指向的旧 Release 被删后残留的 draft），
           # 不碰用户手工创建的其他草稿。
-          for DID in $(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq --arg TAG "${TAG}" '.[] | select(.draft and .tag_name == $TAG) | .id'); do
+          # gh api 无 --arg 旗标（pflag 会把 --arg 当 --jq 的值使命令恒失败、
+          # 且命令替换内的失败被 for 静默吞掉）——TAG 用 shell 内插进 jq 程序。
+          for DID in $(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq ".[] | select(.draft and .tag_name == \"${TAG}\") | .id"); do
             echo "删除本 TAG 残留 draft Release id=$DID"
             gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$DID"
           done

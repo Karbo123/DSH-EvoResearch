@@ -253,7 +253,7 @@ export function TabFileEditor({ path, root, draft, original, readOnly, onDraft, 
         setContent(text); setReadError(null)
         // 上报磁盘原始内容作为 dirty 基准（仅首次/内容变化时；draft 优先分支不覆盖脏状态）
         if (draft === undefined || draft === '') onLoadedRef.current(text)
-      } else setReadError(json.error?.message ?? '读取失败')
+      } else setReadError(json.error?.message ?? t('wsReadFailed'))
     }).catch((e) => { if (!cancelled) setReadError(String(e)) })
     return () => { cancelled = true }
   }, [path])

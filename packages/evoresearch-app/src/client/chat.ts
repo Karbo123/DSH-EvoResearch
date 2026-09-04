@@ -328,7 +328,7 @@ function ToolImageThumb({ asset }: { asset: ToolImageAsset }) {
   return jsxs('button', {
     type: 'button',
     className: 'evo-tool-img',
-    title: `${asset.name}（点击放大）`,
+    title: `${asset.name}${t('clickToEnlarge')}`,
     onClick: () => {
       if (src === null) { load(); return }
       const win = typeof window !== 'undefined' ? window.open('') : null

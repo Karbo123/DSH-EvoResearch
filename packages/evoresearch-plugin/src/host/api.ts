@@ -24,6 +24,7 @@ import type { NotesService, NoteSummary } from './notes.js'
 import type { ExperimentWorkspaceService, ExperimentWorkspaceInfo, ExperimentWorkspaceDetail, ExperimentWorkspaceEntry, ExperimentWorkspaceTree } from './experiment-workspace.js'
 import type { ExperimentProcessService, RunRecord, ExperimentGraphRef, ExperimentGraphRefResolution } from './experiment-process.js'
 import type { ExperimentLedgerService } from './experiment-ledger.js'
+import { resolveLedgerDirKey } from './experiment-ledger.js'
 import type { ExperimentRoundsService } from './experiment-rounds.js'
 import { PHASE_ORDER } from './experiment-rounds.js'
 import { SCIENCE_DUTIES } from './science/roles.js'
@@ -1330,6 +1331,11 @@ export class EvoResearchApiService extends TypertRemoteService {
     try {
       try { this.services.memory.beginDeletion(targetNorm) } catch { /* 连接关闭失败不阻塞 */ }
       this.closeProjectCaches(targetNorm)
+      // 级联清理项目侧全局状态（此前仅删项目目录：同名重建会复活旧实验账本与图谱）
+      const projectName = targetNorm.split(path.sep).pop() ?? ''
+      const ledgerKey = resolveLedgerDirKey(root, projectName)
+      try { rmSync(path.join(root, 'plugins', 'ledgers', ledgerKey), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) } catch { /* best effort */ }
+      try { rmSync(path.join(root, 'plugins', 'chat-graphs', `${projectName}.json`), { force: true }) } catch { /* best effort */ }
       rmSync(targetNorm, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 })
       try { this.services.memory.endDeletion(targetNorm) } catch { /* 标记清理失败不阻塞 */ }
       return { ok: true, deleted: true }
