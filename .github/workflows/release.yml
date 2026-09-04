@@ -382,10 +382,10 @@ jobs:
 
           | 你的设备 | 下载这个 | 怎么用 |
           |---|---|---|
-          | 🪟 **Windows 10/11** | `EvoResearch_0.1.0_x64-setup.exe` | 双击安装，打开即用。**大多数用户选这个** ⭐ |
-          | 🍎 Mac (M1/M2/M3/M4) | `EvoResearch_0.1.0_aarch64.dmg` | 打开后拖进「应用程序」 |
-          | 🐧 Linux（免安装） | `EvoResearch_0.1.0_amd64.AppImage` | `chmod +x` 后直接双击运行 |
-          | 🐧 Linux (Debian/Ubuntu) | `EvoResearch_0.1.0_amd64.deb` | `sudo dpkg -i <文件>` 安装 |
+          | 🪟 **Windows 10/11** | `EvoResearch_0.1.0-rc.1_x64-setup.exe` | 双击安装，打开即用。**大多数用户选这个** ⭐ |
+          | 🍎 Mac (M1/M2/M3/M4) | `EvoResearch_0.1.0-rc.1_aarch64.dmg` | 打开后拖进「应用程序」 |
+          | 🐧 Linux（免安装） | `EvoResearch_0.1.0-rc.1_amd64.AppImage` | `chmod +x` 后直接双击运行 |
+          | 🐧 Linux (Debian/Ubuntu) | `EvoResearch_0.1.0-rc.1_amd64.deb` | `sudo dpkg -i <文件>` 安装 |
           | 🤖 Android 手机 (arm64) | `app-arm64-release.apk` | 下载安装即可（预览版） |
           | 🤖 Android 其它架构 | `app-arm / app-x86 / app-x86_64-release.apk` | 按手机架构选择 |
           | 📱 iPhone / iPad | `ios-build.zip`（见本页 Assets 或 Actions 产物） | 解压出 .app；正式 IPA 需签名后提供 |

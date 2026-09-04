@@ -78,16 +78,25 @@
 - release.yml：publish-notes 增加 android 成功条件；draft 清理过滤本 TAG（不再误删人工草稿）。
 - package.json：verify 链接入 launcher 单测；scripts/ 111 个一次性脚本 git mv 归档到 scripts/legacy/（白名单 22 个长期脚本保留）。
 
-## 四、已确认、留待后续（📋，按优先级）
+## 四、第三轮后仍留待后续（📋，仅剩 2 项，均已设防护）
 
-1. **前端巨石组件**：EvoFrame ~1930 行、ChatArea ~1900 行、ThreadList ~1000 行。建议按「composer/气泡/标签栏/URL 状态」拆分（防止大范围回归，需独立重构分支）。
-2. **账本 slug 20 字符截断碰撞的存量数据迁移**：新建项目已被 createProject 碰撞守卫挡住，历史长名项目的账本键合并需单独设计迁移。
-3. **dailyReportGenerate 的 llm:true 是假功能**（tryPolishMarkdown 恒等返回）：建议接线 LLM（服务需注入 ctx 调 callText）或移除开关与 UI 入参。
-4. **tauri.conf.json version 0.1.0 与 Release v0.1.0-rc.1 双源**：NSIS 产物名与 Notes 模板硬编码一致，改动需两处联动，留待版本策略统一时处理。
-5. **console.error 劫持压制 React key 警告**（app index.ts apply）：后台标签页 rAF 节流期会延长压制窗口，建议仅 dev 构建启用。
-6. **ScienceMemory 死类与 roles 死函数**：生产零引用但测试大量引用，删除需连测试一起清理（本轮为不破坏 npm test 暂留）。
-7. **data-paths `dsh-settings-file` effect 类型与实现差异**：effect 枚举为前后端共享类型（settings.ts 镜像），描述文案已改为与实现一致，类型层面收敛需前后端联动。
-8. **platform/adapters.ts 602 行适配层仅 probes 被消费**、context PLAT-04 工具结果裁剪管线零接线：建议接入或裁剪（涉及上下文管线语义，需设计评审）。
+1. **前端巨石组件完全拆分**：EvoFrame ~1900 行、ChatArea ~1900 行。第三轮已完成有界拆分第一阶段（后台通知 effects 抽为 notifications.ts、两段确认定时器统一为 two-step.ts、POST 封装统一为 fs-api.ts、文件分类统一为 file-kind.ts）；剩余主体为 JSX 组合与事件处理，完全拆分需独立重构分支 + 逐组件回归，不宜在本审计分支继续。
+2. **账本 slug 截断碰撞的存量数据迁移**：已加运行时碰撞检测守卫（repoDir 拒绝共用账本并报可读错误）+ createProject 碰撞守卫挡住新建；历史已合并的账本数据迁移需按真实数据单独设计。
+
+## 四·三、第三轮修复明细（同日第三批）
+
+- **contextPrunes 端点下线**：管线未接线、无前端消费、恒返回 []；pruneToolResult 能力本体保留并标注「预留、需设计评审后接入」（context-runtime）。
+- **日报 llm:true 从假功能变真功能**：DailyReportOptions 新增 polisher 注入，api 层经 ctx.llm（callText，当前默认模型→auxiliaryModel→部署默认）真实润色，30s 超时/失败/空输出回退模板原文。
+- **账本 slug 截断碰撞运行时守卫**：repoDir 检测同键异名项目，拒绝并给出可读错误。
+- **版本单一事实源**：tauri.conf.json version 0.1.0 → 0.1.0-rc.1（对齐 Cargo.toml 与 Release TAG），release.yml Notes 下载表与 AGENTS.md 产物名同步。
+- **console.error 过滤改造**：key 误报由「4 帧+2s 时间窗」改为对恰好该条文案的永久精确过滤（其余错误一律放行，消除窗口漂移与误吞疑虑）。
+- **两段式确认定时器统一**：新增 two-step.ts useConfirmReset（先清旧 timer 防截断新确认窗口 + 卸载清理），替换 research-notes/experiments/ledger-panel/panels 六处裸 setTimeout。
+- **trajectory 行键盘可达**：turn/step/call 三类行补 role=button + tabIndex + Enter/Space + aria-expanded。
+- **library import_literature**：Content-Length 预检，声明超限直接拒绝（不再整体进内存后才校验）。
+- **预留能力显式标注**：science/memory.ts（ScienceMemory 有测试、生产未接线）与 platform/adapters.ts（七适配器预留面）标注「预留、勿按死代码删除」。
+- **有界拆分第一阶段**：index.ts 后台通知 effects 抽为 notifications.ts（行为不变的纯搬移，构建与回归通过）。
+
+> 第三轮后基线：build 0 警告、单测 616+52+5、domain 27、acceptance 19/19、xyflow/bundle/docs 全过、cargo check 过、UI 回归 5/5、pageerror 0。
 
 > 其余 P3 级（5s 确认定时器不清理、trajectory 行键盘可达、library import 50MB 流式预检等）记录于各代理审计原始报告，影响面小，按需处理。
 

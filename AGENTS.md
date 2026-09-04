@@ -127,7 +127,7 @@ bash 等价形式：以上三个变量取同值（`D:\\DSH-Research\\.tmp-dev\\.
 ### 4.3 桌面版
 
 - **开发态**：`cd desktop; cargo tauri dev`（需 Rust）。
-- **打包 NSIS**：`npm run build` → `node desktop/scripts/build.mjs --skip-download`，产物 `desktop/src-tauri/target/release/bundle/nsis/EvoResearch_0.1.0_x64-setup.exe`（同时更新 `desktop/sidecar/dist/` 与 `_up_/`）。
+- **打包 NSIS**：`npm run build` → `node desktop/scripts/build.mjs --skip-download`，产物 `desktop/src-tauri/target/release/bundle/nsis/EvoResearch_0.1.0-rc.1_x64-setup.exe`（同时更新 `desktop/sidecar/dist/` 与 `_up_/`）。
 - `bundle-sidecar.mjs` 用 `--install-links` 真实复制 `@evoresearch/*`（junction 在 NSIS 展开失效）；`launch.js` 启动时自愈 profile junction（黑窗根因修复）；无边框窗口 + 自绘标题栏 36px（`?desktop=1` 渲染 `DesktopTitlebar`）。
 
 ---
