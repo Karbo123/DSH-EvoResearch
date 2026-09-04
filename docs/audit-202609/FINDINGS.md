@@ -78,6 +78,42 @@
 - release.yml：publish-notes 增加 android 成功条件；draft 清理过滤本 TAG（不再误删人工草稿）。
 - package.json：verify 链接入 launcher 单测；scripts/ 111 个一次性脚本 git mv 归档到 scripts/legacy/（白名单 22 个长期脚本保留）。
 
+## 三·五、检查清单执行报告（2026-09-04/05 清单核验战役）
+
+按 [CHECKLIST.md](./CHECKLIST.md) 的 1023 项逐项执行审查：由 6 个分段核验代理（后端×2 / 前端 / 桌面·脚本·测试 / 领域清单 / 视觉·端到端·可维护性）对每一项到代码/运行时实测复核，判定合并脚本校验 **覆盖 1023/1023、无缺失、无重复**。每项行尾 `→ 状态 证据` 已回写进 CHECKLIST.md。
+
+### 执行结果总览
+
+| 分区 | 项数 | 结果分布 |
+|---|---|---|
+| 后端逐文件 | 460 | ✅403 / 📋2 / 🔧55 |
+| 前端逐文件 | 238 | ✅197 / 📋6 / 🔧35 |
+| 桌面 | 20 | ✅13 / 🔧7 |
+| 脚本 | 48 | ✅41 / 📋1 / 🔧6 |
+| CI/Profile | 12 | ✅9 / 🔧3 |
+| 测试覆盖 | 51 | ✅51 |
+| 测试缺口 | 13 | ✅2 / 📋11 |
+| 领域清单 | 116 | ✅95 / 📋4 / 🔧17 |
+| 视觉走查 | 41 | ✅41 |
+| 端到端场景 | 16 | ✅16 |
+| 可维护性 | 8 | 📋3 / 🔧5 |
+| **合计** | **1023** | **✅868 / 📋27 / 🔧128** |
+
+**✅868 通过 · 🔧128 已修复 · 📋27 已登记遗留 · ⚠️0**（核验中发现的问题全部当场修复，无未处置发现）。
+
+### 清单核验中新发现并当场修复的问题（第五批，20 项）
+
+后端：autorelatedwork-compat 死函数 sourceCount 与恒空回调清理、`/project create` 缺 try/catch（碰撞守卫抛错裸冒给命令框架）、core/llm 恒真三元、MCP supervisor reconnectTimer 死字段（三处 clearTimeout 空操作）、diagnostics 悬空段注释、shared/types TurnRecord.interruptReason 联合类型与 store 写入值不一致（补 superseded_by_new_turn）。
+前端：约 12 处硬编码文案走 i18n（工具图片「点击放大」、History copied、Mermaid 两处占位、skills 计数、superseded by、ShortcutsDialog 五行、Full history、读取失败等）；composer-assist `c.hint !== ''` 对 undefined 为真导致无 hint 命令的 description 永不展示（逻辑修复）；死代码 renderComposerDeco（约 70 行）/chatgraph refDisplayName/canvas 死参数 onEdit·onDelete/RESTORE_ICON 死常量删除；ToastHost 补 role=status+aria-live（读屏可感知）；view=/inspector= 短化前旧长键兼容读取。
+后端·项目删除：projectDeleteDisk 级联清理 `plugins/ledgers/<key>` 与 `plugins/chat-graphs/<name>.json`（此前同名重建项目会复活旧账本与图谱）。
+CI：release.yml draft 清理 `gh api --jq --arg` 语法无效（pflag 把 --arg 当 --jq 的值，命令替换内失败被 for 静默吞掉）——第二轮的"按 TAG 过滤"修复实际未生效，改 shell 内插后修复；Release 表述（prerelease）与实现（正式版）矛盾——以实现为准同步 AGENTS.md/feature-map，并修正 feature-map「ELK Worker 已接入」文档漂移。
+清单自身：修正 507 处路径双写前缀（packages/evoresearch-plugin/packages/…）与 AUD-0731~0734 指向全历史不存在的 build-plugin.mjs（实际由 tsc+build-client.mjs 承担，条目标注说明）。
+
+### 📋 27 项登记遗留分布
+
+测试缺口 11（experiment-rounds/commands/core-llm/chat-graph-bridge/packet/rewind×2/api 283 端点/Rust/launch.js/React 组件渲染）· 性能 P3 3（bundle 19MB 无分割/大图主线程布局/client-state 高频写）· 可维护性 3（巨石主体拆分/console.error 保留/active-teams 开关+ctx:any 路线）· 领域 4（verify.mjs 双入口/端口 TOCTOU/capabilities 通配评估/桌面测试面）· 脚本 1（verify.mjs 并存）· 前端 5（主体拆分/readSideChats/matchesSession/拖停全边重算/session-actions 焦点圈闭）· 杂项（cron 英文缩写/roles 死导出有测试引用）。
+
+
 ## 四、最终遗留（📋，仅 1 项）
 
 1. **前端巨石组件完全拆分（EvoFrame / ChatArea 主体）**：有界拆分已完成两阶段——第一阶段 notifications.ts/two-step.ts/fs-api.ts/file-kind.ts，第二阶段 url-state.ts（URL 状态与会话短别名模块，纯函数搬移）。剩余主体为 JSX 组合与事件处理，完全拆分需独立重构分支 + 逐组件回归，不在本审计分支继续。
