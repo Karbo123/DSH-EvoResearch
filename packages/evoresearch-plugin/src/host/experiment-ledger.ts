@@ -13,8 +13,48 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { projectNameFromWorkspace, slugifyProjectName } from './core/paths.js'
 import { captureProvenance } from './experiment-provenance.js'
+
+/**
+ * 账本目录键解析（单点：service.repoDir 与 experiment-workspace 的覆盖清理共用）。
+ *
+ * slug 截断碰撞自愈（2026-09 审计）：两个 >20 字符的长项目名前缀相同会映射到同一
+ * 截断键，裸 git 库会互相提交串数据。检测到碰撞时：
+ * - 键改为确定性派生 `<截断键>-m<sha1 前 8 位（完整项目名）>`（两个碰撞项目各得独立库）；
+ * - 被共享的旧库一次性改名为 `<截断键>-collided-archive` 保留（其内历史属两个项目
+ *   混杂，无法机械拆分；原实验的工作区 .evoresearch-data 侧记录不受影响）。
+ */
+export function resolveLedgerDirKey(dataRoot: string, projectName: string): string {
+  const key = slugifyProjectName(projectName)
+  let colliding = false
+  try {
+    const projectsDir = path.join(dataRoot, 'projects')
+    for (const entry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      if (entry.name !== projectName && slugifyProjectName(entry.name) === key) {
+        colliding = true
+        break
+      }
+    }
+  } catch {
+    return key
+  }
+  if (!colliding) return key
+  const disambiguated = `${key}-m${createHash('sha1').update(projectName).digest('hex').slice(0, 8)}`
+  const sharedDir = path.join(dataRoot, 'plugins', 'ledgers', key)
+  const archiveDir = path.join(dataRoot, 'plugins', 'ledgers', `${key}-collided-archive`)
+  if (fs.existsSync(sharedDir) && !fs.existsSync(archiveDir)) {
+    try {
+      fs.renameSync(sharedDir, archiveDir)
+      console.warn(`[evoresearch:ledger] 检测到项目名截断碰撞，共享账本已归档: ${sharedDir} → ${archiveDir}；各碰撞项目将获得独立账本（混杂历史保留在归档库）`)
+    } catch (error) {
+      console.warn(`[evoresearch:ledger] 碰撞账本归档失败（继续使用派生键 ${disambiguated}）: ${String(error)}`)
+    }
+  }
+  return disambiguated
+}
 
 const GIT_NAME = 'EvoResearch'
 const GIT_EMAIL = 'evoresearch@localhost'
@@ -80,25 +120,7 @@ export class ExperimentLedgerService {
     if (name === undefined) {
       throw new Error(`实验账本需要项目目录（dataRoot/projects/<name>）: ${projectDir}`)
     }
-    const ledgerKey = slugifyProjectName(name)
-    // slug 截断碰撞检测：两个 >20 字符的长项目名前缀相同会映射到同一账本键，
-    // 裸 git 库会互相提交串数据（createProject 已挡新建，这里防存量数据踩中）。
-    for (const other of this.listProjectNames()) {
-      if (other !== name && slugifyProjectName(other) === ledgerKey) {
-        throw new Error(`账本键冲突：项目「${name}」与「${other}」的项目名截断后同为 "${ledgerKey}"，拒绝共用账本；请重命名其中一个项目`)
-      }
-    }
-    return path.join(this.dataRoot, 'plugins', 'ledgers', ledgerKey, `${slug}.git`)
-  }
-
-  private listProjectNames(): string[] {
-    try {
-      return fs.readdirSync(path.join(this.dataRoot, 'projects'), { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-    } catch {
-      return []
-    }
+    return path.join(this.dataRoot, 'plugins', 'ledgers', resolveLedgerDirKey(this.dataRoot, name), `${slug}.git`)
   }
 
   private expDir(projectDir: string, slug: string): string {

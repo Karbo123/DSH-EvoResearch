@@ -684,7 +684,7 @@ export class ResearchMemoryStore {
       topicKeys?: readonly string[]
       status?: TurnStatus
       responseStarted?: boolean
-      interruptReason?: 'user_stop' | 'api_failure'
+      interruptReason?: 'user_stop' | 'api_failure' | 'superseded_by_new_turn'
       partialNote?: string
       workingSummary?: string
     },

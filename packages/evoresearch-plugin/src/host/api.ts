@@ -3861,12 +3861,6 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
   }
 
-  @Remote('safety')
-  safety(): { dangerousMode: boolean } {
-    // 第一版：返回 false（危险模式由 DSH 权限预设管理，此处预留聚合）
-    return { dangerousMode: false }
-  }
-
   // ── 平台能力层（PLAT-13..20，t19 交付） ───────────────────────────────────
 
   // ── PLAT-13：模型 Fallback selector ────────────────────────────────────────
@@ -4057,7 +4051,9 @@ export class EvoResearchApiService extends TypertRemoteService {
     if (!mcp) return { error: 'platform.mcp 未接线' }
     try {
       const result = mcp.addServer(args.config)
-      return result.status
+      // 此前 fire-and-forget 启动、返回 starting 前的快照（恒 stopped），前端拿到
+      // 假状态；connect 现有 15s 超时，等待启动完成后返回真实状态（失败随 {error} 上抛）
+      return await mcp.start(result.status.serverId)
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

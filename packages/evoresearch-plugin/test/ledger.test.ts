@@ -191,3 +191,46 @@ describe('ExperimentLedgerService (A.6)', () => {
     assert.equal(svc.log(projectDir, 'demo').length, 1)
   })
 })
+
+
+describe('ExperimentLedgerService 账本键截断碰撞自愈', () => {
+  it('碰撞项目各得独立派生键账本，旧共享库一次性归档', () => {
+    const base = fs.mkdtempSync(path.join(TMP_ROOT, 'collide-'))
+    const dataRoot = path.join(base, 'data')
+    const nameA = 'deep-learning-pipeline-alpha'
+    const nameB = 'deep-learning-pipeline-beta'
+    // 前置：两个名字确实截断为同一键（默认 maxLength=20）
+    assert.equal(slugifyProjectName(nameA), slugifyProjectName(nameB))
+    const projectDirA = path.join(dataRoot, 'projects', nameA)
+    const projectDirB = path.join(dataRoot, 'projects', nameB)
+    fs.mkdirSync(path.join(projectDirA, 'experiments'), { recursive: true })
+    fs.mkdirSync(path.join(projectDirB, 'experiments'), { recursive: true })
+
+    const svc = new ExperimentLedgerService(dataRoot)
+    // 预置「遗留共享库」（模拟升级前两个碰撞项目共用同一截断键裸库的历史状态）
+    const ledgersDir = path.join(dataRoot, 'plugins', 'ledgers')
+    fs.mkdirSync(path.join(ledgersDir, 'deep-learning-pipeli'), { recursive: true })
+
+    const r1 = svc.init(projectDirA, 'demo')
+    assert.equal(r1.ok, true)
+    const r2 = svc.init(projectDirB, 'demo')
+    assert.equal(r2.ok, true)
+
+    const entries = fs.readdirSync(ledgersDir)
+    // 截断键目录已归档，不再存在
+    assert.ok(!entries.includes('deep-learning-pipeli'))
+    // 归档库保留混杂历史
+    assert.ok(entries.includes('deep-learning-pipeli-collided-archive'))
+    // 两个项目各自得到确定性派生键目录，且互不相同
+    const derived = entries.filter((d) => d.startsWith('deep-learning-pipeli-m'))
+    assert.equal(derived.length, 2)
+    // 各自的库可独立读写（log 不串库）
+    assert.equal(svc.log(projectDirA, 'demo').length, 1)
+    assert.equal(svc.log(projectDirB, 'demo').length, 1)
+    // 幂等：再次访问不重复归档、键稳定
+    const r3 = svc.init(projectDirA, 'demo2')
+    assert.equal(r3.ok, true)
+    const entriesAgain = fs.readdirSync(ledgersDir)
+    assert.equal(entriesAgain.filter((d) => d === 'deep-learning-pipeli-collided-archive').length, 1)
+  })
+})
