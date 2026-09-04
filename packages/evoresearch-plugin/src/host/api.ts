@@ -84,7 +84,7 @@ import type { LayeredSkillRegistry, SkillLayer, SkillEntry } from './skills/regi
 import type { ScienceLoopService, ScienceLoop, ScienceLoopAction } from './science/loops.js'
 import type { ScienceChatGraphBridge } from './science/chat-graph-bridge.js'
 import type { JobHubService } from './jobs.js'
-import { callJson } from './core/llm.js'
+import { callJson, callText } from './core/llm.js'
 import { applyDataPaths, getDataPaths, getDataClearPaths, listDataDirectories, type DataPathApplyMode, type DataPathPair } from './data-paths.js'
 import type { ConfiguredWebSearchProvider } from './web-search.js'
 import { AutoRelatedWorkCacheStore } from './autorelatedwork-search.js'
@@ -3586,14 +3586,6 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
   }
 
-  /** PLAT-04：读取工具结果裁剪归档索引，作为继续读取入口。 */
-  @Remote('contextPrunes')
-  contextPrunes(args: { sessionId?: string }): unknown {
-    const runtime = this.services.contextRuntime
-    if (runtime === undefined) return { error: 'contextRuntime 服务不可用' }
-    return runtime.pruneRecords(args?.sessionId)
-  }
-
   @Remote('contextAssembleDeep')
   async contextAssembleDeep(args: AssembleInput): Promise<AssemblyResult | { error: string }> {
     try {
@@ -4187,6 +4179,25 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   // ── 实验日报（Part C：手动 + 自动触发）─────────────────────────────────────
 
+  /** 日报 LLM 润色：模型取当前默认选择 → auxiliaryModel → 部署默认；失败抛错由 generate 回退模板。 */
+  private async polishMarkdownWithLlm(markdown: string): Promise<string> {
+    const selection = (this.hostCtx.get('agentDefaultModel') as { currentSelection?(): { provider?: string; model?: string } } | undefined)?.currentSelection?.()
+    const configured = this.services.memory.config.auxiliaryModel
+    const model = selection?.provider && selection?.model
+      ? { provider: selection.provider, model: selection.model }
+      : configured?.provider && configured?.model
+        ? { provider: configured.provider, model: configured.model }
+        : DEFAULT_FALLBACK_MODEL
+    const polished = await callText(this.hostCtx, {
+      provider: model.provider,
+      model: model.model,
+      system: '你是科研写作助手。对给定的实验日报做轻度润色：修正语句、统一格式，保留全部事实、数字与结构（Markdown 标题/列表），不新增虚构内容，直接输出润色后的全文。',
+      messages: [markdown],
+      maxTokens: 4096,
+    })
+    return polished
+  }
+
   @Remote('dailyReportGenerate')
   async dailyReportGenerate(args: { projectDir: string; slugs?: string[]; llm?: boolean }): Promise<unknown> {
     const svc = this.services.dailyReport
@@ -4194,7 +4205,17 @@ export class EvoResearchApiService extends TypertRemoteService {
     try {
       const projectDir = String(args?.projectDir ?? '')
       if (projectDir.trim() === '') return { error: 'projectDir 不能为空' }
-      return await svc.generate({ projectDir, ...(Array.isArray(args?.slugs) ? { slugs: args.slugs.map(String) } : {}), ...(args?.llm === true ? { llm: true } : {}) }, 'manual')
+      return await svc.generate({
+        projectDir,
+        ...(Array.isArray(args?.slugs) ? { slugs: args.slugs.map(String) } : {}),
+        ...(args?.llm === true
+          ? {
+              llm: true,
+              // 真实润色：此前 polisher 从未注入，llm:true 是假功能（恒等返回）
+              polisher: (markdown: string) => this.polishMarkdownWithLlm(markdown),
+            }
+          : {}),
+      }, 'manual')
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

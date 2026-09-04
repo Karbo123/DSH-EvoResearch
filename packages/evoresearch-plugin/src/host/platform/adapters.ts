@@ -5,6 +5,11 @@
  * `ctx.sessions` / `ctx.llm` / `ctx.tools` 等 DSH 服务名与调用形态；
  * DSH 版本升级时只改本文件与 `capabilities.ts` 的矩阵即可。
  *
+ * ⚠️ 预留层（2026-09 审计）：当前生产仅 `probes` 被 context-runtime.status()
+ * 消费，sessions/models/tools/approval/sandbox/events/plugins 七个适配器为
+ * 科研模块统一迁移到 adapters.* 时的预留面（platform-context.test 以假适配器
+ * 锁定契约）。迁移完成前不要按「死代码」删除。
+ *
  * 每个适配器在对应 DSH 服务缺失时给出明确的降级行为：
  * - 构造时汇总缺失/部分能力并记录 warning（`quiet: true` 可只收集不打印）；
  * - 读操作（list/get/current）降级返回空值；

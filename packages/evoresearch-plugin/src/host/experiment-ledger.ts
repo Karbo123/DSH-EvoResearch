@@ -80,7 +80,25 @@ export class ExperimentLedgerService {
     if (name === undefined) {
       throw new Error(`实验账本需要项目目录（dataRoot/projects/<name>）: ${projectDir}`)
     }
-    return path.join(this.dataRoot, 'plugins', 'ledgers', slugifyProjectName(name), `${slug}.git`)
+    const ledgerKey = slugifyProjectName(name)
+    // slug 截断碰撞检测：两个 >20 字符的长项目名前缀相同会映射到同一账本键，
+    // 裸 git 库会互相提交串数据（createProject 已挡新建，这里防存量数据踩中）。
+    for (const other of this.listProjectNames()) {
+      if (other !== name && slugifyProjectName(other) === ledgerKey) {
+        throw new Error(`账本键冲突：项目「${name}」与「${other}」的项目名截断后同为 "${ledgerKey}"，拒绝共用账本；请重命名其中一个项目`)
+      }
+    }
+    return path.join(this.dataRoot, 'plugins', 'ledgers', ledgerKey, `${slug}.git`)
+  }
+
+  private listProjectNames(): string[] {
+    try {
+      return fs.readdirSync(path.join(this.dataRoot, 'projects'), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+    } catch {
+      return []
+    }
   }
 
   private expDir(projectDir: string, slug: string): string {

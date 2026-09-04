@@ -371,6 +371,9 @@ export class ContextRuntime {
   }
 
   /* ── PLAT-04：工具结果裁剪（透传 guard + 本层记录） ──────────────────── */
+  /* 预留能力、当前未接线：自动裁剪工具结果会改变上下文语义，需设计评审后
+   * 经 tools.execute 包装（wrapToolExecute）接入；此前的 contextPrunes Remote
+   * 端点因恒返回空数组且无前端消费已下线（2026-09 审计）。 */
 
   pruneToolResult(input: PruneToolResultInput): PruneToolResultOutput {
     const output = this.guard.pruneToolResult(input)
