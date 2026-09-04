@@ -78,12 +78,21 @@
 - release.yml：publish-notes 增加 android 成功条件；draft 清理过滤本 TAG（不再误删人工草稿）。
 - package.json：verify 链接入 launcher 单测；scripts/ 111 个一次性脚本 git mv 归档到 scripts/legacy/（白名单 22 个长期脚本保留）。
 
-## 四、第三轮后仍留待后续（📋，仅剩 2 项，均已设防护）
+## 四、最终遗留（📋，仅 1 项）
 
-1. **前端巨石组件完全拆分**：EvoFrame ~1900 行、ChatArea ~1900 行。第三轮已完成有界拆分第一阶段（后台通知 effects 抽为 notifications.ts、两段确认定时器统一为 two-step.ts、POST 封装统一为 fs-api.ts、文件分类统一为 file-kind.ts）；剩余主体为 JSX 组合与事件处理，完全拆分需独立重构分支 + 逐组件回归，不宜在本审计分支继续。
-2. **账本 slug 截断碰撞的存量数据迁移**：已加运行时碰撞检测守卫（repoDir 拒绝共用账本并报可读错误）+ createProject 碰撞守卫挡住新建；历史已合并的账本数据迁移需按真实数据单独设计。
+1. **前端巨石组件完全拆分（EvoFrame / ChatArea 主体）**：有界拆分已完成两阶段——第一阶段 notifications.ts/two-step.ts/fs-api.ts/file-kind.ts，第二阶段 url-state.ts（URL 状态与会话短别名模块，纯函数搬移）。剩余主体为 JSX 组合与事件处理，完全拆分需独立重构分支 + 逐组件回归，不在本审计分支继续。
 
-## 四·三、第三轮修复明细（同日第三批）
+## 四·四、第四轮修复明细（同日第四批）
+
+- **账本 slug 截断碰撞：从硬报错升级为确定性自愈迁移**——新增 `resolveLedgerDirKey(dataRoot, projectName)` 单点（repoDir 与 experiment-workspace 覆盖清理共用）：检测到同键异名项目时，键派生为 `<截断键>-m<sha1 前8（完整项目名）>`（两碰撞项目各得独立裸库），被共享的旧库一次性改名 `<截断键>-collided-archive` 保留混杂历史；幂等（归档存在即跳过）。新增单元测试覆盖碰撞/归档/独立读写/幂等（ledger.test 10 用例全过）。
+- **memory activeTurns 并发覆盖保护**：同会话并发两条 user/message 不再覆盖式丢失——检测到未结束的上一轮时即时收尾（updateTurn → interrupted/superseded_by_new_turn + 已积累 assistantText），新轮正常开启（此前上一轮悬挂 pending 1 小时被 recovery 兜底误标，正文串账）。
+- **memory storeFor 启动对账后台化**：整库备份复制 + 最多 200 个会话日志同步读挪到 setImmediate，用户首条消息路径不再卡顿。
+- **api 清理**：删除恒 false 且无前端消费的 safety 占位端点；mcpServerAdd 等待启动完成（connect 已有 15s 超时）返回真实状态（此前恒返回 starting 前快照）。
+- **前端小项**：setNarrow 的 resize 处理纯函数化（跨 setState 副作用挪出 updater）；statusbar computeStats 确认已 memo（无需改）。
+
+> 第四轮后基线：build 0 警告、单测 617+52+5、domain 27、acceptance 19/19、xyflow/bundle/docs 全过、cargo check 过、UI 回归 5/5、pageerror 0。
+
+## 四·三、第三轮修复明细（同日第三批，其"遗留 2 项"中账本项已于第四轮解决）
 
 - **contextPrunes 端点下线**：管线未接线、无前端消费、恒返回 []；pruneToolResult 能力本体保留并标注「预留、需设计评审后接入」（context-runtime）。
 - **日报 llm:true 从假功能变真功能**：DailyReportOptions 新增 polisher 注入，api 层经 ctx.llm（callText，当前默认模型→auxiliaryModel→部署默认）真实润色，30s 超时/失败/空输出回退模板原文。
