@@ -629,6 +629,20 @@ export class ManuscriptService {
     return { papers, notes, files, unresolved }
   }
 
+  /** 绝对路径护栏：target 必须等于/位于当前项目目录或 dataRoot 内（win32 大小写不敏感）。 */
+  private isSameOrInsideProject(project: string, target: string): boolean {
+    const norm = (p: string): string => {
+      const resolved = path.resolve(p).replace(/\\/g, '/')
+      return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+    }
+    const t = norm(target).replace(/\/+$/, '')
+    for (const base of [projectDir(this.config.dataRoot, project), this.config.dataRoot]) {
+      const b = norm(base).replace(/\/+$/, '')
+      if (t === b || t.startsWith(`${b}/`)) return true
+    }
+    return false
+  }
+
   /**
    * 引用/数字核对（WRITE-07）：给定引用文本或数字，返回定位结构——
    * 原论文页（library 页文本子串扫描）+ 实验日志/结果文件（行号 + 片段）。
@@ -659,12 +673,19 @@ export class ManuscriptService {
       const target = path.isAbsolute(input.resultFile)
         ? input.resultFile
         : path.join(projectDir(this.config.dataRoot, project), input.resultFile)
+      // 绝对路径必须落在当前项目目录或 dataRoot 内，防任意文件读
+      if (path.isAbsolute(input.resultFile) && !this.isSameOrInsideProject(project, target)) {
+        throw new Error(`resultFile 越界：绝对路径只允许位于当前项目目录或数据根内: ${input.resultFile}`)
+      }
       if (fs.existsSync(target) && fs.statSync(target).isFile()) scanFile(target, path.basename(target))
     }
     if (input.experimentDir) {
       const root = path.isAbsolute(input.experimentDir)
         ? input.experimentDir
         : path.join(projectDir(this.config.dataRoot, project), input.experimentDir)
+      if (path.isAbsolute(input.experimentDir) && !this.isSameOrInsideProject(project, root)) {
+        throw new Error(`experimentDir 越界：绝对路径只允许位于当前项目目录或数据根内: ${input.experimentDir}`)
+      }
       if (fs.existsSync(root) && fs.statSync(root).isDirectory()) {
         const files: string[] = []
         const walk = (current: string, depth: number): void => {
@@ -713,6 +734,24 @@ export class ManuscriptService {
 
 // ── 内部工具 ────────────────────────────────────────────────────────────────
 
+/**
+ * 超时树杀：latexmk 会再派生 pdflatex 等子进程，child.kill() 只杀直接子进程，
+ * Windows 下留下孤儿进程占住输出文件；taskkill /T /F 连整棵进程树一起终止。
+ */
+function killTree(child: import('node:child_process').ChildProcess): void {
+  const pid = child.pid
+  if (pid === undefined) return
+  if (process.platform === 'win32') {
+    try {
+      spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true })
+    } catch {
+      child.kill()
+    }
+  } else {
+    child.kill('SIGKILL')
+  }
+}
+
 /** 运行外部命令，收集 stdout/stderr（超时终止；spawn 失败走 error 事件）。 */
 function runCommand(
   cmd: string,
@@ -733,7 +772,7 @@ function runCommand(
     })
     const timer = setTimeout(() => {
       timedOut = true
-      child.kill()
+      killTree(child)
     }, timeoutMs)
     child.on('error', (error) => {
       clearTimeout(timer)

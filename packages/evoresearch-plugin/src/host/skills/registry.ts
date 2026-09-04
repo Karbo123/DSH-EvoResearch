@@ -85,10 +85,10 @@ export interface SkillRegisterInput {
 /** git 执行注入（测试用；缺省 execFile('git')）。 */
 export type GitRunner = (args: readonly string[], cwd?: string) => Promise<{ code: number; stdout: string; stderr?: string }>
 
-/** 默认 git 执行：execFile('git', args, { cwd, windowsHide: true })。 */
+/** 默认 git 执行：execFile('git', args, { cwd, windowsHide: true, timeout: 120s })。 */
 export function defaultGitRunner(args: readonly string[], cwd?: string): Promise<{ code: number; stdout: string; stderr?: string }> {
   return new Promise((resolve) => {
-    execFile('git', [...args], { cwd, windowsHide: true, encoding: 'utf8' }, (error, stdout, stderr) => {
+    execFile('git', [...args], { cwd, windowsHide: true, encoding: 'utf8', timeout: 120_000 }, (error, stdout, stderr) => {
       if (error) {
         resolve({ code: typeof (error as { code?: unknown }).code === 'number' ? (error as { code: number }).code : 1, stdout: '', stderr: String(stderr ?? error.message) })
       } else {
@@ -410,6 +410,8 @@ export class LayeredSkillRegistry {
       fs.unwatchFile(entry.bodyPath, listener)
       this.watchers.delete(key)
     }
+    // 同 key 重复 watch：先执行旧 disposer，防 fs.watchFile 监听泄漏
+    this.watchers.get(key)?.()
     this.watchers.set(key, disposer)
     return disposer
   }

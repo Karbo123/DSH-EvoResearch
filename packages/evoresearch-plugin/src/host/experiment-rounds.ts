@@ -31,6 +31,8 @@ export interface ExperimentRound {
   phases: RoundPhase[]
   currentIndex: number
   status: 'running' | 'done' | 'cancelled'
+  /** 取消时只删了 pending 阶段产物；done 阶段文件仍保留在磁盘。 */
+  filesDeleted?: boolean
 }
 
 interface RoundsState {
@@ -317,7 +319,7 @@ export class ExperimentRoundsService {
     return this.list(projectDir, slug)
   }
 
-  /** 取消当前回合（清空 pending 阶段目录）。 */
+  /** 取消当前回合：只删 pending 阶段的产物文件，done 阶段产物保留。 */
   cancel(projectDir: string, slug: string): { ok: true } {
     const expDir = this.expDirOf(projectDir, slug)
     const state = this.loadState(expDir)
@@ -326,13 +328,22 @@ export class ExperimentRoundsService {
       throw new Error('当前没有进行中的回合可取消')
     }
     const dir = this.roundDir(expDir, round.roundId)
-    // 删除整个回合目录（其余阶段文件一起清理）
-    try {
-      fs.rmSync(dir, { recursive: true, force: true })
-    } catch {
-      // 删除失败不阻塞状态清理
+    // 只删 pending 阶段文件（done 产物是已留痕的证据，不能连带清掉）
+    for (const phase of round.phases) {
+      if (phase.status !== 'pending' || phase.outputFile === undefined) continue
+      try {
+        fs.rmSync(phase.outputFile, { force: true })
+      } catch {
+        // 删除失败不阻塞状态清理
+      }
     }
-    const cancelled: ExperimentRound = { ...round, status: 'cancelled', phases: round.phases.map((p) => ({ ...p })) }
+    // 目录清空了才移除目录本身
+    try {
+      if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir)
+    } catch {
+      // 保留非空目录（含 done 产物）
+    }
+    const cancelled: ExperimentRound = { ...round, status: 'cancelled', phases: round.phases.map((p) => ({ ...p })), filesDeleted: true }
     state.history.push(cancelled)
     if (state.history.length > 50) state.history.splice(0, state.history.length - 50)
     state.current = null

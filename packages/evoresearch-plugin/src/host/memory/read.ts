@@ -44,7 +44,9 @@ export interface LocatableFragmentHit {
   readonly createdAt: number
 }
 
-/** 命中相邻扩展（RET-08）：默认前后各 2 条。 */
+/** 命中相邻扩展（RET-08）：默认前后各 2 条。
+ *  segmentsCache：同一次检索内按 sessionId 缓存会话原文序列（避免多命中重复拉全量段）；
+ *  由调用链传入（每次请求新建），不跨请求复用，无泄漏风险。 */
 export function expandFragmentContext(
   store: ResearchMemoryStore,
   sessionId: string,
@@ -52,8 +54,10 @@ export function expandFragmentContext(
   anchorSegSeq: number,
   beforeN = 2,
   afterN = 2,
+  segmentsCache?: Map<string, ConversationItem[]>,
 ): FragmentContext {
-  const items = store.conversationSegments(sessionId)
+  const items = segmentsCache?.get(sessionId) ?? store.conversationSegments(sessionId)
+  segmentsCache?.set(sessionId, items)
   const index = items.findIndex((item) => item.turnId === anchorTurnId && item.segSeq === anchorSegSeq)
   if (index === -1) return { prev: [], anchor: undefined, next: [] }
   const start = Math.max(0, index - beforeN)
@@ -72,8 +76,9 @@ export function expandFragmentHit(
   score: number,
   contextBefore = 2,
   contextAfter = 2,
+  segmentsCache?: Map<string, ConversationItem[]>,
 ): LocatableFragmentHit {
-  const context = expandFragmentContext(store, fragment.sessionId, fragment.turnId, fragment.segSeq, contextBefore, contextAfter)
+  const context = expandFragmentContext(store, fragment.sessionId, fragment.turnId, fragment.segSeq, contextBefore, contextAfter, segmentsCache)
   const turn = store.getTurn(fragment.turnId)
   return {
     kind: 'fragment',

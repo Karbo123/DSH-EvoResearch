@@ -73,6 +73,8 @@ export class MemoryRuntime implements GoalRuntime {
   private notesService: NotesService | undefined
   /** 最近一次分类模型选择（缓存，避免每轮查询）。 */
   private cachedModel: { provider: string; model: string } | undefined
+  /** Profile 文件内容缓存（key=目录，value=文件名→mtime/size/文本；文件未变不重读）。 */
+  private readonly profileTextCache = new Map<string, Map<string, { mtimeMs: number; size: number; text: string }>>()
 
   constructor(config: MemoryConfig) {
     this.config = {
@@ -219,7 +221,7 @@ export class MemoryRuntime implements GoalRuntime {
     return this.notesService.createNote({ workspaceDir, title, body })
   }
 
-  /** §12.3 Profile 注入：总量 ≤24000 字符时全文注入，超限只给文件清单 + 读取指令。 */
+  /** §12.3 Profile 注入：总量 ≤24000 字符时全文注入，超限只给文件清单 + 读取指令（mtime 缓存：文件未变不重读）。 */
   profileContextText(sessionId: string): string {
     const sessions = this.ctxRef?.get('sessions')
     const getSession = sessions?.get as ((id: string) => unknown) | undefined
@@ -228,6 +230,11 @@ export class MemoryRuntime implements GoalRuntime {
     const base = cwd && cwd !== this.config.dataRoot ? cwd : this.config.dataRoot
     const profileDir = path.join(workspaceDataDir(this.config.dataRoot, base), 'memories', 'profile')
     const files: Array<{ name: string; text: string }> = []
+    let cache = this.profileTextCache.get(profileDir)
+    if (cache === undefined) {
+      cache = new Map()
+      this.profileTextCache.set(profileDir, cache)
+    }
     try {
       for (const entry of fs.readdirSync(profileDir)) {
         if (!entry.endsWith('.md')) continue
@@ -235,7 +242,14 @@ export class MemoryRuntime implements GoalRuntime {
         try {
           const stat = fs.statSync(full)
           if (!stat.isFile() || stat.size > 64 * 1024) continue
-          files.push({ name: entry, text: fs.readFileSync(full, 'utf8') })
+          const cached = cache.get(entry)
+          if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+            files.push({ name: entry, text: cached.text })
+            continue
+          }
+          const text = fs.readFileSync(full, 'utf8')
+          cache.set(entry, { mtimeMs: stat.mtimeMs, size: stat.size, text })
+          files.push({ name: entry, text })
         } catch { /* 跳过不可读 */ }
       }
     } catch { /* 目录不存在 */ }

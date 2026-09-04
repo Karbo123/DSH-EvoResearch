@@ -45,7 +45,7 @@ import { ManuscriptService } from './manuscript.js'
 import { SignalStore } from './evolution/signals.js'
 import { CandidateRegistry } from './evolution/registry.js'
 import { ContextRuntime } from './platform/context-runtime.js'
-import { ContextAssembler } from './context/assembler.js'
+import { ContextAssembler, suspendSyncPdfRead } from './context/assembler.js'
 import { callText } from './core/llm.js'
 import { ExpertService, type ExpertConfig } from './experts.js'
 import { ExperimentService } from './experiments.js'
@@ -274,6 +274,10 @@ function apply(ctx: Context): void {
   // 5.14) ContextAssembler（§整合 P2：每轮组装 + 压力检查闭环）
   // 关键约束：store 必须按本次 assemble 的 workspaceDir 解析，不能使用一个可变
   // 的“最近工作区”变量，否则并发项目会把上下文检索到另一个数据库。
+  // 热路径标记：prepareFast 在 user/message 事件上同步执行，任何 3s 级的
+  // pdftotext 子进程调用都会阻塞整条事件循环（每次用户消息都触发）。快速
+  // 投影阶段跳过 PDF 提取返回占位；深入检索（assembleDeep）不受影响。
+  let fastProjectionActive = false
   const contextAssembler = new ContextAssembler({
     storeFor: (workspaceDir) => memory.storeFor(workspaceDir),
     notes,
@@ -291,6 +295,10 @@ function apply(ctx: Context): void {
       const rootOk = target === root || target.startsWith(`${root}${path.sep}`) || target.startsWith(`${path.resolve(dataRoot)}${path.sep}`)
       if (!rootOk) return { ok: false, error: '引用资料不在当前工作区内' }
       if (ref.kind !== 'pdf' && ref.kind !== 'paper') return chatGraph.previewOf(node, workspaceDir, maxChars)
+      // 快速投影阶段不同步提取 PDF（见上方注释）；给出与提取失败一致的占位
+      if (fastProjectionActive) {
+        return { ok: false, path: target, error: 'PDF 提取延后到深入检索阶段，请从页码入口打开原文' }
+      }
       try {
         const text = execFileSync('pdftotext', ['-f', '1', '-l', '4', '-layout', target, '-'], {
           encoding: 'utf8', timeout: 3000, maxBuffer: 4 * 1024 * 1024,
@@ -331,7 +339,13 @@ function apply(ctx: Context): void {
       const workspaceDir = typeof session?.header?.cwd === 'string' && session.header.cwd !== '' ? session.header.cwd : dataRoot
       if (text.trim() !== '') {
         const projectName = projectNameFromWorkspace(dataRoot, workspaceDir)
-        contextAssembler.prepareFast({ sessionId, userQuestion: text.trim(), workspaceDir, projectName })
+        fastProjectionActive = true
+        try {
+          // 同时通知 assembler 抑制其内部 readPdf 的同步子进程提取
+          suspendSyncPdfRead(() => contextAssembler.prepareFast({ sessionId, userQuestion: text.trim(), workspaceDir, projectName }))
+        } finally {
+          fastProjectionActive = false
+        }
       }
     } else if (event?.type === 'turn/end') {
       contextAssembler.clearPrepared(sessionId)
@@ -476,7 +490,7 @@ function apply(ctx: Context): void {
     selectModelRoute: (routes, options) => selectModel(routes, modelFallbackState, options),
     selectToolsForTurn: (tools, query, options) => selectToolsForTurn(tools, query, options),
     approvalPolicy,
-    decideApproval: (toolName) => decisionFromPolicy(approvalPolicy, toolName),
+    decideApproval: (toolName) => decideApproval(approvalPolicy, toolName),
     subagents: { registry: subagentRegistry, providers: subagentProviders, facade: subagentFacade },
     mcp: mcpSupervisor,
     skillRegistry: layeredSkills,
@@ -593,14 +607,39 @@ function apply(ctx: Context): void {
     critiqueImage: undefined, // 视觉模型配置就绪时由 vision.ts 的 analyzeImage 接入；此处保守缺省
   }))
   // P0-3 四挂接点之一：实验进程启动登记（其余挂接点见下）
+  // 上限 24h：`for(;;)` 轮询若进程僵死/账本永不翻转，任务行会永远停在 running；
+  // 超时后 fail 落 JobHub，用户可在任务面板看到并手动处理。
+  const EXPERIMENT_JOB_MAX_MS = 24 * 60 * 60 * 1000
   const origExpRun = experimentProcess.run.bind(experimentProcess)
   ;(experimentProcess as { run: typeof experimentProcess.run }).run = (workspaceDir: string, slug: string, spec: Parameters<typeof experimentProcess.run>[2]) => {
     const record = origExpRun(workspaceDir, slug, spec)
-    const job = jobHub.register({ kind: 'experiment', label: `${slug}: ${record.command.slice(0, 60)}`, sessionId: undefined, detail: record.runId })
+    // sessionId：RunSpec/RunRecord 不携带会话 id，保持 undefined（jobsCancel
+    // 仍可按 jobId 取消；cancelBySession 对实验任务不适用属预期）。
+    const job = jobHub.register({
+      kind: 'experiment',
+      label: `${slug}: ${record.command.slice(0, 60)}`,
+      sessionId: undefined,
+      detail: record.runId,
+      // 取消实现：调 experimentProcess.stop（落账 user-stopped + taskkill /T /F 连进程树）
+      cancel: () => {
+        try {
+          experimentProcess.stop(workspaceDir, slug, { runId: record.runId })
+        } catch {
+          // 进程可能已退出；轮询循环会按账本状态正常收尾
+        }
+      },
+    })
+    const startedAt = Date.now()
     void (async () => {
       // 轮询等待该 run 结束（账本状态翻转），随后注销任务行
       for (;;) {
         await new Promise((resolve) => setTimeout(resolve, 5000))
+        if (Date.now() - startedAt > EXPERIMENT_JOB_MAX_MS) {
+          // 超时先真实停进程再 fail，避免"任务行失败但进程仍在跑"
+          try { experimentProcess.stop(workspaceDir, slug, { runId: record.runId }) } catch { /* 已退出 */ }
+          jobHub.fail(job.jobId, '实验任务超过 24h 上限，已强制停止')
+          break
+        }
         try {
           const current = experimentProcess.get(workspaceDir, slug, record.runId)
           if (current.status === 'running') continue
@@ -912,17 +951,6 @@ function apply(ctx: Context): void {
 }
 
 export default { name, inject, apply }
-
-/** PLAT-15：基于策略做审批判定（薄包装，方便 closure 捕获）。 */
-function decisionFromPolicy(approvalPolicy: ReturnType<typeof defaultApprovalPolicy>, toolName: string) {
-  const dangerous = (approvalPolicy.dangerousTools ?? []).includes(toolName)
-  if (!dangerous) return { decision: 'allow' as const, reason: `工具 ${toolName} 不在危险清单`, dangerous: false }
-  const override = approvalPolicy.overrides?.[toolName]
-  const mode = override ?? approvalPolicy.mode
-  if (mode === 'allow') return { decision: 'allow' as const, reason: `工具 ${toolName} 被策略放行`, dangerous: true }
-  if (mode === 'deny') return { decision: 'deny' as const, reason: `工具 ${toolName} 被策略拒绝`, dangerous: true }
-  return { decision: 'ask' as const, reason: `工具 ${toolName} 需要审批`, dangerous: true }
-}
 
 /** 执行 shell 类命令的工具名（灾难命令兜底检查范围）。 */
 const CATASTROPHIC_SHELL_TOOLS: ReadonlySet<string> = new Set(['bash', 'shell', 'pwsh', 'powershell', 'run_command'])

@@ -18,6 +18,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { parseObservationFile, ResearchMemoryStore } from './store.js'
 import { turnDetail, readConversationRange, readMemoryFilePaged, expandFragmentHit } from './read.js'
+import type { ConversationItem } from './read.js'
 import type { ResearchCategory, GoalProposal, ObservationEdgeType, ObservationMeta } from '../../shared/types.js'
 
 /** 工具上下文：MemoryRuntime 提供的存储门面。 */
@@ -102,7 +103,9 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       // RET-03：片段级检索（FTS5 优先，失败自动退化 LIKE 原文扫描，RET-09）
       const fragments = store.searchFragments(input.query, limit * 3, { mode: 'auto' })
       if (fragments.length > 0) {
-        const hits = fragments.slice(0, limit).map(({ fragment, score }) => expandFragmentHit(store, fragment, score))
+        // 同一次检索内按 sessionId 缓存会话段（避免多命中重复拉全量段，防 N+1）
+        const segmentsCache = new Map<string, ConversationItem[]>()
+        const hits = fragments.slice(0, limit).map(({ fragment, score }) => expandFragmentHit(store, fragment, score, 2, 2, segmentsCache))
         return { hits }
       }
       // 兼容回退：片段索引未建立（旧库未回填）时沿用旧混合召回
@@ -140,7 +143,8 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       const store = host.storeFor(workspaceOf(exec))
       const limit = Math.min(input.limit ?? 8, 20)
       const fragments = store.searchFragments(input.query, limit, { sessionId: input.session_id, mode: 'auto' })
-      return { hits: fragments.map(({ fragment, score }) => expandFragmentHit(store, fragment, score)) }
+      const segmentsCache = new Map<string, ConversationItem[]>()
+      return { hits: fragments.map(({ fragment, score }) => expandFragmentHit(store, fragment, score, 2, 2, segmentsCache)) }
     },
   })
 
@@ -405,6 +409,9 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       const input = args as { observation_id: string; superseded_by: string }
       const workspace = workspaceOf(exec)
       const store = host.storeFor(workspace)
+      if (store.getObservation(input.observation_id) === undefined) {
+        return { ok: false, error: `Observation 不存在: ${input.observation_id}` }
+      }
       store.supersedeObservation(host.observationsDirFor(workspace), input.observation_id, input.superseded_by)
       return { ok: true }
     },

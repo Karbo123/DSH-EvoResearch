@@ -108,8 +108,14 @@ export class ChannelManager {
         await adapter.send(message.chatId, `已收到，交由 agent 处理（会话 ${sessionId.slice(0, 8)}…）。`)
       }
     } catch (error) {
-      this.errors.set(adapter.id, error instanceof Error ? error.message : String(error))
-      await adapter.send(message.chatId, `处理失败: ${error instanceof Error ? error.message : String(error)}`)
+      const message0 = error instanceof Error ? error.message : String(error)
+      this.errors.set(adapter.id, message0)
+      // 回发失败提示本身也可能失败（网络断开等），不能再抛出成 unhandled rejection
+      try {
+        await adapter.send(message.chatId, `处理失败: ${message0}`)
+      } catch (sendError) {
+        console.error(`[evoresearch:channels] ${adapter.id} 回发失败提示失败:`, sendError instanceof Error ? sendError.message : sendError)
+      }
     }
   }
 }

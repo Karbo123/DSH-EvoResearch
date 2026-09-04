@@ -523,11 +523,15 @@ function normalizeSettings(raw: unknown): WebSearchSettings {
   return { activeProvider, providers, academicProvider, academicProviders, userConfigured: source.userConfigured === true }
 }
 
-function requireURL(raw: string, provider: WebSearchProviderId): string {
+function requireURL(raw: string, provider: WebSearchProviderId | AcademicSearchProviderId): string {
+  // 学术 Provider 也要报自己的名字，不能统一挂在 searxng 名下（张冠李戴误导排查）
+  const providerName = provider in PROVIDER_META
+    ? PROVIDER_META[provider as WebSearchProviderId].name
+    : ACADEMIC_PROVIDER_META[provider as AcademicSearchProviderId].name
   const value = cleanURL(raw)
-  if (value === '') throw new Error(`${PROVIDER_META[provider].name} 需要配置服务地址`)
+  if (value === '') throw new Error(`${providerName} 需要配置服务地址`)
   let url: URL
-  try { url = new URL(value) } catch { throw new Error(`${PROVIDER_META[provider].name} 服务地址不是有效 URL`) }
+  try { url = new URL(value) } catch { throw new Error(`${providerName} 服务地址不是有效 URL`) }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('搜索服务地址只允许 http 或 https')
   return value
 }
@@ -1055,13 +1059,13 @@ export class ConfiguredWebSearchProvider {
             ...(typeof raw.cacheTTLHours === 'number' ? { cacheTTLHours: Math.max(1, raw.cacheTTLHours) } : previous.cacheTTLHours !== undefined ? { cacheTTLHours: previous.cacheTTLHours } : { cacheTTLHours: 24 }),
           }
       if (academicProvider === id && id === 'openalex-crossref') {
-        requireURL(academicProviders[id]?.baseURL ?? '', 'searxng')
-        requireURL(academicProviders[id]?.crossrefURL ?? '', 'searxng')
+        requireURL(academicProviders[id]?.baseURL ?? '', 'openalex-crossref')
+        requireURL(academicProviders[id]?.crossrefURL ?? '', 'openalex-crossref')
       }
-      if (academicProvider === id && id === 'autorelatedwork') requireURL(academicProviders[id]?.scholarURL ?? '', 'searxng')
+      if (academicProvider === id && id === 'autorelatedwork') requireURL(academicProviders[id]?.scholarURL ?? '', 'autorelatedwork')
       if (academicProvider === id && id === 'paper-navigator') {
-        requireURL(academicProviders[id]?.baseURL ?? '', 'searxng')
-        requireURL(academicProviders[id]?.recommendURL ?? '', 'searxng')
+        requireURL(academicProviders[id]?.baseURL ?? '', 'paper-navigator')
+        requireURL(academicProviders[id]?.recommendURL ?? '', 'paper-navigator')
       }
     }
     const settings = this.ctx.get('settings') as { replace?(namespace: string, value: object): Promise<unknown> } | undefined

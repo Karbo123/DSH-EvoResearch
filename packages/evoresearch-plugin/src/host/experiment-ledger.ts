@@ -42,10 +42,10 @@ function runGit(args: string[], opts: { cwd?: string; gitDir?: string; workTree?
   if (opts.workTree) gitArgs.push(`--work-tree=${opts.workTree}`)
   gitArgs.push(...args)
   const cwd = opts.cwd ?? opts.workTree ?? opts.gitDir ?? process.cwd()
-  // Prefer git.exe on Windows, fallback to git
-  let result = spawnSync('git.exe', gitArgs, { cwd, encoding: 'utf8', windowsHide: true })
+  // Prefer git.exe on Windows, fallback to git；30s 超时防 git 挂起阻塞事件循环外的同步调用
+  let result = spawnSync('git.exe', gitArgs, { cwd, encoding: 'utf8', windowsHide: true, timeout: 30_000 })
   if (result.error && (result.error as NodeJS.ErrnoException).code === 'ENOENT') {
-    result = spawnSync('git', gitArgs, { cwd, encoding: 'utf8', windowsHide: true })
+    result = spawnSync('git', gitArgs, { cwd, encoding: 'utf8', windowsHide: true, timeout: 30_000 })
   }
   if (result.status !== 0) {
     throw new Error(`git ${args[0]} failed: ${(result.stderr ?? '').trim().slice(0, 500) || `exit ${String(result.status)}`}`)
@@ -143,40 +143,6 @@ export class ExperimentLedgerService {
       return { ok: true, sha }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-
-  private buildProvenanceStub(slug: string): Record<string, unknown> {
-    let appVersion = '0.1.0'
-    try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(this.dataRoot, 'package.json'), 'utf8')) as { version?: string }
-      if (typeof pkg.version === 'string') appVersion = pkg.version
-    } catch {
-      try {
-        const pkg2 = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')) as { version?: string }
-        if (typeof pkg2.version === 'string') appVersion = pkg2.version
-      } catch { /* ignore */ }
-    }
-    let dshVersion = 'unknown'
-    for (const cand of [
-      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
-      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-agent', 'package.json'),
-      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-session', 'package.json'),
-    ]) {
-      try {
-        const dshPkg = JSON.parse(fs.readFileSync(cand, 'utf8')) as { version?: string }
-        if (typeof dshPkg.version === 'string' && dshPkg.version !== '') { dshVersion = dshPkg.version; break }
-      } catch { /* try next */ }
-    }
-    return {
-      app: { name: 'EvoResearch', version: appVersion },
-      dsh: { version: dshVersion },
-      node: process.version,
-      os: `${process.platform} ${process.arch}`,
-      dataRoot: this.dataRoot,
-      createdAt: Date.now(),
-      slug,
-      config: {},
     }
   }
 

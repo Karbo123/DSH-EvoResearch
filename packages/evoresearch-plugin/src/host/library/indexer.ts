@@ -419,7 +419,8 @@ export class LibraryIndexer {
   importBibtex(project: string, bibtexText: string): { attached: Array<{ paperId: string; title: string }>; unmatched: BibEntry[] } {
     const store = this.storeFor(projectDir(this.config.dataRoot, project))
     const entries = parseBibtex(bibtexText)
-    const candidates = store.listPapers({ includeMissing: true, limit: 500 })
+    // 2000 上限：>500 篇的库此前匹配不上，抬高到主流库容量级
+    const candidates = store.listPapers({ includeMissing: true, limit: 2000 })
     const byTitle = new Map<string, PaperRecord>()
     for (const paper of candidates) {
       const key = normalizeBibTitle(paper.title)

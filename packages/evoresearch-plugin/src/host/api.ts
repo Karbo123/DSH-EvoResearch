@@ -307,6 +307,13 @@ export type SessionMetaEntry = {
   slug?: string
 }
 
+/**
+ * 部署级兜底模型（projectAutoCreate / projectTitleSuggest 等辅助调用在
+ * 「无用户选择 + 无 auxiliaryModel 配置」时的最后回退）。收敛为模块级常量，
+ * 避免多处硬编码漂移。
+ */
+const DEFAULT_FALLBACK_MODEL = { provider: 'new-api', model: 'deepseek-v4-flash' } as const
+
 /** EvoResearch Remote API。 */
 export class EvoResearchApiService extends TypertRemoteService {
   private readonly services: HostServices
@@ -459,7 +466,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         ? { provider: selection.provider, model: selection.model }
         : configured?.provider && configured?.model
           ? { provider: configured.provider, model: configured.model }
-          : { provider: 'new-api', model: 'deepseek-v4-flash' }
+          : { ...DEFAULT_FALLBACK_MODEL }
       const project = await this.services.workspace.autoCreateProject(this.hostCtx, model, String(args?.description ?? ''))
       // 欢迎页自动建项目路径同样打回溯基线（auto-turn 0 = 初始状态）
       try { this.services.rewind.commitWorkspace(project.path, 'auto-turn 0') } catch { /* 非 git 项目忽略 */ }
@@ -1065,7 +1072,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         // 根工作区（dataRoot 自身）的记忆 / Chat Graph 一并清空；
         // 模型配置（model-settings.json）属于另一个清除项，保留不动。
         const rootEvoData = path.join(this.services.memory.config.dataRoot, 'plugins')
-        for (const sub of ['memories', 'chat-graphs']) {
+        for (const sub of ['memories', 'chat-graphs', 'ledgers', 'evolution', 'science-loops']) {
           try {
             rmSync(path.join(rootEvoData, sub), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
             if (sub === 'chat-graphs') counts.chatGraphs += 1
@@ -1079,11 +1086,16 @@ export class EvoResearchApiService extends TypertRemoteService {
           if (this.services.scheduler.remove(task.taskId)) counts.tasks += 1
         }
 
-        // 全部会话已清空：会话元数据（置顶/标签/归档）整体重置
+        // 全部会话已清空：会话元数据（置顶/标签/归档）与项目元信息（归档/标签色）整体重置
         try {
           this.writeSessionMeta({})
         } catch (error) {
           console.error('[evoresearch:data-clear] 会话元数据重置失败:', error)
+        }
+        try {
+          this.writeProjectMeta({})
+        } catch (error) {
+          console.error('[evoresearch:data-clear] 项目元信息重置失败:', error)
         }
 
         // 收尾：解除删除标记（保留失败目录的标记，供用户处理后重试）
@@ -2733,6 +2745,9 @@ export class EvoResearchApiService extends TypertRemoteService {
   async graphInherit(args: { workspaceDir?: string; fromNodeId: string; toNodeId: string; sourceEventSeq?: number }): Promise<{ ok: boolean; sessionId?: string; replaced?: boolean; notice?: string; error?: string; rev?: number }> {
     try {
       const name = this.graphProjectOf(args)
+      // 乐观并发基线：rev 基于 mtime，必须在 fork（await agents.create）之前取，
+      // 否则保存时现取 current rev 永远等于 expectedRev，检测不到并发写入。
+      const graphRevBeforeFork = this.services.chatGraph.rev(name)
       const graph = this.services.chatGraph.get(name)
       const from = graph.nodes.find((n) => n.id === String(args?.fromNodeId ?? '') && n.type === 'chat')
       const to = graph.nodes.find((n) => n.id === String(args?.toNodeId ?? '') && n.type === 'chat')
@@ -2831,8 +2846,14 @@ export class EvoResearchApiService extends TypertRemoteService {
           forkAnchor: { sourceSessionId: from.sessionId, sourceEventSeq, sourceMessageId, targetSessionId: finalId },
         }])
       const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: finalId } : n)), edges }
-      const saved = this.services.chatGraph.save(name, next)
-      if (!saved.ok) return { ok: false, error: saved.error ?? '图谱保存失败' }
+      // 乐观并发：带上 fork 前的 expectedRev，若期间前端拖线/其他继承已写图，
+      // save 会返回 conflict——直接向调用方报可读错误，而不是静默覆盖别人的修改。
+      const saved = this.services.chatGraph.save(name, next, graphRevBeforeFork)
+      if (!saved.ok) {
+        return { ok: false, error: saved.conflict === true
+          ? '图谱已被其他操作修改（版本冲突），请刷新图谱后重试继承'
+          : saved.error ?? '图谱保存失败' }
+      }
       return { ok: true, sessionId: finalId, replaced, notice, rev: this.services.chatGraph.rev(name) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -3154,7 +3175,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         ? { provider: selection.provider, model: selection.model }
         : configured?.provider && configured?.model
           ? { provider: configured.provider, model: configured.model }
-          : { provider: 'new-api', model: 'deepseek-v4-flash' }
+          : { ...DEFAULT_FALLBACK_MODEL }
       const value = await callJson(this.hostCtx, {
         provider: model.provider,
         model: model.model,
@@ -3796,13 +3817,25 @@ export class EvoResearchApiService extends TypertRemoteService {
     }
     // 2) 字面子串扫描兜底（仅中文/非 ASCII 查询）：对每个会话用 filterEvents 的 text
     //    子句做字面语义扫描，支持中文子串（如“打招呼”里的“招呼”），并去重补全 FTS 漏掉的命中。
+    //    兜底扫描有界化：全部会话逐个串行扫描在大库上可拖住请求数十秒——
+    //    最多扫描 200 个会话或总耗时 2s（先到为准），超出置 truncated=true 供
+    //    前端提示（旧前端不识别该字段也不受影响）。
     const hasNonAscii = /[^\u0000-\u007F]/.test(query)
+    let truncated = false
     if (hasNonAscii && hits.length < limit) {
+      const SCAN_CAP_SESSIONS = 200
+      const SCAN_CAP_MS = 2000
+      const scanStartedAt = Date.now()
       try {
         const sessions = await sessionQuery.listSessions()
-        for (const session of sessions ?? []) {
-          if (seen.has(session?.header?.id)) continue
-          if (hits.length >= limit) break
+        const candidates = (sessions ?? []).filter((session: any) => !seen.has(session?.header?.id))
+        for (let i = 0; i < candidates.length; i += 1) {
+          if (hits.length >= limit || truncated) break
+          if (i >= SCAN_CAP_SESSIONS || Date.now() - scanStartedAt > SCAN_CAP_MS) {
+            truncated = true
+            break
+          }
+          const session = candidates[i]
           const docs = await sessionQuery.filterEvents(session.header.id, [{ kind: 'text', text: query }] as never)
           if (docs.length > 0) {
             const snippet = String(docs[0]?.text ?? '').slice(0, 240)
@@ -3813,7 +3846,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         // 字面扫描失败时保留已收集的 FTS 命中
       }
     }
-    return { hits }
+    return { hits, ...(truncated ? { truncated: true } : {}) }
   }
 
   // ── 斜杠命令目录（动态读取 dsh-commands 全局注册表） ──────────────────────

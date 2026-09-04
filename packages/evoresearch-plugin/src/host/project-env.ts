@@ -15,8 +15,9 @@
  *
  * 既有约定（legacy，保持不动）：
  * - 配置记录：<projectDir>/.evoresearch-data/env.json（pythonVersion/createdAt）
- * - UV 解析：EVORESEARCH_UV 环境变量 → <dataRoot>/.tools/bin/uv.exe（部署目录内安装，
- *   随程序迁移，不写用户目录）→ ~/.local/bin 等既有安装 → PATH 上的 uv
+ * - UV 解析：EVORESEARCH_UV 环境变量 → <dataRoot>/.tools/bin/uv（Windows 为 uv.exe，
+ *   POSIX 为 uv；部署目录内安装，随程序迁移，不写用户目录）→ ~/.local/bin 等既有安装
+ *   → PATH 上的 uv（Windows 用 where.exe，POSIX 用 `command -v`）
  * - 版本指定：uv venv --python <version> --python-preference managed（uv 自动下载
  *   官方 CPython，默认 3.12）
  *
@@ -41,7 +42,6 @@ export interface ProjectEnvInfo {
   readonly exists: boolean
   readonly pythonVersion: string
   readonly packages: readonly string[]
-  readonly creating: boolean
 }
 
 /** 共享池环境信息（wire JSON，ENV-04/05）。 */
@@ -62,6 +62,10 @@ const DEFAULT_PYTHON_VERSION = '3.12'
 const CREATE_TIMEOUT_MS = 15 * 60 * 1000
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000
 
+const IS_WIN = process.platform === 'win32'
+/** uv 二进制文件名（Windows 为 uv.exe，POSIX 为 uv）。 */
+const UV_BIN = IS_WIN ? 'uv.exe' : 'uv'
+
 // ── 共享环境池（§7.5 / ENV-03..07）─────────────────────────────────────────
 
 /** 参与指纹的依赖文件（按此顺序参与哈希；缺文件以空串计）。 */
@@ -78,6 +82,19 @@ export function parsePipList(stdout: string): string[] {
     .slice(2)
     .map((line) => line.trim().split(/\s+/)[0] ?? '')
     .filter((name) => name !== '')
+}
+
+/** uv 官方发布包的平台三元组（下载 URL 用；按当前平台/arch 解析）。 */
+function uvTargetTriple(): string {
+  const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64'
+  if (IS_WIN) return `${arch}-pc-windows-msvc`
+  if (process.platform === 'darwin') return `${arch}-apple-darwin`
+  if (process.platform === 'linux') {
+    // musl 环境极少见且无法从 Node 可靠探测，默认 gnu 三元组（主流发行版）
+    return `${arch}-unknown-linux-gnu`
+  }
+  // 未知平台：退回 linux-gnu（下载失败会走错误提示，不致静默出错）
+  return `${arch}-unknown-linux-gnu`
 }
 
 /** 运行命令并收集 stdout（失败返回空字符串，不抛；短命令同步）。 */
@@ -163,20 +180,26 @@ function findFile(dir: string, name: string): string | null {
 /**
  * 解析 UV 可执行文件（null = 未安装）。
  * 顺序：EVORESEARCH_UV → 部署目录 <dataRoot>/.tools/bin（本产品安装，随程序迁移）
- * → 官方脚本位置 ~/.local/bin → 静默安装器位置 %LOCALAPPDATA%\Programs\uv
- * → 旧版 ~/.dsh/bin → PATH。部署目录优先：不往用户目录写工具二进制。
+ * → 官方脚本位置 ~/.local/bin → 静默安装器位置 %LOCALAPPDATA%\Programs\uv（仅 Windows）
+ * → 旧版 ~/.dsh/bin → PATH（Windows 用 where.exe，POSIX 经 sh -c 用 command -v）。
+ * 部署目录优先：不往用户目录写工具二进制。
  */
 function uvPathOf(dataRoot: string): string | null {
   const fromEnv = process.env.EVORESEARCH_UV
   if (fromEnv !== undefined && fromEnv !== '' && fs.existsSync(fromEnv)) return fromEnv
   const candidates = [
-    path.join(dataRoot, '.tools', 'bin', 'uv.exe'),
-    path.join(homedir(), '.local', 'bin', 'uv.exe'),
-    path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'uv', 'uv.exe'),
-    path.join(homedir(), '.dsh', 'bin', 'uv.exe'),
+    path.join(dataRoot, '.tools', 'bin', UV_BIN),
+    path.join(homedir(), '.local', 'bin', UV_BIN),
   ]
+  if (IS_WIN) {
+    candidates.push(path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'uv', 'uv.exe'))
+  }
+  candidates.push(path.join(homedir(), '.dsh', 'bin', UV_BIN))
   for (const candidate of candidates) if (fs.existsSync(candidate)) return candidate
-  const which = runCapture('where.exe', ['uv'])
+  // PATH 查找：Windows 用 where.exe；POSIX 用 command -v（经 sh -c，避免依赖 which 是否安装）
+  const which = IS_WIN
+    ? runCapture('where.exe', ['uv'])
+    : runCapture('sh', ['-c', 'command -v uv'])
   return which !== '' ? which.split(/\r?\n/)[0]!.trim() : null
 }
 
@@ -197,12 +220,12 @@ export class ProjectEnvService {
     return uvPathOf(this.dataRoot)
   }
 
-  /** 把给定 uv.exe 复制到部署目录 <dataRoot>/.tools/bin（幂等；失败静默）。 */
+  /** 把给定 uv 复制到部署目录 <dataRoot>/.tools/bin（幂等；失败静默）。 */
   private copyUvIntoDeploy(uvExe: string): void {
     try {
       const binDir = path.join(this.dataRoot, '.tools', 'bin')
       fs.mkdirSync(binDir, { recursive: true })
-      fs.copyFileSync(uvExe, path.join(binDir, 'uv.exe'))
+      fs.copyFileSync(uvExe, path.join(binDir, UV_BIN))
     } catch {
       // 复制失败不影响：下次仍可从原位置解析
     }
@@ -211,8 +234,10 @@ export class ProjectEnvService {
   /**
    * 确保 UV 可用：已安装直接返回；未安装则自动安装（客户开箱即用，无需手动操作）。
    * 安装链路（按序尝试，成功即止）：
-   * 1. 官方 PowerShell 安装脚本（irm astral.sh/uv/install.ps1 | iex → ~/.local/bin）；
-   * 2. 官方 zip 下载 + Windows 自带 tar.exe 解压 → ~/.local/bin/uv.exe（无 PowerShell 依赖）。
+   * 1. 官方安装脚本（Windows：irm astral.sh/uv/install.ps1 | iex；
+   *    POSIX：curl astral.sh/uv/install.sh | sh → ~/.local/bin）；
+   * 2. 官方压缩包下载 + tar 解压 → <dataRoot>/.tools/bin（无脚本依赖：
+   *    Windows 用 zip（Win10+ 自带 bsdtar 可解），POSIX 按平台选 tar.gz）。
    * 幂等、可重入（并发调用只执行一次）。
    */
   private ensurePromise: Promise<{ ok: boolean; uv: string | null; installed: boolean; error?: string }> | null = null
@@ -222,10 +247,14 @@ export class ProjectEnvService {
       const existing = uvPathOf(this.dataRoot)
       if (existing !== null) return { ok: true, uv: existing, installed: false }
       let lastError = ''
-      // 1) 官方脚本（固定装到 ~/.local/bin；成功后复制进部署目录，保证下次从部署目录解析）
+      // 1) 官方安装脚本（固定装到 ~/.local/bin；成功后复制进部署目录，保证下次从部署目录解析）
       try {
-        const script = 'irm https://astral.sh/uv/install.ps1 | iex'
-        const result = await runAsync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], 5 * 60 * 1000)
+        let result: RunResult
+        if (IS_WIN) {
+          result = await runAsync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'irm https://astral.sh/uv/install.ps1 | iex'], 5 * 60 * 1000)
+        } else {
+          result = await runAsync('sh', ['-c', 'curl -fsSL https://astral.sh/uv/install.sh | sh'], 5 * 60 * 1000)
+        }
         const found = uvPathOf(this.dataRoot)
         if (result.status === 0 && found !== null) {
           this.copyUvIntoDeploy(found)
@@ -235,27 +264,30 @@ export class ProjectEnvService {
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
       }
-      // 2) 官方 zip + tar.exe（Windows 10+ 自带 bsdtar，可解 zip；无 PowerShell 依赖；
-      //    直接装进部署目录 <dataRoot>/.tools/bin——不写用户目录）
+      // 2) 官方压缩包 + tar 解压（Windows 用 zip——Win10+ 自带 bsdtar 可解；
+      //    POSIX 按平台/arch 选 tar.gz；直接装进部署目录 <dataRoot>/.tools/bin——不写用户目录）
       try {
-        const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64'
+        const target = uvTargetTriple()
+        const ext = IS_WIN ? 'zip' : 'tar.gz'
         const tmp = os.tmpdir()
-        const zip = path.join(tmp, `uv-${process.pid}-${Date.now()}.zip`)
+        const archive = path.join(tmp, `uv-${process.pid}-${Date.now()}.${ext}`)
         const extractDir = path.join(tmp, `uv-extract-${process.pid}-${Date.now()}`)
-        await downloadFile(`https://github.com/astral-sh/uv/releases/latest/download/uv-${arch}-pc-windows-msvc.zip`, zip)
+        await downloadFile(`https://github.com/astral-sh/uv/releases/latest/download/uv-${target}.${ext}`, archive)
         fs.mkdirSync(extractDir, { recursive: true })
-        const tarResult = await runAsync('tar.exe', ['-xf', zip, '-C', extractDir], 2 * 60 * 1000)
-        fs.rmSync(zip, { force: true })
+        const tarExe = IS_WIN ? 'tar.exe' : 'tar'
+        const tarResult = await runAsync(tarExe, ['-xf', archive, '-C', extractDir], 2 * 60 * 1000)
+        fs.rmSync(archive, { force: true })
         if (tarResult.status !== 0) throw new Error(`tar 解压失败: ${(tarResult.stderr || tarResult.stdout).slice(0, 200)}`)
-        const uvExe = findFile(extractDir, 'uv.exe')
-        if (uvExe === null) throw new Error('zip 内未找到 uv.exe')
+        const uvBin = findFile(extractDir, UV_BIN)
+        if (uvBin === null) throw new Error(`压缩包内未找到 ${UV_BIN}`)
         const binDir = path.join(this.dataRoot, '.tools', 'bin')
         fs.mkdirSync(binDir, { recursive: true })
-        fs.copyFileSync(uvExe, path.join(binDir, 'uv.exe'))
+        fs.copyFileSync(uvBin, path.join(binDir, UV_BIN))
+        if (!IS_WIN) try { fs.chmodSync(path.join(binDir, UV_BIN), 0o755) } catch { /* 尽力而为 */ }
         fs.rmSync(extractDir, { recursive: true, force: true })
         const found = uvPathOf(this.dataRoot)
         if (found !== null) return { ok: true, uv: found, installed: true }
-        lastError = '解压安装完成但未找到 uv.exe'
+        lastError = `解压安装完成但未找到 ${UV_BIN}`
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
       }
@@ -268,8 +300,9 @@ export class ProjectEnvService {
     return path.join(projectDir, '.venv')
   }
 
+  /** 环境解释器路径（Windows 为 Scripts\python.exe，POSIX 为 bin/python）。 */
   pythonOf(envDir: string): string {
-    return path.join(envDir, 'Scripts', 'python.exe')
+    return IS_WIN ? path.join(envDir, 'Scripts', 'python.exe') : path.join(envDir, 'bin', 'python')
   }
 
   /** 读取环境配置记录（.evoresearch-data/env.json）。 */
@@ -318,7 +351,6 @@ export class ProjectEnvService {
       exists,
       pythonVersion,
       packages,
-      creating: false,
     }
   }
 

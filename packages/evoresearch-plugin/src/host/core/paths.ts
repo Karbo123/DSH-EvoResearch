@@ -28,9 +28,13 @@ export const PLUGIN_DATA_DIR_NAME = 'plugins'
 /** 项目根目录名。 */
 export const PROJECTS_DIR_NAME = 'projects'
 
-/** 规范化路径用于大小写不敏感比较（Windows）。 */
+/**
+ * 规范化路径用于等值比较：win32 大小写不敏感（lower），POSIX 大小写敏感
+ * （与 data-paths.ts normalizedKey 一致；调用方均成对使用本函数，行为对称）。
+ */
 export function normPath(p: string): string {
-  return path.normalize(p).toLowerCase()
+  const normalized = path.normalize(p)
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
 /** 项目名是否合法。 */

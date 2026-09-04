@@ -61,6 +61,8 @@ export class PlatformHttpAdapter implements ChannelAdapter {
   }
 
   private async poll(onMessage: (message: ChannelMessage) => void): Promise<void> {
+    // 失败指数退避：1.5s 起 ×2，30s 封顶；成功复位为常规轮询间隔
+    let backoffMs = this.pollMs
     while (this.running) {
       try {
         const response = await fetch(this.inboxUrl!, { headers: this.headers() })
@@ -85,10 +87,12 @@ export class PlatformHttpAdapter implements ChannelAdapter {
             })
           }
         }
+        backoffMs = this.pollMs
       } catch (error) {
         console.error(`[evoresearch:${this.id}] HTTP 轮询失败:`, error instanceof Error ? error.message : String(error))
+        backoffMs = Math.min(backoffMs * 2, 30_000)
       }
-      await new Promise((resolve) => setTimeout(resolve, this.pollMs))
+      await new Promise((resolve) => setTimeout(resolve, backoffMs))
     }
   }
 
@@ -132,6 +136,8 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   private async pollLoop(onMessage: (message: ChannelMessage) => void): Promise<void> {
+    // 失败指数退避：1.5s 起 ×2，30s 封顶；成功复位
+    let backoffMs = 1500
     while (this.polling && !this.stopRequested) {
       try {
         const updates = await this.getUpdates()
@@ -148,11 +154,13 @@ export class TelegramAdapter implements ChannelAdapter {
             receivedAt: Date.now(),
           })
         }
+        backoffMs = 1500
       } catch (error) {
-        // 网络抖动：静默重试（避免刷屏）
+        // 网络抖动：静默重试（避免刷屏），退避避免打爆 API
         console.error('[evoresearch:telegram] 轮询失败:', error instanceof Error ? error.message : error)
+        backoffMs = Math.min(backoffMs * 2, 30_000)
       }
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      await new Promise((resolve) => setTimeout(resolve, backoffMs))
     }
   }
 
