@@ -192,11 +192,25 @@ function ResearchPanel({ ctx, onClose, t }: { ctx: Context; onClose: () => void;
     return () => window.clearInterval(timer)
   }, [refresh])
 
-  const call = async (name: string, args?: unknown): Promise<void> => {
+  const call = async (name: string, args?: unknown): Promise<unknown> => {
     const remote = (ctx as unknown as { remote?: Record<string, unknown> }).remote as Record<string, unknown> | undefined
     const evoresearch = remote?.evoresearch as Record<string, (a?: unknown) => Promise<unknown>> | undefined
-    if (evoresearch?.[name]) await evoresearch[name](args)
+    let result: unknown
+    if (evoresearch?.[name]) result = await evoresearch[name](args)
     refresh()
+    return result
+  }
+
+  /** 远端返回 {error} 或调用抛错时给出可见反馈（此兜底面板无 toast 体系）。 */
+  const callOrAlert = async (name: string, args?: unknown): Promise<void> => {
+    try {
+      const result = await call(name, args) as { error?: string } | undefined
+      if (result && typeof result === 'object' && typeof result.error === 'string' && result.error !== '') {
+        window.alert(result.error)
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    }
   }
 
   const tabButton = (id: Tab, label: string): React.ReactElement =>
@@ -239,7 +253,7 @@ function ResearchPanel({ ctx, onClose, t }: { ctx: Context; onClose: () => void;
           }),
           React.createElement(
             'button',
-            { onClick: () => { if (newProject.trim()) { void call('projectCreate', { name: newProject.trim() }); setNewProject('') } }, style: { padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--dsw-alias-state-business-primary, #4a7dff)', color: '#fff' } },
+            { onClick: () => { if (newProject.trim()) { void callOrAlert('projectCreate', { name: newProject.trim() }); setNewProject('') } }, style: { padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--dsw-alias-state-business-primary, #4a7dff)', color: '#fff' } },
             t('action.createProject'),
           ),
         ),
@@ -271,7 +285,7 @@ function ResearchPanel({ ctx, onClose, t }: { ctx: Context; onClose: () => void;
           React.createElement('input', { placeholder: t('task.promptPlaceholder'), value: newPrompt, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNewPrompt(e.target.value), style: { flex: 2, minWidth: 240, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--dsw-alias-border-l2, #ddd)' } }),
           React.createElement(
             'button',
-            { onClick: () => { if (newPrompt.trim()) { void call('schedulerAdd', { name: newPrompt.slice(0, 30), cron: newCron, prompt: newPrompt }); setNewPrompt('') } }, style: { padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--dsw-alias-state-business-primary, #4a7dff)', color: '#fff' } },
+            { onClick: () => { if (newPrompt.trim()) { void callOrAlert('schedulerAdd', { name: newPrompt.slice(0, 30), cron: newCron, prompt: newPrompt }); setNewPrompt('') } }, style: { padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--dsw-alias-state-business-primary, #4a7dff)', color: '#fff' } },
             t('action.addTask'),
           ),
         ),
@@ -292,7 +306,7 @@ function ResearchPanel({ ctx, onClose, t }: { ctx: Context; onClose: () => void;
           React.createElement('span', { style: { color: 'var(--dsw-alias-label-caption, #999)' } }, t('channels.receivedSent', { n: c.received ?? 0, m: c.sent ?? 0 })),
           React.createElement(
             'button',
-            { onClick: () => void call(c.online ? 'channelStop' : 'channelStart', { id: c.id }), style: { marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--dsw-alias-interactive-bg-hover, #eee)' } },
+            { onClick: () => void callOrAlert(c.online ? 'channelStop' : 'channelStart', { id: c.id }), style: { marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--dsw-alias-interactive-bg-hover, #eee)' } },
             c.online ? t('action.stop') : t('action.start'),
           ),
         )
@@ -307,12 +321,12 @@ function ResearchPanel({ ctx, onClose, t }: { ctx: Context; onClose: () => void;
         React.createElement('span', { style: { color: 'var(--dsw-alias-label-caption, #999)' }, title: p.description ?? '' }, (p.description ?? '').slice(0, 40)),
         React.createElement(
           'button',
-          { onClick: () => void call('autoskillsApprove', { proposalId: p.proposalId }), style: { marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: '#2e7d32', color: '#fff' } },
+          { onClick: () => void callOrAlert('autoskillsApprove', { proposalId: p.proposalId }), style: { marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: '#2e7d32', color: '#fff' } },
           t('action.approve'),
         ),
         React.createElement(
           'button',
-          { onClick: () => void call('autoskillsReject', { proposalId: p.proposalId }), style: { padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--dsw-alias-interactive-bg-hover, #eee)' } },
+          { onClick: () => void callOrAlert('autoskillsReject', { proposalId: p.proposalId }), style: { padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--dsw-alias-interactive-bg-hover, #eee)' } },
           t('action.reject'),
         ),
       )

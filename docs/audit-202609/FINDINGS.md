@@ -114,6 +114,16 @@ CI：release.yml draft 清理 `gh api --jq --arg` 语法无效（pflag 把 --arg
 测试缺口 11（experiment-rounds/commands/core-llm/chat-graph-bridge/packet/rewind×2/api 283 端点/Rust/launch.js/React 组件渲染）· 性能 P3 3（bundle 19MB 无分割/大图主线程布局/client-state 高频写）· 可维护性 3（巨石主体拆分/console.error 保留/active-teams 开关+ctx:any 路线）· 领域 4（verify.mjs 双入口/端口 TOCTOU/capabilities 通配评估/桌面测试面）· 脚本 1（verify.mjs 并存）· 前端 5（主体拆分/readSideChats/matchesSession/拖停全边重算/session-actions 焦点圈闭）· 杂项（cron 英文缩写/roles 死导出有测试引用）。
 
 
+## 三·六、复查（2026-09-05：清单覆盖审计 + 判定抽查 + 补充核验）
+
+按「接近完成必须复查」原则，对上一轮清单执行结果做了三项独立复核：
+
+1. **清单覆盖审计**：程序化对比 git 全部跟踪源码（149 个 ts/tsx/rs）与 CHECKLIST 提及文件，发现生成清单的 glob `**/*.ts` 遗漏 **21 个文件**（3 个 .tsx 面板、5 个修复期新建模块、3 个 frontend 入口、3 个 vendored、workspace-api/runtime/directory-picker/app 与 plugin 的 src/index.ts、plugin src/client/index.ts 406 行兜底面板、build.rs）。21 个已全部补审并以 SUP-001~021 追加进 CHECKLIST（总项数 1044）。
+2. **判定抽查**：跨分区随机抽 10 条代理判定逐条独立复核（disposeAutoskillsMining/WEEKDAY_NAME 删除、segmentsCache、clickToEnlarge、hint 判定、toast aria-live、verify 链 launcher、release gh api 内插、projectDeleteDisk 级联、AGENTS Release 表述）——**10/10 属实**。
+3. **补充核验新发现并当场修复**：plugin 兜底面板（src/client/index.ts，406 行，生产 disabled）的 `projectCreate` 调用不处理错误返回——第一轮给 createProject 加的碰撞守卫抛错后该面板静默无反馈；且 `call()` 全程无错误处理（4 处未捕获 Promise 拒绝）。已改 `callOrAlert`（错误可见反馈）覆盖全部 5 处调用。其余 20 个文件补审通过（多数前几轮代理已顺带覆盖，本轮补正式判定）。
+
+**补充核验后基线**：typecheck 0 错误、单测 617+52+5 全过。
+
 ## 四、最终遗留（📋，仅 1 项）
 
 1. **前端巨石组件完全拆分（EvoFrame / ChatArea 主体）**：有界拆分已完成两阶段——第一阶段 notifications.ts/two-step.ts/fs-api.ts/file-kind.ts，第二阶段 url-state.ts（URL 状态与会话短别名模块，纯函数搬移）。剩余主体为 JSX 组合与事件处理，完全拆分需独立重构分支 + 逐组件回归，不在本审计分支继续。

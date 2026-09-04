@@ -1036,3 +1036,32 @@
 - [x] AUD-1021 【可维护性｜结构评估】scripts/ 130 个 mjs 中一次性调试脚本归档清单（不删，移动 legacy 归档） → 🔧 scripts/legacy 归档 111 白名单 22（实测）
 - [x] AUD-1022 【可维护性｜结构评估】experts/active-teams 与 AGENTS.md 注入的可配置性 → 📋 active-teams 固定候选注入建议项目级开关=登记
 - [x] AUD-1023 【可维护性｜结构评估】类型安全：ctx:any/session:any 重点面收敛路线 → 📋 ctx:any 收敛路线未实施=登记
+
+
+## 补充核验（2026-09-05 复查：生成 glob `**/*.ts` 遗漏的 21 个文件）
+
+> 复查发现生成清单时 `**/*.ts` 不匹配 `.tsx` 与部分顶层 src 文件，以下 21 个文件补入并逐一审验（多数已被前几轮代理顺带覆盖，本轮补齐正式判定）。
+
+- [x] SUP-001 【补充｜desktop/src-tauri/build.rs】→ ✅ 16MB 栈 workaround：注释与实现一致，expect 显式报错（亲读全文）
+- [x] SUP-002 【补充｜frontend/main.ts】→ ✅ 12 行薄入口：挂载点判错、组合决策全交 __DSH_BOOT__（亲读全文）
+- [x] SUP-003 【补充｜frontend/mermaid-entry.ts】→ ✅ 14 行惰性初始化：securityLevel strict/startOnLoad false（亲读全文）
+- [x] SUP-004 【补充｜frontend/node-module-stub.ts】→ ✅ 11 行抛错替身：「大声失败」语义明确（亲读全文）
+- [x] SUP-005 【补充｜client/daily-report-card.tsx】→ 🔧 api 封装收敛 fs-api + 错误反馈（V3 审过+第五批修复）
+- [x] SUP-006 【补充｜client/ledger-panel.tsx】→ 🔧 props 收窄/key 防重/useConfirmReset（V3 审过+第五批修复）
+- [x] SUP-007 【补充｜client/rounds-panel.tsx】→ 🔧 死请求删除+降级提示（V3 审过+第五批修复）
+- [x] SUP-008 【补充｜client/file-kind.ts】→ 🔧 第五批新抽出模块：扩展名并集（.env/.csv 一致），两处消费
+- [x] SUP-009 【补充｜client/fs-api.ts】→ 🔧 第五批新抽出模块：统一 9 处 POST 封装
+- [x] SUP-010 【补充｜client/notifications.ts】→ 🔧 第五批自 index.ts 抽取：行为不变（构建+回归过）
+- [x] SUP-011 【补充｜client/two-step.ts】→ 🔧 第五批新模块：六处两段确认接管
+- [x] SUP-012 【补充｜client/url-state.ts】→ 🔧 第五批自 index.ts 抽取：URL 键/slug 模块纯搬移
+- [x] SUP-013 【补充｜src/directory-picker.ts】→ ✅ 31 行桩（kind:'none'），A6 审过
+- [x] SUP-014 【补充｜src/index.ts（app）】→ ✅ 9 行空 apply：职责在 runtime，注释说明同构官方
+- [x] SUP-015 【补充｜src/runtime.ts】→ ✅ A6 深审：LAN 信任 IP 字面量免疫 DNS rebinding/serve dist/系统提示注入
+- [x] SUP-016 【补充｜src/workspace-api.ts】→ 🔧 A6 深审+第五批加固：nosniff/IPv6 精确比较/大小上限/命令 120s 超时
+- [x] SUP-017 【补充｜vendor/dsh-client-modules/index.ts】→ ✅ vendored MIT 内核模块注册（469 行），A6 审过
+- [x] SUP-018 【补充｜vendor/dsh-client-modules/manifest.ts】→ ✅ 同上 vendored 源
+- [x] SUP-019 【补充｜vendor/dsh-client-modules/system.ts】→ ✅ 同上 vendored 源
+- [x] SUP-020 【补充｜plugin src/client/index.ts（406 行兜底面板）】→ 🔧 本轮亲读修复：callOrAlert 错误可见反馈（createProject 碰撞守卫抛错此前静默无反馈）+4 处未捕获 Promise 拒绝防崩；生产 cordis.patch 该行 disabled（兜底预留面已明示）
+- [x] SUP-021 【补充｜plugin src/index.ts】→ ✅ 11 行占位 node half（空 apply 仅供 Loader 解析）
+
+> 补充核验后总项数：1023 + 21 = **1044**。
