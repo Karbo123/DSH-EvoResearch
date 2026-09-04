@@ -13,18 +13,8 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { api } from './fs-api'
 import { FileText, X as XIcon, Copy, Check, Clock, Calendar, RefreshCw, Eye, Sparkles } from 'lucide-react'
-
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  return json.value as T
-}
 
 function fmtTime(ts: number): string {
   const d = new Date(ts)

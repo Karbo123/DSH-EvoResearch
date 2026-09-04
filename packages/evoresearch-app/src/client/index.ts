@@ -26,6 +26,7 @@ import { ThreadList, normalizeSessionsSnapshot, MENU, type SideView } from './th
 import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
 import { TabFileEditor } from './tab-file'
+import { fileKind } from './file-kind'
 import { ConfirmDialog } from './session-actions'
 import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
@@ -1254,6 +1255,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     draft?: string
     /** 磁盘上最近一次读写到的内容（dirty 基准）。未保存改动 = draft !== original。 */
     original?: string
+    /** 非文本类文件只读打开：编辑器只读、Ctrl+S 跳过（TabFileEditor 支持）。 */
+    readonly?: boolean
   }
   /** 仿照 VSCode：斜体=干净（未改动/已保存），正体=有未保存改动。 */
   const isTabDirty = (tab: WorkspaceTab): boolean =>
@@ -1538,7 +1541,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const openTabEditor = (path: string, root: string, draft?: string) => {
     const existing = tabsRef.current.find((tab) => tab.kind === 'editor' && tab.filePath === path)
     if (existing !== undefined) { setActiveTabId(existing.id); setTabMenuOpen(false); return }
-    const tab: WorkspaceTab = { id: `editor-${Date.now().toString(36)}`, kind: 'editor', title: tabNameOf(path), filePath: path, root, draft }
+    // 非文本类（pdf 之外的预览/未知二进制等）只读打开，避免误写回无法安全编辑的内容
+    const isTextFile = fileKind(path) === 'text'
+    const tab: WorkspaceTab = { id: `editor-${Date.now().toString(36)}`, kind: 'editor', title: tabNameOf(path), filePath: path, root, draft, readonly: !isTextFile ? true : undefined }
     setTabs((prev) => [...prev, tab])
     setActiveTabId(tab.id)
     setTabMenuOpen(false)
@@ -1661,6 +1666,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 编辑标签保存（写入工作区；root 为当前会话 cwd）
   const saveTabEditor = (tab: WorkspaceTab) => {
     if (tab.kind !== 'editor' || tab.filePath === undefined || tab.root === undefined) return
+    if (tab.readonly === true) return // 只读 tab：跳过写回（Ctrl+S 已在编辑器层拦截）
     void fetch('/evoresearch/fs/write', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -2188,6 +2194,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           path: activeTab.filePath,
                           root: activeTab.root,
                           draft: activeTab.draft,
+                          original: activeTab.original,
+                          readOnly: activeTab.readonly,
                           onDraft: (text) => updateTabDraft(activeTab.id, text),
                           onLoaded: (original) => setTabLoaded(activeTab.id, original),
                           onSave: () => saveTabEditor(activeTab),

@@ -1,29 +1,21 @@
 /**
  * 「+」新建标签菜单内嵌的工作区文件选择器：
  * 懒加载目录树（/evoresearch/fs/list），点击文件 → 打开编辑器/PDF 标签。
- * 文本类文件走编辑器，.pdf 走预览；其它文件也尝试用编辑器打开（只读文本）。
+ * 文本类文件走编辑器，.pdf 走预览；其它非文本文件也用编辑器打开但强制只读
+ * （index.ts openTabEditor 按 file-kind.ts 分类置 readonly）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect } from 'react'
 import { t } from './i18n'
+import { fileKind } from './file-kind'
 import { ChevronRight, ChevronDown, Folder, FileText, FileCode2, Image as ImageIcon, File, FolderOpen, RefreshCw } from 'lucide-react'
 
 interface FsEntry { name: string; path: string; isDir: boolean; hidden: boolean }
 
-const TEXT_EXT = new Set(['.md', '.txt', '.json', '.ts', '.tsx', '.js', '.mjs', '.cjs', '.css', '.yml', '.yaml', '.rs', '.toml', '.py', '.html', '.htm', '.svg', '.xml', '.sql', '.csv'])
-const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.avif'])
-
-function kindOf(name: string): 'text' | 'pdf' | 'image' | 'other' {
-  const ext = name.slice(name.lastIndexOf('.')).toLowerCase()
-  if (TEXT_EXT.has(ext)) return 'text'
-  if (ext === '.pdf') return 'pdf'
-  if (IMAGE_EXT.has(ext)) return 'image'
-  return 'other'
-}
-
 function FileIcon({ name }: { name: string }) {
-  const kind = kindOf(name)
-  const icon = kind === 'image' ? ImageIcon : kind === 'text' ? FileCode2 : File
+  const kind = fileKind(name)
+  // 图标保持历史映射：文本/代码类（含 html）→ 代码图标，图片 → 图片图标，其余 → 通用文件
+  const icon = kind === 'image' ? ImageIcon : kind === 'other' ? File : FileCode2
   return jsx(icon, {})
 }
 

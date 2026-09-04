@@ -6,8 +6,9 @@
  * 绕开浏览器 Remote $mount 通道）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
+import { api } from './fs-api'
 import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
   Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
@@ -44,18 +45,6 @@ function LoadingRow() {
   return jsx('div', { className: 'evo-panel-hint', children: t('loading') })
 }
 
-/** 简单 POST JSON 封装。 */
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  return json.value as T
-}
-
 /** EvoMemory 面板：项目 + 分类统计 + 目标。 */
 export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => void }) {
   const [projects, setProjects] = useState<Array<{ name: string; path?: string }> | null>(null)
@@ -86,7 +75,15 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
 
   const loadTurns = (offset: number) => {
     void api<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }>>('memory-turns', { limit: TURN_PAGE, offset })
-      .then((list) => { setTurns(list); setTurnOffset(offset) })
+      .then((list) => {
+        // 「加载更早」追加语义（与 research-notes 一致）：保留已加载轮次，按 turnId 去重
+        setTurns((prev) => {
+          if (offset === 0 || prev === null) return list
+          const seen = new Set(prev.map((row) => row.turnId))
+          return [...prev, ...list.filter((row) => !seen.has(row.turnId))]
+        })
+        setTurnOffset(offset)
+      })
       .catch((e: any) => setError(String(e?.message ?? e)))
   }
   useEffect(() => { if (tab === 'history') loadTurns(0) }, [tab])
@@ -277,8 +274,8 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
           ? jsx('span', { className: 'evo-panel-hint', children: t('noActiveGoals') })
           : jsx('div', {
               className: 'evo-panel-list',
-              children: (goals ?? []).map((g) => {
-                const key = g.goalId ?? g.id ?? g.title ?? ''
+              children: (goals ?? []).map((g, gi) => {
+                const key = g.goalId ?? g.id ?? g.title ?? `goal-${gi}`
                 const expanded = expandedGoal === key
                 const criteria = g.criteria ?? []
                 const satisfied = criteria.filter((c) => c.satisfied).length
@@ -655,10 +652,10 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
     setCronInput(t.cron)
   }
   const TEMPLATES = [
-    { name: 'Daily Papers', cron: '0 9 * * *', prompt: '按研究偏好追踪最新论文，并写入 daily-papers.md。' },
-    { name: 'Weekly Research Review', cron: '0 17 * * 5', prompt: '总结本周研究进展、决定、阻塞和下一步计划。' },
-    { name: 'Weekly Research Plan', cron: '0 8 * * 1', prompt: '生成本周科研计划。' },
-    { name: 'Experiment Backlog', cron: '0 10 * * 2', prompt: '把当前开放问题转成可检验的实验 backlog。' },
+    { name: 'Daily Papers', cron: '0 9 * * *', prompt: t('schedTplDailyPapersPrompt') },
+    { name: 'Weekly Research Review', cron: '0 17 * * 5', prompt: t('schedTplWeeklyReviewPrompt') },
+    { name: 'Weekly Research Plan', cron: '0 8 * * 1', prompt: t('schedTplWeeklyPlanPrompt') },
+    { name: 'Experiment Backlog', cron: '0 10 * * 2', prompt: t('schedTplExpBacklogPrompt') },
   ]
 
   const load = () => {
@@ -775,13 +772,13 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
               }),
               jsx('code', { className: 'evo-sched-preview', children: cronPreview }),
             ] }),
-            jsx('div', { className: 'evo-sched-templates', children: TEMPLATES.map((t) => jsx('button', {
+            jsx('div', { className: 'evo-sched-templates', children: TEMPLATES.map((tpl) => jsx('button', {
               type: 'button',
               className: 'evo-sched-template',
-              title: t.prompt,
-              onClick: () => applyTemplate(t),
-              children: t.name,
-            }, t.name)) }),
+              title: tpl.prompt,
+              onClick: () => applyTemplate(tpl),
+              children: tpl.name,
+            }, tpl.name)) }),
             jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: t('promptHint'), value: prompt, onInput: (e) => setPrompt(e.currentTarget.value) }),
             jsx('button', { type: 'button', className: 'evo-panel-add', disabled: adding || !name.trim() || !prompt.trim(), onClick: addTask, children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: t('add') })] }) }),
           ],
@@ -1267,8 +1264,8 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
               ? `${info.packages.length} ${t('packages')}: ${info.packages.slice(0, 12).join(', ')}${info.packages.length > 12 ? '…' : ''}`
               : t('noPackagesYet'),
           }),
-          // 创建（未存在时）
-          !info?.exists && jsxs('div', {
+          // 创建（未存在时；info 尚未加载完成不渲染，避免加载态闪出创建表单）
+          info !== null && !info.exists && jsxs('div', {
             className: 'evo-panel-form',
             children: [
               jsx('input', {

@@ -14,6 +14,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { api } from './fs-api'
 import { FlaskConical, Play, X as XIcon, Check, Eye, Loader2, Sparkles, RotateCcw } from 'lucide-react'
 
 export interface RoundPhase {
@@ -30,17 +31,6 @@ export interface ExperimentRound {
   phases: RoundPhase[]
   currentIndex: number
   status: 'running' | 'done' | 'cancelled'
-}
-
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  return json.value as T
 }
 
 function fmtTime(ts: number): string {
@@ -156,8 +146,6 @@ export function RoundsPanel({ workspaceDir, slug, onError, onNotice }: {
       onError(t('roundsNoOutputFile'))
       return
     }
-    void api<{ content: string }>('experiment-workspace-read-note', { workspaceDir, slug })
-      .catch(() => null)
     // actual phase file: use generic read via fetch file endpoint
     // We read via /evoresearch/fs/read if outputFile is absolute
     const target = phase.outputFile

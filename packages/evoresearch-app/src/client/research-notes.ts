@@ -26,6 +26,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { api } from './fs-api'
 import {
   StickyNote, Map as MapIcon, FileText, FileClock, Search, Plus, RefreshCw,
   PenLine, Trash2, Check, X as XIcon, ChevronLeft, ChevronRight, ArrowLeft,
@@ -100,17 +101,6 @@ interface DraftDocRow extends DraftMetaRow {
 }
 
 /** 简单 POST JSON 封装（与 panels.ts / experiments.ts 同款）。 */
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  return json.value as T
-}
-
 function fmtTime(ts: number): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ''

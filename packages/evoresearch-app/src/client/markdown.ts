@@ -136,18 +136,33 @@ let jsonToggleBound = false
 function bindJsonToggle(): void {
   if (jsonToggleBound || typeof document === 'undefined') return
   jsonToggleBound = true
+  // 展开/收起双向切换：同步 aria-expanded、内容显隐与图标方向
+  const toggleJson = (btn: Element): void => {
+    const pre = btn.closest('.evo-json-large')
+    if (!pre) return
+    const hidden = pre.querySelector<HTMLElement>('.evo-json-hidden')
+    if (hidden === null) return
+    const open = pre.classList.toggle('evo-json-open')
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false')
+    hidden.hidden = !open
+    const icon = btn.querySelector<HTMLElement>('.evo-json-toggle-icon')
+    if (icon !== null) icon.textContent = open ? '▾' : '▸'
+  }
   document.addEventListener('click', (e: MouseEvent) => {
     const target = e.target as Element | null
     const btn = target?.closest?.('.evo-json-toggle')
     if (!btn) return
-    const pre = btn.closest('.evo-json-large')
-    if (!pre) return
     e.preventDefault()
-    const hidden = pre.querySelector<HTMLElement>('.evo-json-hidden')
-    pre.classList.add('evo-json-open')
-    btn.setAttribute('hidden', '')
-    if (hidden !== null) { hidden.hidden = false; hidden.setAttribute('data-open', '1') }
-    btn.setAttribute('aria-expanded', 'true')
+    toggleJson(btn)
+  })
+  // 键盘支持：toggle 是 role=button 的 span（非原生 button），Enter/Space 手动触发
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return
+    const target = e.target as Element | null
+    const btn = target?.closest?.('.evo-json-toggle')
+    if (!btn) return
+    e.preventDefault()
+    toggleJson(btn)
   })
 }
 

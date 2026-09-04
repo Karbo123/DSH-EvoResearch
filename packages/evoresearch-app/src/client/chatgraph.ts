@@ -15,7 +15,7 @@
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
-import { t } from './i18n'
+import { t, readLang } from './i18n'
 import { toast } from './toast'
 import { GitBranch, X, FileText, Check, Search } from 'lucide-react'
 import { ChatGraphCanvas } from './chatgraph-canvas'
@@ -187,16 +187,21 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   // 整图保存串行化：同窗口连续操作按序提交，避免互相冲突
   const saveChainRef = useRef<Promise<void>>(Promise.resolve())
 
+  // load 请求序号：cwd 快速切换时旧 graph-get 响应可能晚于新响应返回，
+  // 序号不匹配的迟到响应直接丢弃，防止旧 cwd 的图覆盖新图。
+  const loadSeqRef = useRef(0)
   const load = () => {
+    const seq = ++loadSeqRef.current
     setError(null)
     setUnboundHint(null)
     void api<{ graph?: ChatGraph; rev?: number; error?: string }>('graph-get', { workspaceDir: cwd ?? undefined })
       .then((r) => {
+        if (seq !== loadSeqRef.current) return // 已有更新的 load 发出，丢弃本响应
         if (typeof r?.error === 'string' && r.error !== '') { showGraphError(r.error); return }
         setGraph({ nodes: r?.graph?.nodes ?? [], edges: r?.graph?.edges ?? [], groups: r?.graph?.groups })
         revRef.current = typeof r?.rev === 'number' ? r.rev : null
       })
-      .catch((e: unknown) => showGraphError(String((e as Error)?.message ?? e)))
+      .catch((e: unknown) => { if (seq === loadSeqRef.current) showGraphError(String((e as Error)?.message ?? e)) })
   }
   useEffect(() => { load() }, [cwd])
 
@@ -246,9 +251,16 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     setError(null)
     setUnboundHint(null)
     const pending = saveChainRef.current.then(async () => {
+      // rev 尚未就绪（graph-get 未返回或失败）时禁止保存：携带 rev:undefined
+      // 会绕过服务端乐观并发检查，造成盲写覆盖。先重新 load 拿到最新 rev。
+      if (revRef.current === null) {
+        toast(readLang() === 'zh' ? '图谱尚未加载完成，已重新拉取，请稍后重试' : 'Graph not loaded yet — reloading, please retry')
+        load()
+        return false
+      }
       try {
         const r = await api<{ ok: boolean; conflict?: boolean; rev?: number; error?: string }>('graph-save', {
-          workspaceDir: cwd ?? undefined, graph: next, rev: revRef.current ?? undefined,
+          workspaceDir: cwd ?? undefined, graph: next, rev: revRef.current,
         })
         if (r?.ok === true && typeof r.rev === 'number') { revRef.current = r.rev; return true }
         if (r?.conflict === true) toast(t('graphConflict'))
@@ -999,7 +1011,8 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: layoutVisible, children: layoutPreview === null ? t('graphLayoutBtn') : t('graphRelayoutBtn') }),
       menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', title: t('graphFocusNeighbors'), onClick: () => setViewMode((mode) => mode === 'neighbors' ? 'all' : 'neighbors'), children: t('graphFocusNeighbors') }),
       menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', title: t('graphFocusBranch'), onClick: () => setViewMode((mode) => mode === 'branch' ? 'all' : 'branch'), children: t('graphFocusBranch') }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
+      // system 常驻节点（身份画像/项目指引/台账等，后端 v4 写入）：屏蔽重命名/删除入口
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.system !== true && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => editEdgeLabel(menu.edgeId as string), children: t('graphEditLabel') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => toggleEdgeMode(menu.edgeId as string), children: t('graphToggleEdge') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteEdge(menu.edgeId as string), children: t('graphDeleteEdge') }),
@@ -1009,7 +1022,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const target = currentChatNode; const source = nodeById(menu.nodeId as string); if (source !== undefined) connectReferenceFromNode(source) }, children: t('graphRefToChat') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const source = nodeById(menu.nodeId as string); if (source !== undefined) createNaturalRelation(source) }, children: t('graphRelateToChat') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && (nodeById(menu.nodeId)?.displayKind === 'memory' || nodeById(menu.nodeId)?.displayKind === 'memory-collection' || nodeById(menu.nodeId)?.type === 'memory') && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => copyMemoryNode(menu.nodeId as string), children: t('graphCopyMemory') }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: t('graphDeleteNode') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.system !== true && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: t('graphDeleteNode') }),
     ],
   })
 

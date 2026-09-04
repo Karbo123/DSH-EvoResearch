@@ -493,6 +493,7 @@ const DICT: Record<string, [string, string]> = {
   clearPathSchedulerFile: ['Removes all registered project scheduled tasks; when tasks exist, this file is rewritten as an empty task table.', '移除全部已注册的项目定时任务；存在任务时将此文件重写为空任务表。'],
   clearPathSessionMetaFile: ['Rewrites the session metadata file as an empty object.', '将会话元数据文件重写为空对象。'],
   clearPathModelSettingsFile: ['Resets the EvoResearch model assignments to their defaults.', '将 EvoResearch 模型分配重置为默认值。'],
+  clearPathDshSettingsFile: ['Resets model defaults (agent-default-model section) only; the rest of settings.yaml is untouched.', '仅重置模型默认选择（agent-default-model 段）；settings.yaml 其余内容不会改动。'],
   clearPathDshSettingsFile: ['Resets only the DSH default model selection; provider connection settings are kept.', '仅重置 DSH 默认模型选择；模型提供商连接配置会保留。'],
   clearPathClientStateFile: ['Rewrites the client-state mirror as an empty object.', '将客户端状态镜像文件重写为空对象。'],
   clearPathBrowserLocalStorage: ['Clears this site’s evoresearch-* entries from the current browser.', '清除当前浏览器中本网页的 evoresearch-* 本地存储项。'],
@@ -1272,8 +1273,6 @@ const DICT: Record<string, [string, string]> = {
   cmdCompactDesc: ['Generate a summary projection of earlier active context (keeps history)', '对较早活跃上下文生成摘要投影（不删历史）'],
   cmdPlanDesc: ['Enter plan mode', '进入计划模式'],
   emptyFolder: ['(Empty folder)', '（空目录）'],
-  askUserQuestion: ['Ask User question', 'Ask User 提问'],
-  deleteFailed: ['Delete failed', '删除失败'],
   workspaceUnbound: ['Beyond deployment root', '超出部署根目录'],
   workspaceMustBeRoot: ['Workspace must be within deployment root', '工作区必须是部署根目录'],
   // 额外补漏
@@ -1287,7 +1286,6 @@ const DICT: Record<string, [string, string]> = {
   graphConfirmSave: ['Confirm save', '确认保存'],
   notificationsEnabled: ['EvoResearch notifications enabled', 'EvoResearch 通知已开启'],
   questionCount: ['Question ({n})', '提问（{n}）'],
-  loadFailed: ['Load failed', '加载失败'],
   networkFailed: ['Network request failed', '网络请求失败'],
   providerIdChars: ['Provider ID may only contain letters, digits, dots, underscores and hyphens', 'Provider ID 只能包含字母、数字、点、下划线与连字符'],
   providerIdExists: ['Provider ID already exists: {id}', 'Provider ID 已存在: {id}'],
@@ -1343,10 +1341,41 @@ const DICT: Record<string, [string, string]> = {
   libFigureVersions: ['versions', '个版本'],
   libFigureLatest: ['latest', '最新'],
   libFigureScript: ['Script', '脚本'],
+  // 审计收敛 2：tab-file 保存 CAS 提示
+  fileChangedExternally: ['File has been modified externally — please refresh and retry', '文件已被外部修改，请刷新后重试'],
+  // 审计收敛 3：Schedule 模板 prompt
+  schedTplDailyPapersPrompt: ['Track the latest papers per your research preferences and write them into daily-papers.md.', '按研究偏好追踪最新论文，并写入 daily-papers.md。'],
+  schedTplWeeklyReviewPrompt: ['Summarize this week\'s research progress, decisions, blockers and next steps.', '总结本周研究进展、决定、阻塞和下一步计划。'],
+  schedTplWeeklyPlanPrompt: ['Generate this week\'s research plan.', '生成本周科研计划。'],
+  schedTplExpBacklogPrompt: ['Turn current open questions into a testable experiment backlog.', '把当前开放问题转成可检验的实验 backlog。'],
+  // 审计收敛 4：设置面板 paper-navigator 分支
+  pnSemanticScholarUrl: ['Semantic Scholar API URL', 'Semantic Scholar API URL'],
+  pnRecommendUrl: ['Semantic Scholar recommendation API URL', 'Semantic Scholar 推荐 API URL'],
+  pnSortLabel: ['Retrieval sort', '检索排序'],
+  pnSortRelevance: ['Semantic relevance', '语义相关性'],
+  pnSortCitations: ['Citation count', '引用量'],
+  pnSortYear: ['Newest year', '最新年份'],
+  pnYearMinLabel: ['Earliest year (optional)', '最早年份（可选）'],
+  pnYearMaxLabel: ['Latest year (optional)', '最晚年份（可选）'],
+  pnOpenAccessOnly: ['Only return open access papers', '仅返回开放获取论文'],
+  clearPathBrowserLocalStoragePath: ['Browser localStorage of this page (keys prefixed with "evoresearch-")', '当前网页的浏览器 localStorage（键名以 evoresearch- 开头）'],
+  // 审计收敛 5：workspace-files 硬编码文案
+  wsReadFailed: ['Failed to read file', '读取失败'],
+  wsSaveFailed: ['Failed to save file', '保存失败'],
+  wsHtmlPreview: ['HTML preview: ', 'HTML 预览：'],
+  wsPreviewUnsupported: ['Preview is not supported for this file type', '预览不支持此文件类型'],
+  wsUploadPartialFailed: ['Some files failed to upload (may exceed 5MB or have invalid paths)', '部分文件上传失败（可能超出 5MB 或路径非法）'],
+  wsZipFailed: ['Failed to package workspace', '打包失败'],
+  wsListFailed: ['Failed to list files', '列表失败'],
 }
 
 export function t(key: string): string {
   const pair = DICT[key]
   if (pair === undefined) return key
   return readLang() === 'zh' ? pair[1] : pair[0]
+}
+
+/** 键是否在词典中（用于「缺键回退显示原文」场景，如服务端下发的 path id）。 */
+export function hasKey(key: string): boolean {
+  return DICT[key] !== undefined
 }

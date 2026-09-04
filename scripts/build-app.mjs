@@ -129,23 +129,11 @@ async function buildClient() {
   generateXyflowCss()
   // 生成 Monaco 编辑器基础样式，供客户端注入
   generateMonacoCss()
-  // Chat Graph 的 ELK 布局独立打包为 Worker payload，再以内联字符串注入
-  // client bundle。这样插件仍只需要 DSH 的单一 client.js 端点，布局不会
-  // 回退到主线程，也不会依赖 WebView2 对额外静态资源路由的支持。
-  const worker = await build({
-    entryPoints: [join(PKG, 'src', 'client', 'chatgraph-layout-worker.ts')],
-    bundle: true,
-    format: 'iife',
-    platform: 'browser',
-    target: 'es2022',
-    write: false,
-    minify: true,
-  })
-  const workerSource = worker.outputFiles?.[0]?.text ?? ''
-  if (workerSource === '') throw new Error('Chat Graph layout worker bundle is empty')
   // Monaco editor worker 同款处理：独立打包为 IIFE 字符串，运行时经 Blob URL
   // 供 MonacoEnvironment.getWorker 创建（语法高亮的 tokenizer 在主线程，
   // worker 承担 diagnostics/计算服务，缺失时 Monaco 降级仍可用但需显式提供）。
+  // 注：ChatGraph 的 ELK 布局不再有 Worker 打包——ELK 的 bootstrap 无法在
+  // Worker 内再建子 worker，运行时走主线程动态 import（chatgraph-layout.ts）。
   const monacoWorker = await build({
     entryPoints: [join(ROOT, 'node_modules', 'monaco-editor', 'esm', 'vs', 'editor', 'editor.worker.js')],
     bundle: true,
@@ -172,7 +160,6 @@ async function buildClient() {
     // Monaco codicon 图标字体等资源内联为 data URL
     loader: { '.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' },
     define: {
-      '__CHATGRAPH_WORKER_SOURCE__': JSON.stringify(workerSource),
       '__MONACO_WORKER_SOURCE__': JSON.stringify(monacoWorkerSource),
     },
   })

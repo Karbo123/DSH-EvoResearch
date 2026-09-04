@@ -8,21 +8,10 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
 import { t } from './i18n'
+import { fileKind } from './file-kind'
 import { ChevronRight, ChevronDown, Folder, FileText, FileCode2, Image as ImageIcon, File, RefreshCw, ArrowUp, Save, Upload, Archive, ExternalLink } from 'lucide-react'
 
 interface FsEntry { name: string; path: string; isDir: boolean; hidden: boolean }
-
-const TEXT_EXT = new Set(['.md', '.txt', '.json', '.ts', '.tsx', '.js', '.mjs', '.cjs', '.css', '.yml', '.yaml', '.rs', '.toml', '.py', '.html', '.htm', '.svg', '.xml', '.env', '.sql'])
-const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.avif'])
-
-function fileKind(name: string): 'text' | 'image' | 'pdf' | 'html' | 'other' {
-  const ext = name.slice(name.lastIndexOf('.')).toLowerCase()
-  if (TEXT_EXT.has(ext)) return 'text'
-  if (IMAGE_EXT.has(ext)) return 'image'
-  if (ext === '.pdf') return 'pdf'
-  if (ext === '.html' || ext === '.htm') return 'html'
-  return 'other'
-}
 
 function FileIcon({ name }: { name: string }) {
   const kind = fileKind(name)
@@ -113,7 +102,7 @@ function FileViewer({ path, root, onBack }: { path: string; root: string; onBack
     }).then((res) => res.json()).then((json) => {
       if (cancelled) return
       if (json.ok) { setText(json.value.text); setError(null) }
-      else setError(json.error?.message ?? '读取失败')
+      else setError(json.error?.message ?? t('wsReadFailed'))
     }).catch((e) => { if (!cancelled) setError(String(e)) })
     return () => { cancelled = true }
   }, [path, kind])
@@ -129,7 +118,7 @@ function FileViewer({ path, root, onBack }: { path: string; root: string; onBack
       })
       const json = await res.json()
       if (json.ok) { setDirty(false); setError(null) }
-      else setError(json.error?.message ?? '保存失败')
+      else setError(json.error?.message ?? t('wsSaveFailed'))
     } catch (e) { setError(String(e)) }
     setSaving(false)
   }
@@ -177,7 +166,7 @@ function FileViewer({ path, root, onBack }: { path: string; root: string; onBack
       kind === 'pdf' && jsx('iframe', { className: 'evo-fs-frame', src: `/evoresearch/fs/file?path=${encodeURIComponent(path)}`, title: name, sandbox: '' }),
       (kind === 'html' || kind === 'other') && jsx('div', {
         className: 'evo-panel-hint',
-        children: kind === 'html' ? 'HTML 预览：' : '预览不支持此文件类型',
+        children: kind === 'html' ? t('wsHtmlPreview') : t('wsPreviewUnsupported'),
       }),
       (kind === 'html') && jsx('iframe', { className: 'evo-fs-frame', src: `/evoresearch/fs/file?path=${encodeURIComponent(path)}`, title: name, sandbox: '' }),
     ],
@@ -220,13 +209,13 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
           pending -= 1
           if (pending === 0) {
             setUploading(false)
-            if (failed) setError('部分文件上传失败（可能超出 5MB 或路径非法）')
+            if (failed) setError(t('wsUploadPartialFailed'))
             setRev((v) => v + 1)
           }
         }).catch(() => {
           failed = true
           pending -= 1
-          if (pending === 0) { setUploading(false); setError('上传失败'); setRev((v) => v + 1) }
+          if (pending === 0) { setUploading(false); setError(t('uploadFailed')); setRev((v) => v + 1) }
         })
       }
       reader.readAsDataURL(file)
@@ -242,7 +231,7 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
       body: JSON.stringify({ root: base }),
     }).then((r) => r.json()).then((json) => {
       setZipBusy(false)
-      if (json.ok !== true) { setError(json.error?.message ?? '打包失败'); return }
+      if (json.ok !== true) { setError(json.error?.message ?? t('wsZipFailed')); return }
       const bytes = Uint8Array.from(atob(json.value.data as string), (c) => c.charCodeAt(0))
       const blob = new Blob([bytes], { type: 'application/zip' })
       const url = URL.createObjectURL(blob)
@@ -288,7 +277,7 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
     }).then((res) => res.json()).then((json) => {
       if (cancelled) return
       if (json.ok) { setEntries(json.value.entries); setError(null) }
-      else setError(json.error?.message ?? '列表失败')
+      else setError(json.error?.message ?? t('wsListFailed'))
     }).catch((e) => { if (!cancelled) setError(String(e)) })
     return () => { cancelled = true }
   }, [base, rev])
