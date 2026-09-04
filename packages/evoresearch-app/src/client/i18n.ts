@@ -493,7 +493,6 @@ const DICT: Record<string, [string, string]> = {
   clearPathSchedulerFile: ['Removes all registered project scheduled tasks; when tasks exist, this file is rewritten as an empty task table.', '移除全部已注册的项目定时任务；存在任务时将此文件重写为空任务表。'],
   clearPathSessionMetaFile: ['Rewrites the session metadata file as an empty object.', '将会话元数据文件重写为空对象。'],
   clearPathModelSettingsFile: ['Resets the EvoResearch model assignments to their defaults.', '将 EvoResearch 模型分配重置为默认值。'],
-  clearPathDshSettingsFile: ['Resets model defaults (agent-default-model section) only; the rest of settings.yaml is untouched.', '仅重置模型默认选择（agent-default-model 段）；settings.yaml 其余内容不会改动。'],
   clearPathDshSettingsFile: ['Resets only the DSH default model selection; provider connection settings are kept.', '仅重置 DSH 默认模型选择；模型提供商连接配置会保留。'],
   clearPathClientStateFile: ['Rewrites the client-state mirror as an empty object.', '将客户端状态镜像文件重写为空对象。'],
   clearPathBrowserLocalStorage: ['Clears this site’s evoresearch-* entries from the current browser.', '清除当前浏览器中本网页的 evoresearch-* 本地存储项。'],

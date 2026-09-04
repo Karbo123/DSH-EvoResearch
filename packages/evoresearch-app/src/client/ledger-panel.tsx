@@ -10,6 +10,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { useConfirmReset } from './two-step'
 import { apiTolerant as api } from './fs-api'
 import { FlaskConical, RefreshCw, Check, X as XIcon, Camera, Play, Pencil, XCircle, RotateCcw, Download, Copy, History, FileText, Beaker } from 'lucide-react'
 
@@ -71,6 +72,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
   const [exportDest, setExportDest] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null)
+  const confirmRestoreReset = useConfirmReset()
   const [provenance, setProvenance] = useState<Record<string, unknown> | null>(null)
   const [provError, setProvError] = useState<string | null>(null)
   const [recent, setRecent] = useState<Record<string, unknown> | null>(null)
@@ -388,7 +390,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
                             className: 'evo-panel-act',
                             title: t('ledgerRestoreTo'),
                             disabled: busy,
-                            onClick: () => { setConfirmRestore(row.sha); setTimeout(() => setConfirmRestore((v) => v === row.sha ? null : v), 5000) },
+                            onClick: () => { setConfirmRestore(row.sha); confirmRestoreReset.arm(() => setConfirmRestore((v) => v === row.sha ? null : v)) },
                             children: jsx(RotateCcw, {}),
                           }),
                       ],

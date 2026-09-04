@@ -13,6 +13,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { useConfirmReset } from './two-step'
 import { api } from './fs-api'
 import { FlaskConical, Plus, Trash2, RefreshCw, GitBranch, RotateCcw, Camera, Check, X as XIcon, MessageSquare, ChevronRight, ChevronDown, FolderKanban, NotepadText, History } from 'lucide-react'
 import { ExperimentWorkspacePanel } from './experiment-workspace'
@@ -138,7 +139,9 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
   const [branchFrom, setBranchFrom] = useState<string | null>(null)
   const [branchName, setBranchName] = useState('')
   const [confirmRollback, setConfirmRollback] = useState<string | null>(null)
+  const confirmRollbackReset = useConfirmReset()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const confirmDeleteReset = useConfirmReset()
   const [busy, setBusy] = useState(false)
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
 
@@ -240,7 +243,7 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
                 title: t('deleteExperiment'),
                 'aria-label': t('deleteExperiment'),
                 disabled: busy,
-                onClick: () => { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 5000) },
+                onClick: () => { setConfirmDelete(true); confirmDeleteReset.arm(() => setConfirmDelete(false)) },
                 children: jsx(Trash2, {}),
               }),
         ],
@@ -356,7 +359,7 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
                                 title: t('rollbackTo'),
                                 'aria-label': t('rollbackTo'),
                                 disabled: busy,
-                                onClick: () => { setConfirmRollback(cp.id); setTimeout(() => setConfirmRollback((v) => (v === cp.id ? null : v)), 5000) },
+                                onClick: () => { setConfirmRollback(cp.id); confirmRollbackReset.arm(() => setConfirmRollback((v) => (v === cp.id ? null : v))) },
                                 children: jsx(RotateCcw, {}),
                               }),
                           branchFrom === cp.id

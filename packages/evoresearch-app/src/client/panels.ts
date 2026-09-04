@@ -8,6 +8,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
+import { useConfirmReset } from './two-step'
 import { api } from './fs-api'
 import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
@@ -66,6 +67,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
   const [newFileName, setNewFileName] = useState('')
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null)
+  const confirmDeleteFileReset = useConfirmReset()
   const [profileBusy, setProfileBusy] = useState(false)
   // Knowledge（§26.5 轻量版）
   const [observations, setObservations] = useState<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; relatedObservationIds?: readonly string[]; updatedAt: number }> | null>(null)
@@ -514,7 +516,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                                           className: 'evo-panel-act evo-del',
                                           title: t('remove'),
                                           'aria-label': t('remove'),
-                                          onClick: () => { setConfirmDeleteFile(f.name); setTimeout(() => setConfirmDeleteFile((v) => (v === f.name ? null : v)), 5000) },
+                                          onClick: () => { setConfirmDeleteFile(f.name); confirmDeleteFileReset.arm(() => setConfirmDeleteFile((v) => (v === f.name ? null : v))) },
                                           children: jsx(Trash2, {}),
                                         }),
                                   ] }),
@@ -1174,6 +1176,7 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
   const [version, setVersion] = useState('3.12')
   const [pkgInput, setPkgInput] = useState('')
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const confirmRemoveReset = useConfirmReset()
 
   const load = () => {
     setInfo(null)
@@ -1315,7 +1318,7 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
                     type: 'button',
                     className: 'evo-tl-del',
                     disabled: busy,
-                    onClick: () => { setConfirmRemove(true); setTimeout(() => setConfirmRemove(false), 5000) },
+                    onClick: () => { setConfirmRemove(true); confirmRemoveReset.arm(() => setConfirmRemove(false)) },
                     children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('removeEnv') })] }),
                   }),
             ],

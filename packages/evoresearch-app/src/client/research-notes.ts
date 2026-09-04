@@ -33,6 +33,7 @@ import {
   NotebookPen,
 } from 'lucide-react'
 import { renderMarkdown } from './markdown'
+import { useConfirmReset } from './two-step'
 
 /** 阅读分页大小（字符）。 */
 const READ_PAGE = 4000
@@ -158,6 +159,7 @@ function NoteReader({ workspaceDir, noteId, initialOffset, onBack, onChanged, on
   const [draftBody, setDraftBody] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const confirmReset = useConfirmReset()
   const [busy, setBusy] = useState(false)
 
   const load = (at: number) => {
@@ -272,7 +274,7 @@ function NoteReader({ workspaceDir, noteId, initialOffset, onBack, onChanged, on
                     title: t('deleteNote'),
                     'aria-label': t('deleteNote'),
                     disabled: busy,
-                    onClick: () => { setConfirmDelete(true); setTimeout(() => setConfirmDelete((v) => (v ? false : v)), 5000) },
+                    onClick: () => { setConfirmDelete(true); confirmReset.arm(() => setConfirmDelete((v) => (v ? false : v))) },
                     children: jsx(Trash2, {}),
                   }),
             ],
