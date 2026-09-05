@@ -124,6 +124,10 @@ export interface ChatGraph {
   edges: GraphEdge[]
   groups?: GraphGroup[]
   schemaVersion?: number
+  /** 人工策展标志：用户手工拖拽过位置/缩放/确认过一次布局后为 true。
+   *  true = 持久化坐标即真相源（同步新节点只按网格入库、不再自动重排）；
+   *  false/缺省 = 前端打开图谱时静默跑自动布局（「默认就是自动布局的结果」）。 */
+  layoutCurated?: boolean
 }
 
 /** Current persisted graph schema. Migrations only add/normalize fields. */
@@ -230,6 +234,7 @@ export function normalizeGraph(graph: ChatGraph): ChatGraph {
     schemaVersion: CHAT_GRAPH_SCHEMA_VERSION,
   }
   if (graph.groups !== undefined) normalized.groups = normalizeGroups(graph.groups)
+  if (graph.layoutCurated === true) normalized.layoutCurated = true
   return normalized
 }
 
@@ -557,6 +562,7 @@ export class ChatGraphService {
       }
       if (Array.isArray(parsed.groups)) project.groups = parsed.groups
       if (typeof parsed.schemaVersion === 'number') project.schemaVersion = parsed.schemaVersion
+      if (parsed.layoutCurated === true) project.layoutCurated = true
       return project
     } catch {
       return emptyGraph()
@@ -573,6 +579,7 @@ export class ChatGraphService {
       edges: project.edges,
       groups: project.groups,
       schemaVersion: Math.max(project.schemaVersion ?? 0, global.schemaVersion ?? 0),
+      layoutCurated: project.layoutCurated,
     })
     const projectMigration = migrateGraph(project).report
     const globalMigration = migrateGraph(global).report
@@ -596,6 +603,7 @@ export class ChatGraphService {
       edges: project.edges,
       groups: project.groups,
       schemaVersion: CHAT_GRAPH_SCHEMA_VERSION,
+      layoutCurated: project.layoutCurated,
     })
   }
 
@@ -615,6 +623,7 @@ export class ChatGraphService {
       edges: Array.isArray(graph?.edges) ? graph.edges : [],
       groups: graph?.groups,
       schemaVersion: graph?.schemaVersion,
+      layoutCurated: graph?.layoutCurated,
     })
     const nodes = normalized.nodes
     const edges = normalized.edges
@@ -655,7 +664,10 @@ export class ChatGraphService {
       // global nodes are shared by every project: a project write failure must
       // not leave the two graph scopes observing different revisions.
       fs.writeFileSync(gtmp, JSON.stringify({ nodes: globalNodes, edges: [], schemaVersion: normalized.schemaVersion }, null, 2), 'utf8')
-      fs.writeFileSync(tmp, JSON.stringify({ nodes: projectNodes, edges: deduped, groups: normalized.groups, schemaVersion: normalized.schemaVersion }, null, 2), 'utf8')
+      fs.writeFileSync(tmp, JSON.stringify({
+        nodes: projectNodes, edges: deduped, groups: normalized.groups, schemaVersion: normalized.schemaVersion,
+        ...(normalized.layoutCurated === true ? { layoutCurated: true } : {}),
+      }, null, 2), 'utf8')
       this.backupIfPresent(gfile)
       this.backupIfPresent(file)
       fs.renameSync(gtmp, gfile)
@@ -984,7 +996,8 @@ export class ChatGraphService {
       if (position === undefined) return node
       return { ...node, x: Number.isFinite(position.x) ? Math.round(position.x) : node.x, y: Number.isFinite(position.y) ? Math.round(position.y) : node.y, ...(typeof position.pinned === 'boolean' ? { pinned: position.pinned } : {}) }
     })
-    return this.save(projectName, { ...graph, nodes: nextNodes })
+    // 人工移动节点 = 人工策展：此后前端不再对该图静默自动布局
+    return this.save(projectName, { ...graph, nodes: nextNodes, layoutCurated: true })
   }
 
   addGroup(projectName: string, group: GraphGroup): { ok: boolean; group?: GraphGroup; error?: string } {

@@ -5,7 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { LinkResolver } from '../src/host/context/link-resolver.js'
 import { ContextAssembler } from '../src/host/context/assembler.js'
-import { ChatGraphService } from '../src/host/chat-graph.js'
+import { ChatGraphService, normalizeGraph } from '../src/host/chat-graph.js'
 
 test('LinkResolver resolves inline, internal and sidecar links with bounds', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-link-test-'))
@@ -112,6 +112,30 @@ test('ChatGraph incremental operations are idempotent and preserve groups', () =
     const current = service.get('project')
     assert.equal(current.nodes.find((item) => item.id === node.id)?.x, 32)
     assert.equal(current.groups?.[0]?.id, 'g1')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('layoutCurated 人工策展标志：moveNodes 置位、normalize/save 往返保留', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'evoresearch-graph-curated-'))
+  try {
+    const service = new ChatGraphService(root)
+    const node = service.addNode('project', { type: 'chat', title: 'chat', x: 0, y: 0, sessionId: 's1' })
+    // 新图未策展
+    assert.notEqual(service.get('project').layoutCurated, true)
+    // 人工拖拽 = 置位策展
+    service.moveNodes('project', [{ id: node.id, x: 100, y: 120 }])
+    assert.equal(service.get('project').layoutCurated, true)
+    // 持久化往返（新实例重读磁盘）后标志仍在
+    const reloaded = new ChatGraphService(root)
+    assert.equal(reloaded.get('project').layoutCurated, true)
+    // normalizeGraph 保留 true；false/缺省不写入
+    const saved = reloaded.get('project')
+    const normalized = normalizeGraph({ ...saved, layoutCurated: true })
+    assert.equal(normalized.layoutCurated, true)
+    const uncurated = normalizeGraph({ nodes: [{ ...node, x: 5, y: 5 }], edges: [] })
+    assert.notEqual(uncurated.layoutCurated, true)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

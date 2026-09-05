@@ -135,6 +135,9 @@ export interface ChatGraph {
   nodes: GraphNode[]
   edges: GraphEdge[]
   groups?: GraphGroup[]
+  /** 人工策展标志（与宿主 ChatGraph.layoutCurated 同源）：true = 用户已手工拖拽/缩放/确认过布局，
+   *  持久化坐标即真相源；false/缺省 = 打开图谱或同步新增节点后静默跑一次自动布局。 */
+  layoutCurated?: boolean
 }
 
 interface ChatGraphPanelProps {
@@ -184,7 +187,10 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     void api<{ graph?: ChatGraph; rev?: number; error?: string }>('graph-get', { workspaceDir: cwd ?? undefined })
       .then((r) => {
         if (typeof r?.error === 'string' && r.error !== '') { setError(r.error); return }
-        setGraph({ nodes: r?.graph?.nodes ?? [], edges: r?.graph?.edges ?? [], groups: r?.graph?.groups })
+        setGraph({
+          nodes: r?.graph?.nodes ?? [], edges: r?.graph?.edges ?? [], groups: r?.graph?.groups,
+          layoutCurated: r?.graph?.layoutCurated === true,
+        })
         revRef.current = typeof r?.rev === 'number' ? r.rev : null
       })
       .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
@@ -232,8 +238,12 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     return () => window.removeEventListener('evo-context-question', onQuestion)
   }, [currentSessionId])
 
-  /** 整图保存（乐观并发 + FIFO 串行）。冲突 → 提示并重新加载最新状态。 */
-  const saveGraph = (next: ChatGraph): Promise<boolean> => {
+  /** 整图保存（乐观并发 + FIFO 串行）。冲突 → 提示并重新加载最新状态。
+   *  策展盖章：位置级手工动作（拖拽/缩放/确认保存布局）显式传 { curated: true }；
+   *  其余调用只透传现有标志（不因改名/删点等内容编辑误冻结自动布局）；
+   *  静默自动布局的落盘不传 curated（保持未策展，新节点同步后仍会自动重排）。 */
+  const saveGraph = (next: ChatGraph, opts?: { curated?: boolean }): Promise<boolean> => {
+    next.layoutCurated = opts?.curated === true ? true : next.layoutCurated === true
     setError(null)
     const pending = saveChainRef.current.then(async () => {
       try {
@@ -706,14 +716,15 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     return keep
   })()
 
-  const layoutVisible = () => {
-    const selected = new Set([...visibleIds].filter((id) => selectedId === null || id === selectedId || viewMode !== 'all'))
+  /** 构建布局请求（手动「整理布局」与静默自动布局共用）。movableAll=true 时忽略
+   *  选中集——全部非 pinned 可见节点参与布局（打开图谱的默认自动布局语义）。 */
+  const buildLayoutRequest = (movableAll: boolean) => {
+    const selected = new Set([...visibleIds].filter((id) => movableAll || selectedId === null || id === selectedId || viewMode !== 'all'))
     const targets = graph.nodes
       .filter((node) => selected.has(node.id) && node.pinned !== true)
       .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || a.id.localeCompare(b.id))
-    if (targets.length === 0) return
-    setBusy(true)
-    void runChatGraphLayout({
+    if (targets.length === 0) return null
+    return {
       // 算法偏好：设置面板「自动布局算法」可切换（tree 紧凑树 / dagre 有向分层 / relax 约束松弛）
       algorithm: getGraphLayoutAlgorithm(),
       nodes: graph.nodes.filter((node) => visibleIds.has(node.id)).map((node) => ({
@@ -726,36 +737,82 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         collapsed: group.collapsed || collapsedGroups.has(group.id), parentId: group.parentId, pinned: group.pinned, createdAt: group.createdAt,
       })),
       edges: graph.edges.filter((edge) => visibleIds.has(edge.from) || visibleIds.has(edge.to)),
-    }).then((result) => {
-      const changes = new Map(result.positions.map((position) => [position.id, position]))
-      const groupChanges = new Map((result.groupPositions ?? []).map((position) => [position.id.replace(/^group:/, ''), position]))
-      const next = {
-        ...graph,
-        nodes: graph.nodes.map((node) => { const position = changes.get(node.id); return position === undefined ? node : { ...node, x: position.x, y: position.y } }),
-        groups: (graph.groups ?? []).map((group) => {
-          const position = groupChanges.get(group.id)
-          return position === undefined ? group : { ...group, x: position.x, y: position.y }
-        }),
-        edges: graph.edges.map((edge) => ({
-          ...edge,
-          // 连线形状 = 节点位置的连续函数（渲染时实时推导）：布局后不再持久化路由/标签位，
-          // 杜绝"方案失配"导致的连线剧变。
-          routePoints: undefined,
-          labelPosition: undefined,
-          labelHidden: undefined,
-          routingVersion: (edge.routingVersion ?? 0) + 1,
-        })),
-      }
+    }
+  }
+
+  /** 布局结果 → 下一份图谱状态（节点/组位置覆盖 + 连线几何字段清零）。 */
+  const applyLayoutResult = (result: Awaited<ReturnType<typeof runChatGraphLayout>>) => {
+    const changes = new Map(result.positions.map((position) => [position.id, position]))
+    const groupChanges = new Map((result.groupPositions ?? []).map((position) => [position.id.replace(/^group:/, ''), position]))
+    return {
+      ...graph,
+      nodes: graph.nodes.map((node) => { const position = changes.get(node.id); return position === undefined ? node : { ...node, x: position.x, y: position.y } }),
+      groups: (graph.groups ?? []).map((group) => {
+        const position = groupChanges.get(group.id)
+        return position === undefined ? group : { ...group, x: position.x, y: position.y }
+      }),
+      edges: graph.edges.map((edge) => ({
+        ...edge,
+        // 连线形状 = 节点位置的连续函数（渲染时实时推导）：布局后不再持久化路由/标签位，
+        // 杜绝"方案失配"导致的连线剧变。
+        routePoints: undefined,
+        labelPosition: undefined,
+        labelHidden: undefined,
+        routingVersion: (edge.routingVersion ?? 0) + 1,
+      })),
+    }
+  }
+
+  const layoutVisible = () => {
+    const request = buildLayoutRequest(false)
+    if (request === null) return
+    const revAtRequest = revRef.current
+    setBusy(true)
+    void runChatGraphLayout(request).then((result) => {
+      if (revRef.current !== revAtRequest) return // 请求期间图谱已被其他保存更新，丢弃过期结果
+      const next = applyLayoutResult(result)
       setGraph(next)
       setLayoutPreview({ previous: graph, next, ...(result.warning === undefined ? {} : { warning: result.warning }) })
       if (result.warning !== undefined) toast(t('graphLayoutFallback').replace('{msg}', result.warning))
     }).catch((error: unknown) => setError(String((error as Error)?.message ?? error))).finally(() => setBusy(false))
   }
 
+  // ── 默认自动布局：打开图谱/同步新增节点后，未人工策展则静默跑一次算法 ──
+  // 「默认就是自动布局的结果，除非用户真的手工拖拽/缩放/确认过布局」：
+  // layoutCurated=false 时直接应用并落盘（不进预览态、不置策展标志），
+  // 此后新增节点（同步/建笔记）会再次触发；策展后永远尊重手工布局。
+  const autoLaidIdsRef = useRef<Set<string>>(new Set())
+  const autoLaidProjectRef = useRef<string | null>(null)
+  const autoLayoutSilently = () => {
+    if (busy || layoutPreview !== null || graph.layoutCurated === true) return
+    const request = buildLayoutRequest(true)
+    if (request === null) return
+    const revAtRequest = revRef.current
+    const project = cwd
+    void runChatGraphLayout(request).then((result) => {
+      if (revRef.current !== revAtRequest || project !== cwd) return // 请求期间图谱已被更新/项目已切换
+      for (const position of result.positions) autoLaidIdsRef.current.add(position.id)
+      const next = applyLayoutResult(result)
+      setGraph(next)
+      void saveGraph(next) // 不传 curated：保持未策展，新增节点仍会触发重排
+    }).catch(() => { /* 静默失败：保留入库网格位 */ })
+  }
+  useEffect(() => {
+    if (autoLaidProjectRef.current !== cwd) {
+      autoLaidProjectRef.current = cwd
+      autoLaidIdsRef.current = new Set()
+    }
+    if (cwd === null || graph.nodes.length === 0 || graph.layoutCurated === true) return
+    if (graph.nodes.every((node) => autoLaidIdsRef.current.has(node.id))) return // 无新增节点
+    autoLayoutSilently()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cwd, graph])
+
   const confirmLayout = () => {
     if (layoutPreview === null) return
     const preview = layoutPreview
-    void saveGraph(preview.next).then((ok) => {
+    // 确认保存 = 接受一次布局 = 人工策展：此后打开图谱不再静默自动重排
+    void saveGraph(preview.next, { curated: true }).then((ok) => {
       if (!ok) {
         setGraph(preview.previous)
         return
@@ -956,7 +1013,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           ? { ...edge, routePoints: undefined, labelPosition: undefined }
           : edge),
       }
-      saveGraph(next)
+      saveGraph(next, { curated: true })
       return next
     })
   }
@@ -971,7 +1028,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           ? { ...edge, routePoints: undefined, labelPosition: undefined }
           : edge),
       }
-      saveGraph(next)
+      saveGraph(next, { curated: true })
       return next
     })
   }
