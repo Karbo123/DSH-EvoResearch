@@ -23,6 +23,7 @@ import type { GraphCanvasMenu } from './chatgraph-canvas'
 import type { Connection } from '@xyflow/react'
 import { runChatGraphLayout, getGraphLayoutAlgorithm } from './chatgraph-layout'
 import { ContextTraceDrawer } from './context-trace'
+import { GraphHealthCard } from './chatgraph-health'
 
 /**
  * 节点几何（Blender 节点编辑器风格）：
@@ -57,8 +58,12 @@ export function nodeSize(node: Pick<GraphNode, 'type' | 'ref' | 'width' | 'heigh
   }
 }
 
-/** 命中脉冲空集（主面板未接入 graph-recent-hits 轮询：共享同一实例避免画布无谓重算）。 */
-const EMPTY_PULSE_IDS = new Set<string>()
+/** graph-version 轮询间隔（页面可见时）；rev 变化才全量对账。 */
+const VERSION_POLL_MS = 800
+/** graph-recent-hits 轮询间隔：命中脉冲（约 2s 消退，纯 CSS）。 */
+const HITS_POLL_MS = 2000
+/** 命中脉冲发光时长（体检卡定位也复用）。 */
+const HIT_PULSE_MS = 2200
 
 export interface GraphNodeRef {
   kind: 'note' | 'file' | 'pdf' | 'dir' | 'memory' | 'session' | 'paper' | 'experiment' | 'run' | 'log' | 'result' | 'code' | 'latex' | 'manuscript'
@@ -155,7 +160,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const [busy, setBusy] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // 右键菜单：nodeId 或 edgeId 二选一（都是画布坐标弹层）
-  const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string; edgeId?: string } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; nodeId?: string; edgeId?: string; mode?: 'distill' } | null>(null)
   // 记忆节点内容编辑（双击或菜单打开）
   const [editing, setEditing] = useState<GraphNode | null>(null)
   const [editText, setEditText] = useState('')
@@ -181,6 +186,41 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const revRef = useRef<number | null>(null)
   // 整图保存串行化：同窗口连续操作按序提交，避免互相冲突
   const saveChainRef = useRef<Promise<void>>(Promise.resolve())
+  // 命中脉冲：nodeId 集合（graph-recent-hits 驱动；约 2s 后消退，不持久化）
+  const [pulseIds, setPulseIds] = useState<Set<string>>(new Set())
+  // 轮询回调里读取最新 graph / 已见命中，避免反复重挂 effect
+  const graphRef = useRef(graph)
+  graphRef.current = graph
+  const seenHitsRef = useRef<Set<string>>(new Set())
+  const pulseTimersRef = useRef<Map<string, number>>(new Map())
+
+  /** 命中脉冲：新出现的 nodeId 画布发光约 2 秒后消退（体检卡定位也复用）。 */
+  const triggerPulse = (ids: readonly (string | undefined)[]) => {
+    const fresh = ids.filter((id): id is string => typeof id === 'string' && id !== '' && graphRef.current.nodes.some((node) => node.id === id))
+    if (fresh.length === 0) return
+    setPulseIds((prev) => {
+      const next = new Set(prev)
+      for (const id of fresh) next.add(id)
+      return next
+    })
+    for (const id of fresh) {
+      const timers = pulseTimersRef.current
+      const existing = timers.get(id)
+      if (existing !== undefined) window.clearTimeout(existing)
+      timers.set(id, window.setTimeout(() => {
+        timers.delete(id)
+        setPulseIds((prev) => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+      }, HIT_PULSE_MS))
+    }
+  }
+  useEffect(() => () => {
+    for (const timer of pulseTimersRef.current.values()) window.clearTimeout(timer)
+    pulseTimersRef.current.clear()
+  }, [])
 
   const load = () => {
     setError(null)
@@ -201,9 +241,25 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const syncSessions = async (manual: boolean): Promise<void> => {
     if (cwd === null) { if (manual) setError(t('graphNeedProject')); return }
     try {
-      const r = await api<{ ok?: boolean; addedChats?: number; addedMemories?: number; addedEdges?: number; error?: string }>('graph-sync', { workspaceDir: cwd })
+      // 手动同步升级（墓碑语义）：先补回墓碑中用户删除过的节点/线，再执行导入
+      if (manual) {
+        if (!window.confirm(t('graphRestoreConfirm'))) return
+        try {
+          const restored = await api<{ restoredNodes?: number; restoredEdges?: number }>('graph-restore-tombstones', { workspaceDir: cwd })
+          const restoredCount = (restored?.restoredNodes ?? 0) + (restored?.restoredEdges ?? 0)
+          if (restoredCount > 0) {
+            toast(t('graphRestored').replace('{n}', String(restored?.restoredNodes ?? 0)).replace('{m}', String(restored?.restoredEdges ?? 0)))
+            load()
+          }
+        } catch {
+          // 补回接口未就绪时继续普通同步（后端兼容）
+        }
+      }
+      const r = await api<{ ok?: boolean; addedNodes?: number; addedEdges?: number; addedChats?: number; addedMemories?: number; error?: string }>('graph-sync', { workspaceDir: cwd })
       if (typeof r?.error === 'string' && r.error !== '') { setError(r.error); return }
-      const added = (r?.addedChats ?? 0) + (r?.addedMemories ?? 0) + (r?.addedEdges ?? 0)
+      const addedNodes = typeof r?.addedNodes === 'number' ? r.addedNodes : (r?.addedChats ?? 0) + (r?.addedMemories ?? 0)
+      const addedEdges = typeof r?.addedEdges === 'number' ? r.addedEdges : 0
+      const added = addedNodes + addedEdges
       if (added > 0) {
         toast(t('graphSyncDone').replace('{n}', String(added)))
         load()
@@ -223,6 +279,61 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     void syncSessions(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cwd, graph.nodes])
+
+  // 实时同步：页面可见时每 800ms 轮询 graph-version，rev 变化才全量对账
+  // （load 按 id 保留本地面板选中态）；窗口重新聚焦立即刷一次；失败静默重试。
+  useEffect(() => {
+    if (cwd === null) return
+    let stopped = false
+    const check = async () => {
+      if (stopped || document.hidden) return
+      try {
+        const r = await api<{ rev?: number; nodeCount?: number; edgeCount?: number; serverTime?: number }>('graph-version', { workspaceDir: cwd })
+        if (stopped) return
+        if (typeof r?.rev === 'number' && r.rev !== revRef.current) load()
+      } catch {
+        // 轮询失败静默重试，不打扰用户
+      }
+    }
+    const timer = window.setInterval(() => { void check() }, VERSION_POLL_MS)
+    const onFocus = () => { void check() }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cwd])
+
+  // 命中脉冲：每 2s 轮询 graph-recent-hits；新出现的 nodeId 画布脉冲约 2 秒。
+  useEffect(() => {
+    if (cwd === null) return
+    let stopped = false
+    const poll = async () => {
+      if (stopped || document.hidden) return
+      try {
+        const r = await api<{ hits?: Array<{ nodeId?: string; sessionId?: string; at?: number }> }>('graph-recent-hits', { workspaceDir: cwd })
+        if (stopped) return
+        const seen = seenHitsRef.current
+        const fresh: string[] = []
+        for (const hit of r?.hits ?? []) {
+          if (typeof hit?.nodeId !== 'string' || hit.nodeId === '') continue
+          const key = `${hit.nodeId}@${typeof hit.at === 'number' ? hit.at : hit.sessionId ?? ''}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          fresh.push(hit.nodeId)
+        }
+        if (seen.size > 400) seenHitsRef.current = new Set([...seen].slice(-200))
+        if (fresh.length > 0) triggerPulse(fresh)
+      } catch {
+        // 静默重试
+      }
+    }
+    const timer = window.setInterval(() => { void poll() }, HITS_POLL_MS)
+    return () => { stopped = true; window.clearInterval(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cwd])
 
   // ChatArea publishes the question at the beginning of a turn.  A new turn
   // clears the previous temporary trace highlight; persisted graph data is
@@ -671,6 +782,38 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const nodeById = (id: string): GraphNode | undefined => graph.nodes.find((n) => n.id === id)
 
+  const isMemoryKind = (node: GraphNode | undefined): node is GraphNode =>
+    node !== undefined && (node.type === 'memory' || node.displayKind === 'memory' || node.displayKind === 'memory-collection')
+
+  /** 沉淀：把会话最新一轮 AI 回复（小模型浓缩）追加进目标记忆节点，并确保写线存在。 */
+  const distillTo = async (chatNode: GraphNode, target: GraphNode): Promise<void> => {
+    setMenu(null)
+    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (chatNode.sessionId === undefined) { setError(t('graphNeedProject')); return }
+    setBusy(true)
+    try {
+      const hasChannel = graph.edges.some((edge) => edge.from === chatNode.id && edge.to === target.id && edge.behavior === 'write')
+      if (!hasChannel) {
+        await api<{ edge?: GraphEdge; rev?: number; error?: string }>('graph-add-edge', {
+          workspaceDir: cwd,
+          operationId: `distill-channel-${chatNode.id}-${target.id}-${Date.now().toString(36)}`,
+          edge: { from: chatNode.id, to: target.id, toPort: 'memory', behavior: 'write' },
+        })
+        toast(t('graphChannelCreated'))
+      }
+      const r = await api<{ ok?: boolean; bytesWritten?: number; nodeId?: string; error?: string }>('graph-distill', {
+        sessionId: chatNode.sessionId, targetNodeId: target.id, workspaceDir: cwd,
+      })
+      if (r?.ok === false || (typeof r?.error === 'string' && r.error !== '')) { setError(r?.error ?? t('graphDistillFailed')); return }
+      toast(t('graphDistillDone').replace('{title}', target.title).replace('{n}', String(r?.bytesWritten ?? 0)))
+      load()
+    } catch (e: unknown) {
+      setError(String((e as Error)?.message ?? e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // GRAPH-11 搜索过滤：匹配节点 id 集合（空 query 时不过滤）；边仅两端都匹配时显示
   const matchedIds = (() => {
     const q = query.trim().toLowerCase()
@@ -1032,7 +1175,42 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       return next
     })
   }
-  const graphMenu = menu === null ? null : jsxs('div', {
+  const distillPicker = menu === null || menu.mode !== 'distill' || menu.nodeId === undefined ? null : (() => {
+    // 沉淀目标选择器：先列写线通道连接的记忆，无通道时可选任意记忆节点（自动建通道）
+    const chatNode = nodeById(menu.nodeId)
+    const channelTargets: GraphNode[] = chatNode === undefined
+      ? []
+      : graph.edges
+          .filter((edge) => edge.from === chatNode.id && edge.behavior === 'write')
+          .map((edge) => nodeById(edge.to))
+          .filter((node): node is GraphNode => isMemoryKind(node))
+    const channelIds = new Set(channelTargets.map((node) => node.id))
+    const otherTargets = graph.nodes.filter((node) => isMemoryKind(node) && !channelIds.has(node.id) && node.id !== chatNode?.id)
+    const targetButton = (node: GraphNode, viaChannel: boolean) => jsx('button', {
+      type: 'button',
+      className: 'evo-graph-menu-item',
+      disabled: busy,
+      onClick: () => { if (chatNode !== undefined) void distillTo(chatNode, node) },
+      children: jsxs(Fragment, { children: [
+        jsx('span', { children: node.title }),
+        viaChannel && jsx('span', { className: 'evo-graph-menu-note', children: t('graphDistillChannel') }),
+      ] }),
+    }, `distill-${node.id}`)
+    return jsxs('div', {
+      className: 'evo-graph-menu evo-graph-menu-scroll',
+      style: { left: menu.x, top: menu.y },
+      onClick: (event: MouseEvent) => event.stopPropagation(),
+      children: [
+        jsx('div', { className: 'evo-graph-menu-title', children: t('graphDistillPickTitle') }),
+        ...channelTargets.map((node) => targetButton(node, true)),
+        channelTargets.length > 0 && otherTargets.length > 0 && jsx('div', { className: 'evo-graph-menu-sep' }),
+        channelTargets.length > 0 && otherTargets.length > 0 && jsx('div', { className: 'evo-graph-menu-title', children: t('graphDistillOther') }),
+        ...otherTargets.map((node) => targetButton(node, false)),
+        channelTargets.length === 0 && otherTargets.length === 0 && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: true, children: t('graphDistillNoTarget') }),
+      ],
+    })
+  })()
+  const graphMenu = menu === null ? null : distillPicker !== null ? distillPicker : jsxs('div', {
     className: 'evo-graph-menu',
     style: { left: menu.x, top: menu.y },
     onClick: (event: MouseEvent) => event.stopPropagation(),
@@ -1052,6 +1230,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteEdge(menu.edgeId as string), children: t('graphDeleteEdge') }),
       menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => togglePinned(menu.nodeId as string), children: nodeById(menu.nodeId)?.pinned === true ? t('graphUnpinNode') : t('graphPinNode') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: () => forkDirection(menu.nodeId as string), children: t('graphBranchFromHere') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && nodeById(menu.nodeId)?.sessionId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: () => setMenu({ x: menu.x, y: menu.y, nodeId: menu.nodeId, mode: 'distill' }), children: t('graphDistill') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const node = nodeById(menu.nodeId as string); if (node !== undefined) startEditMemory(node) }, children: t('graphEditMemory') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const target = currentChatNode; const source = nodeById(menu.nodeId as string); if (source !== undefined) connectReferenceFromNode(source) }, children: t('graphRefToChat') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const source = nodeById(menu.nodeId as string); if (source !== undefined) createNaturalRelation(source) }, children: t('graphRelateToChat') }),
@@ -1114,7 +1293,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         selectedId,
         refPreviews,
         traceHighlightedIds,
-        pulseIds: EMPTY_PULSE_IDS,
+        pulseIds,
         collapseSystem: false,
         menu,
         menuElement: graphMenu,
@@ -1177,6 +1356,12 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
             }),
           ] }),
           selectedRelationEdges.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: t('graphRelation') }), ...selectedRelationEdges.map((edge) => jsx('button', { type: 'button', onClick: () => editEdgeLabel(edge.id), children: edge.label || t('graphUnnamedRelation') }, `relation-${edge.id}`))] }),
+          selectedNode.type === 'chat' && selectedNode.sessionId !== undefined && jsx(GraphHealthCard, {
+            sessionId: selectedNode.sessionId,
+            workspaceDir: cwd ?? undefined,
+            // 点击体检卡命中项：画布脉冲定位 + "本轮已读取"标注，不切换选中（体检卡保持打开）
+            onLocate: (nodeId: string) => { triggerPulse([nodeId]); setTraceHighlightedIds((previous) => new Set([...previous, nodeId])) },
+          }),
           selectedParents.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: t('graphUpstream') }), ...selectedParents.map((node) => jsx('button', { type: 'button', onClick: () => setSelectedId(node.id), children: node.title }, `parent-${node.id}`))] }),
           selectedChildren.length > 0 && jsxs('div', { className: 'evo-graph-inspector-links', children: [jsx('span', { children: t('graphDownstream') }), ...selectedChildren.map((node) => jsx('button', { type: 'button', onClick: () => setSelectedId(node.id), children: node.title }, `child-${node.id}`))] }),
         ],

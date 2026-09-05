@@ -139,7 +139,7 @@ describe('ChatGraphService：两种连线语义的基础保证（GRAPH-01）', (
   })
 
   it('空图防御：无任何文件时 get 返回空图、rev 为 0', () => {
-    assert.deepEqual(svc.get('demo'), { nodes: [], edges: [], schemaVersion: 3 })
+    assert.deepEqual(svc.get('demo'), { nodes: [], edges: [], schemaVersion: 4 })
     assert.equal(svc.rev('demo'), 0)
     assert.equal(svc.get('不存在').nodes.length, 0)
   })
@@ -156,7 +156,7 @@ describe('ChatGraphService：两种连线语义的基础保证（GRAPH-01）', (
     assert.deepEqual(result, { ok: true })
     assert.deepEqual(svc.get('demo'), {
       ...graph,
-      schemaVersion: 3,
+      schemaVersion: 4,
       edges: [{ ...graph.edges[0], behavior: 'reference' }],
     })
   })
@@ -699,12 +699,17 @@ describe('GRAPH-07：非 context 边可附自然语言说明', () => {
     assert.match(result.error ?? '', /context 连线不允许附加说明/)
   })
 
-  it('addEdge 携带 label 落盘；label 为空的边正常', () => {
+  it('addEdge 携带 label 落盘；同路线判重复用；label 为空的边正常', () => {
     const m = svc.addNode('demo', { type: 'memory', title: 'M', x: 0, y: 0, content: 'x', scope: 'project' })
     const c = svc.addNode('demo', { type: 'chat', title: 'C', x: 1, y: 1, sessionId: 'sc' })
+    const c2 = svc.addNode('demo', { type: 'chat', title: 'C2', x: 2, y: 2, sessionId: 'sc2' })
     const edge = svc.addEdge('demo', { from: m.id, to: c.id, toPort: 'memory', label: '实验反驳了上面的猜测' })
     assert.equal(svc.get('demo').edges.find((e) => e.id === edge.id)?.label, '实验反驳了上面的猜测')
-    const plain = svc.addEdge('demo', { from: m.id, to: c.id, toPort: 'memory' })
+    // 新语义：同 from|to|behavior|system 判重复用（GRAPH 节点唯一复用），返回已存在边
+    const dup = svc.addEdge('demo', { from: m.id, to: c.id, toPort: 'memory' })
+    assert.equal(dup.id, edge.id)
+    // 另一对节点之间的无边 label 正常落盘为空
+    const plain = svc.addEdge('demo', { from: m.id, to: c2.id, toPort: 'memory' })
     assert.equal(svc.get('demo').edges.find((e) => e.id === plain.id)?.label, undefined)
   })
 })

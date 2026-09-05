@@ -1,23 +1,37 @@
 /**
- * Chat Graph 服务（§ChatGraph）：聊天图——节点（chat / memory）+ 连线。
+ * Chat Graph 服务（§ChatGraph v4）：聊天图——节点（chat / memory）+ 连线。
  *
- * 语义（§5.1 两种连线；创建后运行时不再做递归上下文注入）：
- * - chat node：一个真实聊天会话（sessionId 关联）；input 端口分 context（唯一，
- *   继承源会话上下文）与 memory（多条，注入记忆检索）；output 供下游继承。
+ * 节点两大类（§4）：chat node = 一个真实会话；memory node = 一份可被取出、
+ * 检索进上下文的内容资产。displayKind 只是品种标签（profile/guidance/turns/
+ * observation/note/science/library/skill/file…），不增加节点大类；旧 'resource'
+ * 类型在 v3→v4 迁移中并入 'memory'。节点唯一复用（§4.3）：所有入图途径按
+ * locator 判重，存在即复用；chat 节点 locator 固定 `session:<sessionId>`。
+ *
+ * 常驻节点（§5.4，每项目最多一个，locator 固定）：`evoresearch:profile` /
+ * `evoresearch:guidance` / `evoresearch:turns`；内容缺失时由 sync 写入
+ * `empty: true` 空态标记。默认连线 = 常驻节点 → 每个 chat 节点一条
+ * reference 边（system: true）。
+ *
+ * 语义（§5 三种有向线；创建后运行时不再做递归上下文注入）：
  * - context 连线 = 创建时一次性 fork：graphInherit（api.ts）把源会话截至当前
  *   的历史 fork 为独立新会话并换绑目标节点；此后源会话后续消息不会偷偷流入
  *   新会话。运行时不再注入上游链（旧递归 graphContextText 已删除）。
  * - memory 连线 = 运行时持续参考：graphMemoryText() 注入所连 memory 节点内容；
  *   neighborChatText() 读取所连 chat 节点（持续参考）的最近消息——多个方向
  *   可以自由汇合，但不 fork、不进入新会话 seed。
+ * - write 写线（v4）= Chat → Memory 的真实写入记录：事实线（system: true，
+ *   模型写工具/每轮台账自动 upsert 累加 writeCount/lastWriteAt）与通道线
+ *   （system: false，用户手拖声明的沉淀通道）。
+ * - relation 存量结构线在 v3→v4 迁移中转为 reference 读线（保留 label）。
  * - memory node：内嵌文本（content，旧节点继续可用，可 convertToNote 转笔记）
  *   或引用真实资料（ref：note 笔记 / file 文本 / pdf / dir 目录，GRAPH-04）；
  *   节点只保存显示名与位置，预览由 previewOf() 实时读取目标文件
  *   （GRAPH-08：文件更新后预览随之更新）。
  * - 非 context 连线可附自然语言说明 label（GRAPH-07，不建立强制关系枚举）。
- * - 删除节点/连线只删除视图引用，不删除目标聊天/笔记/文件（GRAPH-09）。
+ * - 删除节点/连线只删除视图引用，不删除目标聊天/笔记/文件（GRAPH-09）；
+ *   删除项进入墓碑（tombstones），自动同步永不复活（§6.3）。
  * - 图按项目隔离存储：<dataRoot>/plugins/chat-graphs/<projectName>.json
- *   （与 experiments 同级目录，随项目迁移）。
+ *   （与 experiments 同级目录，随项目迁移）；墓碑随项目文件持久化。
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -37,10 +51,17 @@ export interface GraphNodeRef {
 
 export interface GraphNode {
   id: string
-  /** Legacy nodes use chat/memory; resource is the generalized persisted node kind. */
+  /**
+   * Legacy nodes use chat/memory; resource is a legacy persisted kind that the
+   * v3→v4 migration folds into 'memory'（displayKind 保留为品种标签）。
+   */
   type: 'chat' | 'memory' | 'resource'
-  /** User-facing resource subtype; kept optional for legacy graphs. */
+  /**
+   * User-facing subtype label. chat 节点固定 'chat'；memory 节点在存量品种之外
+   * 新增 profile/guidance/observation/turns/science/library/skill/file（v4）。
+   */
   displayKind?: 'chat' | 'memory' | 'memory-collection' | 'idea' | 'candidate' | 'note' | 'paper' | 'experiment' | 'run' | 'log' | 'file' | 'latex' | 'manuscript' | 'result' | 'code'
+    | 'profile' | 'guidance' | 'observation' | 'turns' | 'science' | 'library' | 'skill'
   title: string
   /** 画布坐标（px，画布内部坐标系） */
   x: number
@@ -57,7 +78,18 @@ export interface GraphNode {
   scope?: 'project' | 'global'
   /** Stable resource locator metadata; legacy ref/content remain supported. */
   locator?: string
+  /** 常驻/系统生成节点（画像/指引/台账与默认连线等）为 true（v4）。 */
+  system?: boolean
+  /** 常驻节点内容缺失时的空态标记（由 ensure/sync 计算并写入，v4）。 */
+  empty?: boolean
+  /** chat 节点：该会话累计完成（status=completed）的上下文压缩次数（§6.1 压缩徽标，v4；缺省=从未压缩）。 */
+  compactionCount?: number
+  /** chat 节点：最近一次 turn/end 的活跃时间戳 ms（前端徽标优先于 updatedAt 展示，v4；缺省=尚未结束过回合）。 */
+  lastActiveAt?: number
   origin?: 'user' | 'agent' | 'imported'
+  /** 用户拖拽缩放后的节点尺寸（缺失 = 前端默认设计尺寸；上限 3×默认由前端裁剪，v4）。 */
+  width?: number
+  height?: number
   groupId?: string
   pinned?: boolean
   createdAt?: number
@@ -65,7 +97,14 @@ export interface GraphNode {
   status?: 'available' | 'missing' | 'running' | 'failed' | 'indexing'
 }
 
-export type GraphEdgeBehavior = 'fork' | 'reference' | 'relation'
+/**
+ * 连线行为（v4）：
+ * - fork：存量分叉线（context 继承，一次性）；
+ * - reference：读线——记忆喂给聊天（存量值不变，仅 UI 叫读线）；
+ * - write：写线——聊天把内容写进记忆（事实线 system:true / 通道线 system:false）；
+ * - relation：存量结构关系线，v3→v4 迁移中转为 reference（保留 label、enabled 置 true）。
+ */
+export type GraphEdgeBehavior = 'fork' | 'reference' | 'write' | 'relation'
 
 export interface ForkAnchor {
   sourceSessionId: string
@@ -89,10 +128,21 @@ export interface GraphEdge {
   updatedAt?: number
   /** Natural language relation explanation. */
   label?: string
+  /** 默认连线/系统生成边为 true（边判重键 = from|to|behavior|system，v4）。 */
+  system?: boolean
+  /** 写线累计写入次数（事实线/沉淀动作自动累加，v4）。 */
+  writeCount?: number
+  /** 写线最近一次写入时间（ms，v4）。 */
+  lastWriteAt?: number
   /** Legacy context edges without a recorded message anchor are explicitly unknown. */
   anchorStatus?: 'known' | 'unknown'
   /** ELK/XYFlow absolute route points, persisted only after an accepted layout. */
   routePoints?: Array<{ x: number; y: number }>
+  /** v5 布局选定的贝塞尔端口朝向（'left'|'right'|'top'|'bottom'；normalize 透传）。 */
+  bendSource?: string
+  bendTarget?: string
+  /** 首尾近水平对齐时的平行弓形偏移 px（v5）。 */
+  bendBow?: number
   /** Collision-free label anchor in the same canvas coordinate system. */
   labelPosition?: { x: number; y: number }
   /** Estimated label box used by layout collision checks. */
@@ -119,6 +169,22 @@ export interface GraphGroup {
   createdAt?: number
 }
 
+/**
+ * 墓碑（v4，§6.3 尊重用户编辑）：graph-save 时由服务端 diff 计算——对比已存图
+ * 与入参图，消失的节点/边写入墓碑；graph-sync 与一切自动同步跳过墓碑项，
+ * 永不复活用户显式删除的节点/连线。节点键 = locator（缺失时节点 id）；
+ * 边键 = from|to|behavior|system。
+ */
+export interface GraphTombstones {
+  nodes: string[]
+  edges: string[]
+  /** 消失节点的原样快照（键仍记录在 nodes 中；restore 时逐字补回，用户自建嵌入式内容不丢）。 */
+  nodeSnapshots?: GraphNode[]
+  /** 消失边的原样快照。 */
+  edgeSnapshots?: GraphEdge[]
+  updatedAt: number
+}
+
 export interface ChatGraph {
   nodes: GraphNode[]
   edges: GraphEdge[]
@@ -128,10 +194,44 @@ export interface ChatGraph {
    *  true = 持久化坐标即真相源（同步新节点只按网格入库、不再自动重排）；
    *  false/缺省 = 前端打开图谱时静默跑自动布局（「默认就是自动布局的结果」）。 */
   layoutCurated?: boolean
+  tombstones?: GraphTombstones
 }
 
 /** Current persisted graph schema. Migrations only add/normalize fields. */
-export const CHAT_GRAPH_SCHEMA_VERSION = 3
+export const CHAT_GRAPH_SCHEMA_VERSION = 4
+
+/** 墓碑条目上限（防止长期使用无限增长；超出丢弃最旧条目）。 */
+export const GRAPH_TOMBSTONE_MAX = 500
+
+/** 常驻节点 locator（每项目最多一个；contract 固定值）。 */
+export const PERSISTENT_NODE_LOCATORS = {
+  profile: 'evoresearch:profile',
+  guidance: 'evoresearch:guidance',
+  turns: 'evoresearch:turns',
+} as const
+
+/** chat 节点的稳定定位键（sessionId 派生；用于判重与墓碑）。 */
+export function chatNodeLocator(sessionId: string): string {
+  return `session:${sessionId}`
+}
+
+/**
+ * 边判重键（contract：from|to|behavior|system）。所有调用方都传显式 behavior
+ * （normalizeGraph 后的边恒有 behavior）；缺省按 reference 兜底。
+ */
+export function edgeKeyOf(edge: { from: string; to: string; behavior?: GraphEdgeBehavior; system?: boolean }): string {
+  return `${edge.from}|${edge.to}|${edge.behavior ?? 'reference'}|${edge.system === true ? 1 : 0}`
+}
+
+/** 节点判重/墓碑键：locator 优先（规范化），缺失回退节点 id。 */
+export function nodeKeyOf(node: Pick<GraphNode, 'locator' | 'ref' | 'content' | 'scope' | 'id'>): string {
+  return graphNodeLocator(node) ?? node.id
+}
+
+/** 常驻 memory 品种（画像/指引/台账；内容缺失时显示空态）。 */
+export function isPersistentDisplayKind(kind: string | undefined): boolean {
+  return kind === 'profile' || kind === 'guidance' || kind === 'turns'
+}
 
 export interface GraphMigrationReport {
   readonly changed: boolean
@@ -151,11 +251,35 @@ export function isRuntimeEdge(edge: Pick<GraphEdge, 'toPort' | 'behavior' | 'ena
   return edge.enabled !== false && edgeBehavior(edge) !== 'relation'
 }
 
+/** 墓碑清洗：仅保留字符串键、去重、限量（最旧的排在数组前面被丢弃）；快照仅保留对象形态。 */
+function sanitizeTombstones(input: unknown): GraphTombstones | undefined {
+  if (typeof input !== 'object' || input === null) return undefined
+  const raw = input as { nodes?: unknown; edges?: unknown; nodeSnapshots?: unknown; edgeSnapshots?: unknown; updatedAt?: unknown }
+  const nodes = Array.isArray(raw.nodes) ? [...new Set(raw.nodes.filter((k): k is string => typeof k === 'string' && k !== ''))].slice(-GRAPH_TOMBSTONE_MAX) : []
+  const edges = Array.isArray(raw.edges) ? [...new Set(raw.edges.filter((k): k is string => typeof k === 'string' && k !== ''))].slice(-GRAPH_TOMBSTONE_MAX) : []
+  if (nodes.length === 0 && edges.length === 0) return undefined
+  const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+  const nodeSnapshots = Array.isArray(raw.nodeSnapshots)
+    ? (raw.nodeSnapshots.filter(isRecord) as unknown as GraphNode[]).slice(-GRAPH_TOMBSTONE_MAX)
+    : undefined
+  const edgeSnapshots = Array.isArray(raw.edgeSnapshots)
+    ? (raw.edgeSnapshots.filter(isRecord) as unknown as GraphEdge[]).slice(-GRAPH_TOMBSTONE_MAX)
+    : undefined
+  return {
+    nodes,
+    edges,
+    ...(nodeSnapshots !== undefined && nodeSnapshots.length > 0 ? { nodeSnapshots } : {}),
+    ...(edgeSnapshots !== undefined && edgeSnapshots.length > 0 ? { edgeSnapshots } : {}),
+    updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
+  }
+}
+
 /** Normalize legacy graph records without guessing missing fork positions. */
 export function normalizeGraph(graph: ChatGraph): ChatGraph {
+  // v4：resource 并入 memory（displayKind 保留为品种标签，缺失默认 'file'）。
   const rawNodes = (Array.isArray(graph.nodes) ? graph.nodes : []).map((node) => {
     if (node.type === 'chat' || node.type === 'memory') return { ...node }
-    return { ...node, type: 'resource' as const, displayKind: node.displayKind ?? 'file' }
+    return { ...node, type: 'memory' as const, displayKind: node.displayKind ?? 'file' }
   })
   // 旧版本允许同一份 Memory locator 出现多个视觉节点。迁移时保留第一个
   // 稳定节点、合并可用显示字段，并把所有边重定向过去；原始 Markdown/索引
@@ -194,7 +318,9 @@ export function normalizeGraph(graph: ChatGraph): ChatGraph {
   const edgeMap = new Map<string, GraphEdge>()
   let mergedEdges = 0
   for (const rawEdge of (Array.isArray(graph.edges) ? graph.edges : [])) {
-    const behavior = edgeBehavior(rawEdge)
+    // v4 迁移：relation 结构线 → reference 读线（保留 label、enabled 置 true）。
+    const legacyBehavior = edgeBehavior(rawEdge)
+    const behavior: GraphEdgeBehavior = legacyBehavior === 'relation' ? 'reference' : legacyBehavior
     const edge: GraphEdge = {
       ...rawEdge,
       behavior,
@@ -206,9 +332,11 @@ export function normalizeGraph(graph: ChatGraph): ChatGraph {
       ...(behavior === 'fork' && rawEdge.forkAnchor !== undefined && rawEdge.forkAnchor.sourceEventSeq === undefined && rawEdge.forkAnchor.sourceMessageId === undefined
         ? { anchorStatus: 'unknown' as const }
         : {}),
-      ...(behavior === 'relation' && rawEdge.enabled === undefined ? { enabled: false } : {}),
+      ...(legacyBehavior === 'relation' ? { enabled: true } : {}),
     }
-    const key = `${edge.from}\u0000${edge.to}\u0000${edge.toPort}\u0000${behavior}\u0000${edge.label ?? ''}`
+    // 判重键在 from|to|behavior 之外纳入 toPort/label/system：label 各自表达用户
+    // 说明（不静默合并）；system 区分默认连线与用户连线（contract 键的细化）。
+    const key = `${edge.from}\u0000${edge.to}\u0000${edge.toPort}\u0000${behavior}\u0000${edge.label ?? ''}\u0000${edge.system === true ? 1 : 0}`
     const existing = edgeMap.get(key)
     if (existing === undefined) {
       edgeMap.set(key, edge)
@@ -235,6 +363,8 @@ export function normalizeGraph(graph: ChatGraph): ChatGraph {
   }
   if (graph.groups !== undefined) normalized.groups = normalizeGroups(graph.groups)
   if (graph.layoutCurated === true) normalized.layoutCurated = true
+  const tombstones = sanitizeTombstones(graph.tombstones)
+  if (tombstones !== undefined) normalized.tombstones = tombstones
   return normalized
 }
 
@@ -247,10 +377,16 @@ export function migrateGraph(graph: ChatGraph): { graph: ChatGraph; report: Grap
     changed: graph.schemaVersion !== CHAT_GRAPH_SCHEMA_VERSION
       || normalized.nodes.length !== rawNodes.length
       || normalized.edges.length !== rawEdges.length
-      || (graph.schemaVersion !== CHAT_GRAPH_SCHEMA_VERSION && rawNodes.some((node) => node.type === 'memory' || (node.type === 'resource' && node.displayKind === undefined)))
-      || rawEdges.some((edge) => edge.behavior === undefined || (edge.toPort === 'context' && edge.forkAnchor === undefined && edge.anchorStatus === undefined)),
-    migratedNodes: normalized.nodes.filter((node) => rawNodes.find((item) => item.id === node.id)?.type !== node.type).length,
-    migratedEdges: normalized.edges.filter((edge) => rawEdges.find((item) => item.id === edge.id)?.behavior === undefined).length,
+      || (graph.schemaVersion !== CHAT_GRAPH_SCHEMA_VERSION && rawNodes.some((node) => node.type === 'memory' || node.type === 'resource' || (node.displayKind === undefined && node.type !== 'chat')))
+      || rawEdges.some((edge) => edge.behavior === undefined || edge.behavior === 'relation' || (edge.toPort === 'context' && edge.forkAnchor === undefined && edge.anchorStatus === undefined)),
+    migratedNodes: normalized.nodes.filter((node) => {
+      const raw = rawNodes.find((item) => item.id === node.id)
+      return raw !== undefined && (raw.type !== node.type || (raw.type !== 'chat' && raw.displayKind !== node.displayKind))
+    }).length,
+    migratedEdges: normalized.edges.filter((edge) => {
+      const raw = rawEdges.find((item) => item.id === edge.id)
+      return raw !== undefined && (raw.behavior === undefined || raw.behavior !== edge.behavior)
+    }).length,
     mergedMemoryNodes: Math.max(0, rawNodes.length - normalized.nodes.length),
     mergedEdges: Math.max(0, rawEdges.length - normalized.edges.length),
     backupRequired: graph.schemaVersion !== CHAT_GRAPH_SCHEMA_VERSION || rawNodes.length !== normalized.nodes.length || rawEdges.length !== normalized.edges.length,
@@ -551,7 +687,7 @@ export class ChatGraphService {
     }
   }
 
-  /** 读取项目图（不含 global 节点）。 */
+  /** 读取项目图（不含 global 节点；墓碑随项目文件走）。 */
   private readProject(projectName: string): ChatGraph {
     try {
       const raw = fs.readFileSync(this.fileOf(projectName), 'utf8')
@@ -563,6 +699,8 @@ export class ChatGraphService {
       if (Array.isArray(parsed.groups)) project.groups = parsed.groups
       if (typeof parsed.schemaVersion === 'number') project.schemaVersion = parsed.schemaVersion
       if (parsed.layoutCurated === true) project.layoutCurated = true
+      const tombstones = sanitizeTombstones(parsed.tombstones)
+      if (tombstones !== undefined) project.tombstones = tombstones
       return project
     } catch {
       return emptyGraph()
@@ -580,6 +718,7 @@ export class ChatGraphService {
       groups: project.groups,
       schemaVersion: Math.max(project.schemaVersion ?? 0, global.schemaVersion ?? 0),
       layoutCurated: project.layoutCurated,
+      ...(project.tombstones !== undefined ? { tombstones: project.tombstones } : {}),
     })
     const projectMigration = migrateGraph(project).report
     const globalMigration = migrateGraph(global).report
@@ -604,6 +743,7 @@ export class ChatGraphService {
       groups: project.groups,
       schemaVersion: CHAT_GRAPH_SCHEMA_VERSION,
       layoutCurated: project.layoutCurated,
+      ...(project.tombstones !== undefined ? { tombstones: project.tombstones } : {}),
     })
   }
 
@@ -624,6 +764,7 @@ export class ChatGraphService {
       groups: graph?.groups,
       schemaVersion: graph?.schemaVersion,
       layoutCurated: graph?.layoutCurated,
+      ...(graph?.tombstones !== undefined ? { tombstones: graph.tombstones } : {}),
     })
     const nodes = normalized.nodes
     const edges = normalized.edges
@@ -649,6 +790,9 @@ export class ChatGraphService {
     })
     const globalNodes = nodes.filter((n) => n.scope === 'global')
     const projectNodes = nodes.filter((n) => n.scope !== 'global')
+    // ── 墓碑 diff（v4 §6.3 尊重用户编辑）：graph-save 时服务端对比已存图与入参图，
+    // 消失的节点/边写入墓碑；graph-sync 与一切自动同步跳过墓碑项，绝不复活。
+    const tombstones = this.computeTombstones(projectName, projectNodes, deduped, ids, normalized.tombstones)
     const dir = this.graphsDir()
     const gfile = this.globalFile()
     const file = this.fileOf(projectName)
@@ -667,6 +811,7 @@ export class ChatGraphService {
       fs.writeFileSync(tmp, JSON.stringify({
         nodes: projectNodes, edges: deduped, groups: normalized.groups, schemaVersion: normalized.schemaVersion,
         ...(normalized.layoutCurated === true ? { layoutCurated: true } : {}),
+        ...(tombstones !== undefined ? { tombstones } : {}),
       }, null, 2), 'utf8')
       this.backupIfPresent(gfile)
       this.backupIfPresent(file)
@@ -696,6 +841,143 @@ export class ChatGraphService {
     }
   }
 
+  /**
+   * 墓碑 diff（v4）：对比已存项目图（先经 normalize，避免迁移本身制造假墓碑）
+   * 与入参图。消失的节点/边记入墓碑；已在入参图中重新出现的键清除墓碑
+   * （用户手动重建 = 意图变更）。两端节点同时消失的边不单独记墓碑（随节点走）。
+   */
+  private computeTombstones(
+    projectName: string,
+    incomingNodes: readonly GraphNode[],
+    incomingEdges: readonly GraphEdge[],
+    incomingIds: ReadonlySet<string>,
+    carried: GraphTombstones | undefined,
+  ): GraphTombstones | undefined {
+    const file = this.fileOf(projectName)
+    if (!fs.existsSync(file)) return carried
+    let stored: ChatGraph
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<ChatGraph>
+      stored = normalizeGraph({
+        nodes: Array.isArray(parsed.nodes) ? parsed.nodes : [],
+        edges: Array.isArray(parsed.edges) ? parsed.edges : [],
+        groups: parsed.groups,
+        schemaVersion: typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : undefined,
+        ...(parsed.tombstones !== undefined ? { tombstones: parsed.tombstones } : {}),
+      })
+    } catch {
+      return carried
+    }
+    const nodeKeys = new Set<string>()
+    for (const node of incomingNodes) nodeKeys.add(nodeKeyOf(node))
+    const edgeKeys = new Set<string>()
+    for (const edge of incomingEdges) edgeKeys.add(edgeKeyOf(edge))
+    const prev = stored.tombstones ?? { nodes: [], edges: [], updatedAt: 0 }
+    const prevNodeSnapshots = new Map<string, GraphNode>()
+    for (const snap of prev.nodeSnapshots ?? []) prevNodeSnapshots.set(nodeKeyOf(snap), snap)
+    const prevEdgeSnapshots = new Map<string, GraphEdge>()
+    for (const snap of prev.edgeSnapshots ?? []) prevEdgeSnapshots.set(edgeKeyOf(snap), snap)
+    const disappearedNodes: string[] = []
+    const nodeSnapshots = new Map<string, GraphNode>()
+    for (const node of stored.nodes) {
+      if (node.scope === 'global') continue
+      const key = nodeKeyOf(node)
+      if (!nodeKeys.has(key)) {
+        disappearedNodes.push(key)
+        nodeSnapshots.set(key, node)
+      }
+    }
+    const disappearedEdges: string[] = []
+    const edgeSnapshots = new Map<string, GraphEdge>()
+    for (const edge of stored.edges) {
+      const key = edgeKeyOf(edge)
+      if (edgeKeys.has(key)) continue
+      if (!incomingIds.has(edge.from) || !incomingIds.has(edge.to)) continue
+      disappearedEdges.push(key)
+      edgeSnapshots.set(key, edge)
+    }
+    const nextNodes = [...new Set([...prev.nodes, ...disappearedNodes])].filter((key) => !nodeKeys.has(key)).slice(-GRAPH_TOMBSTONE_MAX)
+    const nextEdges = [...new Set([...prev.edges, ...disappearedEdges])].filter((key) => !edgeKeys.has(key)).slice(-GRAPH_TOMBSTONE_MAX)
+    // 快照与键列表同集合同生命周期：键被清除（用户重建/已补回）时快照一并丢弃。
+    const nextNodeSnapshots = nextNodes.map((key) => nodeSnapshots.get(key) ?? prevNodeSnapshots.get(key)).filter((n): n is GraphNode => n !== undefined)
+    const nextEdgeSnapshots = nextEdges.map((key) => edgeSnapshots.get(key) ?? prevEdgeSnapshots.get(key)).filter((e): e is GraphEdge => e !== undefined)
+    if (nextNodes.length === 0 && nextEdges.length === 0) return undefined
+    return {
+      nodes: nextNodes,
+      edges: nextEdges,
+      ...(nextNodeSnapshots.length > 0 ? { nodeSnapshots: nextNodeSnapshots } : {}),
+      ...(nextEdgeSnapshots.length > 0 ? { edgeSnapshots: nextEdgeSnapshots } : {}),
+      updatedAt: Date.now(),
+    }
+  }
+
+  /** 项目墓碑快照（无文件/无墓碑返回空集合）。 */
+  tombstonesOf(projectName: string): { nodes: string[]; edges: string[] } {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.fileOf(projectName), 'utf8')) as Partial<ChatGraph>
+      const tombstones = sanitizeTombstones(parsed.tombstones)
+      return { nodes: tombstones?.nodes ?? [], edges: tombstones?.edges ?? [] }
+    } catch {
+      return { nodes: [], edges: [] }
+    }
+  }
+
+  /** 自动同步前置检查：locator/节点键是否在墓碑中。 */
+  tombstoneHasNode(projectName: string, key: string): boolean {
+    return this.tombstonesOf(projectName).nodes.includes(key)
+  }
+
+  /** 自动同步前置检查：边键（from|to|behavior|system）是否在墓碑中。 */
+  tombstoneHasEdge(projectName: string, key: string): boolean {
+    return this.tombstonesOf(projectName).edges.includes(key)
+  }
+
+  /**
+   * 清空墓碑（graph-restore-tombstones）：先按快照原样补回（用户自建的嵌入式
+   * 节点没有其他再播种来源，只能从墓碑快照逐字恢复），最后原子清空 tombstones
+   * 字段（不走 save 的 diff，否则清空会被下一次 diff 原样写回）。
+   */
+  restoreTombstones(projectName: string): { restoredNodes: number; restoredEdges: number } {
+    const file = this.fileOf(projectName)
+    try {
+      const before = sanitizeTombstones((JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<ChatGraph>).tombstones)
+      if ((before?.nodes.length ?? 0) === 0 && (before?.edges.length ?? 0) === 0) return { restoredNodes: 0, restoredEdges: 0 }
+      // 1) 逐个补回节点快照（addNode 自带 locator 判重与原子保存；已重建过的键自动跳过）
+      let restoredNodes = 0
+      for (const snap of before?.nodeSnapshots ?? []) {
+        const graph = this.get(projectName)
+        if (graph.nodes.some((n) => nodeKeyOf(n) === nodeKeyOf(snap))) continue
+        this.addNode(projectName, snap)
+        restoredNodes += 1
+      }
+      // 2) 补回边快照（两端节点尚存且键未被占用才补）
+      let restoredEdges = 0
+      for (const snap of before?.edgeSnapshots ?? []) {
+        const graph = this.get(projectName)
+        const ids = new Set(graph.nodes.map((n) => n.id))
+        if (!ids.has(snap.from) || !ids.has(snap.to)) continue
+        if (graph.edges.some((e) => edgeKeyOf(e) === edgeKeyOf(snap))) continue
+        const saved = this.save(projectName, { ...graph, edges: [...graph.edges, snap] }, this.rev(projectName))
+        if (saved.ok) restoredEdges += 1
+      }
+      // 3) 最后清空墓碑（重新读盘：上面 addNode/save 已改写过文件）
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<ChatGraph> & Record<string, unknown>
+      parsed.tombstones = { nodes: [], edges: [], updatedAt: Date.now() }
+      const tmp = `${file}.tmp-${process.pid}-${randomUUID().slice(0, 8)}`
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      try {
+        fs.writeFileSync(tmp, JSON.stringify(parsed, null, 2), 'utf8')
+        this.backupIfPresent(file)
+        fs.renameSync(tmp, file)
+      } finally {
+        try { fs.rmSync(tmp, { force: true }) } catch { /* ignore */ }
+      }
+      return { restoredNodes, restoredEdges }
+    } catch {
+      return { restoredNodes: 0, restoredEdges: 0 }
+    }
+  }
+
   private readBytes(file: string): Buffer | undefined {
     try { return fs.readFileSync(file) } catch { return undefined }
   }
@@ -714,23 +996,54 @@ export class ChatGraphService {
     }
   }
 
-  /** 追加节点（id 冲突自动重生成；多窗口只重试这个追加操作）。 */
+  /**
+   * 追加节点（id 冲突自动重生成；多窗口只重试这个追加操作）。
+   * 判重（§4.3 节点唯一复用）：凡带稳定 locator 的节点（memory / chat /
+   * resource 均）先按 locator 查找，存在即复用并返回现有节点。
+   */
   addNode(projectName: string, node: Omit<GraphNode, 'id'>): GraphNode {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const graph = this.get(projectName)
       const locator = graphNodeLocator(node)
-      if (locator !== undefined && isMemoryNode(node as GraphNode)) {
-        const existing = graph.nodes.find((candidate) => isMemoryNode(candidate) && graphNodeLocator(candidate) === locator)
+      if (locator !== undefined) {
+        const existing = graph.nodes.find((candidate) => graphNodeLocator(candidate) === locator)
         if (existing !== undefined) return existing
       }
       let id = randomUUID().slice(0, 8)
       while (graph.nodes.some((n) => n.id === id)) id = randomUUID().slice(0, 8)
-      const created: GraphNode = { ...node, id }
+      const created: GraphNode = { ...node, id, ...this.overlapFreePosition(graph, node) }
       const saved = this.save(projectName, { ...graph, nodes: [...graph.nodes, created] }, this.rev(projectName))
       if (saved.ok) return created
       if (!saved.conflict) throw new Error(saved.error ?? '图谱保存失败')
     }
     throw new Error('图谱并发修改过多，追加节点失败；请重试')
+  }
+
+  /**
+   * 自动落图防重叠兜底：新建节点坐标与现有节点包围盒相撞时向右逐格挪，
+   * 直到空位（估算卡片 240×130；调用方已给坐标时仅在有碰撞时微调）。
+   */
+  private overlapFreePosition(graph: ChatGraph, node: Omit<GraphNode, 'id'>): Partial<Pick<GraphNode, 'x' | 'y'>> {
+    if (typeof node.x !== 'number' || typeof node.y !== 'number') return {}
+    const W = 240
+    const H = 130
+    const hits = (x: number, y: number): boolean =>
+      graph.nodes.some((n) => {
+        const nx = typeof n.x === 'number' ? n.x : 0
+        const ny = typeof n.y === 'number' ? n.y : 0
+        return Math.abs(nx - x) < W && Math.abs(ny - y) < H
+      })
+    if (!hits(node.x, node.y)) return {}
+    let x = node.x
+    let y = node.y
+    for (let step = 0; step < 40 && hits(x, y); step += 1) {
+      x += W
+      if (step % 6 === 5) {
+        x = node.x
+        y += H + 30
+      }
+    }
+    return { x, y }
   }
 
   /** 保存前轮换少量备份，迁移/并发恢复时不覆盖唯一图文件。 */
@@ -750,13 +1063,21 @@ export class ChatGraphService {
     }
   }
 
-  /** 追加连线（context 目标已有连接时替换旧边）。 */
+  /**
+   * 追加连线（context 目标已有连接时替换旧边）。
+   * 判重（v4 contract）：按 from|to|behavior|system 查找，已存在即复用返回
+   * 现有边（同一对节点的重复连线不再增生；label 各自表达说明，不参与判重）。
+   * 支持 behavior 'write'（写线：事实线 system:true / 通道线 system:false）。
+   */
   addEdge(projectName: string, edge: Omit<GraphEdge, 'id'>): GraphEdge {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const graph = this.get(projectName)
       if (!graph.nodes.some((n) => n.id === edge.from) || !graph.nodes.some((n) => n.id === edge.to)) {
         throw new Error('连线引用的节点不存在')
       }
+      const wantedKey = edgeKeyOf(edge)
+      const existing = graph.edges.find((candidate) => edgeKeyOf(candidate) === wantedKey)
+      if (existing !== undefined && edge.toPort !== 'context') return existing
       const edges = edge.toPort === 'context'
         ? graph.edges.filter((e) => !(e.to === edge.to && e.toPort === 'context'))
         : [...graph.edges]
@@ -766,6 +1087,84 @@ export class ChatGraphService {
       if (!saved.conflict) throw new Error(saved.error ?? '图谱保存失败')
     }
     throw new Error('图谱并发修改过多，追加连线失败；请重试')
+  }
+
+  /**
+   * 写线 upsert（v4）：同一 (from,to,system) 的写线累加 writeCount/lastWriteAt；
+   * 不存在则创建。事实线（system:true）由模型写工具/每轮台账自动调用；
+   * 通道线（system:false）由用户手拖声明、沉淀动作成功后累加。
+   * TODO(Phase4): 节点/边级"禁写开关"挂在这里——开关打开时自动 upsert 直接跳过；
+   * "自动沉淀开关"（turn/end 是否自动 bump 台账写线）由调用方（chat-graph-sync）裁决。
+   */
+  upsertWriteEdge(projectName: string, from: string, to: string, system: boolean, step = 1): { ok: boolean; edge?: GraphEdge; error?: string } {
+    if (from === to) return { ok: false, error: '写线两端不能是同一节点' }
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const graph = this.get(projectName)
+      if (!graph.nodes.some((n) => n.id === from) || !graph.nodes.some((n) => n.id === to)) {
+        return { ok: false, error: '写线引用的节点不存在' }
+      }
+      const index = graph.edges.findIndex((candidate) =>
+        candidate.from === from && candidate.to === to
+        && edgeBehavior(candidate) === 'write' && candidate.system === system)
+      let nextEdges: GraphEdge[]
+      let result: GraphEdge
+      if (index >= 0) {
+        const current = graph.edges[index]!
+        result = { ...current, writeCount: (current.writeCount ?? 0) + step, lastWriteAt: Date.now(), updatedAt: Date.now() }
+        nextEdges = graph.edges.map((edge, i) => (i === index ? result : edge))
+      } else {
+        result = {
+          id: randomUUID().slice(0, 8),
+          from,
+          to,
+          toPort: 'memory',
+          behavior: 'write',
+          system,
+          writeCount: Math.max(1, step),
+          lastWriteAt: Date.now(),
+          createdAt: Date.now(),
+          enabled: true,
+        }
+        nextEdges = [...graph.edges, result]
+      }
+      const saved = this.save(projectName, { ...graph, edges: nextEdges }, this.rev(projectName))
+      if (saved.ok) return { ok: true, edge: result }
+      if (!saved.conflict) return { ok: false, error: saved.error ?? '图谱保存失败' }
+    }
+    return { ok: false, error: '图谱并发修改过多，写线更新失败；请重试' }
+  }
+
+  /** 轻量版本信息（graph-version 轮询用；读原文件计数，不触发迁移落盘）。 */
+  versionOf(projectName: string): { rev: number; nodeCount: number; edgeCount: number; serverTime: number } {
+    let nodeCount = 0
+    let edgeCount = 0
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.fileOf(projectName), 'utf8')) as Partial<ChatGraph>
+      nodeCount = Array.isArray(parsed.nodes) ? parsed.nodes.length : 0
+      edgeCount = Array.isArray(parsed.edges) ? parsed.edges.length : 0
+    } catch { /* 无文件 = 0 */ }
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.globalFile(), 'utf8')) as Partial<ChatGraph>
+      if (Array.isArray(parsed.nodes)) nodeCount += parsed.nodes.filter((n) => n?.scope === 'global').length
+    } catch { /* 无全局文件 = 0 */ }
+    return { rev: this.rev(projectName), nodeCount, edgeCount, serverTime: Date.now() }
+  }
+
+  /** 按会话 id 反查所在项目与 chat 节点（扫描全部项目图；graph-distill 等无 workspaceDir 入口用）。 */
+  projectOfSession(sessionId: string): { project: string; node: GraphNode } | undefined {
+    let names: string[] = []
+    try {
+      names = fs.readdirSync(this.graphsDir())
+        .filter((name) => name.endsWith('.json') && name !== '_global_.json')
+        .map((name) => name.slice(0, -'.json'.length))
+    } catch {
+      return undefined
+    }
+    for (const project of names) {
+      const node = this.get(project).nodes.find((n) => n.type === 'chat' && n.sessionId === sessionId)
+      if (node !== undefined) return { project, node }
+    }
+    return undefined
   }
 
   private memoryBase(workspaceDir: string | undefined, scope: 'project' | 'global'): string {
@@ -955,6 +1354,59 @@ export class ChatGraphService {
     const nextNode: GraphNode = { ...current, content: nextContent, updatedAt: Date.now() }
     const saved = this.save(projectName, { ...graph, nodes: graph.nodes.map((node) => node.id === nodeId ? nextNode : node) })
     return saved.ok ? { ok: true, node: nextNode } : { ok: false, error: saved.error }
+  }
+
+  /**
+   * 沉淀写入（v4 §5.2 追加不覆盖）：把带时间戳的小节追加到目标记忆节点末尾。
+   * - ref 节点：读原文件原文（保留 frontmatter），追加后经原子写回写；
+   * - 内嵌 content 节点：直接在 content 末尾追加（旧节点继续可用）。
+   * 返回追加的字节数；目标不是 memory 节点时报错。
+   */
+  appendMemorySection(projectName: string, nodeId: string, workspaceDir: string | undefined, section: string): { ok: boolean; bytesWritten?: number; node?: GraphNode; error?: string } {
+    const graph = this.get(projectName)
+    const current = graph.nodes.find((node) => node.id === nodeId && isMemoryNode(node))
+    if (current === undefined) return { ok: false, error: 'Memory 节点不存在' }
+    const appended = section.trim() === '' ? '' : section
+    if (appended === '') return { ok: false, error: '没有可沉淀的内容' }
+    if (current.ref !== undefined) {
+      if (current.ref.kind === 'dir' || current.ref.kind === 'pdf') return { ok: false, error: '该节点引用目录/PDF，不支持追加沉淀文本' }
+      const target = this.refPathOf(current, workspaceDir)
+      if (target === undefined) return { ok: false, error: 'Memory 原文位置不可解析' }
+      let raw = ''
+      try {
+        raw = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : ''
+      } catch (error) {
+        return { ok: false, error: `记忆原文读取失败: ${error instanceof Error ? error.message : String(error)}` }
+      }
+      const next = raw === '' ? appended : `${raw.replace(/\s*$/, '')}\n${appended}`
+      try {
+        this.atomicTextWrite(target, next)
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+      const nextNode: GraphNode = { ...current, content: undefined, updatedAt: Date.now() }
+      const saved = this.save(projectName, { ...graph, nodes: graph.nodes.map((node) => (node.id === nodeId ? nextNode : node)) })
+      return saved.ok ? { ok: true, bytesWritten: appended.length, node: nextNode } : { ok: false, error: saved.error }
+    }
+    const nextNode: GraphNode = { ...current, content: `${(current.content ?? '').replace(/\s*$/, '')}\n${appended}`, updatedAt: Date.now() }
+    const saved = this.save(projectName, { ...graph, nodes: graph.nodes.map((node) => (node.id === nodeId ? nextNode : node)) })
+    return saved.ok ? { ok: true, bytesWritten: appended.length, node: nextNode } : { ok: false, error: saved.error }
+  }
+
+  /**
+   * 解析 ref 节点的目标文件绝对路径（与 previewOf 的解析规则一致；不读内容、
+   * 不要求文件存在——沉淀是追加写入，文件缺失时从空内容开始）。
+   */
+  private refPathOf(node: GraphNode, workspaceDir: string | undefined): string | undefined {
+    const ref = node.ref
+    if (ref === undefined) return undefined
+    if (ref.kind === 'note') {
+      const base = node.scope === 'global' || workspaceDir === undefined || workspaceDir === this.dataRoot ? this.dataRoot : workspaceDir
+      return path.isAbsolute(ref.path) ? ref.path : path.join(workspaceDataDir(this.dataRoot, base), 'memories', 'notes', ref.path)
+    }
+    if (path.isAbsolute(ref.path)) return ref.path
+    const base = workspaceDir !== undefined && workspaceDir !== this.dataRoot ? workspaceDir : this.dataRoot
+    return path.join(base, ref.path)
   }
 
   /** 从图中移除节点及其连线；只删除视图引用。 */

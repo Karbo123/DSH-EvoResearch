@@ -21,7 +21,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { projectNameFromWorkspace, workspaceDataDir } from '../core/paths.js'
-import { isRuntimeEdge, isMemoryNode } from '../chat-graph.js'
+import { isRuntimeEdge, isMemoryNode, PERSISTENT_NODE_LOCATORS } from '../chat-graph.js'
 import type { ChatGraph, GraphNode } from '../chat-graph.js'
 import { sessionHistoryText } from '../chat-graph.js'
 import type { SimpleCallOptions } from '../core/llm.js'
@@ -71,6 +71,12 @@ export interface ContextAssemblerDeps {
   readonly dataRoot?: string
   /** 可选链接解析器；未注入时使用当前数据根创建默认实例。 */
   readonly linkResolver?: LinkResolver
+  /**
+   * 可选：检索命中环形缓冲注入（v4 graph-recent-hits）。组装结果里已含 Graph
+   * 命中信息（location.kind === 'graph' 且实际进入上下文的候选），把它记进
+   * ChatGraphSyncService 的内存环形缓冲即可；缺失时静默跳过。
+   */
+  readonly recordGraphHits?: (input: { sessionId: string; hits: ReadonlyArray<{ nodeId: string; title: string; locator?: string; score?: number }> }) => void
   /** 论文/PDF 等专用原文读取器；失败时仍保留可打开定位。 */
   readonly resourceReader?: (input: {
     readonly node: GraphNode
@@ -242,6 +248,7 @@ export class ContextAssembler {
       }, options.perSourceLimit ?? 8)
       const filtered = this.applyUserFilters(candidates, options)
       const selection = selectWithinBudget(filtered, options.tokenBudget ?? DEFAULT_ASSEMBLE_TOKEN_BUDGET)
+      this.recordHitsOf(input.sessionId, selection.included, graph)
       const rendered = renderReadingMaterial({
         sessionId: input.sessionId,
         question: input.userQuestion,
@@ -361,6 +368,7 @@ export class ContextAssembler {
 
     // CTX-11 预算内选择
     const selection = selectWithinBudget(filtered, tokenBudget)
+    this.recordHitsOf(input.sessionId, selection.included, graph)
 
     // CTX-08 渲染
     const questionId = questionIdOf(input.sessionId, input.userQuestion)
@@ -508,6 +516,7 @@ export class ContextAssembler {
       if (whitelist !== undefined && whitelist.length > 0 && !whitelist.includes(memoryId)) continue
       const memoryNode = graph.nodes.find((n) => n.id === memoryId && (isMemoryNode(n) || n.type === 'resource'))
       if (memoryNode === undefined) continue
+      if (isPersistentNode(memoryNode)) continue
       const text = this.nodeTextOf(memoryNode, input.workspaceDir, input.userQuestion).trim()
       if (text === '') continue
       const slice = text.slice(0, 1500)
@@ -571,6 +580,7 @@ export class ContextAssembler {
     for (const memoryId of memoryIds) {
       const memoryNode = graph.nodes.find((n) => n.id === memoryId && n.type !== 'chat')
       if (memoryNode === undefined) continue
+      if (isPersistentNode(memoryNode)) continue
       const text = this.nodeTextOf(memoryNode, input.workspaceDir, input.userQuestion)
       if (text.trim() === '') continue
       const kind = candidateKindOf(memoryNode)
@@ -617,6 +627,8 @@ export class ContextAssembler {
     const candidates: SearchCandidate[] = []
     for (const memoryNode of graph.nodes) {
       if (!isMemoryNode(memoryNode) || !memoryIds.has(memoryNode.id)) continue
+      // 常驻节点（画像/指引/台账）连着每个会话，不产生邻域候选（§5.1 默认连线）。
+      if (isPersistentNode(memoryNode)) continue
       // 与该记忆节点相连的其他 chat（兄弟分支/汇合聊天）
       for (const edge of graph.edges) {
         if (edge.from !== memoryNode.id && edge.to !== memoryNode.id) continue
@@ -769,6 +781,33 @@ export class ContextAssembler {
     }
   }
 
+  /**
+   * v4 检索命中记录：把实际进入上下文的 Graph 候选（location.kind === 'graph'）
+   * 注入命中环形缓冲（graph-recent-hits / 命中脉冲数据源）。失败不影响组装。
+   */
+  private recordHitsOf(sessionId: string, included: readonly SearchCandidate[], graph: ChatGraph): void {
+    const recorder = this.deps.recordGraphHits
+    if (recorder === undefined) return
+    const hits: Array<{ nodeId: string; title: string; locator?: string; score?: number }> = []
+    for (const candidate of included) {
+      const location = candidate.location
+      if (location.kind !== 'graph') continue
+      const node = graph.nodes.find((n) => n.id === location.nodeId)
+      hits.push({
+        nodeId: location.nodeId,
+        title: candidate.title,
+        ...(node?.locator !== undefined ? { locator: node.locator } : {}),
+        score: candidate.score,
+      })
+    }
+    if (hits.length === 0) return
+    try {
+      recorder({ sessionId, hits })
+    } catch {
+      // 命中记录失败不影响组装
+    }
+  }
+
   private applyUserFilters(
     candidates: readonly SearchCandidate[],
     options: AssembleOptions,
@@ -841,6 +880,17 @@ export function locationString(location: CandidateLocation): string {
     case 'background': return `background:${location.docKind}`
     case 'resource': return `resource:${location.path}${location.page === undefined ? '' : `#page=${location.page}`}${location.offset === undefined ? '' : `@${location.offset}`}`
   }
+}
+
+/**
+ * v4 常驻节点（画像/指引/台账）：它们由专属 contributor 固定注入（identity-profile /
+ * agent-guidance / research-memory），不再进入阅读材料候选——避免同一份内容
+ * 一轮内重复注入。默认连线仍表达"会读进上下文"的语义（由专属注入兑现）。
+ */
+const PERSISTENT_LOCATOR_SET: ReadonlySet<string> = new Set<string>(Object.values(PERSISTENT_NODE_LOCATORS))
+
+function isPersistentNode(node: GraphNode): boolean {
+  return node.locator !== undefined && PERSISTENT_LOCATOR_SET.has(node.locator)
 }
 
 function candidateKindOf(node: GraphNode): SearchCandidate['kind'] {

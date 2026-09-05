@@ -137,19 +137,28 @@ export class ExpertService {
   }
 
   /**
-   * 读取当前项目的自然语言专家说明（PLAT-10）。项目文件优先，部署根目录
-   * 作为跨项目兜底；只读取明确的 AGENTS.md，不把任意目录内容注入模型。
+   * 项目 AGENTS.md 的 3 处候选路径（按优先级）：项目根 → 项目 .evoresearch-data →
+   * 部署根兜底。ChatGraph 常驻 guidance 节点的 empty 判定与 agentsContext 共用
+   * 同一份候选逻辑（避免两处路径漂移）。
    */
-  agentsContext(workspaceDir?: string, maxChars = 24000): { text: string; sources: ExpertContextSource[] } {
+  agentsCandidatePaths(workspaceDir?: string): string[] {
     const candidates: string[] = []
     if (workspaceDir !== undefined && workspaceDir !== '') {
       candidates.push(path.join(workspaceDir, 'AGENTS.md'))
       candidates.push(path.join(workspaceDir, '.evoresearch-data', 'AGENTS.md'))
     }
     candidates.push(path.join(this.config.dataRoot, 'AGENTS.md'))
+    return [...new Set(candidates)]
+  }
+
+  /**
+   * 读取当前项目的自然语言专家说明（PLAT-10）。项目文件优先，部署根目录
+   * 作为跨项目兜底；只读取明确的 AGENTS.md，不把任意目录内容注入模型。
+   */
+  agentsContext(workspaceDir?: string, maxChars = 24000): { text: string; sources: ExpertContextSource[] } {
     const sources: ExpertContextSource[] = []
     let total = 0
-    for (const file of [...new Set(candidates)]) {
+    for (const file of this.agentsCandidatePaths(workspaceDir)) {
       try {
         const stat = fs.statSync(file)
         if (!stat.isFile() || stat.size === 0) continue

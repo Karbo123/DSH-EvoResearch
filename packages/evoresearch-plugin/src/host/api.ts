@@ -18,6 +18,8 @@ import type { AutoSkillsService } from './autoskills.js'
 import type { ExpertService } from './experts.js'
 import type { ExperimentService } from './experiments.js'
 import type { ChatGraphService, GraphGroup, GraphNode, GraphEdge } from './chat-graph.js'
+import { chatNodeLocator, edgeKeyOf, PERSISTENT_NODE_LOCATORS } from './chat-graph.js'
+import type { ChatGraphSyncService, GraphHitEntry } from './chat-graph-sync.js'
 import type { ProjectEnvService, ProjectEnvInfo } from './project-env.js'
 import type { RewindService } from './rewind.js'
 import type { NotesService, NoteSummary } from './notes.js'
@@ -84,7 +86,7 @@ import type { LayeredSkillRegistry, SkillLayer, SkillEntry } from './skills/regi
 import type { ScienceLoopService, ScienceLoop, ScienceLoopAction } from './science/loops.js'
 import type { ScienceChatGraphBridge } from './science/chat-graph-bridge.js'
 import type { JobHubService } from './jobs.js'
-import { callJson } from './core/llm.js'
+import { callJson, callText } from './core/llm.js'
 import { applyDataPaths, getDataPaths, getDataClearPaths, listDataDirectories, type DataPathApplyMode, type DataPathPair } from './data-paths.js'
 import type { ConfiguredWebSearchProvider } from './web-search.js'
 import { AutoRelatedWorkCacheStore } from './autorelatedwork-search.js'
@@ -106,6 +108,38 @@ import {
   type AutoRelatedWorkConfig,
   type AutoRelatedWorkCredentials,
 } from './autorelatedwork-compat.js'
+
+// ── Chat Graph v4 体检卡类型（§7；机制词只允许出现在体检卡里）──────────────
+
+/** 体检卡注入块条目（name 为 systemPrompt contributor 名，label 为前端文案键）。 */
+export interface GraphHealthInjection {
+  name: string
+  label: string
+  chars?: number
+}
+
+/** 上下文体检卡数据（尽力聚合；字段可缺省，宁可少不可错）。 */
+export interface GraphHealthReport {
+  generatedAt: number
+  sessionId: string
+  injections: GraphHealthInjection[]
+  memoryPacket?: {
+    categories: Array<{ category: string; count: number }>
+    states: Array<{ category?: string; topicKey?: string; label?: string; decision?: string }>
+    related: Array<{ kind: string; id: string; score: number; snippet: string }>
+  }
+  hits: Array<{ nodeId?: string; title: string; locator?: string; score?: number; sessionId?: string; at: number }>
+  toolCount?: number
+  tokenUsage?: { inputTokens: number; outputTokens: number }
+  compactions: Array<{ at: number; ratio?: number; shadowedCount?: number }>
+  raw?: unknown
+}
+
+/** 沉淀提炼系统提示（graph-distill mode='distill' 用；失败回退原文追加）。 */
+const GRAPH_DISTILL_SYSTEM_PROMPT =
+  '你是科研记忆的整理助手。把给定的助手回复提炼成一段可长期保留的要点笔记：' +
+  '只保留结论、方法、参数、数据与未决问题等未来仍有价值的信息；去掉寒暄、过程性叙述与重复；' +
+  '用简洁的 Markdown 列表或短段落输出，不要添加任何解释、前缀或代码块标记。'
 
 /** 各服务集合（host 入口注入）。 */
 export interface HostServices {
@@ -137,6 +171,8 @@ export interface HostServices {
   readonly scienceLoops?: ScienceLoopService
   /** RA/EA/EMA 到 Chat Graph/Evolution 的明确边界桥接。 */
   readonly scienceGraphBridge?: ScienceChatGraphBridge
+  /** Chat Graph 自动同步（v4：新会话入图/会话删除/写线事实/命中环形缓冲）。 */
+  readonly chatGraphSync?: ChatGraphSyncService
   /** 文献索引（LIB-01..08）：注册/提取/搜索/笔记/参考文献/BibTeX/图引用。 */
   readonly libraryIndexer?: LibraryIndexer
   /** 文献检索与引用解析（LIB-03/07/08）。 */
@@ -2444,7 +2480,17 @@ export class EvoResearchApiService extends TypertRemoteService {
   graphAddNode(args: { workspaceDir?: string; node: unknown; operationId?: string }): unknown {
     try {
       const name = this.graphProjectOf(args)
-      return this.services.chatGraph.applyOperation(args.operationId, () => ({ node: this.services.chatGraph.addNode(name, args?.node as never), rev: this.services.chatGraph.rev(name) }))
+      return this.services.chatGraph.applyOperation(args.operationId, () => {
+        const node = { ...(args?.node as Record<string, unknown>) }
+        // 节点唯一复用（红线 #6）：手动创建常驻品种时强制套固定 locator，
+        // 让 addNode 的判重把它并回既有常驻节点，绝不产生第二份画像/指引/台账。
+        const kind = node.displayKind
+        if (kind === 'profile' || kind === 'guidance' || kind === 'turns') {
+          node.locator = PERSISTENT_NODE_LOCATORS[kind]
+          node.system = true
+        }
+        return { node: this.services.chatGraph.addNode(name, node as never), rev: this.services.chatGraph.rev(name) }
+      })
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -2463,17 +2509,23 @@ export class EvoResearchApiService extends TypertRemoteService {
   /**
    * Chat Graph 项目会话同步（自动补种，幂等）：
    * - 枚举该项目全部子聊天会话（sessionQuery.listSessions() 过滤 meta.cwd === workspaceDir），
-   *   未入图的会话补成 chat 节点（按 sessionId 去重；标题取首条用户消息截断）；
-   * - 项目研究笔记导出为 memory 引用节点（按 ref.kind=note + fileName 去重）；
-   * - 不虚构连线：context/memory 边语义严格（fork 一次性 / 持续参考），只由用户拖线
-   *   或科研管线建立；同步只追加缺失节点，绝不改动已有节点位置与布局。
+   *   未入图的会话补成 chat 节点（按 sessionId 去重；标题取首条用户消息截断；
+   *   墓碑中的会话节点跳过、绝不复活，v4）；
+   * - 项目研究笔记导出为 memory 引用节点（按 ref.kind=note + fileName 去重；墓碑跳过）；
+   * - 补建常驻节点（画像/指引/台账）+ 默认连线（system: true，经 ChatGraphSyncService）；
+   * - 谱系连线（真实 fork 血缘 → context 边）墓碑中的不再补回（§6.3）；
+   * - 同步只追加缺失节点，绝不改动已有节点位置与布局。
    */
   @Remote('graphSync')
-  async graphSync(args: { workspaceDir?: string }): Promise<{ ok: boolean; addedChats?: number; addedMemories?: number; addedEdges?: number; error?: string; rev?: number }> {
+  async graphSync(args: { workspaceDir?: string }): Promise<{ ok: boolean; addedChats?: number; addedMemories?: number; addedNodes?: number; addedEdges?: number; skippedTombstones?: number; error?: string; rev?: number }> {
     try {
       const name = this.graphProjectOf(args)
       const workspaceDir = String(args?.workspaceDir ?? '')
-      const graph = this.services.chatGraph.get(name)
+      const chatGraph = this.services.chatGraph
+      const graph = chatGraph.get(name)
+      const tombstoneNodes = new Set(chatGraph.tombstonesOf(name).nodes)
+      const tombstoneEdges = new Set(chatGraph.tombstonesOf(name).edges)
+      let skippedTombstones = 0
       const nodes: Array<Record<string, unknown>> = [...graph.nodes] as never
       let nextEdges: Array<Record<string, unknown>> | undefined
       let addedChats = 0
@@ -2512,6 +2564,12 @@ export class EvoResearchApiService extends TypertRemoteService {
               if (typeof header?.id !== 'string' || header.id === '') continue
               if (typeof header.cwd !== 'string' || normalizeWorkspace(header.cwd) !== wanted) continue
               if (knownSessions.has(header.id)) continue
+              // v4 墓碑：用户摘除过的会话节点不再自动补种（§6.3）。
+              if (tombstoneNodes.has(chatNodeLocator(header.id))) {
+                knownSessions.add(header.id)
+                skippedTombstones += 1
+                continue
+              }
               knownSessions.add(header.id)
               const spot = nextSpot()
               // 分叉子会话（头带 parentSession 且父在同图）加可区分标记，避免与父会话撞名
@@ -2519,11 +2577,13 @@ export class EvoResearchApiService extends TypertRemoteService {
               nodes.push({
                 id: nextId(),
                 type: 'chat',
+                displayKind: 'chat',
                 title: this.sessionTitleOf(header.id) + (isForkChild ? ' · 分叉' : ''),
                 x: spot.x, y: spot.y,
                 sessionId: header.id,
                 workspaceDir,
                 origin: 'imported',
+                locator: chatNodeLocator(header.id),
                 createdAt,
               })
               addedChats += 1
@@ -2553,6 +2613,12 @@ export class EvoResearchApiService extends TypertRemoteService {
               : s.fileName
             const key = `note:${s.source}:${s.noteId}`
             if (knownRefs.has(key)) continue
+            // v4 墓碑：用户删除过的记忆节点不再自动导入（按 locator 判）。
+            if (tombstoneNodes.has(`project:note:${s.noteId}`)) {
+              knownRefs.add(key)
+              skippedTombstones += 1
+              continue
+            }
             knownRefs.add(key)
             const spot = nextSpot()
             nodes.push({
@@ -2614,8 +2680,8 @@ export class EvoResearchApiService extends TypertRemoteService {
 
       // ── 谱系连线：会话头部记录的真实 fork 血缘 → context 继承边 ──
       // rewind/编辑分叉与 graph-inherit 都会在会话头写 parentSession（rewind.ts:277 / api graphInherit）。
-      // 只画两端都在图内的真实谱系；context 每目标唯一；用户删掉的视觉边下次同步会补回
-      //（谱系是客观事实，手动删除只影响当前视图）。
+      // 只画两端都在图内的真实谱系；context 每目标唯一；用户删掉的继承线进入墓碑
+      //（graph-save diff 自动记录），自动同步不再补回（§6.3 墓碑原则）。
       let addedEdges = 0
       if (workspaceDir !== '') {
         const nodeBySession = new Map<string, { id: string }>()
@@ -2640,6 +2706,12 @@ export class EvoResearchApiService extends TypertRemoteService {
           if (parent === undefined || parent === sessionId) continue
           const parentNode = nodeBySession.get(parent)
           if (parentNode === undefined || hasContextTo.has((n as { id: string }).id)) continue
+          // v4 墓碑：用户删掉的 fork 继承线不再补回。
+          const forkEdgeKey = edgeKeyOf({ from: parentNode.id, to: (n as { id: string }).id, behavior: 'fork', system: false })
+          if (tombstoneEdges.has(forkEdgeKey)) {
+            skippedTombstones += 1
+            continue
+          }
           edges.push({
             id: `e${randomUUID().slice(0, 8)}`,
             from: parentNode.id,
@@ -2654,10 +2726,29 @@ export class EvoResearchApiService extends TypertRemoteService {
         if (addedEdges > 0) nextEdges = edges
       }
 
-      if (addedChats === 0 && addedMemories === 0 && addedEdges === 0) return { ok: true, addedChats: 0, addedMemories: 0, addedEdges: 0, rev: this.services.chatGraph.rev(name) }
-      const saved = this.services.chatGraph.save(name, { ...graph, nodes, ...(nextEdges === undefined ? {} : { edges: nextEdges }) } as never)
-      if (!saved.ok) return { ok: false, error: saved.error ?? '图谱保存失败' }
-      return { ok: true, addedChats, addedMemories, addedEdges, rev: this.services.chatGraph.rev(name) }
+      // 有补种内容时才整图落盘（无变化不写盘）。
+      if (addedChats > 0 || addedMemories > 0 || addedEdges > 0) {
+        const saved = this.services.chatGraph.save(name, { ...graph, nodes, ...(nextEdges === undefined ? {} : { edges: nextEdges }) } as never)
+        if (!saved.ok) return { ok: false, error: saved.error ?? '图谱保存失败' }
+      }
+      // ── v4 骨架补种：常驻节点（画像/指引/台账）+ 默认连线，幂等（经自动同步服务）──
+      let skeleton = { addedNodes: 0, addedEdges: 0, skippedTombstones: 0, emptyPatched: 0 }
+      if (workspaceDir !== '') {
+        try {
+          skeleton = this.services.chatGraphSync?.ensureProjectSkeleton(name, workspaceDir)
+            ?? { addedNodes: 0, addedEdges: 0, skippedTombstones: 0, emptyPatched: 0 }
+        } catch { /* 骨架补种失败不阻断同步返回 */ }
+      }
+      skippedTombstones += skeleton.skippedTombstones
+      return {
+        ok: true,
+        addedChats,
+        addedMemories,
+        addedNodes: addedChats + addedMemories + skeleton.addedNodes,
+        addedEdges: addedEdges + skeleton.addedEdges,
+        skippedTombstones,
+        rev: this.services.chatGraph.rev(name),
+      }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -2795,7 +2886,8 @@ export class EvoResearchApiService extends TypertRemoteService {
         } catch { /* 旧会话不存在则无需提示 */ }
       }
       // 原子保存：context 边（唯一替换）+ 目标节点重新绑定 + 全图落盘
-      // （与前端拖线共用一个写入口，避免 graph-save 与 graph-inherit 竞争覆盖）
+      // （与前端拖线共用一个写入口，避免 graph-save 与 graph-inherit 竞争覆盖）。
+      // v4：绑定真实会话时补齐稳定 locator（session:<id>），墓碑/判重按会话键生效。
       const edges = graph.edges
         .filter((e) => !(e.to === to.id && e.toPort === 'context'))
         .concat([{
@@ -2806,7 +2898,7 @@ export class EvoResearchApiService extends TypertRemoteService {
           behavior: 'fork' as const,
           forkAnchor: { sourceSessionId: from.sessionId, sourceEventSeq, sourceMessageId, targetSessionId: finalId },
         }])
-      const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: finalId } : n)), edges }
+      const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: finalId, ...(n.locator === undefined ? { locator: chatNodeLocator(finalId) } : {}) } : n)), edges }
       const saved = this.services.chatGraph.save(name, next)
       if (!saved.ok) return { ok: false, error: saved.error ?? '图谱保存失败' }
       return { ok: true, sessionId: finalId, replaced, notice, rev: this.services.chatGraph.rev(name) }
@@ -3170,16 +3262,21 @@ export class EvoResearchApiService extends TypertRemoteService {
       if (source === undefined) {
         source = this.services.chatGraph.addNode(name, {
           type: 'chat',
+          displayKind: 'chat',
           title: '当前聊天',
           x: 48,
           y: 48,
           sessionId: args.sourceSessionId,
           workspaceDir: args.workspaceDir,
           origin: 'user',
+          // v4：chat 节点稳定定位键（判重与墓碑按会话键生效）。
+          locator: chatNodeLocator(args.sourceSessionId),
         })
       }
+      // 目标节点先建占位；graph-inherit 换绑真实会话时再补 session:<id> locator。
       const target = this.services.chatGraph.addNode(name, {
         type: 'chat',
+        displayKind: 'chat',
         title: '从消息分出的新方向',
         x: source.x + 240,
         y: source.y + 96,
@@ -3260,6 +3357,203 @@ export class EvoResearchApiService extends TypertRemoteService {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  // ── Chat Graph v4：版本轮询 / 命中缓冲 / 体检卡 / 沉淀 / 墓碑 ─────────────
+
+  /** 轻量版本轮询（rev 沿用现有 mtime 机制；读原文件计数，不触发迁移落盘）。 */
+  @Remote('graphVersion')
+  graphVersion(args: { workspaceDir?: string }): { rev: number; nodeCount: number; edgeCount: number; serverTime: number } | { error: string } {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.versionOf(name)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 检索命中环形缓冲（≤100 条；命中脉冲 / Context Trace 联动数据源）。 */
+  @Remote('graphRecentHits')
+  graphRecentHits(args: { sessionId?: string; limit?: number }): { hits: GraphHitEntry[] } {
+    return { hits: this.services.chatGraphSync?.recentHits(args?.sessionId === undefined || args.sessionId === '' ? undefined : String(args.sessionId), args?.limit ?? 20) ?? [] }
+  }
+
+  /** 清空墓碑（用户在"将补回 N 条已删除的线"提示中确认后调用）。 */
+  @Remote('graphRestoreTombstones')
+  graphRestoreTombstones(args: { workspaceDir?: string }): { restoredNodes: number; restoredEdges: number } | { error: string } {
+    try {
+      const name = this.graphProjectOf(args)
+      return this.services.chatGraph.restoreTombstones(name)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * 上下文体检卡（§7 点睛之笔）：从 effects/compactions 台账、工具收据与会话
+   * 元数据尽力聚合某会话最近一轮的上下文构成；字段可缺省，宁可少不可错。
+   * 这是全系统唯一允许出现机制词的地方（机制词文案由前端负责）。
+   */
+  @Remote('graphHealthReport')
+  graphHealthReport(args: { sessionId: string }): GraphHealthReport | { error: string } {
+    try {
+      const sessionId = String(args?.sessionId ?? '')
+      if (sessionId === '') return { error: '缺少 sessionId' }
+      const memory = this.services.memory
+      const assembler = this.services.contextAssembler
+      // ── 每轮固定/动态注入块（尽力聚合；chars 为当前实际长度）──
+      const injections: GraphHealthInjection[] = []
+      const packet = memory.packetFor(sessionId)
+      if (packet !== undefined && packet.text !== '') {
+        injections.push({ name: 'evoresearch:research-memory', label: '记忆包', chars: packet.text.length })
+      }
+      try {
+        const profileText = memory.profileContextText(sessionId)
+        if (profileText !== '') injections.push({ name: 'evoresearch:identity-profile', label: '身份画像', chars: profileText.length })
+      } catch { /* 会话暂不可读时跳过 */ }
+      if (assembler !== undefined) {
+        const prepared = assembler.preparedText(sessionId)
+        if (prepared !== '') injections.push({ name: 'evoresearch:context-assembler-first-call', label: '快速阅读材料', chars: prepared.length })
+      }
+      // ── 本会话实际命中过的记忆节点（环形缓冲，最近 10 条）──
+      const hits = this.services.chatGraphSync?.recentHits(sessionId, 10) ?? []
+      // ── 工具数量与 token 用量（会话事件尽力聚合）──
+      let toolCount: number | undefined
+      let tokenUsage: { inputTokens: number; outputTokens: number } | undefined
+      try {
+        const events = readSessionEvents(sessionId) as Array<Record<string, unknown>>
+        toolCount = events.filter((event) => event?.type === 'tool/call').length
+        let inputTokens = 0
+        let outputTokens = 0
+        let sawUsage = false
+        for (const event of events) {
+          if (event?.type !== 'assistant/message') continue
+          const usage = (event.data as { usage?: { inputTokens?: unknown; outputTokens?: unknown } } | undefined)?.usage
+          if (usage === undefined) continue
+          sawUsage = true
+          if (typeof usage.inputTokens === 'number') inputTokens += usage.inputTokens
+          if (typeof usage.outputTokens === 'number') outputTokens += usage.outputTokens
+        }
+        if (sawUsage) tokenUsage = { inputTokens, outputTokens }
+      } catch { /* 会话不可读时缺省 */ }
+      // ── 压缩台账（CTX-16）──
+      const compactions = (this.services.contextRuntime?.compactionRecords({ sessionId, limit: 20 }) ?? []).map((record) => {
+        const entry: { at: number; shadowedCount?: number } = { at: record.endedAt ?? record.startedAt }
+        const shadowed = record.messageRange?.shadowedSeqs.length
+        if (shadowed !== undefined && shadowed > 0) entry.shadowedCount = shadowed
+        return entry
+      })
+      // ── 记忆包明细（体检卡折叠区）──
+      const memoryPacket = packet === undefined
+        ? undefined
+        : {
+            categories: packet.catalog.map((entry) => ({ category: entry.category, count: entry.count })),
+            states: packet.states.map((state) => ({ category: state.category, topicKey: state.topicKey, label: state.label, decision: state.decision })),
+            related: packet.hits.slice(0, 8).map((hit) => ({ kind: hit.kind, id: hit.id, score: hit.score, snippet: hit.snippet.slice(0, 120) })),
+          }
+      // ── 最近一次效果信号原样透传（给想深究的人）──
+      const lastEffect = assembler?.queryEffects({ sessionId, limit: 1 })[0]
+      return {
+        generatedAt: Date.now(),
+        sessionId,
+        injections,
+        ...(memoryPacket !== undefined ? { memoryPacket } : {}),
+        hits: hits.map((hit) => ({ ...hit })),
+        ...(toolCount !== undefined ? { toolCount } : {}),
+        ...(tokenUsage !== undefined ? { tokenUsage } : {}),
+        compactions,
+        ...(lastEffect !== undefined ? { raw: lastEffect } : {}),
+      }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * 沉淀（§5.2 写线·通道）：把该会话最新一条 assistant 回复写进目标记忆节点。
+   * mode 默认 'distill'——辅助模型先提炼要点（失败回退原文追加）；'raw' 直接
+   * 追加原文。写入 = 带时间戳小节追加不覆盖（复用记忆文档写路径）；成功后
+   * bump 对应写线（通道线优先，其次事实线）。
+   * TODO(Phase4): "自动沉淀开关"（用户手拖通道后对每条回复自动执行 distill）
+   * 与节点级"禁写开关"的运行时裁决挂在通道线建立/写线 upsert 处。
+   */
+  @Remote('graphDistill')
+  async graphDistill(args: { sessionId: string; targetNodeId: string; mode?: 'distill' | 'raw' }): Promise<{ ok: boolean; bytesWritten?: number; nodeId?: string; error?: string }> {
+    try {
+      const sessionId = String(args?.sessionId ?? '')
+      const targetNodeId = String(args?.targetNodeId ?? '')
+      if (sessionId === '') return { ok: false, error: '缺少 sessionId' }
+      if (targetNodeId === '') return { ok: false, error: '缺少 targetNodeId' }
+      const chatGraph = this.services.chatGraph
+      // 定位目标节点所在项目（按 sessionId 反查会话节点所在项目图）。
+      const found = chatGraph.projectOfSession(sessionId)
+      if (found === undefined) return { ok: false, error: '该会话尚未入图，无法定位项目' }
+      const { project, node: chatNode } = found
+      const graph = chatGraph.get(project)
+      const target = graph.nodes.find((n) => n.id === targetNodeId && n.type !== 'chat')
+      if (target === undefined) return { ok: false, error: '目标记忆节点不存在' }
+      // 最新一条 assistant 回复（assistant/message；中断前缀也接受）。
+      const reply = this.latestAssistantText(sessionId)
+      if (reply === '') return { ok: false, error: '该会话还没有可沉淀的回复' }
+      let text = reply
+      if ((args?.mode ?? 'distill') === 'distill') {
+        try {
+          const model = this.auxiliaryModelOf()
+          const distilled = await callText(this.hostCtx, {
+            provider: model.provider,
+            model: model.model,
+            system: GRAPH_DISTILL_SYSTEM_PROMPT,
+            messages: [reply.slice(0, 12000)],
+            maxTokens: 700,
+          })
+          if (distilled.trim() !== '') text = distilled.trim()
+        } catch {
+          // 提炼失败回退原文追加（contract 明确的降级路径）
+        }
+      }
+      // 本地时区时间戳（toISOString 是 UTC，用户会看到差 8 小时的困惑时间）
+      const now = new Date()
+      const pad2 = (v: number) => String(v).padStart(2, '0')
+      const stamp = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`
+      const section = `\n\n## 沉淀 · ${stamp}（来自「${chatNode.title}」）\n\n${text}\n`
+      const written = chatGraph.appendMemorySection(project, targetNodeId, chatNode.workspaceDir, section)
+      if (!written.ok) return { ok: false, error: written.error }
+      // 写线 bump：通道线（system:false）优先；没有通道线时 bump/建立事实线。
+      const hasChannel = graph.edges.some((edge) => edge.from === chatNode.id && edge.to === target.id && edge.behavior === 'write' && edge.system === false)
+      const bumped = chatGraph.upsertWriteEdge(project, chatNode.id, target.id, hasChannel ? false : true)
+      if (!bumped.ok) this.logDebug(`graphDistill 写线更新失败: ${bumped.error ?? '未知错误'}`)
+      return { ok: true, bytesWritten: written.bytesWritten ?? 0, nodeId: target.id }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** 提取会话最新一条 assistant 回复文本（无则 ''）。 */
+  private latestAssistantText(sessionId: string): string {
+    try {
+      const events = readSessionEvents(sessionId) as Array<Record<string, unknown>>
+      for (let i = events.length - 1; i >= 0; i -= 1) {
+        const event = events[i]
+        if (event?.type !== 'assistant/message') continue
+        const content = (event.data as { message?: { content?: unknown } } | undefined)?.message?.content
+        if (!Array.isArray(content)) continue
+        const text = content
+          .map((block) => (typeof (block as { text?: unknown })?.text === 'string' ? (block as { text: string }).text : ''))
+          .join('')
+          .trim()
+        if (text !== '') return text
+      }
+    } catch { /* 会话不可读时返回空 */ }
+    return ''
+  }
+
+  /** 辅助模型路由：当前默认选择 → 配置 auxiliaryModel → 部署缺省（与 classifier 一致）。 */
+  private auxiliaryModelOf(): { provider: string; model: string } {
+    const selection = (this.hostCtx.get('agentDefaultModel') as { currentSelection?(): { provider?: string; model?: string } } | undefined)?.currentSelection?.()
+    const configured = this.services.memory.config.auxiliaryModel
+    if (selection?.provider && selection?.model) return { provider: selection.provider, model: selection.model }
+    if (configured?.provider && configured?.model) return { provider: configured.provider, model: configured.model }
+    return { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
   }
 
   // ── RA / EA / EMA → Chat Graph（CG-AUTO / CG-INTEG）──────────────────────
@@ -4223,10 +4517,11 @@ export class EvoResearchApiService extends TypertRemoteService {
 
   /**
    * P3-1 会话删除级联取消：先查 JobHub 该会话的 active 任务，逐个取消后再删。
-   * 返回被取消的任务数（0 = 无需级联）。
+   * 返回被取消的任务数（0 = 无需级联）。v4：同时摘除 Chat Graph 上的会话节点
+   * （节点进入墓碑，自动同步不再补种；hadWrites 供前端二次确认框警告）。
    */
   @Remote('sessionDeleteCascade')
-  async sessionDeleteCascade(args: { sessionId: string }): Promise<{ ok: boolean; cancelled: number } | { error: string }> {
+  async sessionDeleteCascade(args: { sessionId: string }): Promise<{ ok: boolean; cancelled: number; graphNodeRemoved?: boolean; hadWrites?: number } | { error: string }> {
     try {
       const hub = this.services.jobHub
       const sessionId = String(args?.sessionId ?? '')
@@ -4243,8 +4538,16 @@ export class EvoResearchApiService extends TypertRemoteService {
           removed += 1
         }
       } catch { /* 会话目录不存在 */ }
+      // v4：会话删除 → 图上摘除节点（先于数据删除也可，幂等）。
+      let graphNodeRemoved = false
+      let hadWrites = 0
+      try {
+        const syncResult = this.services.chatGraphSync?.sessionRemoved(sessionId)
+        graphNodeRemoved = syncResult?.removed === true
+        hadWrites = syncResult?.hadWrites ?? 0
+      } catch { /* 图同步失败不阻塞删除 */ }
       unmarkUnattendedSession(sessionId)
-      return { ok: removed > 0 || cancelled > 0, cancelled }
+      return { ok: removed > 0 || cancelled > 0, cancelled, graphNodeRemoved, hadWrites }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

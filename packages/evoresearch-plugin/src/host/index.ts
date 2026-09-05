@@ -34,6 +34,7 @@ import { builtinAdapters } from './channels/adapters.js'
 import type { ChannelMessage } from './channels/base.js'
 import { AutoSkillsService, type AutoSkillsConfig } from './autoskills.js'
 import { ChatGraphService } from './chat-graph.js'
+import { ChatGraphSyncService } from './chat-graph-sync.js'
 import { NotesService } from './notes.js'
 import { ExperimentWorkspaceService } from './experiment-workspace.js'
 import { ExperimentProcessService } from './experiment-process.js'
@@ -224,6 +225,29 @@ function apply(ctx: Context): void {
   // 5.8) Chat Graph（节点/连线图，按项目存储）
   const chatGraph = new ChatGraphService(dataRoot)
 
+  // 5.8.1) Chat Graph 自动同步（v4 §6.1 现实 → 图）：
+  // - session/event：新会话首条真人消息 → chat 节点 + 常驻节点 + 默认连线落图；
+  //   session/title → 节点标题同步；模型写记忆工具 → 事实写线；turn/end → 台账写线；
+  // - 挂点调用：AutoSkills 审批通过 / 文献入库（见下方包装）；
+  // - 检索命中环形缓冲（graph-recent-hits）由 ContextAssembler 组装结果注入。
+  const chatGraphSync = new ChatGraphSyncService({
+    dataRoot,
+    chatGraph,
+    guidanceCandidates: (workspaceDir) => experts.agentsCandidatePaths(workspaceDir),
+    observationLookup: (workspaceDir, observationId) => {
+      try {
+        const meta = memory.storeFor(workspaceDir).getObservation(observationId)
+        if (meta === undefined) return undefined
+        return {
+          title: meta.title,
+          absolutePath: path.join(memory.observationsDirFor(workspaceDir), meta.projectId ? path.join('projects', meta.projectId) : 'global', meta.fileName),
+        }
+      } catch {
+        return undefined
+      }
+    },
+  })
+
   // 5.9) 自由文本研究笔记（§整合：memories/notes 零 frontmatter + 旧 Observation 兼容）
   const notes = new NotesService(dataRoot)
   // NOTE-02：模型写笔记时优先走零 frontmatter 的自由 Markdown；旧 Observation
@@ -235,7 +259,14 @@ function apply(ctx: Context): void {
   // 避免同时订阅两次 session/event 或重复写入压缩日志。
   const contextRuntime = new ContextRuntime({
     dataRoot,
-    windowConfig: { dataRoot, auxiliaryModel: config.auxiliaryModel },
+    windowConfig: {
+      dataRoot,
+      auxiliaryModel: config.auxiliaryModel,
+      // v4 ChatGraph 压缩徽标（§6.1）：压缩记录到达终态（completed）→ 对应会话
+      // 节点 compactionCount+1 并落盘；与 compactions.jsonl 落账同一挂点
+      //（compactionLog.onAppend），同 compactionId 双路径去重在 bumpCompaction 内。
+      onCompactionCompleted: (record) => chatGraphSync.bumpCompaction(record.sessionId, record.compactionId),
+    },
   })
   const contextGuard = contextRuntime.guard
 
@@ -303,6 +334,7 @@ function apply(ctx: Context): void {
         return { ok: false, path: target, error: 'PDF 提取工具不可用，请从页码入口打开原文' }
       }
     },
+    recordGraphHits: (input) => chatGraphSync.recordGraphHits(input),
     dataRoot,
   })
   const scienceGraphBridge = new ScienceChatGraphBridge({
@@ -477,12 +509,57 @@ function apply(ctx: Context): void {
       : new LayeredSkillRegistry({ dataRoot, workspaceDir }),
   }
 
+  // 5.16) v4 落图挂点：AutoSkills 审批通过 / 文献入库（包装既有服务方法，
+  // 失败只告警不阻塞原流程；graphSync / sessionDeleteCascade 的挂点在 api.ts）。
+  const origAutoskillsApprove = autoskills.approve.bind(autoskills)
+  ;(autoskills as { approve: typeof autoskills.approve }).approve = (proposalId: string) => {
+    const result = origAutoskillsApprove(proposalId)
+    if (result) {
+      try {
+        const proposal = autoskills.listProposals('approved').find((item) => item.proposalId === proposalId)
+        if (proposal !== undefined) {
+          chatGraphSync.skillApproved({
+            name: proposal.name,
+            workspaceDir: proposal.workspaceDir,
+            sourceObservationIds: proposal.sourceObservationIds,
+          })
+        }
+      } catch (error) {
+        console.warn(`[evoresearch] AutoSkills 技能落图失败（不影响技能安装）: ${String(error)}`)
+      }
+    }
+    return result
+  }
+  const origLibraryAddPaper = libraryIndexer.addPaper.bind(libraryIndexer)
+  ;(libraryIndexer as { addPaper: typeof libraryIndexer.addPaper }).addPaper = async (project: string, pdfPath: string) => {
+    const result = await origLibraryAddPaper(project, pdfPath)
+    try {
+      chatGraphSync.papersAdded({ project, papers: [{ paperId: result.paperId, filePath: result.filePath, title: result.title }] })
+    } catch { /* 落图失败不影响入库 */ }
+    return result
+  }
+  const origLibraryIndex = libraryIndexer.indexLibrary.bind(libraryIndexer)
+  ;(libraryIndexer as { indexLibrary: typeof libraryIndexer.indexLibrary }).indexLibrary = async (project: string, scanDir: string) => {
+    const result = await origLibraryIndex(project, scanDir)
+    try {
+      // 批量索引没有逐篇结果，全量 ensure（papersAdded 先读图过滤已存在项，幂等）。
+      const papers = librarySearch.listPapers(project, { limit: 500 }).map((paper) => ({
+        paperId: paper.paperId,
+        filePath: paper.filePath,
+        title: paper.title,
+      }))
+      chatGraphSync.papersAdded({ project, papers })
+    } catch { /* 落图失败不影响入库 */ }
+    return result
+  }
+
   // 6) Remote API（构造即注册 services.evoresearch）；figureService 在下方 7.5 节
   // 构造，此处用 getter 延迟解析（Remote 方法调用时已就绪）。
   const services: HostServices = {
     workspace, memory, scheduler, channels, autoskills, experts, experiments,
     experimentWorkspace, experimentProcess, worktrees, experimentLedger,
     experimentRounds, dailyReport, scienceLoops, scienceGraphBridge, chatGraph,
+    chatGraphSync,
     projectEnv, rewind, notes, libraryIndexer, librarySearch, manuscript,
     webSearch,
     evo: { signals, registry }, contextGuard, contextRuntime, contextAssembler,
@@ -830,6 +907,8 @@ function apply(ctx: Context): void {
   // §整合 P0c：上下文窗口保护层 + AutoSkills 真实执行（runSkill 依赖 attach 探测 DSH skills）
   const disposeContextRuntime = contextRuntime.attach(ctx)
   const disposeAutoskills = autoskills.attach(ctx)
+  // v4：Chat Graph 自动同步（session/event 订阅：新会话入图/改名/写线事实/台账 bump）
+  const disposeChatGraphSync = chatGraphSync.attach(ctx)
 
   // P1-1 AutoSkills 定时挖掘：仅在显式配置 cron 时注册内置任务。
   // 未配置时清理历史版本遗留的重复内置任务，避免后台会话悄悄出现在侧栏。
@@ -874,6 +953,7 @@ function apply(ctx: Context): void {
       disposeDailyReport()
       disposeContextRuntime()
       disposeAutoskills()
+      disposeChatGraphSync()
       void webSearchManager.dispose()
       void googleAiModeManager.dispose()
       void freeSearchManager.dispose()

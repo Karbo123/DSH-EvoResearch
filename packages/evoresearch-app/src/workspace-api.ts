@@ -2238,7 +2238,7 @@ export function registerWorkspaceApi(ctx: any): void {
         // ── Chat Graph（节点/连线图，按项目存储）──
         // 注：update-node/remove-node/update-edge/remove-edge/move-nodes/add-group/update-group
         // 七个粒度端点已随宿主一并移除（客户端编辑走 graph-save 全量写，仅 remove-group 在用）。
-        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write' || method === 'graph-sync') {
+        if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write' || method === 'graph-sync' || method === 'graph-version' || method === 'graph-recent-hits' || method === 'graph-health-report' || method === 'graph-distill' || method === 'graph-restore-tombstones') {
           const serviceMethod = method === 'graph-get' ? 'graphGet'
             : method === 'graph-save' ? 'graphSave'
               : method === 'graph-add-node' ? 'graphAddNode'
@@ -2252,7 +2252,12 @@ export function registerWorkspaceApi(ctx: any): void {
                           : method === 'graph-memory-collection' ? 'graphMemoryCollection'
                             : method === 'graph-memory-write' ? 'graphMemoryWrite'
                               : method === 'graph-sync' ? 'graphSync'
-                                : 'graphConvertNote'
+                                : method === 'graph-version' ? 'graphVersion'
+                                  : method === 'graph-recent-hits' ? 'graphRecentHits'
+                                    : method === 'graph-health-report' ? 'graphHealthReport'
+                                      : method === 'graph-distill' ? 'graphDistill'
+                                        : method === 'graph-restore-tombstones' ? 'graphRestoreTombstones'
+                                          : 'graphConvertNote'
           const fn = evoresearch?.[serviceMethod] as ((a: Record<string, unknown>) => unknown) | undefined
           if (fn === undefined) throw httpError(400, 'method-error', 'evoresearch 服务不可用')
           const args: Record<string, unknown> = {}
@@ -2273,6 +2278,11 @@ export function registerWorkspaceApi(ctx: any): void {
           if (typeof payload.operationId === 'string') args.operationId = payload.operationId
           if (typeof payload.title === 'string') args.title = payload.title
           if (payload.scope === 'project' || payload.scope === 'global') args.scope = payload.scope
+          // 图谱实时同步与体检卡/沉淀（v4 契约新增端点的参数透传）
+          if (typeof payload.sessionId === 'string') args.sessionId = payload.sessionId
+          if (typeof payload.targetNodeId === 'string') args.targetNodeId = payload.targetNodeId
+          if (payload.mode === 'distill' || payload.mode === 'raw') args.mode = payload.mode
+          if (typeof payload.limit === 'number') args.limit = payload.limit
           if (typeof payload.x === 'number') args.x = payload.x
           if (typeof payload.y === 'number') args.y = payload.y
           if (typeof payload.content === 'string') args.content = payload.content

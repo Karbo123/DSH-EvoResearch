@@ -6,6 +6,12 @@
  */
 import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
 
+// 开发/验收辅助：?fresh=1 清空本地缓存（ModuleLoader 按模块 id 缓存客户端 bundle，
+// 插件更新后旧缓存不会自动失效），带一次该参数即可加载最新代码。
+if (new URLSearchParams(location.search).has('fresh')) {
+  try { localStorage.clear() } catch { /* 隐私模式等场景忽略 */ }
+}
+
 const el = document.getElementById('root')
 if (el === null) throw new Error('EvoResearch: 找不到 #root 挂载点')
 

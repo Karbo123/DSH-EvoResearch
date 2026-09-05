@@ -605,7 +605,13 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     // §44 短化 URL：占位 ?t=<uuid 前8位> 保证刷新窗口内仍可恢复；slug 分配完成后原位替换为可读别名
     patchUrl({ [URL_KEY_THREAD]: id.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
     void ensureThreadAlias(id, sessions.byId[id]?.displayTitle)
-    // 左侧选中会话 → 中间区显示对话（若对话 tab 已被关闭则重新加回）
+    // 左侧选中会话 → 仅当用户当前正处于《对话》tab 时保持/激活对话视图；
+    // 正在浏览图谱/轨迹等其他 tab 时不抢焦点（tab 原地保留，面板随 current 自行刷新为新会话内容）。
+    if (activeTabId === 'chat') openFixedTab('chat', t('chatTab'))
+  }
+  // 显式"打开这条对话"入口（聊天内线索、检查器子聊天等）：切换会话并主动跳到《对话》tab。
+  const jumpToSession = (id: string) => {
+    openSession(id)
     openFixedTab('chat', t('chatTab'))
   }
   const startNewChat = (projectCwd?: string) => {
@@ -2201,7 +2207,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         session: sessionObj,
                         cwd: cwdNow,
                         jobs: currentJobs,
-                        onOpenThread: openSession,
+                        onOpenThread: jumpToSession,
                         onBranchFromMessage: branchFromMessage,
                         onOpenProjectFile: (rel) => {
                           if (cwdNow === null || cwdNow === '') return
@@ -2236,7 +2242,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   sessionId: current ?? null,
                   sideChats,
                   onNewSideChat: newSideChat,
-                  onOpenSideChat: openSession,
+                  onOpenSideChat: jumpToSession,
                   onDeleteSideChat: deleteSession,
                 }),
               }),

@@ -119,6 +119,14 @@ export interface ContextWindowConfig {
   readonly pruneBudget?: PruneBudget
   /** 辅助模型（压缩摘要等后台调用；缺省取 agentDefaultModel 当前选择）。 */
   readonly auxiliaryModel?: { readonly provider: string; readonly model: string }
+  /**
+   * v4 ChatGraph 压缩徽标挂点：一条压缩记录到达终态时回调（与 compactions.jsonl
+   * 持久化同一点 compactionLog.onAppend）。仅 status === 'completed' 时触发
+   * （running/summary/failed/degraded-noop/skipped 不代表真实发生了压缩）。
+   * 同一次压缩可能经 guard 直接登记与 DSH 事件折叠两条路径到达，
+   * 同 compactionId 的去重由消费方（ChatGraphSyncService.bumpCompaction）保证。
+   */
+  readonly onCompactionCompleted?: (record: CompactionRecord) => void
 }
 
 interface ResolvedConfig {
@@ -221,6 +229,7 @@ export function resolveContextWindowConfig(config: ContextWindowConfig = {}): Re
 export class ContextWindowRuntime implements ContextWindowGuard {
   readonly config: ResolvedConfig
   readonly compactionLog = new CompactionLog()
+  private readonly onCompactionCompleted?: (record: CompactionRecord) => void
   private readonly prunes: ToolResultArchiveRecord[] = []
   private readonly repairs: ToolHistoryRepairRecord[] = []
   private ctxRef: Context | undefined
@@ -232,6 +241,7 @@ export class ContextWindowRuntime implements ContextWindowGuard {
 
   constructor(config: ContextWindowConfig = {}) {
     this.config = resolveContextWindowConfig(config)
+    this.onCompactionCompleted = config.onCompactionCompleted
   }
 
   get enabled(): boolean {
@@ -284,6 +294,9 @@ export class ContextWindowRuntime implements ContextWindowGuard {
     this.loadPersisted()
     this.compactionLog.onAppend = (record) => {
       this.appendLine(this.compactionsFile(), toCompactionLine(record))
+      // v4 ChatGraph 压缩徽标：仅真实完成的压缩计一次（与 compactions.jsonl 落账
+      // 同一挂点）；同 compactionId 的双路径去重由消费方 bumpCompaction 保证。
+      if (record.status === 'completed') this.onCompactionCompleted?.(record)
     }
 
     // CTX-16：订阅 DSH compaction 事件（start/summary/end → 记录），只读不改原始事件

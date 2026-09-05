@@ -246,7 +246,7 @@ export function ContextTraceDrawer(props: ContextTraceDrawerProps) {
         workspaceDir: props.workspaceDir,
         operationId: `trace-pin-${entry.locator}`,
         node: {
-          type: 'resource', displayKind: kind, title: entry.label || entry.target,
+          type: 'memory', displayKind: kind, title: entry.label || entry.target,
           x: 80, y: 80, scope: 'project', origin: 'user', ref: { kind, path: entry.target },
         },
       })

@@ -8,6 +8,7 @@
  */
 import * as path from 'node:path'
 import { projectNameFromWorkspace } from '../core/paths.js'
+import { edgeKeyOf } from '../chat-graph.js'
 import type { ChatGraphService, GraphGroup, GraphNode, GraphEdge } from '../chat-graph.js'
 import type { ExperimentWorkspaceService } from '../experiment-workspace.js'
 import type { CandidateRegistry } from '../evolution/registry.js'
@@ -101,16 +102,25 @@ function ensureGroup(
   return result.group
 }
 
-function addRelation(service: ChatGraphService, project: string, from: string, to: string, label: string): GraphEdge {
-  return service.addEdge(project, {
+/**
+ * Structural bridge edge (v4)：relation 行为已迁移进 reference 读线——科研落图
+ * 的结构关系现在直接建 reference 边（system: true，系统生成、带说明）。
+ * 墓碑中的边不再重建（§6.3：自动同步尊重用户删除）；重复边由 addEdge 按
+ * from|to|behavior|system 判重复用。
+ */
+function addRelation(service: ChatGraphService, project: string, from: string, to: string, label: string): GraphEdge | undefined {
+  const edge: Omit<GraphEdge, 'id'> = {
     from,
     to,
     toPort: 'memory',
-    behavior: 'relation',
-    enabled: false,
+    behavior: 'reference',
+    system: true,
+    enabled: true,
     label,
     createdAt: Date.now(),
-  })
+  }
+  if (service.tombstoneHasEdge(project, edgeKeyOf(edge))) return undefined
+  return service.addEdge(project, edge)
 }
 
 export class ScienceChatGraphBridge {
@@ -120,6 +130,10 @@ export class ScienceChatGraphBridge {
   raCandidateAdd(input: RaCandidateAddInput): ScienceBridgeResult {
     try {
       const project = projectOf(this.options.dataRoot, input.workspaceDir)
+      // 墓碑前置检查（§6.3）：用户删除过的候选节点，自动落图不再复活。
+      if (input.candidateId !== undefined && this.options.chatGraph.tombstoneHasNode(project, `agent:ra:${input.candidateId}`)) {
+        return { ok: false, error: '该候选节点已被删除（墓碑生效）；如需恢复请在图谱中重建或清理墓碑' }
+      }
       const group = ensureGroup(this.options.chatGraph, project, 'exploration', 'RA 探索候选')
       const text = cleanText(input.text, input.title)
       const node = this.options.chatGraph.addNode(project, {
@@ -139,7 +153,8 @@ export class ScienceChatGraphBridge {
       const edges: GraphEdge[] = []
       if (input.sourceNodeId !== undefined) {
         const source = this.options.chatGraph.get(project).nodes.find((candidate) => candidate.id === input.sourceNodeId)
-        if (source !== undefined) edges.push(addRelation(this.options.chatGraph, project, source.id, node.id, 'RA 候选来源'))
+        const edge = source !== undefined ? addRelation(this.options.chatGraph, project, source.id, node.id, 'RA 候选来源') : undefined
+        if (edge !== undefined) edges.push(edge)
       }
       return { ok: true, group, node, nodes: [node], edges }
     } catch (error) {
@@ -197,6 +212,8 @@ export class ScienceChatGraphBridge {
       const status = input.status ?? 'available'
       const nodes: GraphNode[] = []
       const add = (displayKind: GraphNode['displayKind'], title: string, refPath: string, dx: number, dy: number): void => {
+        // 墓碑前置检查：隐式 locator = `${scope}:${ref.kind}:${path}`（graphNodeLocator 回退规则）。
+        if (this.options.chatGraph.tombstoneHasNode(project, `project:${displayKind}:${rel(refPath)}`)) return
         nodes.push(this.options.chatGraph.addNode(project, {
           type: 'resource', displayKind, title, x: baseX + dx, y: baseY + dy,
           ref: { kind: displayKind === 'experiment' ? 'experiment' : displayKind === 'run' ? 'run' : displayKind === 'log' ? 'log' : displayKind === 'result' ? 'result' : 'code', path: rel(refPath) },
@@ -213,7 +230,11 @@ export class ScienceChatGraphBridge {
       const edges: GraphEdge[] = []
       const root = nodes.find((node) => node.displayKind === 'experiment') ?? nodes[0]
       if (root !== undefined) {
-        for (const node of nodes) if (node.id !== root.id) edges.push(addRelation(this.options.chatGraph, project, root.id, node.id, 'EA 实验资料'))
+        for (const node of nodes) {
+          if (node.id === root.id) continue
+          const edge = addRelation(this.options.chatGraph, project, root.id, node.id, 'EA 实验资料')
+          if (edge !== undefined) edges.push(edge)
+        }
       }
       // The note is deliberately appended outside the graph: the graph only
       // points at the real LAB_NOTE/raw files and never becomes an execution DAG.
