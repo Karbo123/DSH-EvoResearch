@@ -3,7 +3,7 @@
  * 确认 factory 可运行且导出 apply/inject（纳入 npm run verify）。
  * 用法：node scripts/verify-bundle.mjs
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -49,7 +49,20 @@ const mockDocument = {
 }
 globalThis.document = mockDocument
 try { globalThis.navigator = { userAgent: 'node-verify' } } catch { try { Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'node-verify' }, configurable: true }) } catch {} }
+// ELK（GWT 产物）随 chatgraph 布局引擎进入 app bundle，模块初始化期会执行
+// `$wnd.Error.stackTraceLimit = ...`（$wnd 即浏览器 window）。mock window 必须像
+// 浏览器一样暴露这些构造器，否则 bundle 加载校验在 ELK 环境探测处崩溃。
 globalThis.window = {
+  // 浏览器 window 上的常用构造器/全局（GWT 环境探测所需）
+  Error,
+  TypeError,
+  RangeError,
+  EvalError,
+  Date,
+  Math,
+  JSON,
+  Promise,
+  Uint8Array,
   document: mockDocument,
   __ModuleLoader__: {
     load(entry) {
@@ -77,6 +90,10 @@ globalThis.window = {
 }
 
 for (const bundle of BUNDLES) {
+  if (!existsSync(bundle)) {
+    console.error(`[verify-bundle] FAIL 缺少构建产物 ${bundle} —— 请先执行 npm run build`)
+    process.exit(1)
+  }
   if (!process.env.CI) console.log(`[verify-bundle] 读取 ${bundle}`)
   new Function(readFileSync(bundle, 'utf8'))()
 }

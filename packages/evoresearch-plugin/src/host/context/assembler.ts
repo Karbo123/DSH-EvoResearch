@@ -20,6 +20,20 @@ import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { execFileSync } from 'node:child_process'
+
+// 快速投影（prepareFast，每条 user/message 的同步热路径）期间抑制同步 PDF 子进程
+// 提取：execFileSync 阻塞整个 host 事件循环，图谱挂 N 个 PDF 即 3N 秒卡顿。
+let fastProjectionDepth = 0
+
+/** 标记同步快速投影区间：期间 readPdf 直接返回空（深入检索不受影响）。 */
+export function suspendSyncPdfRead<T>(fn: () => T): T {
+  fastProjectionDepth += 1
+  try {
+    return fn()
+  } finally {
+    fastProjectionDepth -= 1
+  }
+}
 import { projectNameFromWorkspace, workspaceDataDir } from '../core/paths.js'
 import { isRuntimeEdge, isMemoryNode, PERSISTENT_NODE_LOCATORS } from '../chat-graph.js'
 import type { ChatGraph, GraphNode } from '../chat-graph.js'
@@ -712,6 +726,7 @@ export class ContextAssembler {
     const skip = new Set(['.git', '.venv', 'node_modules', 'dist', 'build', '.next', '.evoresearch-data', '__pycache__'])
     const allowed = new Set(['.md', '.txt', '.log', '.out', '.err', '.json', '.jsonl', '.csv', '.tex', '.bib', '.py', '.ts', '.tsx', '.js', '.jsx', '.rs', '.java', '.c', '.cpp', '.h', '.yaml', '.yml', '.toml', '.pdf'])
     const readPdf = (file: string): string => {
+      if (fastProjectionDepth > 0) return ''
       try {
         return execFileSync('pdftotext', ['-f', '1', '-l', '4', '-layout', file, '-'], { encoding: 'utf8', timeout: 2500, maxBuffer: 2 * 1024 * 1024 }).slice(0, 1800)
       } catch {

@@ -13,8 +13,48 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { projectNameFromWorkspace, slugifyProjectName } from './core/paths.js'
 import { captureProvenance } from './experiment-provenance.js'
+
+/**
+ * 账本目录键解析（单点：service.repoDir 与 experiment-workspace 的覆盖清理共用）。
+ *
+ * slug 截断碰撞自愈（2026-09 审计）：两个 >20 字符的长项目名前缀相同会映射到同一
+ * 截断键，裸 git 库会互相提交串数据。检测到碰撞时：
+ * - 键改为确定性派生 `<截断键>-m<sha1 前 8 位（完整项目名）>`（两个碰撞项目各得独立库）；
+ * - 被共享的旧库一次性改名为 `<截断键>-collided-archive` 保留（其内历史属两个项目
+ *   混杂，无法机械拆分；原实验的工作区 .evoresearch-data 侧记录不受影响）。
+ */
+export function resolveLedgerDirKey(dataRoot: string, projectName: string): string {
+  const key = slugifyProjectName(projectName)
+  let colliding = false
+  try {
+    const projectsDir = path.join(dataRoot, 'projects')
+    for (const entry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      if (entry.name !== projectName && slugifyProjectName(entry.name) === key) {
+        colliding = true
+        break
+      }
+    }
+  } catch {
+    return key
+  }
+  if (!colliding) return key
+  const disambiguated = `${key}-m${createHash('sha1').update(projectName).digest('hex').slice(0, 8)}`
+  const sharedDir = path.join(dataRoot, 'plugins', 'ledgers', key)
+  const archiveDir = path.join(dataRoot, 'plugins', 'ledgers', `${key}-collided-archive`)
+  if (fs.existsSync(sharedDir) && !fs.existsSync(archiveDir)) {
+    try {
+      fs.renameSync(sharedDir, archiveDir)
+      console.warn(`[evoresearch:ledger] 检测到项目名截断碰撞，共享账本已归档: ${sharedDir} → ${archiveDir}；各碰撞项目将获得独立账本（混杂历史保留在归档库）`)
+    } catch (error) {
+      console.warn(`[evoresearch:ledger] 碰撞账本归档失败（继续使用派生键 ${disambiguated}）: ${String(error)}`)
+    }
+  }
+  return disambiguated
+}
 
 const GIT_NAME = 'EvoResearch'
 const GIT_EMAIL = 'evoresearch@localhost'
@@ -42,10 +82,10 @@ function runGit(args: string[], opts: { cwd?: string; gitDir?: string; workTree?
   if (opts.workTree) gitArgs.push(`--work-tree=${opts.workTree}`)
   gitArgs.push(...args)
   const cwd = opts.cwd ?? opts.workTree ?? opts.gitDir ?? process.cwd()
-  // Prefer git.exe on Windows, fallback to git
-  let result = spawnSync('git.exe', gitArgs, { cwd, encoding: 'utf8', windowsHide: true })
+  // Prefer git.exe on Windows, fallback to git；30s 超时防 git 挂起阻塞事件循环外的同步调用
+  let result = spawnSync('git.exe', gitArgs, { cwd, encoding: 'utf8', windowsHide: true, timeout: 30_000 })
   if (result.error && (result.error as NodeJS.ErrnoException).code === 'ENOENT') {
-    result = spawnSync('git', gitArgs, { cwd, encoding: 'utf8', windowsHide: true })
+    result = spawnSync('git', gitArgs, { cwd, encoding: 'utf8', windowsHide: true, timeout: 30_000 })
   }
   if (result.status !== 0) {
     throw new Error(`git ${args[0]} failed: ${(result.stderr ?? '').trim().slice(0, 500) || `exit ${String(result.status)}`}`)
@@ -80,7 +120,7 @@ export class ExperimentLedgerService {
     if (name === undefined) {
       throw new Error(`实验账本需要项目目录（dataRoot/projects/<name>）: ${projectDir}`)
     }
-    return path.join(this.dataRoot, 'plugins', 'ledgers', slugifyProjectName(name), `${slug}.git`)
+    return path.join(this.dataRoot, 'plugins', 'ledgers', resolveLedgerDirKey(this.dataRoot, name), `${slug}.git`)
   }
 
   private expDir(projectDir: string, slug: string): string {
@@ -143,40 +183,6 @@ export class ExperimentLedgerService {
       return { ok: true, sha }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-
-  private buildProvenanceStub(slug: string): Record<string, unknown> {
-    let appVersion = '0.1.0'
-    try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(this.dataRoot, 'package.json'), 'utf8')) as { version?: string }
-      if (typeof pkg.version === 'string') appVersion = pkg.version
-    } catch {
-      try {
-        const pkg2 = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')) as { version?: string }
-        if (typeof pkg2.version === 'string') appVersion = pkg2.version
-      } catch { /* ignore */ }
-    }
-    let dshVersion = 'unknown'
-    for (const cand of [
-      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
-      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-agent', 'package.json'),
-      path.join(process.cwd(), 'node_modules', '@deepseek-ai', 'dsh-session', 'package.json'),
-    ]) {
-      try {
-        const dshPkg = JSON.parse(fs.readFileSync(cand, 'utf8')) as { version?: string }
-        if (typeof dshPkg.version === 'string' && dshPkg.version !== '') { dshVersion = dshPkg.version; break }
-      } catch { /* try next */ }
-    }
-    return {
-      app: { name: 'EvoResearch', version: appVersion },
-      dsh: { version: dshVersion },
-      node: process.version,
-      os: `${process.platform} ${process.arch}`,
-      dataRoot: this.dataRoot,
-      createdAt: Date.now(),
-      slug,
-      config: {},
     }
   }
 

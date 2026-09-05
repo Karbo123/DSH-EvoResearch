@@ -51,9 +51,13 @@ jobs:
               ;;
           esac
           # 孤儿 draft 清理：draft 尚未打 tag，上面的 by-tag 路由查不到，
-          # 会永久残留并让仓库首页 Releases 侧栏显示异常（如只剩「1 tag」）
-          for DID in $(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '.[] | select(.draft) | .id'); do
-            echo "删除残留 draft Release id=$DID"
+          # 会永久残留并让仓库首页 Releases 侧栏显示异常（如只剩「1 tag」）。
+          # 仅删除本 TAG 的 draft（TAG 指向的旧 Release 被删后残留的 draft），
+          # 不碰用户手工创建的其他草稿。
+          # gh api 无 --arg 旗标（pflag 会把 --arg 当 --jq 的值使命令恒失败、
+          # 且命令替换内的失败被 for 静默吞掉）——TAG 用 shell 内插进 jq 程序。
+          for DID in $(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq ".[] | select(.draft and .tag_name == \"${TAG}\") | .id"); do
+            echo "删除本 TAG 残留 draft Release id=$DID"
             gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/$DID"
           done
           # 删除旧 Tag（remote 与 local）
@@ -347,7 +351,7 @@ jobs:
   # 模板：平台下载表（含 iOS）+ 卖点简介 + 自动提取的 commit 变更摘要。
   publish-notes:
     needs: [desktop, android]
-    if: ${{ !cancelled() && needs.desktop.result == 'success' }}
+    if: ${{ !cancelled() && needs.desktop.result == 'success' && needs.android.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout（取 commit 历史生成变更摘要）
@@ -380,10 +384,10 @@ jobs:
 
           | 你的设备 | 下载这个 | 怎么用 |
           |---|---|---|
-          | 🪟 **Windows 10/11** | `EvoResearch_0.1.0_x64-setup.exe` | 双击安装，打开即用。**大多数用户选这个** ⭐ |
-          | 🍎 Mac (M1/M2/M3/M4) | `EvoResearch_0.1.0_aarch64.dmg` | 打开后拖进「应用程序」 |
-          | 🐧 Linux（免安装） | `EvoResearch_0.1.0_amd64.AppImage` | `chmod +x` 后直接双击运行 |
-          | 🐧 Linux (Debian/Ubuntu) | `EvoResearch_0.1.0_amd64.deb` | `sudo dpkg -i <文件>` 安装 |
+          | 🪟 **Windows 10/11** | `EvoResearch_0.1.0-rc.1_x64-setup.exe` | 双击安装，打开即用。**大多数用户选这个** ⭐ |
+          | 🍎 Mac (M1/M2/M3/M4) | `EvoResearch_0.1.0-rc.1_aarch64.dmg` | 打开后拖进「应用程序」 |
+          | 🐧 Linux（免安装） | `EvoResearch_0.1.0-rc.1_amd64.AppImage` | `chmod +x` 后直接双击运行 |
+          | 🐧 Linux (Debian/Ubuntu) | `EvoResearch_0.1.0-rc.1_amd64.deb` | `sudo dpkg -i <文件>` 安装 |
           | 🤖 Android 手机 (arm64) | `app-arm64-release.apk` | 下载安装即可（预览版） |
           | 🤖 Android 其它架构 | `app-arm / app-x86 / app-x86_64-release.apk` | 按手机架构选择 |
           | 📱 iPhone / iPad | `ios-build.zip`（见本页 Assets 或 Actions 产物） | 解压出 .app；正式 IPA 需签名后提供 |

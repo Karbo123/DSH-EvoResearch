@@ -111,6 +111,15 @@ function makeSnippet(text: string, offset: number, length: number, before = 60, 
   return `${start > 0 ? '…' : ''}${core}${end < text.length ? '…' : ''}`
 }
 
+/** FTS 优先，异常时退化 LIKE 扫描（不因 FTS 表损坏而检索整体失败）。 */
+function tryFts<T>(fts: () => T, like: () => T): T {
+  try {
+    return fts()
+  } catch {
+    return like()
+  }
+}
+
 /** 文献检索服务。 */
 export class LibrarySearch {
   private readonly stores = new Map<string, LibraryStore>()
@@ -128,8 +137,9 @@ export class LibrarySearch {
     const fields: readonly SearchField[] = options.fields && options.fields.length > 0 ? options.fields : ALL_FIELDS
     const limit = Math.min(Math.max(Math.floor(options.limit ?? 20), 1), 100)
     const tokens = toFtsTokens(q)
+    // FTS5 优先；FTS 表异常/查询语法错误时退化为 LIKE 子串扫描（对照 memory 侧 RET-09 模式）
     const results = tokens.length > 0
-      ? store.searchFts(buildFieldMatch(tokens, fields), limit)
+      ? tryFts(() => store.searchFts(buildFieldMatch(tokens, fields), limit), () => store.searchLike(q, fields, limit))
       : store.searchLike(q, fields, limit)
     const terms = tokens.length > 0 ? tokens : [q]
     const locationsPerPaper = Math.min(Math.max(Math.floor(options.locationsPerPaper ?? 5), 0), 20)
@@ -270,6 +280,16 @@ export class LibrarySearch {
       this.stores.set(key, store)
     }
     return store
+  }
+
+  /** 关闭指定项目的缓存连接（项目删除/数据清理前调用：Windows 下打开的 SQLite 句柄会阻止目录删除）。 */
+  closeStore(projectPath: string): void {
+    const key = normPath(projectPath)
+    const store = this.stores.get(key)
+    if (store !== undefined) {
+      this.stores.delete(key)
+      store.close()
+    }
   }
 
   /** 关闭全部缓存连接（插件生命周期释放时调用）。 */

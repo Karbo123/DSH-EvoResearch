@@ -26,12 +26,14 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { api } from './fs-api'
 import {
   StickyNote, Map as MapIcon, FileText, FileClock, Search, Plus, RefreshCw,
   PenLine, Trash2, Check, X as XIcon, ChevronLeft, ChevronRight, ArrowLeft,
   NotebookPen,
 } from 'lucide-react'
 import { renderMarkdown } from './markdown'
+import { useConfirmReset } from './two-step'
 
 /** 阅读分页大小（字符）。 */
 const READ_PAGE = 4000
@@ -100,17 +102,6 @@ interface DraftDocRow extends DraftMetaRow {
 }
 
 /** 简单 POST JSON 封装（与 panels.ts / experiments.ts 同款）。 */
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  return json.value as T
-}
-
 function fmtTime(ts: number): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ''
@@ -168,6 +159,7 @@ function NoteReader({ workspaceDir, noteId, initialOffset, onBack, onChanged, on
   const [draftBody, setDraftBody] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const confirmReset = useConfirmReset()
   const [busy, setBusy] = useState(false)
 
   const load = (at: number) => {
@@ -178,7 +170,7 @@ function NoteReader({ workspaceDir, noteId, initialOffset, onBack, onChanged, on
       .catch((e: any) => onError(String(e?.message ?? e)))
       .finally(() => setBusy(false))
   }
-  useEffect(() => { load(initialOffset) }, [noteId])
+  useEffect(() => { load(initialOffset) }, [noteId, initialOffset])
 
   const save = () => {
     if (draftBody.trim() === '' || saving) return
@@ -282,7 +274,7 @@ function NoteReader({ workspaceDir, noteId, initialOffset, onBack, onChanged, on
                     title: t('deleteNote'),
                     'aria-label': t('deleteNote'),
                     disabled: busy,
-                    onClick: () => { setConfirmDelete(true); setTimeout(() => setConfirmDelete((v) => (v ? false : v)), 5000) },
+                    onClick: () => { setConfirmDelete(true); confirmReset.arm(() => setConfirmDelete((v) => (v ? false : v))) },
                     children: jsx(Trash2, {}),
                   }),
             ],
@@ -513,7 +505,7 @@ function DocBlock({ workspaceDir, kind, onError }: { workspaceDir: string; kind:
       .then((row) => { setDoc(row); setDraft(row.content) })
       .catch((e: any) => onError(String(e?.message ?? e)))
   }
-  useEffect(() => { load() }, [kind])
+  useEffect(() => { load() }, [kind, workspaceDir])
 
   const save = () => {
     if (saving) return

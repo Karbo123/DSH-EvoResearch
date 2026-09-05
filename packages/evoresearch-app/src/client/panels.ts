@@ -6,8 +6,10 @@
  * 绕开浏览器 Remote $mount 通道）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
+import { useConfirmReset } from './two-step'
+import { api } from './fs-api'
 import {
   BrainCircuit, Clock, Plus, Trash2, ListChecks, Target, GraduationCap,
   Check, X as XIcon, Play, FolderGit2, FolderUp, RefreshCw, Cable, Users,
@@ -44,18 +46,6 @@ function LoadingRow() {
   return jsx('div', { className: 'evo-panel-hint', children: t('loading') })
 }
 
-/** 简单 POST JSON 封装。 */
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  return json.value as T
-}
-
 /** EvoMemory 面板：项目 + 分类统计 + 目标。 */
 export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => void }) {
   const [projects, setProjects] = useState<Array<{ name: string; path?: string }> | null>(null)
@@ -77,6 +67,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
   const [newFileName, setNewFileName] = useState('')
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null)
+  const confirmDeleteFileReset = useConfirmReset()
   const [profileBusy, setProfileBusy] = useState(false)
   // Knowledge（§26.5 轻量版）
   const [observations, setObservations] = useState<Array<{ observationId: string; title: string; content: string; categories: readonly string[]; status: string; supersededBy?: string; relatedObservationIds?: readonly string[]; updatedAt: number }> | null>(null)
@@ -86,7 +77,15 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
 
   const loadTurns = (offset: number) => {
     void api<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }>>('memory-turns', { limit: TURN_PAGE, offset })
-      .then((list) => { setTurns(list); setTurnOffset(offset) })
+      .then((list) => {
+        // 「加载更早」追加语义（与 research-notes 一致）：保留已加载轮次，按 turnId 去重
+        setTurns((prev) => {
+          if (offset === 0 || prev === null) return list
+          const seen = new Set(prev.map((row) => row.turnId))
+          return [...prev, ...list.filter((row) => !seen.has(row.turnId))]
+        })
+        setTurnOffset(offset)
+      })
       .catch((e: any) => setError(String(e?.message ?? e)))
   }
   useEffect(() => { if (tab === 'history') loadTurns(0) }, [tab])
@@ -277,8 +276,8 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
           ? jsx('span', { className: 'evo-panel-hint', children: t('noActiveGoals') })
           : jsx('div', {
               className: 'evo-panel-list',
-              children: (goals ?? []).map((g) => {
-                const key = g.goalId ?? g.id ?? g.title ?? ''
+              children: (goals ?? []).map((g, gi) => {
+                const key = g.goalId ?? g.id ?? g.title ?? `goal-${gi}`
                 const expanded = expandedGoal === key
                 const criteria = g.criteria ?? []
                 const satisfied = criteria.filter((c) => c.satisfied).length
@@ -430,7 +429,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                                 o.status === 'superseded' && jsx('span', { className: 'evo-skill-status rejected', children: t('superseded') }),
                               ],
                             }),
-                            o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: `superseded by ${o.supersededBy.slice(0, 18)}` }),
+                            o.supersededBy !== undefined && jsx('div', { className: 'evo-skill-src', children: t('skillSupersededBy').replace('{v}', o.supersededBy.slice(0, 18)) }),
                             o.content !== '' && jsx('div', { className: 'evo-skill-desc', children: o.content.slice(0, 220) }),
                             (o.categories ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.categories ?? []).slice(0, 3).map((c) => jsx('span', { className: 'evo-panel-tag', children: categoryLabel(c) }, c)) }),
                             (o.relatedObservationIds ?? []).length > 0 && jsx('div', { className: 'evo-history-meta', children: (o.relatedObservationIds ?? []).map((rid) => {
@@ -517,7 +516,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                                           className: 'evo-panel-act evo-del',
                                           title: t('remove'),
                                           'aria-label': t('remove'),
-                                          onClick: () => { setConfirmDeleteFile(f.name); setTimeout(() => setConfirmDeleteFile((v) => (v === f.name ? null : v)), 5000) },
+                                          onClick: () => { setConfirmDeleteFile(f.name); confirmDeleteFileReset.arm(() => setConfirmDeleteFile((v) => (v === f.name ? null : v))) },
                                           children: jsx(Trash2, {}),
                                         }),
                                   ] }),
@@ -655,10 +654,10 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
     setCronInput(t.cron)
   }
   const TEMPLATES = [
-    { name: 'Daily Papers', cron: '0 9 * * *', prompt: '按研究偏好追踪最新论文，并写入 daily-papers.md。' },
-    { name: 'Weekly Research Review', cron: '0 17 * * 5', prompt: '总结本周研究进展、决定、阻塞和下一步计划。' },
-    { name: 'Weekly Research Plan', cron: '0 8 * * 1', prompt: '生成本周科研计划。' },
-    { name: 'Experiment Backlog', cron: '0 10 * * 2', prompt: '把当前开放问题转成可检验的实验 backlog。' },
+    { name: 'Daily Papers', cron: '0 9 * * *', prompt: t('schedTplDailyPapersPrompt') },
+    { name: 'Weekly Research Review', cron: '0 17 * * 5', prompt: t('schedTplWeeklyReviewPrompt') },
+    { name: 'Weekly Research Plan', cron: '0 8 * * 1', prompt: t('schedTplWeeklyPlanPrompt') },
+    { name: 'Experiment Backlog', cron: '0 10 * * 2', prompt: t('schedTplExpBacklogPrompt') },
   ]
 
   const load = () => {
@@ -775,13 +774,13 @@ export function SchedulePanel({ onOpenThread }: { onOpenThread: (id: string) => 
               }),
               jsx('code', { className: 'evo-sched-preview', children: cronPreview }),
             ] }),
-            jsx('div', { className: 'evo-sched-templates', children: TEMPLATES.map((t) => jsx('button', {
+            jsx('div', { className: 'evo-sched-templates', children: TEMPLATES.map((tpl) => jsx('button', {
               type: 'button',
               className: 'evo-sched-template',
-              title: t.prompt,
-              onClick: () => applyTemplate(t),
-              children: t.name,
-            }, t.name)) }),
+              title: tpl.prompt,
+              onClick: () => applyTemplate(tpl),
+              children: tpl.name,
+            }, tpl.name)) }),
             jsx('input', { type: 'text', className: 'evo-panel-input', placeholder: t('promptHint'), value: prompt, onInput: (e) => setPrompt(e.currentTarget.value) }),
             jsx('button', { type: 'button', className: 'evo-panel-add', disabled: adding || !name.trim() || !prompt.trim(), onClick: addTask, children: jsxs(Fragment, { children: [jsx(Plus, {}), jsx('span', { children: t('add') })] }) }),
           ],
@@ -890,7 +889,7 @@ function MarketplaceView() {
             onInput: (e) => setQuery(e.currentTarget.value),
             'aria-label': t('searchSkills'),
           }),
-          jsx('span', { className: 'evo-panel-hint', children: `${rows.length} skills` }),
+          jsx('span', { className: 'evo-panel-hint', children: t('skillsCount').replace('{n}', String(rows.length)) }),
         ],
       }),
       skills === null
@@ -1177,6 +1176,7 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
   const [version, setVersion] = useState('3.12')
   const [pkgInput, setPkgInput] = useState('')
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const confirmRemoveReset = useConfirmReset()
 
   const load = () => {
     setInfo(null)
@@ -1185,17 +1185,20 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
   // 挂载即加载（而非仅展开时）：折叠态头部应显示真实环境状态（未创建/版本），而不是永远"加载中…"
   useEffect(() => { load() }, [projectDir])
 
-  // UV 缺失 → 自动安装（官方脚本；一次成功即刷新状态）
+  // UV 缺失 → 自动安装（官方脚本；一次成功即刷新状态）。
+  // 失败后必须退出自动安装（uvFailedRef），否则 setUvBusy(true→false) 会让本 effect
+  // 的守卫每次都重新放行，形成「安装失败→重试→刷错误条」的无限循环。
+  const uvFailedRef = useRef(false)
   useEffect(() => {
-    if (!expanded || info === null || info.uv !== null || uvBusy) return
+    if (!expanded || info === null || info.uv !== null || uvBusy || uvFailedRef.current) return
     setUvBusy(true)
     void api<{ ok: boolean; installed: boolean; error?: string }>('uv-ensure', {})
       .then((result) => {
         setUvBusy(false)
         if (result.ok) load()
-        else onError(`${t('uvInstallFailed')}: ${result.error ?? ''}`)
+        else { uvFailedRef.current = true; onError(`${t('uvInstallFailed')}: ${result.error ?? ''}`) }
       })
-      .catch((e: any) => { setUvBusy(false); onError(String(e?.message ?? e)) })
+      .catch((e: any) => { setUvBusy(false); uvFailedRef.current = true; onError(String(e?.message ?? e)) })
   }, [expanded, info, uvBusy])
 
   const doCreate = () => {
@@ -1264,8 +1267,8 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
               ? `${info.packages.length} ${t('packages')}: ${info.packages.slice(0, 12).join(', ')}${info.packages.length > 12 ? '…' : ''}`
               : t('noPackagesYet'),
           }),
-          // 创建（未存在时）
-          !info?.exists && jsxs('div', {
+          // 创建（未存在时；info 尚未加载完成不渲染，避免加载态闪出创建表单）
+          info !== null && !info.exists && jsxs('div', {
             className: 'evo-panel-form',
             children: [
               jsx('input', {
@@ -1315,7 +1318,7 @@ function ProjectEnvCard({ projectDir, onError }: { projectDir: string; onError: 
                     type: 'button',
                     className: 'evo-tl-del',
                     disabled: busy,
-                    onClick: () => { setConfirmRemove(true); setTimeout(() => setConfirmRemove(false), 5000) },
+                    onClick: () => { setConfirmRemove(true); confirmRemoveReset.arm(() => setConfirmRemove(false)) },
                     children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('removeEnv') })] }),
                   }),
             ],

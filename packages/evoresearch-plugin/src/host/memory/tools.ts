@@ -16,10 +16,10 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import type { ResearchMemoryStore } from './store.js'
-import { parseObservationFile } from './store.js'
+import { parseObservationFile, ResearchMemoryStore } from './store.js'
 import { turnDetail, readConversationRange, readMemoryFilePaged, expandFragmentHit } from './read.js'
-import type { ResearchCategory, GoalProposal, ObservationEdgeType } from '../../shared/types.js'
+import type { ConversationItem } from './read.js'
+import type { ResearchCategory, GoalProposal, ObservationEdgeType, ObservationMeta } from '../../shared/types.js'
 
 /** 工具上下文：MemoryRuntime 提供的存储门面。 */
 export interface MemoryToolHost {
@@ -103,7 +103,9 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       // RET-03：片段级检索（FTS5 优先，失败自动退化 LIKE 原文扫描，RET-09）
       const fragments = store.searchFragments(input.query, limit * 3, { mode: 'auto' })
       if (fragments.length > 0) {
-        const hits = fragments.slice(0, limit).map(({ fragment, score }) => expandFragmentHit(store, fragment, score))
+        // 同一次检索内按 sessionId 缓存会话段（避免多命中重复拉全量段，防 N+1）
+        const segmentsCache = new Map<string, ConversationItem[]>()
+        const hits = fragments.slice(0, limit).map(({ fragment, score }) => expandFragmentHit(store, fragment, score, 2, 2, segmentsCache))
         return { hits }
       }
       // 兼容回退：片段索引未建立（旧库未回填）时沿用旧混合召回
@@ -141,7 +143,8 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       const store = host.storeFor(workspaceOf(exec))
       const limit = Math.min(input.limit ?? 8, 20)
       const fragments = store.searchFragments(input.query, limit, { sessionId: input.session_id, mode: 'auto' })
-      return { hits: fragments.map(({ fragment, score }) => expandFragmentHit(store, fragment, score)) }
+      const segmentsCache = new Map<string, ConversationItem[]>()
+      return { hits: fragments.map(({ fragment, score }) => expandFragmentHit(store, fragment, score, 2, 2, segmentsCache)) }
     },
   })
 
@@ -243,7 +246,18 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       const input = args as { query: string; limit?: number }
       const store = host.storeFor(workspaceOf(exec))
       const limit = Math.min(input.limit ?? 10, 30)
-      const results = store.searchObservationsFts(input.query, limit)
+      // FTS MATCH 串必须经 toFtsQuery 清洗：原始查询含 CJK 标点/FTS 运算符
+      // 会语法错误直接抛给模型；清洗后为空或 FTS 故障时退化 LIKE 检索。
+      const ftsQuery = ResearchMemoryStore.toFtsQuery(input.query)
+      let results: Array<{ observation: ObservationMeta; score: number }> = []
+      if (ftsQuery !== '') {
+        try {
+          results = store.searchObservationsFts(ftsQuery, limit)
+        } catch {
+          results = []
+        }
+      }
+      if (results.length === 0) results = store.searchObservationsLike(input.query, limit)
       return results.map(({ observation, score }) => ({
         observationId: observation.observationId,
         title: observation.title,
@@ -361,7 +375,6 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       const existing = store.getObservation(input.observation_id)
       if (!existing) return { ok: false, error: '未找到 Observation' }
       const parsed = parseObservationFile(existing.content)
-      const now = Date.now()
       store.writeObservation(host.observationsDirFor(workspace), {
         observationId: existing.observationId,
         title: parsed.frontmatter.title ?? existing.title,
@@ -371,6 +384,13 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
         topicKeys: existing.topicKeys,
         entities: existing.entities,
         sourceTurnIds: existing.sourceTurnIds,
+        // 更新路径必须保留既有元数据：关联/状态/时间线此前会被重置
+        //（superseded 记录被改一笔就"复活"为 active，关联边全部丢失）。
+        relatedObservationIds: existing.relatedObservationIds,
+        edgeTypes: existing.edgeTypes,
+        status: existing.status,
+        supersededBy: existing.supersededBy,
+        createdAt: existing.createdAt,
         projectId: existing.projectId,
       })
       return { ok: true }
@@ -389,6 +409,9 @@ export function registerMemoryTools(ctx: Context, host: MemoryToolHost): () => v
       const input = args as { observation_id: string; superseded_by: string }
       const workspace = workspaceOf(exec)
       const store = host.storeFor(workspace)
+      if (store.getObservation(input.observation_id) === undefined) {
+        return { ok: false, error: `Observation 不存在: ${input.observation_id}` }
+      }
       store.supersedeObservation(host.observationsDirFor(workspace), input.observation_id, input.superseded_by)
       return { ok: true }
     },

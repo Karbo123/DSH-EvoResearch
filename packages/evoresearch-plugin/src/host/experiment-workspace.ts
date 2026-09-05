@@ -41,7 +41,9 @@ import {
   projectDir,
   slugifyProjectName,
   validateWorkspace,
+  projectNameFromWorkspace,
 } from './core/paths.js'
+import { resolveLedgerDirKey } from './experiment-ledger.js'
 
 /** 实验目录集合名（<workspace>/experiments/）。 */
 const EXP_DIR_NAME = 'experiments'
@@ -245,7 +247,8 @@ export class ExperimentWorkspaceService {
       if (opts?.overwrite !== true) throw new Error(`实验已存在: ${baseSlug}`)
       // 覆盖并重建：删除实验目录及对应账本（A.5 纪律 6）
       fs.rmSync(targetDir, { recursive: true, force: true })
-      const sanitized = slugifyProjectName(path.basename(ws))
+      // 账本键解析单点收敛（与 ExperimentLedgerService.repoDir 同源，含碰撞消解）
+      const sanitized = resolveLedgerDirKey(this.config.dataRoot, projectNameFromWorkspace(this.config.dataRoot, this.assertWorkspace(ws)) ?? path.basename(ws))
       const ledgerRepo = path.join(this.config.dataRoot, 'plugins', 'ledgers', sanitized, `${baseSlug}.git`)
       try { fs.rmSync(ledgerRepo, { recursive: true, force: true }) } catch { /* best effort */ }
     }

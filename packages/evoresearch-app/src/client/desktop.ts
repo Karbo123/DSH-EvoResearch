@@ -26,7 +26,6 @@ const TB_ICONS = {
 
 const MIN_ICON = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`
 const MAX_ICON = `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect x="2" y="2" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`
-const RESTORE_ICON = `<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect x="2.5" y="3.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 3.5v-1.5h6v6h-1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`
 const CLOSE_ICON = `<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`
 
 /** 调用 Tauri 窗口命令（浏览器环境静默失败）。

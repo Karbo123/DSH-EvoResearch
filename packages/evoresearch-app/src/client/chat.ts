@@ -40,11 +40,8 @@ import { CurrentDialog, SearchDialog, ShortcutsDialog, ConfirmDialog } from './s
 import { ShieldCheck as ShieldCheckIcon, ShieldX } from 'lucide-react'
 import { Dropdown } from './dropdown'
 
-const SUGGESTED_PROMPTS = [
-  'Survey recent papers on a topic',
-  'Design an experiment plan',
-  'Analyze workspace files',
-]
+// i18n：欢迎页建议卡此前硬编码英文（中文界面仍显示英文文案）
+const SUGGESTED_PROMPTS = ['sugPromptSurvey', 'sugPromptExperiment', 'sugPromptWorkspace']
 
 /** 自适应工作路径：可用宽度放得下就完整显示；放不下时保留头尾路径段、中间省略（省略号位于两段分隔符之间）。 */
 function CwdPath({ path }: { path: string }) {
@@ -331,7 +328,7 @@ function ToolImageThumb({ asset }: { asset: ToolImageAsset }) {
   return jsxs('button', {
     type: 'button',
     className: 'evo-tool-img',
-    title: `${asset.name}（点击放大）`,
+    title: `${asset.name}${t('clickToEnlarge')}`,
     onClick: () => {
       if (src === null) { load(); return }
       const win = typeof window !== 'undefined' ? window.open('') : null
@@ -891,6 +888,9 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
     setJumpKey(null)
     // 待编辑状态只属于当前会话，切换会话后不得把旧消息序号带到新会话。
     setPendingEdit(null)
+    // 回溯/编辑操作锁同样只属于当前会话的操作流，切换后必须解锁。
+    setOpBusy(false)
+    setRewindConfirm(null)
   }, [sessionId])
 
   const toggleNotify = () => {
@@ -955,6 +955,9 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
       if (json.ok === true && typeof json.value?.childSessionId === 'string') {
         onSuccess?.()
         if (json.value?.note !== undefined && json.value.note !== '') toast(json.value.note, 'info')
+        // 成功路径同样复位：ChatArea 实例在 fork 后继续服务子会话（无 key 重挂载），
+        // 此前 opBusy 永久停留 true，一次成功回溯后编辑/回溯全部失效。
+        setOpBusy(false)
         window.dispatchEvent(new CustomEvent('evo-rewind', { detail: { childId: json.value.childSessionId, ...(resend !== undefined ? { resend } : {}) } }))
       } else {
         setOpBusy(false)
@@ -1701,17 +1704,17 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
                   jsx('p', { children: t('tagline') }),
                   jsx('div', {
                     className: 'evo-suggest',
-                    children: SUGGESTED_PROMPTS.map((p) => jsx('button', {
+                    children: SUGGESTED_PROMPTS.map((key) => jsx('button', {
                       type: 'button',
                       className: 'evo-suggest-card',
                       title: t('suggestionHint'),
-                      'aria-label': `${p}（${t('suggestionHint')}）`,
+                      'aria-label': `${t(key)}（${t('suggestionHint')}）`,
                       onClick: () => {
-                        setComposerMarkdown(p, true)
+                        setComposerMarkdown(t(key), true)
                         requestAnimationFrame(() => moveCursorToEnd())
                       },
-                      children: p,
-                    }, p)),
+                      children: t(key),
+                    }, key)),
                   }),
                   input.trim() === '' && jsx('button', {
                     type: 'button',

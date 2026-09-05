@@ -131,7 +131,7 @@ export class SchedulerService {
 
   private save(): void {
     fs.mkdirSync(path.dirname(this.file), { recursive: true })
-    const tmp = `${this.file}.tmp`
+    const tmp = `${this.file}.tmp-${process.pid}`
     fs.writeFileSync(tmp, JSON.stringify({ tasks: this.tasks }, null, 2), 'utf8')
     fs.renameSync(tmp, this.file)
   }
@@ -248,28 +248,36 @@ export class SchedulerService {
     }
   }
 
+  /** 在飞守卫：runTask 卡住时跳过后续 tick，避免同一任务双触发。 */
+  private ticking = false
+
   /** 检查并触发到期任务。 */
   private async tick(ctx: Context): Promise<void> {
-    const now = new Date()
-    for (const task of this.tasks) {
-      if (!task.enabled) continue
-      if (task.lastRunAt !== undefined) {
-        const next = nextRun(parseCron(task.cron), new Date(task.lastRunAt))
+    if (this.ticking) return
+    this.ticking = true
+    try {
+      const now = new Date()
+      for (const task of this.tasks) {
+        if (!task.enabled) continue
+        // 上次运行起算下一次命中；从未运行过的任务从 createdAt 起算。
+        // 此前新任务从 epoch(0) 起算恒为到期，"每天9点"在 10 点添加也会立即执行。
+        const from = new Date(task.lastRunAt ?? task.createdAt)
+        const next = nextRun(parseCron(task.cron), from)
         if (!next || next.getTime() > now.getTime()) continue
-      } else {
-        const first = nextRun(parseCron(task.cron), new Date(0))
-        if (!first || first.getTime() > now.getTime()) continue
+        // 到期：执行一次（失败也推进 lastRunAt：按 cron 等到下一命中点，
+        // 避免每分钟重试风暴式创建无人值守会话）
+        try {
+          const threadId = await this.runTask(ctx, task)
+          task.lastRunAt = Date.now()
+          task.lastResultThreadId = threadId
+        } catch (error) {
+          console.error(`[evoresearch:scheduler] 任务 ${task.taskId} 执行失败:`, error)
+          task.lastRunAt = Date.now()
+        }
+        this.save()
       }
-      // 到期：执行一次
-      try {
-        const threadId = await this.runTask(ctx, task)
-        task.lastRunAt = Date.now()
-        task.lastResultThreadId = threadId
-      } catch (error) {
-        console.error(`[evoresearch:scheduler] 任务 ${task.taskId} 执行失败:`, error)
-        task.lastRunAt = Date.now()
-      }
-      this.save()
+    } finally {
+      this.ticking = false
     }
   }
 

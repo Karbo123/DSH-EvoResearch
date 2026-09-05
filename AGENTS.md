@@ -118,7 +118,7 @@ bash 等价形式：以上三个变量取同值（`D:\\DSH-Research\\.tmp-dev\\.
 
 **验证启动成功**：① 日志出现 `[evoresearch] host 插件激活（dataRoot: …）` 且 dataRoot 符合 §2（主仓库或分支独立根）；② 用启动器日志打印的实际 URL（3081 起，占用自动递增）访问返回 200；③ 左侧项目列表来自对应 dataRoot。
 
-**profile 就绪判定**：当前 worktree `profiles\evoresearch\` 须有 `cordis.yml`、`cordis.patch.yml`、`package.json`、`node_modules`，且 `node_modules/@evoresearch/*` 指向本 worktree workspace 包；缺失就先在当前 worktree `npm install` + `npm run build`。profile 的 `file:../../packages/...` 相对当前 worktree 解析；不要把 profile junction 到主仓库、不要复制到数据目录（启动器自动挂载）。**`--profile evoresearch` 只认裸名**，不能传路径形式（rc.2 报 invalid profile name）。
+**profile 就绪判定**：当前 worktree `profiles\evoresearch\` 须有 `cordis.yml`、`cordis.patch.yml`、`package.json`、`node_modules`，且 `node_modules/@evoresearch/*` 指向本 worktree workspace 包；缺失就先在当前 worktree `npm install` + `npm run build`，**再在 `profiles/evoresearch/` 内执行 `pnpm install`**（profile 是独立 pnpm 工程，根 npm install 不会装它的依赖；start-web.mjs 报「profile 依赖不完整」即指此项）。profile 的 `file:../../packages/...` 相对当前 worktree 解析；不要把 profile junction 到主仓库、不要复制到数据目录（启动器自动挂载）。**`--profile evoresearch` 只认裸名**，不能传路径形式（rc.2 报 invalid profile name）。
 
 #### 4.2.1 正式 Web（同一 profile，只切数据根）
 
@@ -127,7 +127,7 @@ bash 等价形式：以上三个变量取同值（`D:\\DSH-Research\\.tmp-dev\\.
 ### 4.3 桌面版
 
 - **开发态**：`cd desktop; cargo tauri dev`（需 Rust）。
-- **打包 NSIS**：`npm run build` → `node desktop/scripts/build.mjs --skip-download`，产物 `desktop/src-tauri/target/release/bundle/nsis/EvoResearch_0.1.0_x64-setup.exe`（同时更新 `desktop/sidecar/dist/` 与 `_up_/`）。
+- **打包 NSIS**：`npm run build` → `node desktop/scripts/build.mjs --skip-download`，产物 `desktop/src-tauri/target/release/bundle/nsis/EvoResearch_0.1.0-rc.1_x64-setup.exe`（同时更新 `desktop/sidecar/dist/` 与 `_up_/`）。
 - `bundle-sidecar.mjs` 用 `--install-links` 真实复制 `@evoresearch/*`（junction 在 NSIS 展开失效）；`launch.js` 启动时自愈 profile junction（黑窗根因修复）；无边框窗口 + 自绘标题栏 36px（`?desktop=1` 渲染 `DesktopTitlebar`）。
 
 ---
@@ -195,7 +195,7 @@ node scripts/verify-chatgraph-xyflow.mjs / verify-bundle.mjs / check-docs.mjs
 - **修改本文件（AGENTS.md）后**：先按文件头部规则复查字符数 ≤ 24,000，超限继续精简，然后再自动提交。
 
 - **日常**：工作树干净、`ahead N` 时 `git push origin main`。
-- **CI 发布流水线**（`.github/workflows/release.yml`，仅手动 workflow_dispatch；push main 不触发构建）：prepare-release（删旧 tag/Release 重建）→ desktop 三平台矩阵（NSIS / AppImage+deb / dmg）∥ android ∥ ios → publish-notes；**Release 恒为 `v0.1.0-rc.1`**（prerelease），资产同名覆盖，Notes 由 publish-notes 固定模板生成；iOS `npx tauri ios build --target aarch64-sim|aarch64`，.app 打 zip 走 artifact `ios-build`（无签名，正式 IPA 需配证书 secrets）；Android unsigned APK 挂 Release，配 `ANDROID_KEYSTORE_*` 四个 secrets 后自动签名。
+- **CI 发布流水线**（`.github/workflows/release.yml`，仅手动 workflow_dispatch；push main 不触发构建）：prepare-release（删旧 tag/Release 重建）→ desktop 三平台矩阵（NSIS / AppImage+deb / dmg）∥ android ∥ ios → publish-notes；**Release 恒为 `v0.1.0-rc.1`**（正式版，展示为 Latest；release.yml `-F prerelease=false`），资产同名覆盖，Notes 由 publish-notes 固定模板生成；iOS `npx tauri ios build --target aarch64-sim|aarch64`，.app 打 zip 走 artifact `ios-build`（无签名，正式 IPA 需配证书 secrets）；Android unsigned APK 挂 Release，配 `ANDROID_KEYSTORE_*` 四个 secrets 后自动签名。
 
 ### 9.1 Git 历史重写（去 Claude co-author）
 

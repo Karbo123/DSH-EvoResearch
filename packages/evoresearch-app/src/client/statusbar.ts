@@ -301,13 +301,13 @@ export function ComposerModelInfo() {
             : info.reasoningEffort === 'xhigh' ? t('effortXhigh')
           : info.reasoningEffort === 'max' ? t('effortMax')
             : null
-  const detail = [`${info.model}（${info.provider ?? '?'}）`, currentEffortLabel !== null ? `推理强度：${currentEffortLabel}` : null].filter(Boolean).join(' · ')
+  const detail = [`${info.model}（${info.provider ?? '?'}）`, currentEffortLabel !== null ? t('reasoningLevelLabel').replace('{v}', currentEffortLabel) : null].filter(Boolean).join(' · ')
   return jsxs(Fragment, { children: [
     jsxs('button', {
       ref: btnRef,
       type: 'button',
       className: `evo-composer-model${open ? ' evo-composer-model-open' : ''}`,
-      title: `${detail}（点击切换）`,
+      title: `${detail}${t('clickToSwitch')}`,
       'aria-label': t('model'),
       'aria-expanded': open || undefined,
       'aria-haspopup': 'listbox',

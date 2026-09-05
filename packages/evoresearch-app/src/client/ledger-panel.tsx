@@ -10,6 +10,8 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { useConfirmReset } from './two-step'
+import { apiTolerant as api } from './fs-api'
 import { FlaskConical, RefreshCw, Check, X as XIcon, Camera, Play, Pencil, XCircle, RotateCcw, Download, Copy, History, FileText, Beaker } from 'lucide-react'
 
 interface ExperimentWorkspaceInfo {
@@ -27,23 +29,6 @@ interface LedgerCommitInfo {
   message: string
   when: number
   kind: string
-}
-
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  const v = json.value as T & { error?: string; ok?: boolean }
-  // some remotes return { error: string } inside value on service unavailable
-  if (v !== null && typeof v === 'object' && 'error' in (v as Record<string, unknown>) && typeof (v as { error?: unknown }).error === 'string') {
-    // but distinguish ok:false shape – let caller handle ok false
-    if (!('ok' in (v as Record<string, unknown>))) throw new Error((v as { error: string }).error)
-  }
-  return json.value as T
 }
 
 function fmtTime(ts: number): string {
@@ -87,6 +72,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
   const [exportDest, setExportDest] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null)
+  const confirmRestoreReset = useConfirmReset()
   const [provenance, setProvenance] = useState<Record<string, unknown> | null>(null)
   const [provError, setProvError] = useState<string | null>(null)
   const [recent, setRecent] = useState<Record<string, unknown> | null>(null)
@@ -404,7 +390,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
                             className: 'evo-panel-act',
                             title: t('ledgerRestoreTo'),
                             disabled: busy,
-                            onClick: () => { setConfirmRestore(row.sha); setTimeout(() => setConfirmRestore((v) => v === row.sha ? null : v), 5000) },
+                            onClick: () => { setConfirmRestore(row.sha); confirmRestoreReset.arm(() => setConfirmRestore((v) => v === row.sha ? null : v)) },
                             children: jsx(RotateCcw, {}),
                           }),
                       ],
@@ -487,7 +473,7 @@ function LedgerExperimentCard({ workspaceDir, slug, onError, onNotice }: {
   })
 }
 
-export function LedgerPanel({ cwd }: { cwd: string | null; sessionId: string | null; onOpenSession: (id: string) => void }) {
+export function LedgerPanel({ cwd }: { cwd: string | null }) {
   const workspaceDir = cwd ?? ''
   const [list, setList] = useState<ExperimentWorkspaceInfo[] | null>(null)
   const [error, setError] = useState<string | null>(null)

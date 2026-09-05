@@ -10,6 +10,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ExternalLink, Link2, Pin, RefreshCw, X } from 'lucide-react'
 import { t } from './i18n'
+import { api } from './fs-api'
 import type { ChatGraph, GraphNode } from './chatgraph'
 
 interface PreviewItem {
@@ -64,15 +65,9 @@ export interface ContextTraceDrawerProps {
   onError: (message: string) => void
 }
 
-async function callApi<T>(method: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await response.json() as { ok?: boolean; value?: T; error?: { message?: string } }
-  if (json.ok !== true) throw new Error(json.error?.message ?? t('contextTraceApiFailed').replace('{method}', method))
-  return json.value as T
+/** 统一传输层（fs-api）；本面板错误文案带 method 名，经 fallback 注入。 */
+function callApi<T>(method: string, body: Record<string, unknown>): Promise<T> {
+  return api<T>(method, body, t('contextTraceApiFailed').replace('{method}', method))
 }
 
 function graphNodeFromLocator(locator: string): string | undefined {

@@ -13,6 +13,8 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { useConfirmReset } from './two-step'
+import { api } from './fs-api'
 import { FlaskConical, Plus, Trash2, RefreshCw, GitBranch, RotateCcw, Camera, Check, X as XIcon, MessageSquare, ChevronRight, ChevronDown, FolderKanban, NotepadText, History } from 'lucide-react'
 import { ExperimentWorkspacePanel } from './experiment-workspace'
 import { LedgerPanel } from './ledger-panel'
@@ -67,17 +69,6 @@ interface ExperimentSummaryRow {
 }
 
 /** 简单 POST JSON 封装（与 panels.ts 同款）。 */
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? '请求失败')
-  return json.value as T
-}
-
 function fmtTime(ts: number): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ''
@@ -148,7 +139,9 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
   const [branchFrom, setBranchFrom] = useState<string | null>(null)
   const [branchName, setBranchName] = useState('')
   const [confirmRollback, setConfirmRollback] = useState<string | null>(null)
+  const confirmRollbackReset = useConfirmReset()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const confirmDeleteReset = useConfirmReset()
   const [busy, setBusy] = useState(false)
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
 
@@ -250,7 +243,7 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
                 title: t('deleteExperiment'),
                 'aria-label': t('deleteExperiment'),
                 disabled: busy,
-                onClick: () => { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 5000) },
+                onClick: () => { setConfirmDelete(true); confirmDeleteReset.arm(() => setConfirmDelete(false)) },
                 children: jsx(Trash2, {}),
               }),
         ],
@@ -286,7 +279,6 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
               addingPhase
                 ? jsx(InlineInput, {
                     placeholder: t('phaseName'),
-                    confirmLabel: t('create'),
                     busy,
                     onConfirm: doAddPhase,
                     onCancel: () => setAddingPhase(false),
@@ -367,13 +359,12 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
                                 title: t('rollbackTo'),
                                 'aria-label': t('rollbackTo'),
                                 disabled: busy,
-                                onClick: () => { setConfirmRollback(cp.id); setTimeout(() => setConfirmRollback((v) => (v === cp.id ? null : v)), 5000) },
+                                onClick: () => { setConfirmRollback(cp.id); confirmRollbackReset.arm(() => setConfirmRollback((v) => (v === cp.id ? null : v))) },
                                 children: jsx(RotateCcw, {}),
                               }),
                           branchFrom === cp.id
                             ? jsx('div', { className: 'evo-exp-branch-from', children: jsx(InlineInput, {
                                 placeholder: t('branchName'),
-                                confirmLabel: t('create'),
                                 busy,
                                 onConfirm: (name) => doBranch(cp.id, name),
                                 onCancel: () => setBranchFrom(null),

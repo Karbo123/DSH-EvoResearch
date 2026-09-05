@@ -659,6 +659,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
   border-radius: 8px; background: var(--color-surface); }
 .evo-panel-field-hint { margin-top: -10px; font-size: 11.5px; line-height: 1.5; }
 .evo-panel-error { padding: 8px 12px; border: 1px solid var(--color-error); border-radius: 8px; color: var(--color-error); font-size: 12.5px; }
+/* 图谱「未绑定项目工作区」引导空态：中性色，不用错误红 */
+.evo-graph-hint-banner { padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-secondary); font-size: 12.5px; line-height: 1.6; }
 .evo-llm-probe-warn { padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--color-border)); border-radius: 8px; color: var(--color-warning); font-size: 12.5px; line-height: 1.6; }
 .evo-panel-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .evo-panel-tag { padding: 4px 12px; border: 1px solid var(--color-border); border-radius: 999px; font-size: 12.5px; color: var(--color-text-secondary); background: var(--color-surface); }
@@ -795,7 +797,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-ctx-ok { color: var(--color-success); }
 .evo-ctx-watch { color: var(--color-warning); }
 .evo-ctx-high { color: var(--color-error); }
-.evo-stats-line { display: flex; align-items: center; gap: 8px; padding: 6px 14px 9px; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 会话统计行：与输入框同宽，位于圆角框外部正下方、水平居中、紧贴。 */
 .evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: 75%; margin: 8px auto 0; display: flex; align-items: center; gap: 10px; }
 .evo-composer-stats .evo-statusbar { flex: 1 1 auto; min-width: 0; width: auto; height: auto; min-height: 16px; padding: 0; border-top: 0; background: transparent; flex-wrap: wrap; row-gap: 0; overflow: visible; white-space: normal; line-height: 16px; justify-content: center; }

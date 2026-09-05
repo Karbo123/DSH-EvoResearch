@@ -185,6 +185,16 @@ export function stdioClient(config: McpServerConfig): McpClientLike {
       let buffer = ''
       let nextId = 1
       const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
+      // 子进程意外退出时必须 reject 全部 pending（含未 settle 的 connect 握手），
+      // 否则调用方（supervisor.start）会永久卡在 await connect。
+      const failAll = (error: Error): void => {
+        for (const entry of pending.values()) entry.reject(error)
+        pending.clear()
+        if (!settled) {
+          settled = true
+          reject(error)
+        }
+      }
       const send = (method: string, params?: unknown): Promise<unknown> =>
         new Promise((resolveId, rejectId) => {
           const id = nextId
@@ -205,6 +215,13 @@ export function stdioClient(config: McpServerConfig): McpClientLike {
           settled = true
           reject(error)
         }
+      })
+      child.on('exit', (code, signal) => {
+        failAll(new Error(`stdio 服务器进程已退出（code=${code ?? 'null'} signal=${signal ?? 'null'}）: ${config.serverId}`))
+      })
+      // close 覆盖 stdio 流全部关闭的情形（exit 后仍有残余输出要排空）
+      child.on('close', () => {
+        failAll(new Error(`stdio 服务器连接已关闭: ${config.serverId}`))
       })
       child.stderr?.on('data', () => { /* 诊断可接；不阻塞协议 */ })
       child.stdout?.on('data', (chunk: Buffer) => {
@@ -338,6 +355,9 @@ export function reconnectBackoffMs(attempt: number): number {
   return Math.min(1000 * 2 ** Math.max(0, attempt - 1), 30000)
 }
 
+/** 单次 connect 握手整体超时（毫秒）：stdio/http 都可能无限挂起，超时按启动失败处理。 */
+export const CONNECT_TIMEOUT_MS = 15_000
+
 /** MCP supervisor（PLAT-11/12）。 */
 export class McpSupervisor {
   private readonly clientFactory: McpClientFactory
@@ -350,7 +370,6 @@ export class McpSupervisor {
     status: McpServerStatus
     client: McpClientLike
     disposed: boolean
-    reconnectTimer: ReturnType<typeof setTimeout> | null
     desiredState: 'running' | 'stopped'
   }>()
 
@@ -408,7 +427,6 @@ export class McpSupervisor {
       },
       client: this.clientFactory(config),
       disposed: desiredState === 'stopped',
-      reconnectTimer: null,
       desiredState,
     }
   }
@@ -450,8 +468,21 @@ export class McpSupervisor {
     record.status = { ...record.status, state: 'starting', error: undefined }
     for (let attempt = 1; ; attempt += 1) {
       if (record.disposed) break
+      let connectTimer: ReturnType<typeof setTimeout> | undefined
       try {
-        const { tools } = await record.client.connect()
+        // 整体超时：connect（initialize + tools/list）可能因服务器卡死/网络挂起
+        // 永不返回；Promise.race 15s 后视为该 server 启动失败，并 disconnect
+        // 清理底层传输（stdio 杀子进程 / http 置 aborted），避免半开连接残留。
+        const { tools } = await Promise.race([
+          record.client.connect(),
+          new Promise<never>((_, rejectTimeout) => {
+            connectTimer = setTimeout(() => {
+              try { record.client.disconnect() } catch { /* 已释放 */ }
+              rejectTimeout(new Error(`MCP connect 超时（${CONNECT_TIMEOUT_MS / 1000}s）: ${serverId}`))
+            }, CONNECT_TIMEOUT_MS)
+          }),
+        ])
+        clearTimeout(connectTimer)
         if (record.disposed) break
         record.status = {
           ...record.status,
@@ -463,6 +494,7 @@ export class McpSupervisor {
         }
         return record.status
       } catch (error) {
+        if (connectTimer !== undefined) clearTimeout(connectTimer)
         if (record.disposed) break
         const message = error instanceof Error ? error.message : String(error)
         const maxAttempts = record.config.maxReconnectAttempts ?? 3
@@ -495,10 +527,6 @@ export class McpSupervisor {
     if (!record) throw new Error(`MCP 服务器不存在: ${serverId}`)
     record.disposed = true
     record.desiredState = 'stopped'
-    if (record.reconnectTimer) {
-      clearTimeout(record.reconnectTimer)
-      record.reconnectTimer = null
-    }
     try {
       record.client.disconnect()
     } catch {
@@ -545,10 +573,6 @@ export class McpSupervisor {
     const record = this.servers.get(serverId)
     if (!record) return false
     record.disposed = true
-    if (record.reconnectTimer) {
-      clearTimeout(record.reconnectTimer)
-      record.reconnectTimer = null
-    }
     try {
       record.client.disconnect()
     } catch {
@@ -602,10 +626,6 @@ export class McpSupervisor {
   disposeAll(): void {
     for (const record of this.servers.values()) {
       record.disposed = true
-      if (record.reconnectTimer) {
-        clearTimeout(record.reconnectTimer)
-        record.reconnectTimer = null
-      }
       try {
         record.client.disconnect()
       } catch {

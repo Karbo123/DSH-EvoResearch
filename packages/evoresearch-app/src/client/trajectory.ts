@@ -303,6 +303,10 @@ export function TrajectoryPanel({ session }: { session: any }) {
                   jsxs('div', {
                     className: 'evo-traj-row evo-traj-turn-row',
                     title: t('trajClickExpand'),
+                    role: 'button',
+                    tabIndex: 0,
+                    'aria-expanded': turnOpen,
+                    onKeyDown: (e: { key: string; preventDefault: () => void }) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(turnKey) } },
                     onClick: () => toggle(turnKey),
                     children: [
                       turnOpen ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
@@ -334,6 +338,10 @@ export function TrajectoryPanel({ session }: { session: any }) {
                             jsxs('div', {
                               className: 'evo-traj-row evo-traj-step-row',
                               title: t('trajClickExpand'),
+                              role: 'button',
+                              tabIndex: 0,
+                              'aria-expanded': stepOpen,
+                              onKeyDown: (e: { key: string; preventDefault: () => void }) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(stepKey) } },
                               onClick: () => toggle(stepKey),
                               children: [
                                 stepOpen ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),
@@ -384,6 +392,10 @@ export function TrajectoryPanel({ session }: { session: any }) {
                                       jsxs('div', {
                                         className: 'evo-traj-row evo-traj-call-row',
                                         title: t('trajClickExpand'),
+                                        role: 'button',
+                                        tabIndex: 0,
+                                        'aria-expanded': callOpen,
+                                        onKeyDown: (e: { key: string; preventDefault: () => void }) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(call.callId) } },
                                         onClick: () => toggle(call.callId),
                                         children: [
                                           callOpen ? jsx(ChevronDown, {}) : jsx(ChevronRight, {}),

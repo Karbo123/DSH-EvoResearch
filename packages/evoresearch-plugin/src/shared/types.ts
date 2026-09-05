@@ -53,8 +53,8 @@ export interface TurnRecord {
   readonly continuedFrom?: string
   /** v3：模型响应是否已开始流式输出。 */
   readonly responseStarted?: boolean
-  /** v3：打断原因（user_stop | api_failure）。 */
-  readonly interruptReason?: 'user_stop' | 'api_failure'
+  /** v3：打断原因（user_stop | api_failure | superseded_by_new_turn）。 */
+  readonly interruptReason?: 'user_stop' | 'api_failure' | 'superseded_by_new_turn'
   /** 打断时生成的 Partial Turn Note 文本。 */
   readonly partialNote?: string
   /** v3：工作摘要（滚动整理时生成）。 */
@@ -193,7 +193,8 @@ export interface AutoSkillProposal {
   createdAt: number
 }
 
-/** 定时任务（cron）。存储模型字段可变（调度器内部更新运行状态）。 */export interface ScheduledTask {
+/** 定时任务（cron）。存储模型字段可变（调度器内部更新运行状态）。 */
+export interface ScheduledTask {
   taskId: string
   name: string
   /** cron 表达式（5 字段：分 时 日 月 周）。 */

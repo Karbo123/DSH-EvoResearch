@@ -26,11 +26,14 @@ import { ThreadList, normalizeSessionsSnapshot, MENU, type SideView } from './th
 import { ChatArea, type ChatNode } from './chat'
 import { Inspector, type InspectorTab } from './inspector'
 import { TabFileEditor } from './tab-file'
+import { fileKind } from './file-kind'
 import { ConfirmDialog } from './session-actions'
 import { registerConversation } from './conversation'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
+import { useBackgroundNotifications } from './notifications'
+import { patchUrl, ensureThreadAlias, resolveThreadIdParam, threadSlugOf, encValue, URL_KEY_THREAD, URL_KEY_VIEW, URL_KEY_INSPECTOR, URL_KEY_INSPECTOR_TAB, URL_KEY_SIDEBAR, URL_KEY_RESEND, ENC_VALUE_VIEW, ENC_VALUE_TAB } from './url-state'
 import { clientStateFlush, clientStateGet, clientStateHydrate, clientStateMigrateLocalKeys, clientStateSet } from './client-state'
 import { toast, ToastHost } from './toast'
 import { MemoryPanel, SchedulePanel, SkillsPanel, WorkspacePanel, ChannelsPanel, TeamPanel } from './panels'
@@ -178,121 +181,7 @@ const CLIENT_STATE_PREFIXES = [
 
 const PANELS_KEY = 'evoresearch-panels'
 
-/** URL 查询键（§44 短化）：t=会话短别名 slug，v=视图，i/it=检查器，sb=窄屏抽屉，r=编辑重发。 */
-const URL_KEY_THREAD = 't'
-const URL_KEY_VIEW = 'v'
-const URL_KEY_INSPECTOR = 'i'
-const URL_KEY_INSPECTOR_TAB = 'it'
-const URL_KEY_SIDEBAR = 'sb'
-const URL_KEY_RESEND = 'r'
 
-/**
- * §44 值短化：固定枚举写成 2–3 字符缩写（如 workspace→ws、agents→ag），
- * 保证 v=ws&it=ag 这类参数同样极短；完整单词仍兼容读取（旧分享链接自动识别）。
- */
-const ENC_VALUE_VIEW: Record<string, string> = {
-  workspace: 'ws',
-  skills: 'sk',
-  memory: 'mem',
-  schedule: 'sch',
-  channels: 'ch',
-  team: 'tm',
-  experiments: 'exp',
-  notes: 'note',
-  library: 'lib',
-}
-const ENC_VALUE_TAB: Record<string, string> = { workspace: 'ws', agents: 'ag', chats: 'ch' }
-
-/** 写入用：编码枚举值；未知值原样透传（避免意外丢参）。 */
-function encValue(table: Record<string, string>, v: string | null): string | null {
-  return v === null || table[v] === undefined ? v : table[v]
-}
-
-/** URL 查询状态（§43.5）：可分享/可恢复的导航状态（t/v/i/it…）。 */
-function patchUrl(patch: Record<string, string | null>): void {
-  try {
-    const params = new URLSearchParams(location.search)
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null) params.delete(key)
-      else params.set(key, value)
-    }
-    const qs = params.toString()
-    history.replaceState(null, '', qs === '' ? location.pathname : `${location.pathname}?${qs}`)
-  } catch { /* URL 更新失败不影响功能 */ }
-}
-
-// ── §44 会话 URL 短别名：?t=<slug> 替代长 UUID；slug ↔ sessionId 映射后端持久化 ──
-
-/** slug 别名内存缓存（session-meta 启动加载后填充）；key: sessionId, value: slug。 */
-const threadSlugBySession = new Map<string, string>()
-const threadSessionBySlug = new Map<string, string>()
-
-/** 从 session-meta 条目表重建双射映射（幂等）。 */
-function ingestThreadSlugs(meta: Record<string, { slug?: string } | undefined>): void {
-  for (const [sessionId, entry] of Object.entries(meta)) {
-    if (typeof entry?.slug !== 'string' || entry.slug === '') continue
-    if (!threadSlugBySession.has(sessionId)) {
-      threadSlugBySession.set(sessionId, entry.slug)
-      if (!threadSessionBySlug.has(entry.slug)) threadSessionBySlug.set(entry.slug, sessionId)
-    }
-  }
-}
-
-/** 取会话的 slug 别名（未登记返回 null，调用方需自行 ensure）。 */
-function threadSlugOf(sessionId: string): string | null {
-  return threadSlugBySession.get(sessionId) ?? null
-}
-
-/**
- * 异步为会话分配短别名并更新当前 URL（openSession 已写入 ?t= 占位）。
- * preferred 传会话标题（AI slug 优先），失败时由 host 回退 s-<短哈希>；
- * 竞态保护：仅当 URL 当前仍指向同一会话时才替换参数值。
- */
-async function ensureThreadAlias(sessionId: string, preferred: string | undefined): Promise<void> {
-  try {
-    const res = await fetch('/evoresearch/fs/session-slug-ensure', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionId, ...(preferred !== undefined && preferred.trim() !== '' ? { preferred: preferred.slice(0, 200) } : {}) }),
-    })
-    const json = await res.json()
-    const slug = json?.value?.slug
-    if (typeof slug !== 'string' || slug === '') return
-    if (!threadSlugBySession.has(sessionId)) {
-      threadSlugBySession.set(sessionId, slug)
-      if (!threadSessionBySlug.has(slug)) threadSessionBySlug.set(slug, sessionId)
-    }
-    // 仅当分享链接仍停在该会话的占位短哈希上时才替换为正式 slug（用户已切走则不动）
-    const params = new URLSearchParams(location.search)
-    if (params.get(URL_KEY_THREAD) === sessionId.replace(/^session-/, '').slice(0, 8)) patchUrl({ [URL_KEY_THREAD]: slug })
-  } catch { /* 别名分配失败不影响功能，占位仍在 */ }
-}
-
-/** 解析 URL ?t= 的会话 id：已登记 slug 直接反查；未知的先试 host 反查，再兜底按占位短哈希还原。 */
-async function resolveThreadIdParam(value: string | null): Promise<string | null> {
-  if (value === null || value === '') return null
-  const direct = value.startsWith('session-')
-    ? value
-    : (/^[0-9a-f]{1,8}$/i.test(value) ? `session-${value}` : threadSessionBySlug.get(value) ?? null)
-  if (direct !== null) return direct
-  try {
-    const res = await fetch('/evoresearch/fs/session-slug-lookup', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ slug: value }),
-    })
-    const json = await res.json()
-    const sessionId = json?.value?.sessionId
-    if (typeof sessionId === 'string' && sessionId !== '') {
-      if (!threadSlugBySession.has(sessionId)) {
-        threadSlugBySession.set(sessionId, value)
-        threadSessionBySlug.set(value, sessionId)
-      }
-      return sessionId
-    }
-  } catch { /* 反查失败按不存在处理 */ }
-  return null
-}
 
 function readPanels(): { left: number; right: number } {
   try {
@@ -358,7 +247,12 @@ class ErrorBoundary extends (Component as any) {
 function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
   const workspaces = useWorkspaces((w) => w)
   const [projectScope, setProjectScope] = useState<{ name: string; path: string } | null>(null)
-  const [inspector, setInspector] = useState(() => typeof window !== 'undefined' ? new URLSearchParams(location.search).get(URL_KEY_INSPECTOR) === '1' : false)
+  const [inspector, setInspector] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const params = new URLSearchParams(location.search)
+    // 兼容短化前的旧长键 inspector=（现仅写 i=）
+    return params.get(URL_KEY_INSPECTOR) === '1' || params.get('inspector') === '1'
+  })
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>(() => {
     if (typeof window === 'undefined') return 'workspace'
     const params = new URLSearchParams(location.search)
@@ -368,7 +262,19 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     if (t === ENC_VALUE_TAB.chats || t === 'chats') return 'chats'
     return 'workspace'
   })
-  const [view, setView] = useState<SideView>(null)
+  const [view, setView] = useState<SideView>(() => {
+    // §43.5 ?v= 可分享/可恢复：此前只有写入方、无读取方，分享 ?v=mem 打开仍是欢迎页。
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(location.search)
+    // 兼容短化前的旧长键 view=（现仅写 v=）
+    const v = params.get(URL_KEY_VIEW) ?? params.get('view')
+    if (v === null || v === '') return null
+    for (const [full, short] of Object.entries(ENC_VALUE_VIEW)) {
+      if (v === short) return full as SideView
+    }
+    // 旧链接的完整单词同样识别；未知值忽略
+    return (Object.keys(ENC_VALUE_VIEW) as SideView[]).includes(v as SideView) ? (v as SideView) : null
+  })
   // 首次发送（欢迎页无会话时）：乐观渲染「用户消息 + AI 加载中」，让界面立即响应，
   // 不等后台建会话/LLM 标题/建项目等串行链完成。真实快照出现后自动被覆盖。
   const [pendingFirst, setPendingFirst] = useState<{ text: string; ts: number } | null>(null)
@@ -419,6 +325,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 窄屏首屏抽屉默认收起：抽屉 z-index 高于顶栏，若初始展开会遮住整屏
   // （含导航开关），用户必须先点遮罩才能操作。URL 参数 sb=1（旧 sidebar=1）强制展开。
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
+  const narrowRef = useRef(narrow)
   const [sidebar, setSidebar] = useState(() => {
     if (typeof window === 'undefined') return true
     // §44 键短化：sb=1/0；旧链接 sidebar=1 同样识别
@@ -430,12 +337,13 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   useEffect(() => {
     const onResize = () => {
       const nextNarrow = window.innerWidth < 768
-      setNarrow((prev) => {
-        // 桌面 → 窄屏时收起抽屉，避免遮罩盖住顶栏；反向展开恢复侧栏。
-        if (nextNarrow && !prev) setSidebar(false)
-        else if (!nextNarrow && prev) setSidebar(true)
-        return nextNarrow
-      })
+      if (nextNarrow === narrowRef.current) return
+      narrowRef.current = nextNarrow
+      // 桌面 → 窄屏时收起抽屉，避免遮罩盖住顶栏；反向展开恢复侧栏。
+      // （updater 保持纯函数：跨 setState 副作用挪到 updater 外）
+      if (nextNarrow) setSidebar(false)
+      else setSidebar(true)
+      setNarrow(nextNarrow)
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
@@ -647,59 +555,30 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       setHomeMode(false)
       if (params.get(URL_KEY_RESEND) !== null) {
         // 编辑重发：清除参数，打开会话后自动发送修正文本（走官方 prompt 流程）
-        history.replaceState(null, '', `${location.pathname}${location.search.replace(new RegExp(`[?&]${URL_KEY_RESEND}=[^&]*`), '$1').replace(/[?&]$/, '')}${location.hash}`)
+        history.replaceState(null, '', `${location.pathname}${location.search.replace(new RegExp(`([?&])${URL_KEY_RESEND}=[^&]*`), '$1').replace(/[?&]$/, '')}${location.hash}`)
       } else if (params.get('resend') !== null) {
         history.replaceState(null, '', `${location.pathname}${location.search.replace(/([?&])resend=[^&]*/, '$1').replace(/[?&]$/, '')}${location.hash}`)
       }
       let cancelled = false
       let attempts = 0
-      const tryOpen = () => {
+      let resolvedFlag = false
+      const tryOpen = (id: string) => {
         if (cancelled) return
         if (sessionsService === null || attempts > 30) return
         attempts += 1
         try {
-          sessionsService.open(threadParamRaw)
+          sessionsService.open(id)
         } catch {
-          setTimeout(tryOpen, 300)
+          setTimeout(() => tryOpen(id), 300)
         }
       }
-      void resolveThreadIdParam(threadParamRaw).then((resolved) => {
-        if (cancelled) return
-        if (resolved === null) return
-        // 会话 id 解析完成后再开始重试打开（服务未就绪时定时重试）
-        const tryOpenResolved = () => {
-          if (cancelled) return
-          if (sessionsService === null || attempts > 30) return
-          attempts += 1
-          try {
-            sessionsService.open(resolved)
-          } catch {
-            setTimeout(tryOpenResolved, 300)
-          }
-        }
-        tryOpenResolved()
-        if (resend !== null && resend !== '') {
-          // 等会话绑定就绪后自动重发
-          const timer = setInterval(() => {
-            if (cancelled) { clearInterval(timer); return }
-            const s = sessionsService?.binding(resolved)?.session
-            if (s !== undefined) {
-              clearInterval(timer)
-              void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
-            }
-          }, 200)
-          setTimeout(() => clearInterval(timer), 20000)
-        }
-        // URL 归一化：清掉旧 threadId=/占位哈希，换正式 ?t=
-        patchUrl({ threadId: null, [URL_KEY_THREAD]: threadSlugOf(resolved) ?? resolved.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
-      })
-      // slug 反查失败时的兜底直开路径（旧链接 / 未登记参数）
-      tryOpen()
-      if (resend !== null && resend !== '') {
-        // 等会话绑定就绪后自动重发（解析失败兜底）
+      // 重发定时器只允许一条：解析成功路径与兜底路径互斥触发，避免同一段
+      // 修正文本被两个 timer 先后 prompt 两次。
+      const armResend = (id: string) => {
+        if (resend === null || resend === '') return
         const timer = setInterval(() => {
           if (cancelled) { clearInterval(timer); return }
-          const s = sessionsService?.binding(threadParamRaw)?.session
+          const s = sessionsService?.binding(id)?.session
           if (s !== undefined) {
             clearInterval(timer)
             void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
@@ -707,6 +586,24 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         }, 200)
         setTimeout(() => clearInterval(timer), 20000)
       }
+      void resolveThreadIdParam(threadParamRaw).then((resolved) => {
+        if (cancelled || resolved === null) return
+        resolvedFlag = true
+        // 会话 id 解析完成后再开始重试打开（服务未就绪时定时重试）
+        tryOpen(resolved)
+        armResend(resolved)
+        // URL 归一化：清掉旧 threadId=/占位哈希，换正式 ?t=（此时先落占位，
+        // ensureThreadAlias 拿到会话后原位升级为正式 slug）
+        patchUrl({ threadId: null, [URL_KEY_THREAD]: threadSlugOf(resolved) ?? resolved.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
+        void ensureThreadAlias(resolved, undefined)
+      })
+      // 解析失败 1.5s 后按原参数兜底直开（旧链接/未登记参数）；解析成功则不执行，
+      // 修复此前"直开 + 解析后重开"双通道并行导致的重复 prompt 风险。
+      setTimeout(() => {
+        if (cancelled || resolvedFlag) return
+        tryOpen(threadParamRaw)
+        armResend(threadParamRaw)
+      }, 1500)
       return () => { cancelled = true }
     }, [])
 
@@ -720,62 +617,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return () => window.removeEventListener('evo-report-to-chat', onReport)
   }, [current])
 
-  // ── §42.4 浏览器通知事件 ──
-  const notifyEnabled = (): boolean =>
-    typeof Notification !== 'undefined' && Notification.permission === 'granted' && (() => {
-      try { return clientStateGet('evoresearch-notifications') === '1' } catch { return false }
-    })()
-  // 1) Scheduled 任务完成：10s 轮询 + 首次 baseline（不补发）+ taskId:lastRunAt 去重（跨刷新持久化）
-  useEffect(() => {
-    if (typeof Notification === 'undefined') return
-    const KEY = 'evoresearch-sched-notified'
-    let known = new Set<string>()
-    let baseline = true
-    try {
-      const raw = clientStateGet(KEY)
-      if (raw !== null) {
-        known = new Set(JSON.parse(raw))
-        baseline = false // 已有去重键：后续新完成事件立即通知
-      }
-    } catch { /* 损坏则视为首次运行 */ }
-    const timer = setInterval(() => {
-      if (!notifyEnabled()) return
-      void fetch('/evoresearch/fs/scheduler-list', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-        .then((r) => r.json())
-        .then((json) => {
-          const tasks: Array<{ taskId?: string; name?: string; lastRunAt?: number }> = json?.value ?? []
-          let changed = false
-          for (const t of tasks) {
-            if (t.taskId === undefined || t.lastRunAt === undefined) continue
-            const key = `${t.taskId}:${t.lastRunAt}`
-            if (known.has(key)) continue
-            known.add(key)
-            changed = true
-            if (!baseline) {
-              try { new Notification(`Scheduled 任务完成：${t.name ?? t.taskId}`) } catch { /* 静默退化 */ }
-            }
-          }
-          if (changed) {
-            clientStateSet(KEY, JSON.stringify([...known]))
-          }
-          baseline = false
-        })
-        .catch(() => { /* 网络失败静默 */ })
-    }, 10000)
-    return () => clearInterval(timer)
-  }, [])
-  // 2) Ask User / 工具审批出现时通知（仅新出现的 pending）
-  const prevPendingRef = useRef<Set<string>>(new Set())
-  useEffect(() => {
-    const pending: Array<{ kind?: string; key?: string }> = sessionSnapshot?.pending ?? []
-    const keys = new Set(pending.map((p) => `${p.kind ?? ''}:${p.key ?? ''}`))
-    const fresh = [...keys].filter((k) => !prevPendingRef.current.has(k))
-    prevPendingRef.current = keys
-    if (fresh.length > 0 && notifyEnabled() && current !== undefined) {
-      const labels = fresh.map((k) => (k.startsWith('question') ? 'Ask User 提问' : '工具审批'))
-      try { new Notification(`${labels.join('、')} 等待处理`) } catch { /* 静默退化 */ }
-    }
-  }, [sessionSnapshot])
+  // ── §42.4 浏览器通知事件（实现见 notifications.ts，2026-09 有界拆分） ──
+  useBackgroundNotifications(current, sessionSnapshot)
 
   // §43.5：view / inspector 状态写入 URL（可分享/可恢复；键名与值 §44 全短化）
   const setViewAndUrl = (v: SideView) => {
@@ -811,7 +654,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           try { await workspacesService?.rename(state.workspaceId, title) } catch { /* 会话标题已保存 */ }
         }
       }
-      toast('会话已重命名', 'success')
+      toast(t('sessionRenamed'), 'success')
     }
     return result?.ok === true
   }
@@ -971,7 +814,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       return next
     })
     persistProjectMeta(path, { tagColor: color })
-    toast(color === null ? '已清除标签颜色' : '已设置标签颜色', 'success')
+    toast(color === null ? t('tagColorCleared') : t('tagColorSet'), 'success')
   }
   /** 归档/恢复项目：同步归档/恢复其全部子聊天（后端 session-meta 持久化）。 */
   const toggleProjectArchive = (path: string) => {
@@ -993,10 +836,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     })
     persistProjectMeta(path, { archived: !isArchived })
     if (!isArchived) {
-      toast('项目已归档，可在底部“已归档项目”中恢复', 'success')
+      toast(t('projectArchivedHint'), 'success')
       window.dispatchEvent(new CustomEvent('evo:project-archived'))
     } else {
-      toast('项目已恢复', 'success')
+      toast(t('projectRestored'), 'success')
     }
   }
   /** 项目重命名：改 Workspace 显示标题；同时终止项目内会话的自动标题。 */
@@ -1021,7 +864,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         }
       }
       if (changed) writeAutoTitleStates(states)
-      toast('项目已重命名', 'success')
+      toast(t('projectRenamed'), 'success')
       return true
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error), 'error')
@@ -1115,11 +958,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
         body: JSON.stringify({ sessionId: id }),
       })
       const json = await res.json()
-      if (json.ok !== true) return { ok: false, error: (json.error as { message?: string } | undefined)?.message ?? '删除失败' }
+      if (json.ok !== true) return { ok: false, error: (json.error as { message?: string } | undefined)?.message ?? t('deleteFailed') }
       const cwd = sessions.byId[id]?.cwd ?? null
       markDeleted(id, cwd)
       const cancelled = typeof json.value?.cancelled === 'number' ? json.value.cancelled : 0
-      toast(cancelled > 0 ? `会话已删除（已取消 ${cancelled} 个后台任务）` : '会话已删除', 'success')
+      toast(cancelled > 0 ? t('sessionDeletedCancelled').replace('{n}', String(cancelled)) : t('sessionDeleted'), 'success')
       // 删除的是当前会话 → 跳到新会话
       if (sessions.current === id) startNewChat()
       window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
@@ -1143,7 +986,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     let failed: string | null = null
     for (const id of ids) {
       const result = await deleteSessionById(id)
-      if (!result.ok && failed === null) failed = result.error ?? '删除失败'
+      if (!result.ok && failed === null) failed = result.error ?? t('deleteFailed')
     }
     setProjectTagColors((prev) => {
       const next = { ...prev }
@@ -1171,12 +1014,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           body: JSON.stringify({ path }),
         })
         const json = await res.json()
-        if (json.value?.ok !== true) failed = json.value?.reason ?? '磁盘文件删除失败'
+        if (json.value?.ok !== true) failed = json.value?.reason ?? t('diskDeleteFailed')
       } catch {
-        failed = '磁盘文件删除失败'
+        failed = t('diskDeleteFailed')
       }
     }
-    if (failed === null) toast(opts?.deleteDisk === true ? '项目已删除（对话与磁盘文件均已移除）' : '项目已删除（对话已移除，磁盘文件保留）', 'success')
+    if (failed === null) toast(opts?.deleteDisk === true ? t('projectDeletedFull') : t('projectDeletedChatOnly'), 'success')
     else toast(failed, 'error')
     window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
     return { ok: failed === null, error: failed ?? undefined }
@@ -1205,17 +1048,24 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }, [])
   const cwdNow = current === undefined ? null : (sessions.byId[current]?.cwd ?? null)
   // 全局侧聊 id 集合（供 Recents 隐藏；§22.1 内部/侧聊线程不混入普通列表）
+  // 渲染期内按 cwd 缓存 localStorage 读取：会话多时 O(会话数) 次同步 IO → O(去重 cwd 数)
+  const sideChatCache = new Map<string | null, string[]>()
+  const readSideChatsCached = (cwd: string | null): string[] => {
+    let list = sideChatCache.get(cwd)
+    if (list === undefined) { list = readSideChats(cwd); sideChatCache.set(cwd, list) }
+    return list
+  }
   const sideChatIds = new Set<string>()
   for (const sid of sessions.ids ?? []) {
     const s = sessions.byId[sid]
-    if (s !== undefined && !deletedIds.has(sid)) for (const sc of readSideChats(s.cwd ?? null)) sideChatIds.add(sc)
+    if (s !== undefined && !deletedIds.has(sid)) for (const sc of readSideChatsCached(s.cwd ?? null)) sideChatIds.add(sc)
   }
   const sideChats: Array<{ id: string; title: string; kind: 'fork' | 'blank' }> = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
     // cwd 未设置时镜像字段为 undefined，统一 null 化后再与 cwdNow 比较（§22.4 只展示当前 workspace）
     .filter((s) => s !== undefined && !deletedIds.has(s.id) && (s.cwd ?? null) === cwdNow && !promotedIds.has(s.id))
     // fork 子会话（parentSessionId 或本地记录）或本地记录的空白侧聊（§22.4 只展示当前 workspace）
-    .filter((s) => s.parentSessionId !== undefined || readSideChats(cwdNow).includes(s.id))
+    .filter((s) => s.parentSessionId !== undefined || readSideChatsCached(cwdNow).includes(s.id))
     .map((s) => ({
       id: s.id,
       title: s.displayTitle ?? s.id.slice(0, 12),
@@ -1245,7 +1095,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       promoteSession(result.id)
       sessionsService?.open(result.id)
       window.dispatchEvent(new CustomEvent('evo-sidechats-refresh'))
-      toast('History copied to new chat', 'success')
+      toast(t('historyCopiedToNewChat'), 'success')
       return result
     }
     return result
@@ -1261,6 +1111,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     draft?: string
     /** 磁盘上最近一次读写到的内容（dirty 基准）。未保存改动 = draft !== original。 */
     original?: string
+    /** 非文本类文件只读打开：编辑器只读、Ctrl+S 跳过（TabFileEditor 支持）。 */
+    readonly?: boolean
   }
   /** 仿照 VSCode：斜体=干净（未改动/已保存），正体=有未保存改动。 */
   const isTabDirty = (tab: WorkspaceTab): boolean =>
@@ -1545,7 +1397,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const openTabEditor = (path: string, root: string, draft?: string) => {
     const existing = tabsRef.current.find((tab) => tab.kind === 'editor' && tab.filePath === path)
     if (existing !== undefined) { setActiveTabId(existing.id); setTabMenuOpen(false); return }
-    const tab: WorkspaceTab = { id: `editor-${Date.now().toString(36)}`, kind: 'editor', title: tabNameOf(path), filePath: path, root, draft }
+    // 非文本类（pdf 之外的预览/未知二进制等）只读打开，避免误写回无法安全编辑的内容
+    const isTextFile = fileKind(path) === 'text'
+    const tab: WorkspaceTab = { id: `editor-${Date.now().toString(36)}`, kind: 'editor', title: tabNameOf(path), filePath: path, root, draft, readonly: !isTextFile ? true : undefined }
     setTabs((prev) => [...prev, tab])
     setActiveTabId(tab.id)
     setTabMenuOpen(false)
@@ -1588,8 +1442,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }).then((res) => res.json()).then((json) => {
       setTabBusy(false)
       if (json.ok === true) { setNewFileName(''); openTabEditor(path, root, '') }
-      else toast(json.error?.message ?? '创建文件失败', 'error')
-    }).catch(() => { setTabBusy(false); toast('创建文件失败', 'error') })
+      else toast(json.error?.message ?? t('createFileFailed'), 'error')
+    }).catch(() => { setTabBusy(false); toast(t('createFileFailed'), 'error') })
   }
   const uploadPdfTab = (root: string, file: File) => {
     if (root === '') return
@@ -1606,8 +1460,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       }).then((r) => r.json()).then((json) => {
         setTabBusy(false)
         if (json.ok === true) openTabPdf(json.value.path, root)
-        else toast(json.error?.message ?? '上传失败', 'error')
-      }).catch(() => { setTabBusy(false); toast('上传失败', 'error') })
+        else toast(json.error?.message ?? t('uploadFailed'), 'error')
+      }).catch(() => { setTabBusy(false); toast(t('uploadFailed'), 'error') })
     }
     reader.readAsDataURL(file)
   }
@@ -1668,6 +1522,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 编辑标签保存（写入工作区；root 为当前会话 cwd）
   const saveTabEditor = (tab: WorkspaceTab) => {
     if (tab.kind !== 'editor' || tab.filePath === undefined || tab.root === undefined) return
+    if (tab.readonly === true) return // 只读 tab：跳过写回（Ctrl+S 已在编辑器层拦截）
     void fetch('/evoresearch/fs/write', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1748,13 +1603,17 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       writeAutoTitleStates(states)
       setHomeMode(false)
       sessionsService?.open(id)
+      // 首条消息创建的会话同样写 URL（裸 8 位占位，resolveThreadIdParam 可还原；
+      // ensureThreadAlias 稍后原位升级为正式 slug）——此前不写 ?t=，刷新即丢会话定位。
+      patchUrl({ [URL_KEY_THREAD]: id.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
+      void ensureThreadAlias(id, initialTitle.title ?? undefined)
       for (let i = 0; i < 30; i++) {
         const created = sessionsService?.binding(id)?.session
         if (created !== undefined) {
           if (initialTitle.title === null) {
-            try { await created.rename(kind === 'subchat' ? '新子对话' : '新项目') } catch { /* 占位标题失败不影响消息 */ }
+            try { await created.rename(t(kind === 'subchat' ? 'newSubchatTitle' : 'newProjectTitle')) } catch { /* 占位标题失败不影响消息 */ }
             if (workspaceId !== undefined && kind === 'project') {
-              try { await workspacesService?.rename(workspaceId, '新项目') } catch { /* 占位标题失败不影响消息 */ }
+              try { await workspacesService?.rename(workspaceId, t('newProjectTitle')) } catch { /* 占位标题失败不影响消息 */ }
             }
           }
           await created.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
@@ -1781,12 +1640,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       body: JSON.stringify({ workspaceDir: cwdNow, sourceSessionId: current, sourceEventSeq: seq }),
     }).then((res) => res.json()).then(async (json) => {
       if (json.ok !== true || typeof json.value?.sessionId !== 'string') {
-        toast(json.error?.message ?? '从消息分支失败', 'error')
+        toast(json.error?.message ?? t('branchFromMessageFailed'), 'error')
         return
       }
       try { await (sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined)?.refreshList?.() } catch { /* 依赖会话服务下次刷新 */ }
       openSession(json.value.sessionId)
-    }).catch(() => toast('从消息分支失败', 'error'))
+    }).catch(() => toast(t('branchFromMessageFailed'), 'error'))
   }
 
   const persistPanels = (p: { left: number; right: number }) => {
@@ -2191,6 +2050,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                           path: activeTab.filePath,
                           root: activeTab.root,
                           draft: activeTab.draft,
+                          original: activeTab.original,
+                          readOnly: activeTab.readonly,
                           onDraft: (text) => updateTabDraft(activeTab.id, text),
                           onLoaded: (original) => setTabLoaded(activeTab.id, original),
                           onSave: () => saveTabEditor(activeTab),
@@ -2223,7 +2084,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           }),
           inspector && jsxs(Fragment, {
             children: [
-              narrow && jsx('div', { className: 'evo-drawer-mask', onClick: () => setInspector(false) }),
+              narrow && jsx('div', { className: 'evo-drawer-mask', onClick: () => { setInspector(false); patchUrl({ [URL_KEY_INSPECTOR]: null, [URL_KEY_INSPECTOR_TAB]: null }) } }),
               jsx('div', {
                 className: 'evo-resize-handle evo-resize-right',
                 'data-dragging': dragging === 'right' || undefined,
@@ -2237,7 +2098,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                 children: jsx(Inspector, {
                   tab: inspectorTab,
                   onTab: setInspectorTabUrl,
-                  onClose: () => setInspector(false),
+                  onClose: () => { setInspector(false); patchUrl({ [URL_KEY_INSPECTOR]: null, [URL_KEY_INSPECTOR_TAB]: null }) },
                   cwd: current === undefined ? null : (sessions.byId[current]?.cwd ?? null),
                   sessionId: current ?? null,
                   sideChats,
@@ -2300,24 +2161,14 @@ function apply(ctx: any) {
   // ui-renderer 挂载后异步首帧，非 apply 同步阶段，因此抑制保持到首帧渲染完成）。
   // 此压制仅影响 key 警告本身，不影响任何功能。
   const suppressKeyWarning = () => {
+    // 框架内部 slot 渲染路径存在已知且无法在调用方修复的 key 误报；对「恰好该条
+    // 文案」永久精确过滤，其余 console.error 一律原样放行。旧实现用「4 帧+2s」
+    // 时间窗：窗口漂移导致压制时有时无，且窗口语义让人误以为会吞其他错误。
     const origError = console.error
-    const filter = (...args: any[]) => {
+    console.error = (...args: any[]) => {
       if (typeof args[0] === 'string' && args[0].includes('Each child in a list should have a unique "key" prop')) return
       origError.call(console, ...args)
     }
-    console.error = filter
-    // 首帧渲染完成后恢复（boot 异步链：loader.await → mountApp → React 渲染，
-    // 用「4 帧 + 2s」双保险覆盖慢帧，避免热重载时反复压制）
-    let frames = 0
-    const restore = () => {
-      if (console.error === filter) console.error = origError
-    }
-    const tick = () => {
-      frames++
-      if (frames < 4) requestAnimationFrame(tick)
-      else { restore(); setTimeout(restore, 2000) }
-    }
-    requestAnimationFrame(tick)
   }
   suppressKeyWarning()
 

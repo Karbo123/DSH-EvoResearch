@@ -33,6 +33,10 @@ export interface TabFileEditorProps {
   path: string
   root: string
   draft?: string
+  /** 打开时磁盘上的原始内容（dirty 基准）；由父级（WorkspaceTab.original）传入，用于保存前 CAS 比对。 */
+  original?: string
+  /** 只读打开（非文本类文件：pdf 之外的预览/未知二进制等）；编辑器只读、Ctrl+S 跳过。 */
+  readOnly?: boolean
   onDraft: (text: string) => void
   /** 首次读取磁盘内容后上报原始内容（dirty 基准）。 */
   onLoaded: (original: string) => void
@@ -194,16 +198,45 @@ function MarkdownLive({ initial, onMarkdown, onSave }: { initial: string; onMark
 }
 
 /** 工作区文件 tab（按类型适配：md → Milkdown 实时编辑，其它文本 → Monaco 代码编辑器）。 */
-export function TabFileEditor({ path, root, draft, onDraft, onLoaded, onSave }: TabFileEditorProps) {
+export function TabFileEditor({ path, root, draft, original, readOnly, onDraft, onLoaded, onSave }: TabFileEditorProps) {
   const [content, setContent] = useState<string | null>(null)
   const [readError, setReadError] = useState<string | null>(null)
+  // 保存前 CAS（比对磁盘与 original）失败等保存期错误
+  const [saveError, setSaveError] = useState<string | null>(null)
   const isMarkdown = MD_EXT.has(path.slice(path.lastIndexOf('.')).toLowerCase())
-  // Monaco addCommand 需要稳定引用（注册一次），经 ref 转发最新 onSave
-  const saveRef = useRef(onSave)
-  saveRef.current = onSave
-  // onLoaded 引用转发（避免闭包捕获旧值）
+  // original / onLoaded 引用转发（CAS 比对要用最新值，避免闭包捕获旧 original）
+  const originalRef = useRef(original)
+  originalRef.current = original
   const onLoadedRef = useRef(onLoaded)
   onLoadedRef.current = onLoaded
+
+  // 保存（Ctrl+S）：先重读磁盘做 CAS——磁盘内容与打开时 original 不一致
+  // （已被外部修改）则不覆盖，提示刷新；一致才放行真正的写回。只读 tab 直接跳过。
+  const doSave = () => {
+    if (readOnly === true) return
+    void (async () => {
+      const baseline = originalRef.current
+      if (baseline !== undefined) {
+        try {
+          const res = await fetch('/evoresearch/fs/read', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ path }),
+          })
+          const json = await res.json()
+          if (json.ok !== true) { setSaveError(json.error?.message ?? t('requestFailed')); return }
+          if (String(json.value?.text ?? '') !== baseline) { setSaveError(t('fileChangedExternally')); return }
+        } catch (e) { setSaveError(String(e)); return }
+      }
+      setSaveError(null)
+      saveRef.current()
+    })()
+  }
+  // Monaco addCommand 需要稳定引用（注册一次），经 ref 转发最新 doSave / onSave / original
+  const doSaveRef = useRef<() => void>(() => {})
+  doSaveRef.current = doSave
+  const saveRef = useRef(onSave)
+  saveRef.current = onSave
 
   // 打开时自动读取文件内容（draft 已有值则直接采用，避免覆盖未保存编辑）
   useEffect(() => {
@@ -220,7 +253,7 @@ export function TabFileEditor({ path, root, draft, onDraft, onLoaded, onSave }: 
         setContent(text); setReadError(null)
         // 上报磁盘原始内容作为 dirty 基准（仅首次/内容变化时；draft 优先分支不覆盖脏状态）
         if (draft === undefined || draft === '') onLoadedRef.current(text)
-      } else setReadError(json.error?.message ?? '读取失败')
+      } else setReadError(json.error?.message ?? t('wsReadFailed'))
     }).catch((e) => { if (!cancelled) setReadError(String(e)) })
     return () => { cancelled = true }
   }, [path])
@@ -240,15 +273,16 @@ export function TabFileEditor({ path, root, draft, onDraft, onLoaded, onSave }: 
     ],
   })
 
-  if (isMarkdown) {
+  if (isMarkdown && readOnly !== true) {
     return jsxs('div', {
       className: 'evo-tab-body evo-tab-editor-body evo-tab-file-body',
       children: [
         head,
         readError !== null && jsx('div', { className: 'evo-panel-error', children: readError }),
+        saveError !== null && jsx('div', { className: 'evo-panel-error', children: saveError }),
         content === null
           ? jsx('div', { className: 'evo-panel-hint', children: t('loading') })
-          : jsx(MarkdownLive, { initial: content, onMarkdown: onDraft, onSave }),
+          : jsx(MarkdownLive, { initial: content, onMarkdown: onDraft, onSave: doSave }),
       ],
     })
   }
@@ -258,9 +292,13 @@ export function TabFileEditor({ path, root, draft, onDraft, onLoaded, onSave }: 
     children: [
       head,
       readError !== null && jsx('div', { className: 'evo-panel-error', children: readError }),
+      saveError !== null && jsx('div', { className: 'evo-panel-error', children: saveError }),
       content === null
         ? jsx('div', { className: 'evo-panel-hint', children: t('loading') })
-        : jsx(TabMonacoEditor, { path, value: content, onDraft, onSaveRef: saveRef }),
+        : readOnly === true
+          // 只读：非文本类文件不挂 Monaco（其 Ctrl+S 命令会绕过 doSave），退化为纯文本预览
+          ? jsx('textarea', { className: 'evo-fs-editor', value: content, readOnly: true, spellCheck: false })
+          : jsx(TabMonacoEditor, { path, value: content, onDraft, onSaveRef: doSaveRef }),
     ],
   })
 }

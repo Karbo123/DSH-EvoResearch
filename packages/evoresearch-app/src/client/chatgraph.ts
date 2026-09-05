@@ -222,24 +222,36 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     pulseTimersRef.current.clear()
   }, [])
 
+  // 请求序号守卫：cwd 快速切换时丢弃迟到的旧 graph-get 响应（防旧图覆盖新项目图）
+  const loadSeqRef = useRef(0)
+  // 「未绑定项目工作区」属于引导性空态而非错误：用中性提示呈现，避免红色错误条吓退用户
+  const [unboundHint, setUnboundHint] = useState<string | null>(null)
+  /** 后端「未绑定项目工作区/不在部署根」类错误 = 引导性空态，走中性提示而非错误红条。 */
+  const showGraphError = (msg: string): void => {
+    if (/未绑定项目工作区|工作区必须是部署根/.test(msg)) setUnboundHint(t('graphNeedProject'))
+    else setError(msg)
+  }
   const load = () => {
     setError(null)
+    setUnboundHint(null)
+    const seq = ++loadSeqRef.current
     void api<{ graph?: ChatGraph; rev?: number; error?: string }>('graph-get', { workspaceDir: cwd ?? undefined })
       .then((r) => {
-        if (typeof r?.error === 'string' && r.error !== '') { setError(r.error); return }
+        if (seq !== loadSeqRef.current) return
+        if (typeof r?.error === 'string' && r.error !== '') { showGraphError(r.error); return }
         setGraph({
           nodes: r?.graph?.nodes ?? [], edges: r?.graph?.edges ?? [], groups: r?.graph?.groups,
           layoutCurated: r?.graph?.layoutCurated === true,
         })
         revRef.current = typeof r?.rev === 'number' ? r.rev : null
       })
-      .catch((e: unknown) => setError(String((e as Error)?.message ?? e)))
+      .catch((e: unknown) => { if (seq === loadSeqRef.current) showGraphError(String((e as Error)?.message ?? e)) })
   }
   useEffect(() => { load() }, [cwd])
 
   /** 项目会话/研究笔记补种（§graphSync）：幂等，宿主按 sessionId/笔记去重且不改动已有布局。 */
   const syncSessions = async (manual: boolean): Promise<void> => {
-    if (cwd === null) { if (manual) setError(t('graphNeedProject')); return }
+    if (cwd === null) { if (manual) setUnboundHint(t('graphNeedProject')); return }
     try {
       // 手动同步升级（墓碑语义）：先补回墓碑中用户删除过的节点/线，再执行导入
       if (manual) {
@@ -256,7 +268,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         }
       }
       const r = await api<{ ok?: boolean; addedNodes?: number; addedEdges?: number; addedChats?: number; addedMemories?: number; error?: string }>('graph-sync', { workspaceDir: cwd })
-      if (typeof r?.error === 'string' && r.error !== '') { setError(r.error); return }
+      if (typeof r?.error === 'string' && r.error !== '') { showGraphError(r.error); return }
       const addedNodes = typeof r?.addedNodes === 'number' ? r.addedNodes : (r?.addedChats ?? 0) + (r?.addedMemories ?? 0)
       const addedEdges = typeof r?.addedEdges === 'number' ? r.addedEdges : 0
       const added = addedNodes + addedEdges
@@ -356,10 +368,18 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   const saveGraph = (next: ChatGraph, opts?: { curated?: boolean }): Promise<boolean> => {
     next.layoutCurated = opts?.curated === true ? true : next.layoutCurated === true
     setError(null)
+    setUnboundHint(null)
     const pending = saveChainRef.current.then(async () => {
       try {
+        // rev 尚未就绪（graph-get 未返回或失败）时禁止保存：携带 rev:undefined
+        // 会绕过服务端乐观并发检查，造成盲写覆盖。先重新 load 拿到最新 rev。
+        if (revRef.current === null) {
+          toast(t('graphRevMissing'))
+          load()
+          return false
+        }
         const r = await api<{ ok: boolean; conflict?: boolean; rev?: number; error?: string }>('graph-save', {
-          workspaceDir: cwd ?? undefined, graph: next, rev: revRef.current ?? undefined,
+          workspaceDir: cwd ?? undefined, graph: next, rev: revRef.current,
         })
         if (r?.ok === true && typeof r.rev === 'number') { revRef.current = r.rev; return true }
         if (r?.conflict === true) toast(t('graphConflict'))
@@ -490,7 +510,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const createChatNode = async () => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     setBusy(true)
     try {
       const sessionId = await onCreateSession()
@@ -522,7 +542,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const createMemoryNode = (scope: 'project' | 'global') => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
     void api<{ node: GraphNode; rev?: number }>('graph-memory-create', {
       workspaceDir: cwd,
@@ -535,7 +555,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const createMemoryCollection = (scope: 'project' | 'global' = 'project') => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const spot = freeSpot(menu?.x ?? 60, menu?.y ?? 60)
     void api<{ node: GraphNode; rev?: number }>('graph-memory-collection', {
       workspaceDir: cwd,
@@ -548,7 +568,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
 
   const copyMemoryNode = (nodeId: string) => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const source = nodeById(nodeId)
     if (source === undefined) return
     void api<{ node: GraphNode; rev?: number }>('graph-memory-copy', {
@@ -562,7 +582,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** Reuse a single existing Memory locator; when not on the graph, add one reference node. */
   const useExistingMemory = () => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const raw = window.prompt(t('graphUseMemoryPrompt'), '')
     if (raw === null || raw.trim() === '') return
     const value = raw.trim().toLowerCase()
@@ -672,7 +692,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 从当前聊天分出新方向（GRAPH-10 语义的图内入口）：新建 chat 节点 + context 继承连线。 */
   const forkDirection = async (nodeId: string) => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const source = nodeById(nodeId)
     if (source === undefined) return
     setBusy(true)
@@ -713,7 +733,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 内嵌文本 memory node → Markdown 笔记（GRAPH-06；Remote graph-convert-note）。 */
   const convertNodeToNote = (nodeId: string) => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     void api<{ ok: boolean; noteId?: string; error?: string }>('graph-convert-note', { workspaceDir: cwd, nodeId })
       .then((r) => {
         if (r.ok !== true) { setError(r.error ?? t('graphConvertFailed')); return }
@@ -788,7 +808,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 沉淀：把会话最新一轮 AI 回复（小模型浓缩）追加进目标记忆节点，并确保写线存在。 */
   const distillTo = async (chatNode: GraphNode, target: GraphNode): Promise<void> => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     if (chatNode.sessionId === undefined) { setError(t('graphNeedProject')); return }
     setBusy(true)
     try {
@@ -976,7 +996,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
   /** 可选人工固定资料入口；自动 Memory 链接发现不依赖此操作。 */
   const addResourceNode = () => {
     setMenu(null)
-    if (cwd === null) { setError(t('graphNeedProject')); return }
+    if (cwd === null) { setUnboundHint(t('graphNeedProject')); return }
     const rawPath = window.prompt(t('graphResourcePathPrompt'), '')
     if (rawPath === null || rawPath.trim() === '') return
     const value = rawPath.trim()
@@ -1224,7 +1244,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: layoutVisible, children: layoutPreview === null ? t('graphLayoutBtn') : t('graphRelayoutBtn') }),
       menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', title: t('graphFocusNeighbors'), onClick: () => setViewMode((mode) => mode === 'neighbors' ? 'all' : 'neighbors'), children: t('graphFocusNeighbors') }),
       menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', title: t('graphFocusBranch'), onClick: () => setViewMode((mode) => mode === 'branch' ? 'all' : 'branch'), children: t('graphFocusBranch') }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.system !== true && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => editEdgeLabel(menu.edgeId as string), children: t('graphEditLabel') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => toggleEdgeMode(menu.edgeId as string), children: t('graphToggleEdge') }),
       menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteEdge(menu.edgeId as string), children: t('graphDeleteEdge') }),
@@ -1235,7 +1255,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const target = currentChatNode; const source = nodeById(menu.nodeId as string); if (source !== undefined) connectReferenceFromNode(source) }, children: t('graphRefToChat') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const source = nodeById(menu.nodeId as string); if (source !== undefined) createNaturalRelation(source) }, children: t('graphRelateToChat') }),
       menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && (nodeById(menu.nodeId)?.displayKind === 'memory' || nodeById(menu.nodeId)?.displayKind === 'memory-collection' || nodeById(menu.nodeId)?.type === 'memory') && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => copyMemoryNode(menu.nodeId as string), children: t('graphCopyMemory') }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: t('graphDeleteNode') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.system !== true && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: t('graphDeleteNode') }),
     ],
   })
 
@@ -1284,6 +1304,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
           children: `${group.collapsed || collapsedGroups.has(group.id) ? t('graphExpand') : t('graphCollapse')} ${group.title}`,
         }, `group-${group.id}`)),
       ]}),
+      unboundHint !== null && jsx('div', { className: 'evo-graph-hint-banner', children: unboundHint }),
       error !== null && jsx('div', { className: 'evo-panel-error', children: error }),
       jsx(ChatGraphCanvas, {
         graph,
@@ -1450,12 +1471,6 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       }),
     ],
   })
-}
-
-/** 引用显示名：路径 basename（截断）。 */
-export function refDisplayName(refPath: string): string {
-  const base = refPath.split(/[\\/]/).filter((s) => s !== '').pop() ?? refPath
-  return base.length > 18 ? `${base.slice(0, 17)}…` : base
 }
 
 /** displayKind → 中文名映射键（画布标题条与检查器共用；未知值原样显示）。 */

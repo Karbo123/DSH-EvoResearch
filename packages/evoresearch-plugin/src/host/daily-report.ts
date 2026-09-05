@@ -21,6 +21,11 @@ export interface DailyReportOptions {
   /** 实验 slug 列表；不传 = 该项目全部实验 */
   slugs?: string[]
   llm?: boolean
+  /**
+   * LLM 润色函数（llm=true 时由调用方注入，服务本身不持有 ctx）。
+   * 不传或抛错/超时/返回空 → 回退模板原文（离线始终可用）。
+   */
+  polisher?: (markdown: string) => Promise<string>
 }
 
 /** 日报结果。 */
@@ -189,13 +194,10 @@ export class DailyReportService {
     markdown += `## 建议\n`
     markdown += `自动生成，供参考。\n`
 
-    // LLM 润色（可选，失败回退）
+    // LLM 润色（可选）：润色函数由调用方注入（api 层经 ctx.llm），失败/超时/空输出回退模板
     if (opts.llm === true) {
       try {
-        // 复用全局 ctx 的 llm 服务需要外部传入；此处没有 ctx，尝试无 ctx 润色跳过
-        // generate 的调用方若有 ctx，可在外层自行润色；这里保持离线可用，不抛错
-        // 为保持接口兼容，尝试用空 ctx 占位，若失败则回退
-        markdown = await this.tryPolishMarkdown(markdown)
+        markdown = await this.tryPolishMarkdown(markdown, opts)
       } catch {
         // 回退到模板
       }
@@ -272,11 +274,14 @@ export class DailyReportService {
     }
   }
 
-  private async tryPolishMarkdown(markdown: string): Promise<string> {
-    // 没有 ctx 时无法调用 LLM，保持原样（调用方若需要 LLM 润色应在外层用 ctx.callText）
-    // 这里保留接口，实际润色由上层通过 DailyReportServicePolisher 注入或直接在 generate 后处理
-    // 为避免无 ctx 抛错，直接返回原 markdown；若后续需要真实 LLM，可扩展为接受 ctx 参数
-    return markdown
+  private async tryPolishMarkdown(markdown: string, opts: DailyReportOptions): Promise<string> {
+    const polisher = opts.polisher
+    if (polisher === undefined) return markdown
+    const result = await Promise.race([
+      polisher(markdown),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 30_000).unref?.()),
+    ])
+    return typeof result === 'string' && result.trim() !== '' ? result : markdown
   }
 
   /** 读取一份日报内容。 */
@@ -323,10 +328,13 @@ export class DailyReportService {
   }
 
   private findReportPath(reportId: string): string | null {
+    // reportId 来自远端入参：白名单消毒，防 `..\` 穿越读任意 .md
+    const safe = reportId.replace(/[^A-Za-z0-9._-]/g, '_')
+    if (safe === '' || safe === '.' || safe === '..') return null
     const projects = listProjects(this.dataRoot)
     const roots: string[] = [this.dataRoot, ...projects.map((name) => path.join(this.dataRoot, 'projects', name))]
     for (const root of roots) {
-      const p = path.join(workspaceDataDir(this.dataRoot, root), 'reports', 'daily', `${reportId}.md`)
+      const p = path.join(workspaceDataDir(this.dataRoot, root), 'reports', 'daily', `${safe}.md`)
       if (fs.existsSync(p)) return p
     }
     return null

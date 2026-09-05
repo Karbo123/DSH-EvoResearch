@@ -7,7 +7,6 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { execFileSync } from 'node:child_process'
 import { workspaceDataDir } from '../core/paths.js'
 
 export type ResolvedLinkKind =
@@ -245,15 +244,17 @@ export class LinkResolver {
     if (!link.exists || link.path === undefined || link.kind === 'url' || link.kind === 'chat') {
       return { text: '', trace: trace(false, link.exists ? '目标需要专用打开或搜索入口' : '目标不存在，交给全项目搜索兜底') }
     }
+    // PDF 不同步提取：read() 处于 user/message 触发的同步遍历链（prepareFast →
+    // memoryTextOf → follow → read），execFileSync 的 3s 子进程会阻塞整条事件
+    // 循环；PDF 保持惰性，交给页码入口/深入检索打开。
+    if (link.kind === 'paper') {
+      return { text: '', trace: trace(false, 'PDF 保持惰性打开入口，避免同步提取阻塞热路径') }
+    }
     try {
       const stat = fs.statSync(link.path)
       if (!stat.isFile()) return { text: '', trace: trace(false, '目录保持惰性浏览') }
       if (stat.size > 2 * 1024 * 1024) return { text: '', trace: trace(false, '文件过大，保持原始定位入口') }
-      const content = link.kind === 'paper'
-        ? execFileSync('pdftotext', ['-f', '1', '-l', '4', '-layout', link.path, '-'], {
-            encoding: 'utf8', timeout: 3000, maxBuffer: 4 * 1024 * 1024,
-          })
-        : fs.readFileSync(link.path, 'utf8')
+      const content = fs.readFileSync(link.path, 'utf8')
       if (content.includes('\u0000')) return { text: '', trace: trace(false, '二进制资料保持原始打开入口') }
       const text = content.slice(0, Math.max(1, maxChars))
       return { text, trace: trace(text !== '', text !== '' ? '按问题相关链接读取局部原文' : '目标为空，交给全项目搜索兜底') }

@@ -26,7 +26,7 @@ const checks = [
   ['@xyflow/react dependency', typeof (pkg.dependencies && pkg.dependencies['@xyflow/react']) === 'string'],
   ['elkjs dependency', typeof (pkg.dependencies && pkg.dependencies.elkjs) === 'string'],
   ['XYFlow renderer', source !== null && source.includes('ReactFlow') && source.includes('Handle')],
-  ['ELK worker', worker !== null && worker.includes("elkjs/lib/elk.bundled.js") && worker.includes('self.onmessage')],
+  ['ELK layout runs on main thread (no Worker entry)', worker !== null && worker.includes('elkjs/lib/elk.bundled.js') && !worker.includes('self.onmessage')],
   ['domain no handwritten SVG renderer', domain !== null && !domain.includes('evo-graph-svg') && !domain.includes('edgePath(')],
   ['built bundle contains XYFlow', bundle !== null && bundle.includes('ReactFlow') && bundle.includes('elk-worker')],
 ]

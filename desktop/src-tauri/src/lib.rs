@@ -20,35 +20,46 @@ fn desktop_main() {
             let app_data_dir = app_local_data_dir();
             log(&format!("[shell] resource_dir={}", resource_dir.display()));
             log(&format!("[shell] app_data_dir={}", app_data_dir.display()));
-            fs::create_dir_all(&app_data_dir).ok();
-            // 清掉旧端口文件（避免读到上次运行的残留）
-            fs::remove_file(port_file(&app_data_dir)).ok();
+            // 端口文件目录由 app_local_data_dir() 内部负责创建（失败会写日志）。
+            // 不再启动即删 port.json：删除会导致多实例互踩（新实例删掉正在运行
+            // 实例的端口文件）；读到旧文件最多短暂连到旧端，由 wait_for_port
+            // 轮询语义兜底，权衡见 wait_for_port 文档。
 
-            // 1) 启动 Node sidecar
-            match spawn_sidecar(&resource_dir) {
-                Ok(child) => {
-                    log(&format!("[shell] sidecar 已启动，pid={}", child.id()));
-                }
-                Err(error) => {
-                    log(&format!("[shell] sidecar 启动失败: {error}"));
-                }
+            // 1) 启动 Node sidecar（数据根目录创建失败则直接走失败页）
+            let spawn_result = spawn_sidecar(&resource_dir);
+            if let Err(error) = &spawn_result {
+                log(&format!("[shell] sidecar 启动失败: {error}"));
+            }
+            let sidecar_failed = spawn_result.is_err();
+            if let Ok(child) = &spawn_result {
+                log(&format!("[shell] sidecar 已启动，pid={}", child.id()));
             }
 
             // 2) 等待端口并加载 WebUI（首次启动 sidecar 冷启动较慢，放宽到 60s）
-            let port = wait_for_port(&app_data_dir, Duration::from_secs(60));
-            let url = match port {
-                Some(port) => {
-                    log(&format!("[shell] 后端就绪，端口={port}"));
-                    format!("http://127.0.0.1:{port}")
+            let url: Result<String, std::io::Error> = if sidecar_failed {
+                log("[shell] sidecar 启动失败，加载失败页");
+                failure_page_url("后端启动失败")
+            } else {
+                match wait_for_port(&app_data_dir, Duration::from_secs(60)) {
+                    Some(port) => {
+                        log(&format!("[shell] 后端就绪，端口={port}"));
+                        Ok(format!("http://127.0.0.1:{port}"))
+                    }
+                    None => {
+                        log("[shell] sidecar 未在 60s 内就绪，加载失败页");
+                        failure_page_url("后端启动超时")
+                    }
                 }
-                None => {
-                    log("[shell] sidecar 未在 60s 内就绪，加载失败页");
+            };
+            // 失败页（file: 协议）不追加桌面参数；仅正式 WebUI 追加。
+            let url = match url {
+                Ok(url) if url.starts_with("http://") => format!("{}?desktop=1", url),
+                Ok(url) => url,
+                Err(error) => {
+                    log(&format!("[shell] 失败页写入失败: {error}"));
                     "about:blank".to_string()
                 }
             };
-
-            // 3) 创建主窗口（无边框 + 自绘标题栏：frameless + 网页内注入 36px 标题栏）
-            let url = format!("{}?desktop=1", url);
             WebviewWindowBuilder::new(
                 handle,
                 "main",
@@ -163,8 +174,72 @@ fn app_local_data_dir() -> PathBuf {
         PathBuf::from(home).join(".local").join("share").display().to_string()
     };
     let dir = PathBuf::from(base).join("com.evoresearch.desktop");
-    let _ = fs::create_dir_all(&dir);
+    if let Err(error) = fs::create_dir_all(&dir) {
+        log(&format!("[shell] 创建端口文件目录失败 {}: {error}", dir.display()));
+    }
     dir
+}
+
+/// 失败页 HTML（编译期内嵌，无外部资源依赖）。
+#[cfg(desktop)]
+const FAILURE_PAGE_HTML: &str = r#"<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>EvoResearch 启动失败</title>
+<style>
+  body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center;
+         font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+         background:#111418; color:#e6e6e6; }
+  .box { max-width:560px; padding:32px 40px; border:1px solid #333; border-radius:12px;
+         background:#1b1f26; }
+  h1 { font-size:20px; margin:0 0 12px; color:#ff9f6b; }
+  p { line-height:1.7; margin:6px 0; }
+  code { background:#2a2f38; padding:2px 6px; border-radius:4px; }
+</style></head>
+<body><div class="box">
+  <h1>后端启动失败</h1>
+  <p id="reason"></p>
+  <p>请查看日志文件 <code>%TEMP%\evoresearch-shell.log</code> 与
+     <code>%TEMP%\evoresearch-sidecar.err.log</code> 排查原因后重启应用。</p>
+</div>
+<script>
+  // 通过 URL hash 传入失败原因（data:/file: 页面无法读取启动参数）
+  const r = decodeURIComponent((location.hash || "").replace(/^#/, ""));
+  if (r) document.getElementById("reason").textContent = "原因：" + r;
+</script>
+</body></html>
+"#;
+
+/// 把失败页写到临时目录并返回其 file:// URL；不追加 ?desktop=1。
+#[cfg(desktop)]
+fn failure_page_url(reason: &str) -> Result<String, std::io::Error> {
+    let path = std::env::temp_dir().join("evoresearch-failure.html");
+    fs::write(&path, FAILURE_PAGE_HTML)?;
+    let text = path.display().to_string().replace('\\', "/");
+    // Windows 绝对路径形如 C:/...，需补一个斜杠成为 file:///C:/...
+    let url = if text.starts_with('/') {
+        format!("file://{text}")
+    } else {
+        format!("file:///{text}")
+    };
+    Ok(format!(
+        "{url}#{}",
+        percent_encode_minimal(reason)
+    ))
+}
+
+/// 最小百分比编码（保留字母数字与 -_.~，其余转 %XX）。
+#[cfg(desktop)]
+fn percent_encode_minimal(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for b in text.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 /// 启动自愈：若 profiles/node_modules 是真实目录（打包/复制残留），删除之。
@@ -197,15 +272,24 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
     let workdir = locate_sidecar(resource_dir, "app")
         .ok_or_else(|| std::io::Error::other("未找到 sidecar app 目录"))?;
     heal_profiles_modules(&workdir);
-    // 数据根：exe 同级目录下的 .evoresearch-data（用户数据一目了然、随程序迁移；
-    // 与程序文件（sidecar/dist/app）分离，打包重建不会触碰）
+    // 数据根：Windows = exe/程序目录同级的 .evoresearch-data（用户数据一目了然、
+    // 随程序迁移）；macOS = 应用本地数据目录下的 .evoresearch-data——写入 .app
+    // bundle 内会破坏 ad-hoc 签名封印，绝不可写资源目录。
+    // 创建失败不能吞错：直接返回 Err，壳会加载失败页提示用户看日志。
+    #[cfg(target_os = "macos")]
+    let data_home = app_local_data_dir().join(".evoresearch-data");
+    #[cfg(not(target_os = "macos"))]
     let data_home = resource_dir.join(".evoresearch-data");
-    fs::create_dir_all(&data_home).ok();
+    fs::create_dir_all(&data_home)?;
     log(&format!("[shell] data_home={}", data_home.display()));
     // 端口文件路径经环境变量传给 launch.js（避免两侧路径约定漂移）
     let port_file_env = app_local_data_dir().join("port.json");
     let stderr_log = std::env::temp_dir().join("evoresearch-sidecar.err.log");
-    let stderr_file = std::fs::File::create(&stderr_log)?;
+    // 追加而非截断：多实例/多次启动的日志都保留，便于排障
+    let stderr_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&stderr_log)?;
     let mut command = Command::new(&node);
     command
         .arg(&launch)
@@ -224,6 +308,10 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
 }
 
 /// 等待端口文件出现并返回端口。
+/// 权衡：不再启动即删旧 port.json（避免多实例互踩），因此读到上一次运行的
+/// 残留端口时，本实例可能在最多 60s 窗口内先连到旧端——旧实例仍在则直接复用
+/// 其服务（无害），已退出则端口无监听、页面加载失败概率极低（新 sidecar 随即
+/// 覆盖端口文件）。轮询语义保持不变。
 #[cfg(desktop)]
 fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<u16> {
     let file = port_file(app_data_dir);

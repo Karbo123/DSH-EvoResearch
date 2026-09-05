@@ -400,6 +400,9 @@ const PAD_X = 48
 const PAD_Y = 48
 const GAP_X = 72
 const GAP_Y = 36
+/** 兜底布局的默认节点尺寸（与前端 chatgraph.ts 的 NODE_W/CHAT_H=200/96 保持一致）。 */
+const DEFAULT_NODE_W = 200
+const DEFAULT_NODE_H = 96
 const GROUP_PAD_X = 24
 const GROUP_PAD_TOP = 36
 /** R2：节点之间的最小边距（px，任意两矩形边缘距离下限）。 */
@@ -496,8 +499,8 @@ function stableGroups(groups: readonly LayoutGroupInput[] | undefined): LayoutGr
 }
 
 function intersects(a: LayoutNodeInput | (LayoutPosition & { width?: number; height?: number }), b: LayoutNodeInput, x: number, y: number): boolean {
-  const aw = 'width' in a && typeof a.width === 'number' ? a.width : 176
-  const ah = 'height' in a && typeof a.height === 'number' ? a.height : 76
+  const aw = 'width' in a && typeof a.width === 'number' ? a.width : DEFAULT_NODE_W
+  const ah = 'height' in a && typeof a.height === 'number' ? a.height : DEFAULT_NODE_H
   return x < a.x + aw + GAP_X / 2 && x + b.width + GAP_X / 2 > a.x
     && y < a.y + ah + GAP_Y / 2 && y + b.height + GAP_Y / 2 > a.y
 }
@@ -864,8 +867,9 @@ async function layoutByMrtree(input: ChatGraphLayoutRequest, collapsed: Readonly
     node.pinned === true || node.selected === false || collapsed.has(node.groupId ?? '')
   const positions: LayoutPosition[] = ordered.map((node) => {
     const placed = columns.positionOf.get(node.id)
-    // 锚点（pinned / selected=false）与折叠子节点：输出用输入位置覆盖（保持原位）
-    if (anchored(node) || placed === undefined) return { id: node.id, x: Math.max(0, node.x), y: Math.max(0, node.y) }
+    // 锚点（pinned / selected=false）与折叠子节点：原样输出输入位置（锚点不动契约）；
+    // 归一平移只作用于下方 shiftable 集合（非锚点已摆放节点）。
+    if (anchored(node) || placed === undefined) return { id: node.id, x: node.x, y: node.y }
     return { id: node.id, x: placed.x, y: placed.y }
   })
   // 非锚点（约束层摆放的）节点整体平移使全局 min(x,y) ≥ 12；锚点与折叠子节点不动。
@@ -1336,7 +1340,9 @@ export function fallbackLayout(input: ChatGraphLayoutRequest): LayoutPosition[] 
   const result = new Map<string, LayoutPosition>()
   for (const node of ordered) {
     if (node.pinned === true || node.selected === false || collapsed.has(node.groupId ?? '')) {
-      result.set(node.id, { id: node.id, x: Math.max(0, node.x), y: Math.max(0, node.y) })
+      // 锚点不动契约：原样输出输入位置（不归一、不截断到非负），
+      // 与 dagre/relax 分支一致；归一平移只作用于非锚点。
+      result.set(node.id, { id: node.id, x: node.x, y: node.y })
     }
   }
   const rowByDepth = new Map<number, number>()
@@ -1344,11 +1350,13 @@ export function fallbackLayout(input: ChatGraphLayoutRequest): LayoutPosition[] 
     if (result.has(node.id)) continue
     const depth = depths.get(node.id) ?? 0
     let row = rowByDepth.get(depth) ?? 0
-    const x = PAD_X + depth * (176 + GAP_X)
-    let y = PAD_Y + row * (76 + GAP_Y)
+    // 默认节点尺寸 200×96 与前端 defaultNodeSize（chatgraph.ts NODE_W/CHAT_H）一致；
+    // 否则兜底行距按旧值 16px < 24px 最小间距违约。
+    const x = PAD_X + depth * (DEFAULT_NODE_W + GAP_X)
+    let y = PAD_Y + row * (DEFAULT_NODE_H + GAP_Y)
     while ([...result.values()].some((placed) => intersects(placed, node, x, y))) {
       row += 1
-      y = PAD_Y + row * (76 + GAP_Y)
+      y = PAD_Y + row * (DEFAULT_NODE_H + GAP_Y)
     }
     rowByDepth.set(depth, row + 1)
     result.set(node.id, { id: node.id, x, y })
@@ -1380,8 +1388,8 @@ function fallbackGroupPositions(input: ChatGraphLayoutRequest, positions: readon
     if (rects.length === 0 && group.collapsed !== true) return undefined
     const minX = rects.length === 0 ? group.x ?? PAD_X : Math.min(...rects.map((rect) => rect.x))
     const minY = rects.length === 0 ? group.y ?? PAD_Y : Math.min(...rects.map((rect) => rect.y))
-    const maxX = rects.length === 0 ? minX + 176 : Math.max(...rects.map((rect) => rect.x + rect.width))
-    const maxY = rects.length === 0 ? minY + 76 : Math.max(...rects.map((rect) => rect.y + rect.height))
+    const maxX = rects.length === 0 ? minX + DEFAULT_NODE_W : Math.max(...rects.map((rect) => rect.x + rect.width))
+    const maxY = rects.length === 0 ? minY + DEFAULT_NODE_H : Math.max(...rects.map((rect) => rect.y + rect.height))
     return {
       id: `group:${group.id}`,
       x: Math.max(0, group.x ?? minX - GROUP_PAD_X),
@@ -1720,7 +1728,8 @@ export async function layoutGraph(input: ChatGraphLayoutRequest): Promise<ChatGr
   }
 }
 
-declare const self: { onmessage?: (event: MessageEvent<ChatGraphLayoutRequest>) => void; postMessage: (value: ChatGraphLayoutResponse) => void } | undefined
-if (typeof self !== 'undefined' && self !== undefined) {
-  self.onmessage = (event) => { void layoutGraph(event.data).then((response) => self.postMessage(response)) }
-}
+// 注意：本模块唯一的调用路径是主线程动态 import（chatgraph-layout.ts 的
+// runChatGraphLayout）——ELK 的 bootstrap 无法在 Worker 内再建子 worker，
+// Worker 化会静默退化到单列 fallback。也不要在此挂任何 Worker 消息入口：
+// 浏览器主线程上 self === window，挂消息处理会劫持 window 的 message 事件，
+// 把任意 postMessage 以错误形状喂给 layoutGraph。此处刻意不设消息入口。

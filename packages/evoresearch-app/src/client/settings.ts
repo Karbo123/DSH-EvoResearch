@@ -9,7 +9,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Cpu, HardDrive, Info, Puzzle, Code2, Eye, Image as ImageIcon, Trash2, Server, Plus, X, Zap, FolderOpen, ChevronRight, ArrowUp, Home, Copy, Search } from 'lucide-react'
-import { t } from './i18n'
+import { t, hasKey } from './i18n'
 import { clientStateClear, clientStateSet } from './client-state'
 import { GRAPH_LAYOUT_ALGO_STATE_KEY, getGraphLayoutAlgorithm, type GraphLayoutAlgorithm } from './chatgraph-layout'
 import { toast } from './toast'
@@ -619,15 +619,15 @@ function AcademicSearchSection() {
             jsx(ModelField, { label: t('academicCrossrefURLLabel'), value: String(draft.crossrefURL ?? selected.settings?.crossrefURL ?? ''), onChange: (value) => update('crossrefURL', value) }),
           ] }),
           selected.id === 'paper-navigator' && jsxs(Fragment, { children: [
-            jsx(ModelField, { label: 'Semantic Scholar API URL', value: String(draft.baseURL ?? selected.baseURL), onChange: (value) => update('baseURL', value) }),
-            jsx(ModelField, { label: 'Semantic Scholar 推荐 API URL', value: String(draft.recommendURL ?? selected.settings?.recommendURL ?? ''), onChange: (value) => update('recommendURL', value) }),
+            jsx(ModelField, { label: t('pnSemanticScholarUrl'), value: String(draft.baseURL ?? selected.baseURL), onChange: (value) => update('baseURL', value) }),
+            jsx(ModelField, { label: t('pnRecommendUrl'), value: String(draft.recommendURL ?? selected.settings?.recommendURL ?? ''), onChange: (value) => update('recommendURL', value) }),
             jsxs('label', { className: 'evo-setting-field evo-web-search-select', children: [
-              jsx('span', { className: 'evo-setting-field-label', children: '检索排序' }),
-              jsx(Dropdown, { value: String(draft.s2SortBy ?? selected.settings?.s2SortBy ?? 'relevance'), onChange: (value: string) => update('s2SortBy', value), ariaLabel: '检索排序', options: [{ value: 'relevance', label: '语义相关性' }, { value: 'citations', label: '引用量' }, { value: 'year', label: '最新年份' }] }),
+              jsx('span', { className: 'evo-setting-field-label', children: t('pnSortLabel') }),
+              jsx(Dropdown, { value: String(draft.s2SortBy ?? selected.settings?.s2SortBy ?? 'relevance'), onChange: (value: string) => update('s2SortBy', value), ariaLabel: t('pnSortLabel'), options: [{ value: 'relevance', label: t('pnSortRelevance') }, { value: 'citations', label: t('pnSortCitations') }, { value: 'year', label: t('pnSortYear') }] }),
             ] }),
-            jsx(ModelField, { label: '最早年份（可选）', value: String((draft.s2YearMin ?? selected.settings?.s2YearMin ?? 0) || ''), onChange: (value) => update('s2YearMin', value.trim() === '' ? undefined : Math.max(1900, Math.round(Number(value) || 1900))) }),
-            jsx(ModelField, { label: '最晚年份（可选）', value: String((draft.s2YearMax ?? selected.settings?.s2YearMax ?? 0) || ''), onChange: (value) => update('s2YearMax', value.trim() === '' ? undefined : Math.max(1900, Math.round(Number(value) || 1900))) }),
-            jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.s2OpenAccessOnly === true, onChange: (e: { currentTarget: HTMLInputElement }) => update('s2OpenAccessOnly', e.currentTarget.checked) }), jsx('span', { children: '仅返回开放获取论文' })] }),
+            jsx(ModelField, { label: t('pnYearMinLabel'), value: String((draft.s2YearMin ?? selected.settings?.s2YearMin ?? 0) || ''), onChange: (value) => update('s2YearMin', value.trim() === '' ? undefined : Math.max(1900, Math.round(Number(value) || 1900))) }),
+            jsx(ModelField, { label: t('pnYearMaxLabel'), value: String((draft.s2YearMax ?? selected.settings?.s2YearMax ?? 0) || ''), onChange: (value) => update('s2YearMax', value.trim() === '' ? undefined : Math.max(1900, Math.round(Number(value) || 1900))) }),
+            jsxs('label', { className: 'evo-setting-check', children: [jsx('input', { type: 'checkbox', checked: draft.s2OpenAccessOnly === true, onChange: (e: { currentTarget: HTMLInputElement }) => update('s2OpenAccessOnly', e.currentTarget.checked) }), jsx('span', { children: t('pnOpenAccessOnly') })] }),
           ] }),
           selected.id === 'autorelatedwork' && jsxs(Fragment, { children: [
             jsx(ModelField, { label: t('academicScholarURLLabel'), value: String(draft.scholarURL ?? selected.settings?.scholarURL ?? selected.baseURL), onChange: (value) => update('scholarURL', value) }),
@@ -1244,7 +1244,14 @@ function clearPathEffectLabel(effect: DataClearPathEffect): string {
 
 function clearPathDetail(id: string): string {
   const key = `clearPath${id.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')}`
-  return t(key)
+  // 未知 path id（服务端新增/本地词典未跟上）：显示 id 原文兜底，而不是把 id 当文案展示
+  return hasKey(key) ? t(key) : id
+}
+
+/** path 显示文案：按 id 本地化（如浏览器 localStorage 描述），未知 id 显示服务端原文。 */
+function clearPathDisplay(path: string, id: string): string {
+  if (id === 'browser-local-storage') return t('clearPathBrowserLocalStoragePath')
+  return path
 }
 
 /** 清除数据（设置面板）：三类数据可多选，展示真实路径，二次确认后执行。 */
@@ -1347,7 +1354,7 @@ function DataClearSection() {
     className: 'evo-clear-path-entry',
     children: [
       jsx('span', { className: 'evo-clear-path-effect', children: clearPathEffectLabel(entry.effect) }),
-      jsx('code', { className: 'evo-clear-path-value', title: entry.path, children: entry.path }),
+      jsx('code', { className: 'evo-clear-path-value', title: entry.path, children: clearPathDisplay(entry.path, entry.id) }),
       jsx('span', { className: 'evo-clear-path-detail', children: clearPathDetail(entry.id) }),
     ],
   }, `${entry.id}:${entry.path}`)
@@ -2057,7 +2064,13 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
     const previous = document.activeElement as HTMLElement | null
     const el = shellRef.current?.querySelector<HTMLElement>('button, input, textarea, [tabindex]')
     el?.focus()
-    return () => { previous?.focus?.() }
+    // Esc 关闭（与品牌菜单/context-trace 一致；此前只能点遮罩或「返回」）
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previous?.focus?.()
+    }
   }, [])
   return jsxs('div', {
     className: 'evo-modal-mask',

@@ -32,15 +32,15 @@ export const MENU = [
  */
 function formatWhen(iso: string | undefined): string {
   if (!iso) return ''
-  const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return ''
-  const diff = Date.now() - t
+  const ts = new Date(iso).getTime()
+  if (Number.isNaN(ts)) return ''
+  const diff = Date.now() - ts
   const min = Math.floor(diff / 60000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min}m ago`
+  if (min < 1) return t('timeJustNow')
+  if (min < 60) return t('timeMinAgo').replace('{n}', String(min))
   const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h ago`
-  const d = new Date(t)
+  if (hr < 24) return t('timeHourAgo').replace('{n}', String(hr))
+  const d = new Date(ts)
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
@@ -127,7 +127,13 @@ function readManualOrder(): ManualOrder {
   } catch { return { projects: [], chats: {} } }
 }
 
+/** 搜索全文缓存：同一会话对象（同一快照）多次过滤时避免反复拼接全部事件文本。 */
+const searchTextCache = new WeakMap<object, { sig: string; text: string }>()
+
 function sessionSearchText(session: any): string {
+  const sig = `${session.id ?? ''}|${session.displayTitle ?? ''}|${session.title ?? ''}|${session.events?.length ?? 0}|${session.snapshotCache?.chat?.legacy?.nodes?.length ?? 0}`
+  const cached = searchTextCache.get(session)
+  if (cached !== undefined && cached.sig === sig) return cached.text
   const parts = [session.displayTitle, session.title]
   const nodes = session.snapshotCache?.chat?.legacy?.nodes
   if (Array.isArray(nodes)) for (const node of nodes) if (typeof node?.data?.text === 'string') parts.push(node.data.text)
@@ -135,7 +141,9 @@ function sessionSearchText(session: any): string {
     if (typeof event?.data?.text === 'string') parts.push(event.data.text)
     if (Array.isArray(event?.data?.content)) for (const block of event.data.content) if (typeof block?.text === 'string') parts.push(block.text)
   }
-  return parts.filter((v): v is string => typeof v === 'string').join('\n').toLocaleLowerCase()
+  const text = parts.filter((v): v is string => typeof v === 'string').join('\n').toLocaleLowerCase()
+  searchTextCache.set(session, { sig, text })
+  return text
 }
 
 function hitSessionId(hit: any): string | null {
@@ -290,7 +298,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
     setDeleteError(null)
     void onDelete(id).then((result) => {
       if (!result.ok) {
-        setDeleteError(result.error ?? '删除失败')
+        setDeleteError(result.error ?? t('deleteFailed'))
         setTimeout(() => setDeleteError(null), 5000)
       }
       setDelArm(null)
@@ -301,7 +309,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
     setDeleteError(null)
     void onDeleteProject(path, { deleteDisk }).then((result) => {
       if (!result.ok) {
-        setDeleteError(result.error ?? '删除项目失败')
+        setDeleteError(result.error ?? t('projectDeleteFailed'))
         setTimeout(() => setDeleteError(null), 5000)
       } else {
         const nextOrder: ManualOrder = { projects: manualOrder.projects.filter((p) => p !== path), chats: { ...manualOrder.chats } }
@@ -318,7 +326,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
     setForkError(null)
     void onForkSideChat(id).then((result) => {
       if (result.ok && result.id !== undefined) { onOpen(result.id); return }
-      setForkError(result.error ?? 'Side chat 创建失败')
+      setForkError(result.error ?? t('sidechatCreateFailed'))
       setTimeout(() => setForkError(null), 5000)
     })
   }
@@ -327,7 +335,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
     setForkError(null)
     void onCopyHistory(id).then((result) => {
       if (result.ok && result.id !== undefined) { onOpen(result.id); return }
-      setForkError(result.error ?? '复制历史失败')
+      setForkError(result.error ?? t('copyHistoryFailed'))
       setTimeout(() => setForkError(null), 5000)
     })
   }

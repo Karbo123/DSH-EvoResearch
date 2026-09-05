@@ -33,6 +33,8 @@ const MEDIA_TYPES: Record<string, string> = {
 
 const MAX_READ_BYTES = 1 << 22 // 4 MiB 文本上限
 const MAX_BODY_BYTES = 1 << 23 // 8 MiB 写请求上限（含 5MiB 文件上传的 base64）
+const MAX_FILE_BYTES = 32 * (1 << 20) // GET /fs/file 读入内存前的大小上限（32 MiB）
+const MAX_ZIP_ENTRY_BYTES = 20 * (1 << 20) // /fs/zip 单文件上限（超限跳过并列入 skipped）
 
 interface FsEntry { name: string; path: string; isDir: boolean; hidden: boolean }
 
@@ -560,15 +562,49 @@ async function withWriteRetry<T>(fn: () => Promise<T>, attempts = 8): Promise<T>
   throw lastError
 }
 
+/**
+ * 解析 HTTP Host / 权威条目为 { hostname, port }。
+ * - IPv6 字面量（`[::1]:3081`）：按 `]` 前截取主机名，端口取 `]:` 之后；
+ *   不能用 split(':')[0]——会把 `[::1]` 错切成 `[`。
+ * - IPv4/主机名：仅在「只有一个冒号」时按最后冒号剥端口（裸 IPv6 无方括号
+ *   形态不在 Host 头合法范围，忽略）；无冒号则整串为主机名、无端口。
+ */
+export function parseHostAuthority(value: string): { hostname: string; port?: string } {
+  const trimmed = value.trim().toLowerCase()
+  if (trimmed.startsWith('[')) {
+    const end = trimmed.indexOf(']')
+    if (end !== -1) {
+      const rest = trimmed.slice(end + 1)
+      return { hostname: trimmed.slice(1, end), port: rest.startsWith(':') ? rest.slice(1) : undefined }
+    }
+  }
+  const first = trimmed.indexOf(':')
+  const last = trimmed.lastIndexOf(':')
+  if (first !== -1 && first === last) return { hostname: trimmed.slice(0, first), port: trimmed.slice(first + 1) }
+  return { hostname: trimmed, port: undefined }
+}
+
+/**
+ * 权威条目是否匹配请求 Host。
+ * 条目含端口（如 `10.0.0.5:3081`）时端口参与比较——否则剥端口会把
+ * `10.0.0.5:3081` 扩大成「该主机任意端口都信任」；条目无端口（LAN IP
+ * 字面量，见 runtime.ts resolveLanTrust）则任意端口都匹配（IP 字面量
+ * Host 不受 DNS 重绑定影响，OS 分配端口在绑定前不可知）。
+ */
+export function hostMatchesAuthority(hostHeader: string, authority: string): boolean {
+  const host = parseHostAuthority(hostHeader)
+  const entry = parseHostAuthority(authority)
+  if (host.hostname !== entry.hostname) return false
+  return entry.port === undefined || host.port === entry.port
+}
+
 /** 信任栅栏：回环 Host 或 webRuntime.trustedHosts 允许的权威。 */
 function trusted(req: IncomingMessage, trustedHosts: string[]): boolean {
   const host = req.headers.host ?? ''
-  const hostname = host.split(':')[0].toLowerCase()
+  if (host === '') return false
+  const { hostname } = parseHostAuthority(host)
   if (hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1') return true
-  return trustedHosts.some((authority) => {
-    const a = authority.split(':')[0].toLowerCase()
-    return a === hostname
-  })
+  return trustedHosts.some((authority) => hostMatchesAuthority(host, authority))
 }
 
 /**
@@ -601,6 +637,9 @@ export function registerWorkspaceApi(ctx: any): void {
         writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
         return
       }
+      // §27.2 加固：/fs/* 全部响应统一 nosniff，禁止浏览器 MIME 嗅探把
+      // JSON/文本响应解释成可执行内容（writeHead 会合并此 header）。
+      res.setHeader('x-content-type-options', 'nosniff')
       const url = new URL(req.url ?? '/', 'http://dsh.internal')
       const pathname = url.pathname
       const method = pathname.startsWith('/evoresearch/fs/') ? pathname.slice('/evoresearch/fs/'.length) : undefined
@@ -610,6 +649,8 @@ export function registerWorkspaceApi(ctx: any): void {
         // GET /evoresearch/fs/file?path= → 媒体/文本文件流
         if (req.method === 'GET' && method === 'file') {
           const target = requireAbsolute(url.searchParams.get('path') ?? '')
+          // 先 stat 校验大小再读入内存：超大文件（如视频/数据集）会撑爆进程内存
+          if ((await stat(target)).size > MAX_FILE_BYTES) throw httpError(400, 'fs-error', `文件过大（>${MAX_FILE_BYTES / (1 << 20)}MiB）`)
           const buffer = await readFile(target)
           const type = MEDIA_TYPES[extname(target).toLowerCase()] ?? 'application/octet-stream'
           // §27.2：SVG/HTML 等可执行内容预览响应必须加 sandbox CSP 与 nosniff
@@ -665,6 +706,8 @@ export function registerWorkspaceApi(ctx: any): void {
         // POST /evoresearch/fs/read {path} → 文本内容
         if (method === 'read') {
           const target = requireAbsolute(requireString(payload, 'path'))
+          // 先 stat 校验大小：避免把超大文件整体读进内存再丢弃
+          if ((await stat(target)).size > MAX_READ_BYTES) throw httpError(400, 'fs-error', '文件过大（>4MiB）')
           const buffer = await readFile(target)
           if (buffer.length > MAX_READ_BYTES) throw httpError(400, 'fs-error', '文件过大（>4MiB）')
           writeOk(res, { path: target, text: buffer.toString('utf8') })
@@ -741,6 +784,7 @@ export function registerWorkspaceApi(ctx: any): void {
           const { zipSync } = await import('fflate')
           const SKIP_DIRS = new Set(['.git', '.evosci-data', '.evoresearch-data', 'node_modules', '.venv', '__pycache__', '.next', 'dist', 'build', '.cache'])
           const files: Record<string, Uint8Array> = {}
+          const skipped: string[] = []
           let total = 0
           const walk = async (dir: string, prefix: string): Promise<void> => {
             let level
@@ -753,6 +797,10 @@ export function registerWorkspaceApi(ctx: any): void {
                 await walk(full, rel)
               } else if (dirent.isFile()) {
                 try {
+                  // 逐文件先 stat：>20MiB 的单文件跳过（错误列表注明），
+                  // 避免把超大文件整体读入内存；总大小上限 50MB 仍保留。
+                  const size = (await stat(full)).size
+                  if (size > MAX_ZIP_ENTRY_BYTES) { skipped.push(rel); continue }
                   const data = await readFile(full)
                   total += data.length
                   if (total > 50 * 1024 * 1024) throw httpError(400, 'fs-error', 'workspace 过大（>50MB），请缩小范围')
@@ -765,7 +813,7 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           await walk(root, '')
           const zipped = zipSync(files)
-          writeOk(res, { data: Buffer.from(zipped).toString('base64'), count: Object.keys(files).length })
+          writeOk(res, { data: Buffer.from(zipped).toString('base64'), count: Object.keys(files).length, skipped })
           return
         }
 
@@ -1940,10 +1988,17 @@ export function registerWorkspaceApi(ctx: any): void {
           const images = rawImages
             .filter((img: any) => img !== null && typeof img === 'object' && typeof img.mediaType === 'string' && typeof img.data === 'string')
             .map((img: any) => ({ mediaType: String(img.mediaType), data: String(img.data), ...(typeof img.name === 'string' ? { name: img.name } : {}) }))
-          const signal = new AbortController().signal
-          const result = images.length > 0
-            ? await (commands.execute as (agent2: unknown, line2: string, imgs: typeof images, signal2: AbortSignal) => Promise<unknown>)(agent, line, images, signal)
-            : await commands.execute(agent, line, signal as never)
+          // 120s 超时：命令卡死时中止执行并释放请求，避免 HTTP 连接永久挂起
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(new Error('命令执行超时（120s）')), 120_000)
+          let result: unknown
+          try {
+            result = images.length > 0
+              ? await (commands.execute as (agent2: unknown, line2: string, imgs: typeof images, signal2: AbortSignal) => Promise<unknown>)(agent, line, images, controller.signal)
+              : await commands.execute(agent, line, controller.signal as never)
+          } finally {
+            clearTimeout(timer)
+          }
           writeOk(res, { matched: result !== undefined, result: result ?? null })
           return
         }

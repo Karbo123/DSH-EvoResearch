@@ -20,6 +20,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
 import { t } from './i18n'
+import { apiTolerant as api } from './fs-api'
 import { FlaskConical, Plus, Download, RefreshCw, FileText, FolderTree, Play, Square, Terminal, FileClock, Folder, File, ChevronDown, Check, X as XIcon, Pencil } from 'lucide-react'
 import { RoundsPanel } from './rounds-panel'
 import { DailyReportCard } from './daily-report-card'
@@ -92,21 +93,6 @@ interface LogSlice {
 }
 
 /** 简单 POST JSON 封装（与 experiments.ts / panels.ts 同款；兼容 { error } 载荷）。 */
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json() as { ok: boolean; value?: unknown; error?: { message?: string } }
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  const v = json.value as T & { error?: string; ok?: boolean }
-  if (v !== null && typeof v === 'object' && 'error' in (v as Record<string, unknown>) && typeof (v as { error?: unknown }).error === 'string') {
-    if (!('ok' in (v as Record<string, unknown>))) throw new Error((v as { error: string }).error)
-  }
-  return json.value as T
-}
-
 function fmtTime(ts: number): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ''
@@ -210,7 +196,12 @@ function RunSection({ workspaceDir, slug, onError, onNotice }: {
     void api<LogSlice>('experiment-log-read', { workspaceDir, slug, stream, offset, limit: 8192 })
       .then((slice) => {
         offsetRef.current[stream] = slice.nextOffset
-        setLogText((prev) => ({ ...prev, [stream]: prev[stream] + slice.text }))
+        // 长任务内存保护：单流日志超 256KiB 时丢弃头部一半，防止 logText 线性增长
+        setLogText((prev) => {
+          const merged = prev[stream] + slice.text
+          if (merged.length <= 256 * 1024) return { ...prev, [stream]: merged }
+          return { ...prev, [stream]: merged.slice(merged.length - 128 * 1024) }
+        })
         if (slice.text !== '') setLogLoaded((prev) => ({ ...prev, [stream]: true }))
       })
       .catch(() => { /* 轮询静默 */ })

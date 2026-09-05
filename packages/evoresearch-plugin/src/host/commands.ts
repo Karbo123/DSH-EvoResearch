@@ -59,8 +59,13 @@ export function registerCommands(ctx: Context, host: CommandHost): () => void {
       if (sub === 'create') {
         const name = rest.join('-')
         if (!name) return fail('用法: /project create <name>')
-        const project = host.workspace.createProject(name)
-        return ok(`已创建项目 ${project.name}\n目录: ${project.path}`)
+        try {
+          const project = host.workspace.createProject(name)
+          return ok(`已创建项目 ${project.name}\n目录: ${project.path}`)
+        } catch (error) {
+          // createProject 有碰撞/非法名守卫（会抛错），与 import 分支一致转为友好失败
+          return fail(error instanceof Error ? error.message : String(error))
+        }
       }
       if (sub === 'import') {
         const source = rest.join(' ')

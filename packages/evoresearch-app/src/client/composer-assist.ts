@@ -3,7 +3,7 @@
  * - 斜杠命令候选（/）：目录从后端 dsh-commands 注册表动态读取；
  * - @文件 补全：按当前 workspace 递归文件树模糊搜索（§27.1 上限）；
  * - 输入历史：按 workspace 保存最近 200 条，输入时按内容匹配候选，空输入或普通输入均可用上下键浏览；
- * - 候选弹层：listbox/option 语义 + aria-activedescendant，Tab 应用、Esc 关闭。
+ * - 候选弹层：listbox/option 语义（Tab 应用、Esc 关闭；未实现 aria-activedescendant，选项自带语义）。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
@@ -211,7 +211,7 @@ export function buildCandidates(trigger: Trigger, catalog: CommandEntry[], tree:
   if (trigger === null) return []
   if (trigger.kind === 'command') {
     return matchQuery(
-      catalog.map((c) => ({ key: `cmd:${c.name}`, title: `/${c.name}`, subtitle: c.hint !== '' ? c.hint : c.description, kind: 'command' as const, insert: `/${c.name}` })),
+      catalog.map((c) => ({ key: `cmd:${c.name}`, title: `/${c.name}`, subtitle: c.hint != null && c.hint !== '' ? c.hint : c.description, kind: 'command' as const, insert: `/${c.name}` })),
       trigger.query,
     )
   }

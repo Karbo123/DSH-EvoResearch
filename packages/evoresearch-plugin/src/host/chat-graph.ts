@@ -661,15 +661,28 @@ export class ChatGraphService {
   }
 
   /**
-   * 当前修订号：项目文件与全局文件的 mtimeMs 之和（任一文件变动即视为新修订）。
+   * 当前修订号：优先读项目图 JSON 内持久化的自增 rev（save 时 +1，无 mtime
+   * 碰撞盲区）；旧文件无 rev 字段时回退「项目+全局文件 mtimeMs 之和」。
    * 前端每次整图保存携带该值，服务端比对不一致则拒绝（乐观并发，防陈旧窗口覆盖）。
    */
   rev(projectName: string): number {
+    const stored = this.readStoredRev(this.fileOf(projectName))
+    if (stored !== undefined) return stored
     let v = 0
     for (const file of [this.fileOf(projectName), this.globalFile()]) {
       try { v += fs.statSync(file).mtimeMs } catch { /* 尚未落盘 = 0 */ }
     }
     return v
+  }
+
+  /** 读图 JSON 内持久化的自增 rev（缺失/旧文件返回 undefined）。 */
+  private readStoredRev(file: string): number | undefined {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as { rev?: unknown }
+      return typeof parsed.rev === 'number' && Number.isFinite(parsed.rev) ? parsed.rev : undefined
+    } catch {
+      return undefined
+    }
   }
 
   /** 读取全局图（仅 global 节点；无则空）。 */
@@ -808,8 +821,11 @@ export class ChatGraphService {
       // global nodes are shared by every project: a project write failure must
       // not leave the two graph scopes observing different revisions.
       fs.writeFileSync(gtmp, JSON.stringify({ nodes: globalNodes, edges: [], schemaVersion: normalized.schemaVersion }, null, 2), 'utf8')
+      // 自增 rev：旧文件回退 mtime 之和作基线，向后兼容（存进项目图文件）
+      const nextRev = (this.readStoredRev(file) ?? this.rev(projectName)) + 1
       fs.writeFileSync(tmp, JSON.stringify({
         nodes: projectNodes, edges: deduped, groups: normalized.groups, schemaVersion: normalized.schemaVersion,
+        rev: nextRev,
         ...(normalized.layoutCurated === true ? { layoutCurated: true } : {}),
         ...(tombstones !== undefined ? { tombstones } : {}),
       }, null, 2), 'utf8')

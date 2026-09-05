@@ -24,6 +24,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useEffect, useState } from 'react'
 import { t } from './i18n'
+import { api } from './fs-api'
 import {
   BookOpen, FileText, Search, RefreshCw, Plus, ArrowLeft, ExternalLink, Save,
   FolderOpen, FileCode2, Play, Quote, Globe,
@@ -224,17 +225,6 @@ function FiguresTab({ onError }: { onError: (message: string) => void }) {
 // ── 工具 ────────────────────────────────────────────────────────────────────
 
 /** 简单 POST JSON 封装（与 research-notes.ts / panels.ts 同款）。 */
-async function api<T>(method: string, body: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(`/evoresearch/fs/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!json.ok) throw new Error(json.error?.message ?? t('requestFailed'))
-  return json.value as T
-}
-
 function normForMatch(p: string): string {
   return p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
@@ -1111,7 +1101,7 @@ function ManuscriptTab({ project, onError }: { project: string; onError: (messag
                       ],
                     }),
                   }, `ph-${h.paperId}-${h.page}-${h.offset}`)),
-                  quote.fileHits.map((h) => jsx('button', {
+                  quote.fileHits.map((h, hi) => jsx('button', {
                     type: 'button',
                     className: 'evo-note-hit',
                     children: jsxs('div', {
@@ -1122,7 +1112,7 @@ function ManuscriptTab({ project, onError }: { project: string; onError: (messag
                         jsx('div', { className: 'evo-note-hit-snippet', children: h.snippet }),
                       ],
                     }),
-                  }, `fh-${h.relative}-${h.line}`)),
+                  }, `fh-${h.relative}-${h.line}-${hi}`)),
                 ],
               }),
             ],

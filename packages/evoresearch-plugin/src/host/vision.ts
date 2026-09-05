@@ -2,12 +2,13 @@
  * 视觉检查能力：调用视觉模型分析截图/图片（用于 GUI 效果验收与回归检查）。
  *
  * 模型配置（OpenAI 兼容端点）：
- * - 读取 D:\ResearchOS\.env 或环境变量：
+ * - 优先读进程环境变量，其次回退 <dataRoot>/.env（可传入 dataRoot，缺省不读文件）：
  *   RESEARCH_VISION_MODEL / RESEARCH_VISION_MODEL_URL / RESEARCH_VISION_MODEL_KEY
  * - 插件配置 evoresearch.visionEnabled 开启后注册 vision_check 模型工具。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { readFileSync, existsSync } from 'node:fs'
+import * as path from 'node:path'
 
 /** 视觉模型配置。 */
 export interface VisionConfig {
@@ -30,9 +31,11 @@ function parseEnvFile(file: string): Record<string, string> {
   return result
 }
 
-/** 解析视觉模型配置（.env 优先于环境变量）。 */
-export function resolveVisionConfig(): VisionConfig | undefined {
-  const env = { ...parseEnvFile('D:\\ResearchOS\\.env'), ...process.env }
+/** 解析视觉模型配置（进程环境变量优先；可选回退 <dataRoot>/.env）。 */
+export function resolveVisionConfig(dataRoot?: string): VisionConfig | undefined {
+  const env = dataRoot !== undefined && dataRoot !== ''
+    ? { ...parseEnvFile(path.join(dataRoot, '.env')), ...process.env }
+    : { ...process.env }
   const model = env['RESEARCH_VISION_MODEL']
   const url = env['RESEARCH_VISION_MODEL_URL']
   const key = env['RESEARCH_VISION_MODEL_KEY']
@@ -49,7 +52,12 @@ export function resolveVisionConfig(): VisionConfig | undefined {
 export async function analyzeImage(config: VisionConfig, imagePath: string, instruction: string): Promise<string> {
   if (!existsSync(imagePath)) throw new Error(`图片不存在: ${imagePath}`)
   const base64 = readFileSync(imagePath).toString('base64')
-  const mime = imagePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'
+  // MIME 白名单：默认 jpeg（覆盖未识别扩展名的截图场景）
+  const ext = imagePath.toLowerCase().replace(/.*\./, '.')
+  const mime = ext === '.png' ? 'image/png'
+    : ext === '.webp' ? 'image/webp'
+    : ext === '.gif' ? 'image/gif'
+    : 'image/jpeg'
   const body = {
     model: config.model,
     messages: [
@@ -67,6 +75,8 @@ export async function analyzeImage(config: VisionConfig, imagePath: string, inst
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${config.key}` },
     body: JSON.stringify(body),
+    // 30s 超时：视觉模型无响应时不无限挂起
+    signal: AbortSignal.timeout(30_000),
   })
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 400)

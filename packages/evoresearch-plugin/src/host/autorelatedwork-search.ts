@@ -2401,7 +2401,11 @@ class AutoRelatedWorkJSONCache {
     this.doc.entries[key] = { storedAt: Date.now(), result }
     try {
       mkdirSync(dirname(this.file), { recursive: true })
-      writeFileSync(this.file, JSON.stringify(this.doc), 'utf8')
+      // tmp + rename 原子写：直接 writeFileSync 在并发检索/进程中断时会留下
+      // 半截 JSON，下次 load 整个缓存作废；rename 在同一目录内是原子的。
+      const tmp = `${this.file}.tmp-${process.pid}`
+      writeFileSync(tmp, JSON.stringify(this.doc), 'utf8')
+      renameSync(tmp, this.file)
     } catch { /* 只读/不可写数据根时退化为内存结果 */ }
   }
 }
@@ -3182,7 +3186,9 @@ export async function searchAutoRelatedWork(options: AutoRelatedWorkOptions): Pr
     // DBLP/Unpaywall belong to app.py's /api/search compatibility facade and
     // must not silently change this entry point's request graph.
     if (config.fetchSemanticScholar !== false) for (const paper of papers) await enrichSemanticScholarPaper(paper, options, fetchImpl)
-    if (config.deepseekEnrich !== false) for (const paper of papers) await enrichWithDeepSeekAuthorFallback(paper, options, fetchImpl)
+    // 付费 DeepSeek 富化必须显式 opt-in（=== true）：undefined 不再默认发
+    // 付费请求，避免未配置 deepseekEnrich 的部署悄悄产生 API 消耗。
+    if (config.deepseekEnrich === true) for (const paper of papers) await enrichWithDeepSeekAuthorFallback(paper, options, fetchImpl)
   }
   if (config.includeAuthorProfiles === true && shouldEnrich) for (const paper of papers) await enrichAuthorProfiles(paper, options, fetchImpl)
   if (config.webFallback === true && shouldEnrich) {

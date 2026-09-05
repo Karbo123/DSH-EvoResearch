@@ -11,6 +11,10 @@ import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync, renameSy
 import { randomUUID } from 'node:crypto'
 import type { WorkspaceService } from './workspace.js'
 import { resolveDshHomePath, workspaceDataDir, slugifyProjectName } from './core/paths.js'
+import { resolveLedgerDirKey } from './experiment-ledger.js'
+
+/** 部署默认兜底模型（当前默认选择与 auxiliaryModel 均不可用时使用）。 */
+const DEFAULT_FALLBACK_MODEL = { provider: 'new-api', model: 'deepseek-v4-flash' } as const
 import type { MemoryRuntime } from './memory/index.js'
 import type { SchedulerService } from './scheduler.js'
 import type { ChannelManager } from './channels/index.js'
@@ -425,12 +429,33 @@ export class EvoResearchApiService extends TypertRemoteService {
    * 递归 2 层、上限 200 项；跳过 .git/.evoresearch-data/隐藏项/常见依赖目录。
    * 返回相对路径（/ 分隔），dir=false 表示目录。
    */
+  /**
+   * projectFilesList/projectFileRead 的读边界（此前 projectDir 完全不设限，
+   * 等于全盘任意目录列表+读文本）。允许范围：dataRoot 内（根工作区/projects/…）
+   * 或任一既有会话的 cwd（工作区文件面板本就按当前会话 cwd 读取，属正常路径）。
+   */
+  private assertReadableWorkspaceRoot(root: string): void {
+    const resolved = path.resolve(root)
+    if (isSameOrInside(resolved, this.services.memory.config.dataRoot)) return
+    const sessions = (this.hostCtx.get('sessions') as { list?(): Array<{ header?: { cwd?: string } }> } | undefined)?.list?.() ?? []
+    for (const s of sessions) {
+      const cwd = s.header?.cwd
+      if (cwd !== undefined && cwd !== '' && path.resolve(cwd) === resolved) return
+    }
+    throw new Error(`目录不在部署根内，也不是任何既有会话的工作区: ${root}`)
+  }
+
   @Remote('projectFilesList')
   projectFilesList(args: { projectDir?: string; depth?: number }): Array<{ path: string; dir?: boolean; bytes?: number }> | { error: string } {
     try {
       const root = String(args?.projectDir ?? '')
       if (root === '' || !existsSync(root) || !statSync(root).isDirectory()) {
         return { error: '项目目录不存在' }
+      }
+      try {
+        this.assertReadableWorkspaceRoot(root)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
       }
       // 与 workspace 导入同款跳过集合；项目私有数据目录也不展示
       const walk = (current: string, depth: number): Array<{ path: string; dir?: boolean; bytes?: number }> => {
@@ -472,6 +497,11 @@ export class EvoResearchApiService extends TypertRemoteService {
       const root = String(args?.projectDir ?? '')
       const rel = String(args?.relPath ?? '')
       if (root === '' || rel === '') return { error: '缺少参数' }
+      try {
+        this.assertReadableWorkspaceRoot(root)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
       const target = path.join(root, rel)
       if (!target.startsWith(root + path.sep) && target !== root) return { error: '路径越界' }
       if (!existsSync(target) || !statSync(target).isFile()) return { error: '文件不存在' }
@@ -495,7 +525,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         ? { provider: selection.provider, model: selection.model }
         : configured?.provider && configured?.model
           ? { provider: configured.provider, model: configured.model }
-          : { provider: 'new-api', model: 'deepseek-v4-flash' }
+          : DEFAULT_FALLBACK_MODEL
       const project = await this.services.workspace.autoCreateProject(this.hostCtx, model, String(args?.description ?? ''))
       // 欢迎页自动建项目路径同样打回溯基线（auto-turn 0 = 初始状态）
       try { this.services.rewind.commitWorkspace(project.path, 'auto-turn 0') } catch { /* 非 git 项目忽略 */ }
@@ -1043,6 +1073,12 @@ export class EvoResearchApiService extends TypertRemoteService {
         // 会话文件/项目目录，Windows 下无法删除，先拦截并提示。
         const busy = (live?.list?.() ?? []).some((s) => agents?.get?.(s.id ?? '')?.status === 'running')
         if (busy) return { ok: false, error: '有会话正在运行，请先停止任务再清除' }
+        // 隔离红线护栏：会话存储根在 DSH_HOME（未经理器设置时回退 ~/.dsh）。
+        // 清除范围包含整个 sessions 根，一旦 DSH_HOME 不等于本部署 dataRoot，
+        // 就可能清掉其它部署（乃至官方 DSH）的会话数据，直接拒绝。
+        if (path.resolve(resolveDshHomePath()) !== path.resolve(this.services.memory.config.dataRoot)) {
+          return { ok: false, error: `DSH_HOME（${resolveDshHomePath()}）与数据根（${this.services.memory.config.dataRoot}）不一致，拒绝清除会话数据；请经启动器重启后再试` }
+        }
 
         console.log(`[evoresearch:data-clear] projects=${projects.length} live=${live?.list?.()?.length ?? 0} root=${sessionStoreRoot()}`)
 
@@ -1094,6 +1130,17 @@ export class EvoResearchApiService extends TypertRemoteService {
         // 根工作区（dataRoot 自身）的记忆 / Chat Graph 一并清空；
         // 模型配置（model-settings.json）属于另一个清除项，保留不动。
         const rootEvoData = path.join(this.services.memory.config.dataRoot, 'plugins')
+        // 审计补齐（对照 AGENTS §2.5B）：账本/演化/科学循环/项目元数据同属项目侧状态
+        for (const sub of ['ledgers', 'evolution', 'science-loops']) {
+          try {
+            rmSync(path.join(rootEvoData, sub), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+          } catch (error) {
+            console.error(`[evoresearch:data-clear] ${sub} 清除失败: ${path.join(rootEvoData, sub)}`, error)
+          }
+        }
+        try { this.writeProjectMeta({}) } catch (error) {
+          console.error('[evoresearch:data-clear] 项目元数据重置失败:', error)
+        }
         for (const sub of ['memories', 'chat-graphs']) {
           try {
             rmSync(path.join(rootEvoData, sub), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
@@ -1323,6 +1370,17 @@ export class EvoResearchApiService extends TypertRemoteService {
   }
 
   /** 删除项目磁盘目录（删除项目时可选；带路径越界保护，禁止删 dataRoot 本身或外部路径）。 */
+  /** 关闭项目级缓存连接（library indexer/search；Windows 下打开的 SQLite 句柄会让目录删除失败）。 */
+  private closeProjectCaches(projectPath: string): void {
+    for (const svc of [this.services.libraryIndexer, this.services.librarySearch]) {
+      try {
+        svc?.closeStore(projectPath)
+      } catch {
+        // 关闭失败不阻塞删除主流程
+      }
+    }
+  }
+
   @Remote('projectDeleteDisk')
   projectDeleteDisk(args: { path: string }): { ok: boolean; deleted?: boolean; reason?: string } {
     const raw = String(args?.path ?? '')
@@ -1334,7 +1392,15 @@ export class EvoResearchApiService extends TypertRemoteService {
     if (!targetNorm.startsWith(rootNorm + path.sep)) return { ok: false, reason: 'path outside data root' }
     if (!existsSync(targetNorm)) return { ok: false, reason: 'not found' }
     try {
+      try { this.services.memory.beginDeletion(targetNorm) } catch { /* 连接关闭失败不阻塞 */ }
+      this.closeProjectCaches(targetNorm)
+      // 级联清理项目侧全局状态（此前仅删项目目录：同名重建会复活旧账本与图谱）
+      const projectName = targetNorm.split(path.sep).pop() ?? ''
+      const ledgerKey = resolveLedgerDirKey(root, projectName)
+      try { rmSync(path.join(root, 'plugins', 'ledgers', ledgerKey), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) } catch { /* best effort */ }
+      try { rmSync(path.join(root, 'plugins', 'chat-graphs', projectName + '.json'), { force: true }) } catch { /* best effort */ }
       rmSync(targetNorm, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 })
+      try { this.services.memory.endDeletion(targetNorm) } catch { /* 标记清理失败不阻塞 */ }
       return { ok: true, deleted: true }
     } catch (error) {
       return { ok: false, reason: error instanceof Error ? error.message : String(error) }
@@ -2611,15 +2677,17 @@ export class EvoResearchApiService extends TypertRemoteService {
             const refPath = isObservation
               ? `.evoresearch-data/memories/observations/${s.legacyDir ? s.legacyDir + '/' : ''}${s.fileName}`
               : s.fileName
-            const key = `note:${s.source}:${s.noteId}`
-            if (knownRefs.has(key)) continue
+            // 去重键必须与 knownRefs 的键同构（`${ref.kind}:${ref.path}`）：
+            // 旧实现拼 `note:<source>:<noteId>` 与集合永不相交，同步每次重复追加节点。
+            const dedupKey = `${isObservation ? 'file' : 'note'}:${refPath}`
+            if (knownRefs.has(dedupKey)) continue
             // v4 墓碑：用户删除过的记忆节点不再自动导入（按 locator 判）。
             if (tombstoneNodes.has(`project:note:${s.noteId}`)) {
-              knownRefs.add(key)
+              knownRefs.add(dedupKey)
               skippedTombstones += 1
               continue
             }
-            knownRefs.add(key)
+            knownRefs.add(dedupKey)
             const spot = nextSpot()
             nodes.push({
               id: nextId(),
@@ -2854,6 +2922,9 @@ export class EvoResearchApiService extends TypertRemoteService {
       } catch (error) {
         return { ok: false, error: `源会话历史读取失败: ${error instanceof Error ? error.message : String(error)}` }
       }
+      // fork 前捕获 rev（必须在 agents.create 之前取，否则创建耗时窗口内 rev
+      // 变化检测不到）；保存时带 expectedRev 防并发盲写覆盖
+      const graphRevBeforeFork = this.services.chatGraph.rev(name)
       const childId = `session-${randomUUID()}`
       const seed = Array.isArray(seedEvents) ? seedEvents : []
       // 原子性关键：fork 必须成功才继续——失败时返回错误且不改动图
@@ -2899,8 +2970,11 @@ export class EvoResearchApiService extends TypertRemoteService {
           forkAnchor: { sourceSessionId: from.sessionId, sourceEventSeq, sourceMessageId, targetSessionId: finalId },
         }])
       const next = { ...graph, nodes: graph.nodes.map((n) => (n.id === to.id ? { ...n, sessionId: finalId, ...(n.locator === undefined ? { locator: chatNodeLocator(finalId) } : {}) } : n)), edges }
-      const saved = this.services.chatGraph.save(name, next)
-      if (!saved.ok) return { ok: false, error: saved.error ?? '图谱保存失败' }
+      const saved = this.services.chatGraph.save(name, next, graphRevBeforeFork)
+      if (!saved.ok) {
+        const reason = saved.conflict === true ? '图谱已被其他操作修改（版本冲突），请刷新图谱后重试继承' : (saved.error ?? '图谱保存失败')
+        return { ok: false, error: reason }
+      }
       return { ok: true, sessionId: finalId, replaced, notice, rev: this.services.chatGraph.rev(name) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -3222,7 +3296,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         ? { provider: selection.provider, model: selection.model }
         : configured?.provider && configured?.model
           ? { provider: configured.provider, model: configured.model }
-          : { provider: 'new-api', model: 'deepseek-v4-flash' }
+          : DEFAULT_FALLBACK_MODEL
       const value = await callJson(this.hostCtx, {
         provider: model.provider,
         model: model.model,
@@ -4067,12 +4141,18 @@ export class EvoResearchApiService extends TypertRemoteService {
     // 2) 字面子串扫描兜底（仅中文/非 ASCII 查询）：对每个会话用 filterEvents 的 text
     //    子句做字面语义扫描，支持中文子串（如“打招呼”里的“招呼”），并去重补全 FTS 漏掉的命中。
     const hasNonAscii = /[^\u0000-\u007F]/.test(query)
+    // 兜底扫描限幅：非 ASCII 查询会对全部会话逐个 filterEvents（中文子串语义），
+    // 会话多时一次搜索可达数百次查询——限制扫描规模并如实返回 truncated 标志。
+    const maxScan = 200
+    const scanDeadline = Date.now() + 2000
+    let scanTruncated = false
     if (hasNonAscii && hits.length < limit) {
       try {
-        const sessions = await sessionQuery.listSessions()
+        const sessions = (await sessionQuery.listSessions() ?? []).slice(0, maxScan)
         for (const session of sessions ?? []) {
           if (seen.has(session?.header?.id)) continue
           if (hits.length >= limit) break
+          if (Date.now() > scanDeadline) { scanTruncated = true; break }
           const docs = await sessionQuery.filterEvents(session.header.id, [{ kind: 'text', text: query }] as never)
           if (docs.length > 0) {
             const snippet = String(docs[0]?.text ?? '').slice(0, 240)
@@ -4083,7 +4163,7 @@ export class EvoResearchApiService extends TypertRemoteService {
         // 字面扫描失败时保留已收集的 FTS 命中
       }
     }
-    return { hits }
+    return scanTruncated ? { hits, truncated: true } : { hits }
   }
 
   // ── 斜杠命令目录（动态读取 dsh-commands 全局注册表） ──────────────────────
@@ -4104,12 +4184,6 @@ export class EvoResearchApiService extends TypertRemoteService {
     } catch (error) {
       return { commands: [], error: error instanceof Error ? error.message : String(error) }
     }
-  }
-
-  @Remote('safety')
-  safety(): { dangerousMode: boolean } {
-    // 第一版：返回 false（危险模式由 DSH 权限预设管理，此处预留聚合）
-    return { dangerousMode: false }
   }
 
   // ── 平台能力层（PLAT-13..20，t19 交付） ───────────────────────────────────
@@ -4302,7 +4376,9 @@ export class EvoResearchApiService extends TypertRemoteService {
     if (!mcp) return { error: 'platform.mcp 未接线' }
     try {
       const result = mcp.addServer(args.config)
-      return result.status
+      // 此前 fire-and-forget 启动、返回 starting 前的快照（恒 stopped），前端拿到
+      // 假状态；connect 现有 15s 超时，等待启动完成后返回真实状态（失败随 {error} 上抛）
+      return await mcp.start(result.status.serverId)
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
@@ -4503,7 +4579,7 @@ export class EvoResearchApiService extends TypertRemoteService {
     const job = hub.get(String(args?.jobId ?? ''))
     if (job === undefined) return { ok: false, error: `任务不存在: ${String(args?.jobId ?? '')}` }
     // cancel 实现挂在注册表内部；这里经 markCancelled 走完结流转
-    const cancelled = hub.markCancelled(String(args.jobId))
+    const cancelled = await hub.cancel(String(args.jobId))
     return { ok: cancelled, ...(cancelled ? {} : { error: '任务已不在运行中' }) }
   }
 
@@ -4529,13 +4605,24 @@ export class EvoResearchApiService extends TypertRemoteService {
       const cancelled = hub !== undefined ? await hub.cancelBySession(sessionId) : 0
       // 复用既有持久化数据删除路径（与客户端 session-delete 同源）
       const sessionsRoot = sessionStoreRoot()
+      // 会话目录有两级布局：sessions/<编码cwd>/<sessionId>/（现行，与 rewind.findSessionDir
+      // 同构），以及早期扁平 sessions/<sessionId>/（兜底）。顶层目录名是工作区编码而非
+      // sessionId，直接拿顶层与 sessionId 比较永远不命中（删除整体失效）。
       let removed = 0
       try {
         const entries = readdirSync(sessionsRoot)
         for (const name of entries) {
-          if (name !== sessionId) continue
-          rmSync(path.join(sessionsRoot, name), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-          removed += 1
+          const dir = path.join(sessionsRoot, name)
+          if (name === sessionId) {
+            rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+            removed += 1
+            continue
+          }
+          const candidate = path.join(dir, sessionId)
+          if (statSync(candidate, { throwIfNoEntry: false })?.isDirectory()) {
+            rmSync(candidate, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+            removed += 1
+          }
         }
       } catch { /* 会话目录不存在 */ }
       // v4：会话删除 → 图上摘除节点（先于数据删除也可，幂等）。
@@ -4546,8 +4633,10 @@ export class EvoResearchApiService extends TypertRemoteService {
         graphNodeRemoved = syncResult?.removed === true
         hadWrites = syncResult?.hadWrites ?? 0
       } catch { /* 图同步失败不阻塞删除 */ }
+      if (removed > 0) this.dropSessionRefs(new Set([sessionId]))
       unmarkUnattendedSession(sessionId)
-      return { ok: removed > 0 || cancelled > 0, cancelled, graphNodeRemoved, hadWrites }
+      // 已不存在也视为成功（幂等删除），避免前端把重复删除误报为失败
+      return { ok: true, cancelled, graphNodeRemoved, hadWrites }
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }

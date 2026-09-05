@@ -73,6 +73,8 @@ export class MemoryRuntime implements GoalRuntime {
   private notesService: NotesService | undefined
   /** 最近一次分类模型选择（缓存，避免每轮查询）。 */
   private cachedModel: { provider: string; model: string } | undefined
+  /** Profile 文件内容缓存（key=目录，value=文件名→mtime/size/文本；文件未变不重读）。 */
+  private readonly profileTextCache = new Map<string, Map<string, { mtimeMs: number; size: number; text: string }>>()
 
   constructor(config: MemoryConfig) {
     this.config = {
@@ -93,17 +95,23 @@ export class MemoryRuntime implements GoalRuntime {
     if (!store) {
       store = Store.open(this.memoryDirFor(workspaceDir))
       this.stores.set(key, store)
-      // v3 启动对账：每项目每进程一次（quick_check/轮换备份/悬挂对账/补归档）
+      // v3 启动对账：每项目每进程一次（quick_check/轮换备份/悬挂对账/补归档）。
+      // 对账含整库备份复制与最多 200 个会话日志的同步读取，此前在用户首条消息的
+      // 事件路径上直接执行会明显卡顿；挪到 setImmediate 后本调用立即返回，
+      // 对账在下一个事件循环阶段进行（期间写入走 SQLite WAL，无一致性影响）。
       if (!this.reconciled.has(key)) {
         this.reconciled.add(key)
-        try {
-          const result = reconcileStore(store, { backupDir: path.join(this.memoryDirFor(workspaceDir), 'backups') })
-          if (!result.skipped && (result.markedInterrupted > 0 || result.archivedMissing > 0 || result.backedUp || result.assistantRecovered > 0)) {
-            console.log(`[evoresearch:memory] 启动对账（${path.basename(key)}）: 悬挂标记 ${result.markedInterrupted}，补归档 ${result.archivedMissing}，assistant 补回 ${result.assistantRecovered}，备份 ${result.backedUp}`)
+        const openedStore = store
+        setImmediate(() => {
+          try {
+            const result = reconcileStore(openedStore, { backupDir: path.join(this.memoryDirFor(workspaceDir), 'backups') })
+            if (!result.skipped && (result.markedInterrupted > 0 || result.archivedMissing > 0 || result.backedUp || result.assistantRecovered > 0)) {
+              console.log(`[evoresearch:memory] 启动对账（${path.basename(key)}）: 悬挂标记 ${result.markedInterrupted}，补归档 ${result.archivedMissing}，assistant 补回 ${result.assistantRecovered}，备份 ${result.backedUp}`)
+            }
+          } catch (error) {
+            console.error('[evoresearch:memory] 启动对账失败（不阻塞）:', error)
           }
-        } catch (error) {
-          console.error('[evoresearch:memory] 启动对账失败（不阻塞）:', error)
-        }
+        })
       }
       // v2 回填：既有会话历史后台 newest-first 索引进 Turn Catalog（每项目每进程一次）
       if (!this.backfilled.has(key)) {
@@ -219,7 +227,7 @@ export class MemoryRuntime implements GoalRuntime {
     return this.notesService.createNote({ workspaceDir, title, body })
   }
 
-  /** §12.3 Profile 注入：总量 ≤24000 字符时全文注入，超限只给文件清单 + 读取指令。 */
+  /** §12.3 Profile 注入：总量 ≤24000 字符时全文注入，超限只给文件清单 + 读取指令（mtime 缓存：文件未变不重读）。 */
   profileContextText(sessionId: string): string {
     const sessions = this.ctxRef?.get('sessions')
     const getSession = sessions?.get as ((id: string) => unknown) | undefined
@@ -228,6 +236,11 @@ export class MemoryRuntime implements GoalRuntime {
     const base = cwd && cwd !== this.config.dataRoot ? cwd : this.config.dataRoot
     const profileDir = path.join(workspaceDataDir(this.config.dataRoot, base), 'memories', 'profile')
     const files: Array<{ name: string; text: string }> = []
+    let cache = this.profileTextCache.get(profileDir)
+    if (cache === undefined) {
+      cache = new Map()
+      this.profileTextCache.set(profileDir, cache)
+    }
     try {
       for (const entry of fs.readdirSync(profileDir)) {
         if (!entry.endsWith('.md')) continue
@@ -235,7 +248,14 @@ export class MemoryRuntime implements GoalRuntime {
         try {
           const stat = fs.statSync(full)
           if (!stat.isFile() || stat.size > 64 * 1024) continue
-          files.push({ name: entry, text: fs.readFileSync(full, 'utf8') })
+          const cached = cache.get(entry)
+          if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+            files.push({ name: entry, text: cached.text })
+            continue
+          }
+          const text = fs.readFileSync(full, 'utf8')
+          cache.set(entry, { mtimeMs: stat.mtimeMs, size: stat.size, text })
+          files.push({ name: entry, text })
         } catch { /* 跳过不可读 */ }
       }
     } catch { /* 目录不存在 */ }
@@ -335,6 +355,15 @@ export class MemoryRuntime implements GoalRuntime {
       const text = extractUserText(message)
       if (!text) return
       const workspaceDir = (session.header as { cwd?: string }).cwd ?? this.config.dataRoot
+      // 同会话并发两条 user/message 的保护：activeTurns 按会话单槽，直接覆盖会让
+      // 上一轮永久停留 pending、其 assistant 正文被记到本轮账。检测到未结束的
+      // 上一轮时先把已积累文本收尾归档（标记 interrupted），再开新轮。
+      const previous = this.activeTurns.get(session.id)
+      if (previous !== undefined) {
+        try {
+          this.finalizeAbandonedTurn(ctx, session.id, previous)
+        } catch { /* 收尾失败不阻塞新轮次 */ }
+      }
       const turnId = randomUUID()
       this.activeTurns.set(session.id, { turnId, workspaceDir, userText: text, startedAt: Date.now(), accumulator: new TurnTextAccumulator() })
       // MEM-06：把真实 user/message 也交给累积器，归档时才能和后续
@@ -420,7 +449,22 @@ export class MemoryRuntime implements GoalRuntime {
     }
   }
 
-  /** 后台：分类 + topic state 更新 + 记忆包构建（不 await，失败静默）。 */  private async processTurnBackground(
+  /** 后台：分类 + topic state 更新 + 记忆包构建（不 await，失败静默）。 */  /**
+   * 同会话并发新轮到达时，把上一条未结束轮次收尾：以已积累文本落 interrupted
+   * 轮（语义同 recovery 的 api_failure 对账，但即时而非等 1 小时兜底）。
+   * activeTurns 单槽不做替换式覆盖，避免上一轮悬挂 pending、正文串账。
+   */
+  private finalizeAbandonedTurn(ctx: Context, sessionId: string, previous: { turnId: string; workspaceDir: string; userText: string; accumulator: TurnTextAccumulator }): void {
+    const assistantText = previous.accumulator.text()
+    this.storeFor(previous.workspaceDir).updateTurn(previous.turnId, {
+      status: 'interrupted',
+      interruptReason: 'superseded_by_new_turn',
+      ...(assistantText.trim() !== '' ? { assistantText } : {}),
+    })
+    this.activeTurns.delete(sessionId)
+  }
+
+  private async processTurnBackground(
     ctx: Context,
     sessionId: string,
     turnId: string,

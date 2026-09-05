@@ -419,7 +419,8 @@ export class LibraryIndexer {
   importBibtex(project: string, bibtexText: string): { attached: Array<{ paperId: string; title: string }>; unmatched: BibEntry[] } {
     const store = this.storeFor(projectDir(this.config.dataRoot, project))
     const entries = parseBibtex(bibtexText)
-    const candidates = store.listPapers({ includeMissing: true, limit: 500 })
+    // 2000 上限：>500 篇的库此前匹配不上，抬高到主流库容量级
+    const candidates = store.listPapers({ includeMissing: true, limit: 2000 })
     const byTitle = new Map<string, PaperRecord>()
     for (const paper of candidates) {
       const key = normalizeBibTitle(paper.title)
@@ -464,6 +465,16 @@ export class LibraryIndexer {
       this.stores.set(key, store)
     }
     return store
+  }
+
+  /** 关闭指定项目的缓存连接（项目删除/数据清理前调用：Windows 下打开的 SQLite 句柄会阻止目录删除）。 */
+  closeStore(projectPath: string): void {
+    const key = normPath(projectPath)
+    const store = this.stores.get(key)
+    if (store !== undefined) {
+      this.stores.delete(key)
+      store.close()
+    }
   }
 
   /** 关闭全部缓存连接（插件生命周期释放时调用）。 */

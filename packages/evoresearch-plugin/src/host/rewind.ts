@@ -5,8 +5,8 @@
  * - 每完成一个回合，host 自动提交项目工作区（git commit "auto-turn N"）；
  * - 回溯/编辑 = 以目标消息之前的事件为边界 fork 出截断历史的子会话（新的独立会话，
  *   旧会话保留——git 式"分支"语义）：
- *   ① git：先安全提交当前工作区（rewind-safety），再 restore --source 到目标回合完成后的
- *      自动提交 + clean -fdx（工作区文件回到当时，非破坏式）；② fork 子会话（历史 = 目标点之前）；
+ *   ① git：先安全提交当前工作区（rewind-safety，失败即中止），再 restore --source 到目标回合
+ *      完成后的自动提交 + clean -fd（不带 -x：项目私有数据/venv 等忽略文件必须保留，非破坏式）；② fork 子会话（历史 = 目标点之前）；
  *   ③ 前端打开子会话；编辑场景下前端对子会话发送修正文本（官方 prompt 流程）。
  */
 import * as fs from 'node:fs'
@@ -22,7 +22,7 @@ const GIT_EMAIL = 'evoresearch@localhost'
 
 /** 运行 git 命令（注入身份；成功返回 stdout，失败抛错）。 */
 function git(dir: string, args: string[], timeoutMs = 120000): string {
-  const result = spawnSync('git.exe', ['-c', `user.name=${GIT_NAME}`, '-c', `user.email=${GIT_EMAIL}`, ...args], {
+  const result = spawnSync(process.platform === 'win32' ? 'git.exe' : 'git', ['-c', `user.name=${GIT_NAME}`, '-c', `user.email=${GIT_EMAIL}`, ...args], {
     cwd: dir,
     encoding: 'utf8',
     timeout: timeoutMs,
@@ -139,19 +139,23 @@ export class RewindService {
     }
   }
 
-  /** 提交当前工作区（无变更时返回 null）。 */
+  /** 提交当前工作区（无变更时返回 null；真实失败抛错，调用方据此中止回溯）。 */
   commitWorkspace(projectDir: string, message: string): string | null {
     const dir = this.assertProjectDir(projectDir)
     if (!fs.existsSync(path.join(dir, '.git'))) return null
     this.ensureGitIgnore(dir)
     git(dir, ['add', '-A'])
-    const result = spawnSync('git.exe', ['-c', `user.name=${GIT_NAME}`, '-c', `user.email=${GIT_EMAIL}`, 'commit', '-m', message], {
+    const result = spawnSync(process.platform === 'win32' ? 'git.exe' : 'git', ['-c', `user.name=${GIT_NAME}`, '-c', `user.email=${GIT_EMAIL}`, 'commit', '-m', message], {
       cwd: dir,
       encoding: 'utf8',
       timeout: 120000,
       windowsHide: true,
     })
-    if (result.status !== 0) return null // 无变更
+    if (result.status !== 0) {
+      const err = (result.stderr ?? '').trim()
+      if (/nothing to commit|no changes added/i.test(err)) return null // 无变更
+      throw new Error(`安全提交失败: ${err.slice(0, 300) || `exit ${String(result.status)}`}`)
+    }
     return git(dir, ['rev-parse', 'HEAD'])
   }
 
@@ -166,13 +170,14 @@ export class RewindService {
     })
   }
 
-  /** 恢复工作区到某提交：先安全提交当前状态（rewind-safety），再非破坏性 restore + clean（禁用硬重置，纪律 3）。 */
+  /** 恢复工作区到某提交：先安全提交当前状态（rewind-safety，失败即中止），再非破坏性 restore + clean（禁用硬重置，纪律 3）。 */
   restoreWorkspace(projectDir: string, targetSha: string): { safety: string | null; target: string } {
     const dir = this.assertProjectDir(projectDir)
     const safety = this.commitWorkspace(dir, `rewind-safety ${new Date().toISOString()}`)
-    // 非破坏性回滚：restore --source + clean -fdx（被回退内容已在 safety commit 保留）
+    // 非破坏性回滚：restore --source + clean -fd。绝不用 -x：.evoresearch-data/（项目记忆/
+    // 笔记/日报）与 .venv/ 都是"未跟踪+忽略"文件，-x 会把它们连同回退内容一起无法恢复地删除。
     git(dir, ['restore', '--source', targetSha, '--staged', '--worktree', '--', '.'])
-    git(dir, ['clean', '-fdx'])
+    git(dir, ['clean', '-fd'])
     return { safety, target: targetSha }
   }
 

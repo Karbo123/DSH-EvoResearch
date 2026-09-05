@@ -4,9 +4,9 @@
  * 对齐 EvoResearch memory/research/retrieval.py：
  * - 候选来源：research_turns（FTS5）、observations（FTS5，默认 ACTIVE）、topic states；
  * - RRF（Reciprocal Rank Fusion）：score = Σ 1/(k + rank)，k=60；
- * - 类别加权：查询命中类别时对同类别结果加权（×1.5），但**不**做硬过滤；
- * - 向量召回（multilingual-e5）在 EmbeddingProvider 可用时叠加；
- *   模型未就绪/不可用时自动退化 FTS，不阻塞主回答。
+ * - 类别加权：查询命中类别时对同类别结果加权（×1.5），但**不**做硬过滤。
+ *   （历史说明：曾经的"可选向量召回"分支因 EmbeddingProvider 从未在生产接线、
+ *   turnVectorCache 无写入方，属死路径，已删除；语义召回见 host/context/search.ts。）
  */
 import type { ResearchCategory } from '../../shared/types.js'
 import type { MemoryHit } from '../../shared/types.js'
@@ -19,16 +19,6 @@ const RRF_K = 60
 /** 类别加权系数（查询命中类别 ×1.5，其他 ×1.0）。 */
 const CATEGORY_WEIGHT = 1.5
 
-/** 向量检索提供者接口（第一版可空；接入远端 embedding API 或本地模型后实现）。 */
-export interface EmbeddingProvider {
-  /** 模型是否可用。 */
-  readonly ready: boolean
-  /** 计算一段文本的向量。 */
-  embed(text: string): Promise<number[]>
-  /** 向量相似度（余弦）。 */
-  similarity(a: number[], b: number[]): number
-}
-
 /** 检索选项。 */
 export interface RetrieveOptions {
   /** 类别加权：命中这些类别时加权（不硬过滤）。 */
@@ -37,8 +27,6 @@ export interface RetrieveOptions {
   readonly perSourceLimit?: number
   /** 最终返回条数。 */
   readonly limit?: number
-  /** 可选的向量提供者。 */
-  readonly embeddings?: EmbeddingProvider
   /** 是否包含 topic states 结果。 */
   readonly includeStates?: boolean
 }
@@ -154,37 +142,6 @@ export async function retrieve(
     }
   }
 
-  // 向量召回（可选）：query 与候选文本的相似度作为额外来源；
-  // RET-09：embedding 失败（未就绪/超时/异常）时静默跳过，不阻塞 FTS 结果
-  if (options.embeddings?.ready) {
-    try {
-      const embeddings = options.embeddings
-      const queryVector = await embeddings.embed(query)
-      const turnCandidates = store.listTurns(undefined, 50)
-      const vectorCandidates: Array<{ hit: MemoryHit; score: number }> = []
-      for (const turn of turnCandidates) {
-        const vector = turnVectorCache.get(turn.turnId)
-        if (!vector) continue
-        vectorCandidates.push({
-          hit: {
-            kind: 'turn',
-            id: turn.turnId,
-            score: embeddings.similarity(queryVector, vector),
-            category: turn.categories[0],
-            topicKey: turn.topicKeys[0],
-            snippet: turn.userText.slice(0, 200),
-            createdAt: turn.createdAt,
-          },
-          score: 0,
-        })
-      }
-      vectorCandidates.sort((a, b) => b.hit.score - a.hit.score)
-      sources.push(vectorCandidates.slice(0, perSource))
-    } catch {
-      // embedding 失败：退化 FTS/LIKE 结果，不阻塞主回答
-    }
-  }
-
   // 类别加权（不硬过滤）：命中类别 ×1.5
   const weighted = fuseRrf(...sources).map((hit) => {
     if (hit.category && options.categories?.includes(hit.category)) {
@@ -202,12 +159,4 @@ function tryFts<T>(fts: () => T, like: () => T): T {
   } catch {
     return like()
   }
-}
-
-/** 轮次向量缓存（EmbeddingProvider 后台预热；内存级，重启丢失可重建）。 */
-const turnVectorCache = new Map<string, number[]>()
-
-/** 供 embedding 后台线程写入的缓存钩子。 */
-export function cacheTurnVector(turnId: string, vector: number[]): void {
-  turnVectorCache.set(turnId, vector)
 }

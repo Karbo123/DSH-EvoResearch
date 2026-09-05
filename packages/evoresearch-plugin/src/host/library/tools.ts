@@ -441,6 +441,9 @@ export function registerLibraryTools(ctx: Context, deps: LibraryToolsDeps): () =
             error: `响应不是 PDF 文件（content-type: ${contentType || '未知'}），可能是付费墙或 HTML 页面`,
           }
         }
+        // Content-Length 预检：声明超限直接拒绝，避免大文件整体进内存后才校验
+        const declared = Number(res.headers.get('content-length') ?? '')
+        if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) return { ok: false, error: '文件过大（>50MB）' }
         const buffer = Buffer.from(await res.arrayBuffer())
         if (buffer.byteLength > MAX_PDF_BYTES) return { ok: false, error: '文件过大（>50MB）' }
         if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') {

@@ -629,7 +629,15 @@ export class ResearchMemoryStore {
   static open(memoryDir: string): ResearchMemoryStore {
     const file = path.join(memoryDir, 'research_memory.db')
     const archivesDir = path.join(memoryDir, '..', 'archives')
-    return new ResearchMemoryStore(evoresearchDb.open(file, RESEARCH_MEMORY_MIGRATIONS), archivesDir, memoryDir)
+    let db: ReturnType<typeof evoresearchDb.open> | undefined
+    try {
+      db = evoresearchDb.open(file, RESEARCH_MEMORY_MIGRATIONS)
+      return new ResearchMemoryStore(db, archivesDir, memoryDir)
+    } catch (error) {
+      // 打开/迁移中途失败必须关闭句柄，防 Windows 文件占用泄漏
+      try { db?.close() } catch { /* 尽力而为 */ }
+      throw error
+    }
   }
 
   /** 内存库（测试用）；可选传入 archivesDir 以测试长文本落盘。 */
@@ -676,7 +684,7 @@ export class ResearchMemoryStore {
       topicKeys?: readonly string[]
       status?: TurnStatus
       responseStarted?: boolean
-      interruptReason?: 'user_stop' | 'api_failure'
+      interruptReason?: 'user_stop' | 'api_failure' | 'superseded_by_new_turn'
       partialNote?: string
       workingSummary?: string
     },
@@ -1132,9 +1140,7 @@ export class ResearchMemoryStore {
     const rows = this.db.db
       .prepare(`SELECT * FROM observation_search_index WHERE title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' ORDER BY updated_at DESC LIMIT ?`)
       .all(pattern, pattern, limit) as Row[]
-    return rows
-      .map((row) => ({ observation: this.getObservation(asString(row.observation_id))!, score: 0.5 }))
-      .filter((entry) => entry.observation !== undefined)
+    return rows.map((row) => ({ observation: this.observationFromRow(row), score: 0.5 }))
   }
 
   /**
@@ -1219,6 +1225,10 @@ export class ResearchMemoryStore {
     /** P1-2：与 relatedObservationIds 同序对齐的边类型（缺省 relates）。 */
     edgeTypes?: readonly ObservationEdgeType[]
     projectId?: string
+    /** 更新既有记录时透传，避免 update 路径把 superseded 复活/重置时间线。 */
+    status?: 'active' | 'superseded'
+    supersededBy?: string
+    createdAt?: number
   }): ObservationMeta {
     const fileName = `${input.observationId}.md`
     const dir = input.projectId
@@ -1226,6 +1236,7 @@ export class ResearchMemoryStore {
       : path.join(observationsDir, 'global')
     fs.mkdirSync(dir, { recursive: true })
     const now = Date.now()
+    const createdAt = input.createdAt ?? now
     const content = renderObservationFile({
       title: input.title,
       body: input.body,
@@ -1236,9 +1247,10 @@ export class ResearchMemoryStore {
       sourceTurnIds: input.sourceTurnIds,
       relatedObservationIds: input.relatedObservationIds,
       edgeTypes: input.edgeTypes,
-      status: 'active',
+      status: input.status ?? 'active',
+      supersededBy: input.supersededBy,
       projectId: input.projectId,
-      createdAt: now,
+      createdAt,
       updatedAt: now,
     })
     // 原子写：先写临时文件再改名，避免半成品。
@@ -1258,9 +1270,10 @@ export class ResearchMemoryStore {
       sourceTurnIds: input.sourceTurnIds,
       relatedObservationIds: input.relatedObservationIds ?? [],
       ...(input.edgeTypes === undefined ? {} : { edgeTypes: input.edgeTypes }),
-      status: 'active',
+      status: input.status ?? 'active',
+      ...(input.supersededBy === undefined ? {} : { supersededBy: input.supersededBy }),
       projectId: input.projectId,
-      createdAt: now,
+      createdAt,
       updatedAt: now,
     }
     this.upsertObservationIndex(meta)
@@ -1498,12 +1511,8 @@ export class ResearchMemoryStore {
     return { ...meta, edgeTypes }
   }
 
-  /** 按 id 读取 Observation 索引。 */
-  getObservation(observationId: string): ObservationMeta | undefined {
-    const row = this.db.db
-      .prepare('SELECT * FROM observation_search_index WHERE observation_id = ?')
-      .get(observationId) as Row | undefined
-    if (!row) return undefined
+  /** 行 → Observation 索引（复用 getObservation 的组装逻辑，避免列表场景二次查询）。 */
+  private observationFromRow(row: Row): ObservationMeta {
     const meta: ObservationMeta = {
       observationId: asString(row.observation_id),
       fileName: asString(row.file_name),
@@ -1522,6 +1531,15 @@ export class ResearchMemoryStore {
       updatedAt: asNumber(row.updated_at),
     }
     return this.mergeEdgeTypes(meta)
+  }
+
+  /** 按 id 读取 Observation 索引。 */
+  getObservation(observationId: string): ObservationMeta | undefined {
+    const row = this.db.db
+      .prepare('SELECT * FROM observation_search_index WHERE observation_id = ?')
+      .get(observationId) as Row | undefined
+    if (!row) return undefined
+    return this.observationFromRow(row)
   }
 
   /** 列出 Observation（默认只出 ACTIVE，支持项目过滤）。 */
@@ -1543,7 +1561,7 @@ export class ResearchMemoryStore {
     const rows = this.db.db
       .prepare(`SELECT * FROM observation_search_index WHERE ${clauses.join(' AND ')} ORDER BY updated_at DESC LIMIT ?`)
       .all(...(params as Array<string | number | null>)) as Row[]
-    return rows.map((row) => this.getObservation(asString(row.observation_id))!).filter(Boolean)
+    return rows.map((row) => this.observationFromRow(row))
   }
 
   // ── 检索（FTS5，供 retrieval.ts 使用） ────────────────────────────────────
@@ -1727,6 +1745,7 @@ export class ResearchMemoryStore {
   /**
    * 接受/拒绝提案。接受时把 changes 合并进当前合同并生成新版本（version+1）；
    * 拒绝仅标记状态。返回更新后的提案与（接受时的）新合同。
+   * saveGoal 与提案状态 UPDATE 在同一事务内，保证合同版本与提案状态一致。
    */
   respondGoalProposal(proposalId: string, decision: 'approve' | 'reject'): { proposal: GoalProposal; goal?: GoalContract } {
     const proposal = this.getGoalProposal(proposalId)
@@ -1736,23 +1755,25 @@ export class ResearchMemoryStore {
     if (!goal) throw new Error(`目标合同不存在: ${proposal.goalId}`)
     const now = Date.now()
     let updatedGoal: GoalContract | undefined
-    if (decision === 'approve') {
-      const changes = proposal.changes
-      updatedGoal = {
-        goalId: goal.goalId,
-        title: changes.title ?? goal.title,
-        objective: changes.objective ?? goal.objective,
-        criteria: changes.criteria ?? goal.criteria,
-        constraints: changes.constraints ?? goal.constraints,
-        version: goal.version + 1,
-        createdAt: goal.createdAt,
-        updatedAt: now,
+    this.db.transaction(() => {
+      if (decision === 'approve') {
+        const changes = proposal.changes
+        updatedGoal = {
+          goalId: goal.goalId,
+          title: changes.title ?? goal.title,
+          objective: changes.objective ?? goal.objective,
+          criteria: changes.criteria ?? goal.criteria,
+          constraints: changes.constraints ?? goal.constraints,
+          version: goal.version + 1,
+          createdAt: goal.createdAt,
+          updatedAt: now,
+        }
+        this.saveGoal(updatedGoal)
       }
-      this.saveGoal(updatedGoal)
-    }
-    this.db.db
-      .prepare(`UPDATE goal_proposals SET status = ?, created_at = created_at WHERE proposal_id = ?`)
-      .run(decision === 'approve' ? 'approved' : 'rejected', proposalId)
+      this.db.db
+        .prepare(`UPDATE goal_proposals SET status = ? WHERE proposal_id = ?`)
+        .run(decision === 'approve' ? 'approved' : 'rejected', proposalId)
+    })
     return { proposal: { ...proposal, status: decision === 'approve' ? 'approved' : 'rejected' }, goal: updatedGoal }
   }
 
@@ -1761,13 +1782,23 @@ export class ResearchMemoryStore {
     this.db.db.prepare('INSERT OR IGNORE INTO goal_events (goal_id, event, created_at) VALUES (?, ?, ?)').run(goalId, event, createdAt)
   }
 
-  /** 按类别统计轮次数（category_catalog 用）。 */
+  /** 按类别统计轮次数（category_catalog 用；SQL json_each 聚合，SQLite JSON1 不可用时回退 JS 计数）。 */
   countByCategory(): Record<string, number> {
-    const rows = this.db.db.prepare('SELECT categories FROM research_turns').all() as Row[]
-    const counts: Record<string, number> = {}
-    for (const row of rows) {
-      for (const category of parseJsonArray<string>(row.categories)) {
-        counts[category] = (counts[category] ?? 0) + 1
+    let counts: Record<string, number>
+    try {
+      const rows = this.db.db
+        .prepare(`SELECT je.value AS category, COUNT(*) AS count FROM research_turns, json_each(research_turns.categories) je GROUP BY je.value`)
+        .all() as Row[]
+      counts = {}
+      for (const row of rows) counts[asString(row.category)] = asNumber(row.count)
+    } catch {
+      // 回退：无 json_each（老 SQLite）时全表载入 JS 计数
+      const rows = this.db.db.prepare('SELECT categories FROM research_turns').all() as Row[]
+      counts = {}
+      for (const row of rows) {
+        for (const category of parseJsonArray<string>(row.categories)) {
+          counts[category] = (counts[category] ?? 0) + 1
+        }
       }
     }
     for (const category of RESEARCH_CATEGORIES) {

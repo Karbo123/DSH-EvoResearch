@@ -66,7 +66,7 @@ function AgentsPanel({ sessionId }: { sessionId: string | null }) {
       body: JSON.stringify({ sessionId }),
     }).then((res) => res.json()).then((json) => {
       if (json.ok) setAgents(json.value.agents as AgentRow[])
-      else setError(json.error?.message ?? '加载失败')
+      else setError(json.error?.message ?? t('loadFailed'))
     }).catch((e) => setError(String(e)))
   }
 
@@ -177,8 +177,8 @@ export function Inspector({ tab, onTab, onClose, cwd, sessionId, sideChats, onNe
                       children: t('byType'),
                     }),
                     jsx('span', { style: { flex: 1 } }),
-                    jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('refresh'), children: jsx(RefreshCw, {}) }),
-                    jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('download'), children: jsx(Download, {}) }),
+                    jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('refresh'), onClick: () => { window.dispatchEvent(new CustomEvent('evo-workspace-files-refresh')) }, children: jsx(RefreshCw, {}) }),
+                    jsx('button', { type: 'button', className: 'evo-icon-btn', title: t('download'), onClick: () => { window.dispatchEvent(new CustomEvent('evo-workspace-files-download')) }, children: jsx(Download, {}) }),
                   ],
                 }),
                 jsx(WorkspaceFiles, { root: cwd }),

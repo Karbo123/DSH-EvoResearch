@@ -319,7 +319,9 @@ export class ExperimentService {
     opts: { name?: string; note?: string; phaseId?: string; sessionId?: string },
   ): ExperimentManifest {
     const manifest = this.read(workspaceDir, id)
-    const next = { ...manifest }
+    // 快照源用当前调用校验过的工作区目录（而非 manifest 里可能过期的记录），并回写修正
+    const ws = this.assertWorkspace(workspaceDir)
+    const next = { ...manifest, workspaceDir: ws }
     const branches = [...next.branches]
     const idx = branches.findIndex((b) => b.id === next.currentBranchId)
     if (idx < 0) throw new Error(`当前分支不存在: ${next.currentBranchId}`)
@@ -337,7 +339,7 @@ export class ExperimentService {
     const checkpointId = newId('c')
     const snapshotDir = path.join('snapshots', id, checkpointId)
     const snapshotAbs = path.join(this.snapshotsRootOf(workspaceDir), id, checkpointId)
-    const { files, bytes } = snapshotTree(path.resolve(manifest.workspaceDir), snapshotAbs)
+    const { files, bytes } = snapshotTree(ws, snapshotAbs)
     const checkpoint: ExperimentCheckpoint = {
       id: checkpointId,
       name: (opts.name ?? '').trim().slice(0, 120) || `检查点 ${phase.checkpoints.length + 1}`,
@@ -378,11 +380,17 @@ export class ExperimentService {
     let branchIdx = -1
     let phaseIdx = -1
     let cpIdx = -1
+    // EXP-01 容错：branches/phases/checkpoints 非数组（旧/损坏 manifest）时给出可读错误
+    if (!Array.isArray(manifest.branches)) throw new Error(`实验 manifest 损坏（branches 非数组）: ${id}`)
     for (let b = 0; b < manifest.branches.length && target === null; b++) {
-      for (let p = 0; p < manifest.branches[b]!.phases.length && target === null; p++) {
-        for (let c = 0; c < manifest.branches[b]!.phases[p]!.checkpoints.length; c++) {
-          if (manifest.branches[b]!.phases[p]!.checkpoints[c]!.id === checkpointId) {
-            target = manifest.branches[b]!.phases[p]!.checkpoints[c]!
+      const branch = manifest.branches[b]!
+      const phases = Array.isArray(branch.phases) ? branch.phases : []
+      for (let p = 0; p < phases.length && target === null; p++) {
+        const phase = phases[p]!
+        const checkpoints = Array.isArray(phase.checkpoints) ? phase.checkpoints : []
+        for (let c = 0; c < checkpoints.length; c++) {
+          if (checkpoints[c]!.id === checkpointId) {
+            target = checkpoints[c]!
             branchIdx = b; phaseIdx = p; cpIdx = c
             break
           }
@@ -415,9 +423,12 @@ export class ExperimentService {
     let sourceBranch: ExperimentBranch | null = null
     let sourcePhase: ExperimentPhase | null = null
     let foundCheckpoint = false
+    if (!Array.isArray(manifest.branches)) throw new Error(`实验 manifest 损坏（branches 非数组）: ${id}`)
     for (const branch of manifest.branches) {
-      for (const phase of branch.phases) {
-        if (phase.checkpoints.some((c) => c.id === fromCheckpointId)) {
+      const phases = Array.isArray(branch.phases) ? branch.phases : []
+      for (const phase of phases) {
+        const checkpoints = Array.isArray(phase.checkpoints) ? phase.checkpoints : []
+        if (checkpoints.some((c: ExperimentCheckpoint) => c.id === fromCheckpointId)) {
           sourceBranch = branch
           sourcePhase = phase
           foundCheckpoint = true

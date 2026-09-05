@@ -8,6 +8,11 @@
  *   .index.json（软件维护，不混入正文；用户编辑正文不影响链接）；
  * - 保存成功方向、失败方向、有效做法和待重新尝试的想法——状态由用户正文的
  *   自然语言表达，add() 的 status 只作为初始正文模板提示，不强制结构化字段。
+ *
+ * ⚠️ 预留模块（2026-09 审计）：ScienceMemory 类当前生产代码零调用（science loop
+ * 尚未接入记忆读写），仅 ScienceMemoryLink 类型被 chat-graph/loops 复用；测试
+ * （science.test.ts / platform-context.test.ts）完整覆盖其行为。接入 science loop
+ * 前不要删除；删除须连同测试一起评估。
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
