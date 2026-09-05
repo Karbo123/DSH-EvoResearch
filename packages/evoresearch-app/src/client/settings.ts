@@ -1847,7 +1847,7 @@ function LlmProviderSection() {
                     children: [
                       jsx('span', { className: 'evo-setting-field-label', children: t('apiKeyLabel') }),
                       jsx('input', {
-                        type: 'text',
+                        type: 'password',
                         className: 'evo-panel-input evo-llm-key-input',
                         value: draft.apiKey,
                         spellCheck: false,
@@ -1948,7 +1948,7 @@ function LlmProviderSection() {
                       children: [
                         jsx('span', { className: 'evo-setting-field-label', children: t('apiKeyLabel') }),
                         jsx('input', {
-                          type: 'text',
+                          type: 'password',
                           className: 'evo-panel-input evo-llm-key-input',
                           value: provider.apiKey,
                           spellCheck: false,

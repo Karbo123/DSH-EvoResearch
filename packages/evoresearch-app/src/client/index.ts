@@ -321,10 +321,10 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 首次发送创建会话后，视图快照可能晚一拍；用短生命周期引用承接紧接着的第二条输入。
   const justCreatedSessionRef = useRef<string | null>(null)
 
-  // 响应式（§26.1）：<768px 左右栏改为抽屉 + 黑色 40% 遮罩。
+  // 响应式（§26.1）：≤820px（平板竖屏）左右栏改为抽屉 + 黑色 40% 遮罩。
   // 窄屏首屏抽屉默认收起：抽屉 z-index 高于顶栏，若初始展开会遮住整屏
   // （含导航开关），用户必须先点遮罩才能操作。URL 参数 sb=1（旧 sidebar=1）强制展开。
-  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 820)
   const narrowRef = useRef(narrow)
   const [sidebar, setSidebar] = useState(() => {
     if (typeof window === 'undefined') return true
@@ -332,11 +332,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const param = new URLSearchParams(location.search).get(URL_KEY_SIDEBAR) ?? new URLSearchParams(location.search).get('sidebar')
     if (param === '1') return true
     if (param === '0') return false
-    return window.innerWidth >= 768
+    return window.innerWidth >= 820
   })
   useEffect(() => {
     const onResize = () => {
-      const nextNarrow = window.innerWidth < 768
+      const nextNarrow = window.innerWidth < 820
       if (nextNarrow === narrowRef.current) return
       narrowRef.current = nextNarrow
       // 桌面 → 窄屏时收起抽屉，避免遮罩盖住顶栏；反向展开恢复侧栏。

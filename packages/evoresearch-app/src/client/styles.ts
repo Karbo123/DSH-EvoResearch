@@ -204,7 +204,7 @@ body { margin: 0; }
 .evo-resize-handle:hover, .evo-resize-handle[data-dragging] { background: var(--color-border); }
 /* ── 响应式抽屉（§26.1：<768px 左右栏变抽屉 + 黑色 40% 遮罩）── */
 .evo-drawer-mask { position: fixed; inset: 0; background: rgb(0 0 0 / 40%); z-index: 280; }
-@media (max-width: 767px) {
+@media (max-width: 819px) {
   .evo-left, .evo-right { position: fixed; top: 0; bottom: 0; z-index: 300; width: min(320px, 84vw) !important; box-shadow: 0 0 40px rgb(0 0 0 / 35%); transition: transform 0.22s ease; }
   .evo-left { left: 0; transform: translateX(-100%); }
   .evo-right { right: 0; transform: translateX(100%); }
@@ -418,7 +418,7 @@ body { margin: 0; }
 .evo-insp-tab svg { width: 15px; height: 15px; }
 .evo-insp-close { margin-left: auto; }
 .evo-insp-body { flex: 1; overflow-y: auto; min-height: 0; }
-.evo-insp-subtabs { display: flex; gap: 2px; padding: 8px 12px 0; }
+.evo-insp-subtabs { display: flex; gap: 2px; padding: 8px 12px 0; flex-wrap: wrap; }
 .evo-insp-subtab { padding: 4px 10px; border: none; background: none; border-radius: 999px; color: var(--color-text-tertiary); font-size: 12px; cursor: pointer; }
 .evo-insp-subtab:hover { background: var(--hover-bg); }
 .evo-insp-subtab[data-active] { background: var(--hover-bg); color: var(--color-text-primary); }
@@ -465,7 +465,7 @@ body { margin: 0; }
 .evo-pending-dot:nth-child(3) { animation-delay: .36s; }
 @keyframes evo-pending-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-4px); opacity: .9; } }
 /* 窄屏：消息列与审批/命令条占满可用宽度（放在主规则之后，避免被前面的媒体查询覆盖） */
-@media (max-width: 767px) {
+@media (max-width: 819px) {
   .evo-msg-list { width: 100%; min-width: 0; }
   .evo-composer { width: 100%; max-width: none; margin-inline: 0; }
   .evo-approval-list, .evo-cmd-card { max-width: 100%; min-width: 0; }
@@ -885,9 +885,12 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-assign-tier-head { display: flex; align-items: baseline; gap: 8px; }
 .evo-assign-tier-name { font-weight: 600; font-size: 13px; color: var(--color-text-primary); }
 .evo-assign-tier-desc { font-size: 12px; color: var(--color-text-tertiary); }
-.evo-assign-grid { display: grid; grid-template-columns: 150px 220px 120px; gap: 10px; align-items: end; }
-.evo-assign-grid.tier { grid-template-columns: 150px 220px 120px; }
-.evo-assign-grid.no-reasoning { grid-template-columns: 150px 220px; }
+.evo-assign-grid { display: grid; grid-template-columns: minmax(110px, 150px) minmax(130px, 1fr) minmax(90px, 120px); gap: 10px; align-items: end; }
+.evo-assign-grid.tier { grid-template-columns: minmax(110px, 150px) minmax(130px, 1fr) minmax(90px, 120px); }
+.evo-assign-grid.no-reasoning { grid-template-columns: minmax(110px, 150px) minmax(130px, 1fr); }
+@media (max-width: 600px) {
+  .evo-assign-grid, .evo-assign-grid.tier, .evo-assign-grid.no-reasoning { grid-template-columns: 1fr; }
+}
 .evo-assign-grid .evo-btn { height: 28px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
 .evo-assign-actions { display: flex; justify-content: flex-start; gap: 10px; }
 .evo-assign-migrate { font-size: 12px; color: var(--color-warning); line-height: 1.5; }
@@ -907,8 +910,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-edit-grid { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: start; }
 .evo-llm-edit-grid .evo-setting-field { gap: 4px; }
 .evo-llm-span2 { flex: 1 1 100%; }
-.evo-llm-url { flex: 0 0 360px; }
-.evo-llm-key { flex: 0 0 460px; }
+.evo-llm-url { flex: 1 1 320px; max-width: 480px; }
+.evo-llm-key { flex: 1 1 320px; max-width: 560px; }
 .evo-llm-name { flex: 0 0 200px; }
 .evo-llm-id { flex: 0 0 200px; }
 .evo-llm-proto { flex: 0 0 160px; }
@@ -1254,7 +1257,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-graph-viewer-text { width: 100%; min-height: 180px; max-height: 55vh; overflow: auto; margin: 0; padding: 9px 11px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); color: var(--color-text-primary); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 .evo-graph-viewer-error { width: 100%; padding: 14px 11px; border: 1px solid color-mix(in srgb, var(--color-error) 40%, var(--color-border)); border-radius: 8px; background: color-mix(in srgb, var(--color-error) 8%, var(--color-background)); color: var(--color-error); font-size: 12.5px; }
 .evo-graph-narrow-list { display: none; }
-@media (max-width: 767px) {
+@media (max-width: 819px) {
   .evo-graph-narrow-list { display: block; min-height: 100%; background: var(--color-surface); }
 }
 .evo-graph-narrow-item { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 10px; border: 0; border-bottom: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-primary); text-align: left; font: inherit; }
@@ -1304,7 +1307,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-context-trace-degraded { border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--color-border)); color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 7%, var(--color-background)); }
 .evo-context-trace-loading, .evo-context-trace-empty { padding: 16px 8px; text-align: center; color: var(--color-text-tertiary); font-size: 12px; }
 .evo-context-trace-close-bottom { align-self: flex-end; min-height: 30px; padding: 5px 12px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 12px; }
-@media (max-width: 767px) { .evo-context-trace { width: 100vw; max-width: none; border-left: 0; } .evo-context-trace-link code { max-width: 42%; } }
+@media (max-width: 819px) { .evo-context-trace { width: 100vw; max-width: none; border-left: 0; } .evo-context-trace-link code { max-width: 42%; } }
 /* ── Channels / Team ── */
 .evo-channel-badge { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: var(--hover-bg); color: var(--color-text-tertiary); flex-shrink: 0; text-transform: capitalize; }
 .evo-channel-badge.online { background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }
@@ -1631,7 +1634,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* 文件编辑 tab：未改动=斜体，有未保存改动=正体（仿 VSCode dirty 语义的斜体约定） */
 .evo-tab-title-file { font-style: italic; }
 .evo-tab-title-file.evo-tab-title-dirty { font-style: normal; font-weight: 700; color: var(--color-text-primary); }
-.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: 5px; cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0.65; }
+.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: 5px; cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0.65; position: relative; }
+.evo-tab-close::after { content: ''; position: absolute; inset: -6px; }
 .evo-tab-close:hover { background: rgba(255, 255, 255, 0.22); opacity: 1; }
 .evo-tab-close svg { width: 11px; height: 11px; }
 .evo-tab-new-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 2px; }
@@ -1924,7 +1928,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-source::placeholder { color: var(--color-text-placeholder); opacity: 1; }
 .evo-composer-placeholder { position: absolute; top: 10px; left: 14px; right: 14px; color: var(--color-text-placeholder); font: inherit; font-size: 14.5px; line-height: 1.55; pointer-events: none; user-select: none; white-space: pre-wrap; }
 .evo-composer-editor[data-markdown-toolbar-open] .evo-composer-placeholder { top: 46px; }
-.evo-md-toolbar { display: flex; flex: 0 0 0; align-items: center; gap: 2px; height: 0; min-height: 0; padding: 0 10px; overflow: hidden; border-bottom: 0 solid transparent; }
+.evo-md-toolbar { display: flex; flex: 0 0 0; align-items: center; gap: 2px; height: 0; min-height: 0; padding: 0 10px; overflow: hidden; overflow-x: auto; scrollbar-width: none; border-bottom: 0 solid transparent; }
 .evo-composer-editor[data-markdown-toolbar-open] .evo-md-toolbar { flex-basis: 36px; height: 36px; border-bottom-width: 1px; border-bottom-color: var(--color-border-light); }
 .evo-md-btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 7px; background-color: transparent; color: var(--color-text-secondary); cursor: pointer; transition: background-color 0.15s, color 0.15s, border-color 0.15s; }
 .evo-md-btn svg { width: 15px; height: 15px; }
