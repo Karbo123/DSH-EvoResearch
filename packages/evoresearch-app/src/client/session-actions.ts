@@ -11,14 +11,36 @@ import { X, Search, Keyboard, FileText, Eraser, Copy, Check } from 'lucide-react
 import { toast } from './toast'
 import { t } from './i18n'
 
-/** 模态外壳（与设置弹窗同视觉）。§30.2：打开聚焦首个可操作元素，关闭恢复触发按钮焦点。 */
+/** 模态外壳（与设置弹窗同视觉）。§30.2：打开聚焦首个可操作元素，关闭恢复触发按钮焦点；
+ * Tab 焦点圈闭在弹层内循环 + Esc 关闭（对齐 context-trace 的模态规范）。 */
 function ModalShell({ title, onClose, children, className }: { title: string; onClose: () => void; children: any; className?: string }) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
-    const el = shellRef.current?.querySelector<HTMLElement>('button, input, textarea, [tabindex]')
-    el?.focus()
-    return () => { previous?.focus?.() }
+    const shell = shellRef.current
+    const focusables = (): HTMLElement[] =>
+      Array.from(shell?.querySelectorAll<HTMLElement>('button, input, textarea, select, [tabindex]:not([tabindex="-1"])') ?? [])
+        .filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null)
+    shell?.querySelector<HTMLElement>('button, input, textarea, [tabindex]')?.focus()
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+      if (e.key !== 'Tab') return
+      const items = focusables()
+      if (items.length === 0) return
+      const first = items[0]!
+      const last = items[items.length - 1]!
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey && (active === first || active === null || (shell && !shell.contains(active)))) {
+        e.preventDefault(); last.focus()
+      } else if (!e.shiftKey && (active === last || active === null || (shell && !shell.contains(active)))) {
+        e.preventDefault(); first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previous?.focus?.()
+    }
   }, [])
   return jsxs('div', {
     className: 'evo-modal-mask',

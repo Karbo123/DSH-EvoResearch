@@ -127,7 +127,13 @@ function readManualOrder(): ManualOrder {
   } catch { return { projects: [], chats: {} } }
 }
 
+/** 搜索全文缓存：同一会话对象（同一快照）多次过滤时避免反复拼接全部事件文本。 */
+const searchTextCache = new WeakMap<object, { sig: string; text: string }>()
+
 function sessionSearchText(session: any): string {
+  const sig = `${session.id ?? ''}|${session.displayTitle ?? ''}|${session.title ?? ''}|${session.events?.length ?? 0}|${session.snapshotCache?.chat?.legacy?.nodes?.length ?? 0}`
+  const cached = searchTextCache.get(session)
+  if (cached !== undefined && cached.sig === sig) return cached.text
   const parts = [session.displayTitle, session.title]
   const nodes = session.snapshotCache?.chat?.legacy?.nodes
   if (Array.isArray(nodes)) for (const node of nodes) if (typeof node?.data?.text === 'string') parts.push(node.data.text)
@@ -135,7 +141,9 @@ function sessionSearchText(session: any): string {
     if (typeof event?.data?.text === 'string') parts.push(event.data.text)
     if (Array.isArray(event?.data?.content)) for (const block of event.data.content) if (typeof block?.text === 'string') parts.push(block.text)
   }
-  return parts.filter((v): v is string => typeof v === 'string').join('\n').toLocaleLowerCase()
+  const text = parts.filter((v): v is string => typeof v === 'string').join('\n').toLocaleLowerCase()
+  searchTextCache.set(session, { sig, text })
+  return text
 }
 
 function hitSessionId(hit: any): string | null {

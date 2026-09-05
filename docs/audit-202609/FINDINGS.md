@@ -124,9 +124,23 @@ CI：release.yml draft 清理 `gh api --jq --arg` 语法无效（pflag 把 --arg
 
 **补充核验后基线**：typecheck 0 错误、单测 617+52+5 全过。
 
-## 四、最终遗留（📋，仅 1 项）
+## 四、最终遗留（📋，13 项——均为"需独立工程/产品决策"，非未处置问题）
 
-1. **前端巨石组件完全拆分（EvoFrame / ChatArea 主体）**：有界拆分已完成两阶段——第一阶段 notifications.ts/two-step.ts/fs-api.ts/file-kind.ts，第二阶段 url-state.ts（URL 状态与会话短别名模块，纯函数搬移）。剩余主体为 JSX 组合与事件处理，完全拆分需独立重构分支 + 逐组件回归，不在本审计分支继续。
+六批修复后仍登记的 13 项，按性质分组：
+- **需重构分支**（1）：EvoFrame/ChatArea 巨石组件主体完全拆分（两阶段有界拆分已完成，主体 JSX/事件处理需独立分支逐组件回归）。
+- **需独立性能工程**（3）：client bundle 19MB 无代码分割；大图布局主线程执行（Worker 化需重建 ELK 加载方式）；client-state 80ms 高频写（需写合并策略设计）。
+- **需测试基建决策**（7）：experiment-rounds/commands/core-llm/chat-graph-bridge/packet 无直接单测；api 283 端点仅 3 用例；React 组件零渲染测试（需引入 jsdom/testing-library 决策）；Rust 壳仅 cargo check；launch.js 零测试。
+- **已评估维持现状**（2）：web-port 探测-绑定 TOCTOU 竞态（影响窗口毫秒级，OS 绑定裁决）；桌面 capabilities 127.0.0.1:* 通配 + CSP null（权限面仅窗口控制，内容全本地 sidecar 提供）。
+
+## 四·六、第六批修复明细（2026-09-05：把可动手的遗留做掉）
+
+- **回归测试补齐（audit-regressions.test.ts，6 用例）**：锁住四个曾判 P0/P1 的修复——rewind restoreWorkspace 保留忽略文件（.evoresearch-data/.venv 不再被 clean -x 误删）+ safety 提交失败中止回溯；JobHub.cancel 先调注册 cancel() 真终止；scheduler 新任务 createdAt 起算不立即触发 + 在飞守卫；rounds cancel 保留 done 产物。
+- **session-actions ModalShell 升级**：Esc 关闭 + Tab 焦点圈闭 + 开合焦点保存/恢复（确认/搜索/快捷键四弹窗一并无障碍达标，对齐 context-trace 规范）。
+- **verify.mjs 双入口收敛**：两个入口的互补角色（npm 链=提交门禁 fail-fast；verify.mjs=分层诊断含 graph/paths/library）以交叉说明固化，消除混淆。
+- **性能小优化**：index.ts 侧聊集合渲染期按 cwd 缓存 localStorage 读取（O(会话)→O(去重 cwd)）；threadlist 搜索全文 WeakMap 签名缓存（同快照多次过滤不再重复拼接全部事件）；chatgraph 静止边弓形搜索结果按「端点坐标+矩形内容签名」缓存（拖停保存后的重渲染直接命中，不再每边全量重跑 12×48 采样射线）。
+- **审查后清理**：chat.ts 5s 自动消失型定时器经评估为自消失 UX 且卸载后为 no-op——维持现状（登记依据）。
+
+> 第六批后基线：typecheck 0 错误、单测 623+52+5、build 0 警告、check-docs 通过。
 
 ## 四·四、第四轮修复明细（同日第四批）
 

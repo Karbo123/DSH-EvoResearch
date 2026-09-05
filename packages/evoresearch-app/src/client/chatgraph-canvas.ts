@@ -447,7 +447,19 @@ function arrowMarker(id: string, color: string, opacity: number) {
   })
 }
 
+/** 节点矩形内容签名：同数组实例只算一次（WeakMap），供弓形搜索缓存 key 使用。 */
+const rectsSigCache = new WeakMap<object, string>()
+function rectsSignature(rects: Array<{ id: string; x: number; y: number; width: number; height: number }>): string {
+  const cached = rectsSigCache.get(rects)
+  if (cached !== undefined) return cached
+  const sig = `${rects.length}:${rects.map((r) => `${r.id}:${r.x | 0},${r.y | 0}`).join(';')}`
+  rectsSigCache.set(rects, sig)
+  return sig
+}
+
 const GraphEdgeView = memo(function GraphEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }: EdgeProps<XYEdge<GraphEdgeData>>) {
+  // 弓形搜索结果缓存（几何+节点矩形签名不变即命中；见 detour IIFE 内说明）
+  const detourRef = useRef<{ key: string; value: EdgeDetour | undefined } | null>(null)
   const graphEdge = data?.graphEdge
   const interacting = data?.interactionState?.current === true
   // 平行偏移：按自身方向取法向平移；反向线因方向相反自然偏到另一侧
@@ -492,10 +504,14 @@ const GraphEdgeView = memo(function GraphEdgeView({ id, sourceX, sourceY, target
     if (interacting) return undefined // 拖拽中一律 liveBow 单段贝塞尔平滑跟随
     if (Math.abs(tx - sx) < 8) return undefined // 反馈向边交给 orientation 逻辑（静态场景才有）
     const rects = data?.nodeRects ?? []
+    // 结果缓存：key = 端点坐标(0.5px 精度) + rects 内容签名。拖停保存后的重渲染
+    // （选中态变化、轮询刷新等）几何不变时直接命中，避免每条边全量重跑弓形搜索。
+    const cacheKey = `${sx.toFixed(1)},${sy.toFixed(1)},${tx.toFixed(1)},${ty.toFixed(1)},${rectsSignature(rects)}`
+    if (detourRef.current?.key === cacheKey) return detourRef.current.value
     const fromId = graphEdge?.from ?? ''
     const toId = graphEdge?.to ?? ''
     // 第 1 级：直连不撞 → 单段贝塞尔（bow=0）
-    if (!directCurveHits({ x: sx, y: sy }, { x: tx, y: ty }, rects, fromId, toId)) return undefined
+    if (!directCurveHits({ x: sx, y: sy }, { x: tx, y: ty }, rects, fromId, toId)) { detourRef.current = { key: cacheKey, value: undefined }; return undefined }
     // 第 2 级：弓形搜索（单段三次贝塞尔，控制点与端口共 y + bow）
     const bowBase = Math.abs(ty - sy) * 0.5 + 40
     const bowCandidates = [...new Set(
@@ -504,8 +520,13 @@ const GraphEdgeView = memo(function GraphEdgeView({ id, sourceX, sourceY, target
         return [-magnitude, magnitude]
       }),
     )].sort((a, b) => Math.abs(a) - Math.abs(b) || a - b)
+    let detourResult: EdgeDetour | undefined = undefined
     for (const bow of bowCandidates) {
-      if (!directCurveHits({ x: sx, y: sy }, { x: tx, y: ty }, rects, fromId, toId, bow)) return { bow }
+      if (!directCurveHits({ x: sx, y: sy }, { x: tx, y: ty }, rects, fromId, toId, bow)) { detourResult = { bow }; break }
+    }
+    if (detourResult !== undefined) {
+      detourRef.current = { key: cacheKey, value: detourResult }
+      return detourResult
     }
     // 第 3 级：A* 航路 → 拐点抽稀 → Catmull-Rom 样条（段数 = 拐点数，> 6 段再抽稀）
     const rectMap = new Map(rects.map((rect) => [rect.id, { x: rect.x, y: rect.y, width: rect.width, height: rect.height }]))
@@ -513,12 +534,20 @@ const GraphEdgeView = memo(function GraphEdgeView({ id, sourceX, sourceY, target
       { x: sx, y: sy }, { x: tx, y: ty }, graphEdge?.toPort ?? 'context', rectMap,
       rects.find((rect) => rect.id === fromId)?.kind, rects.find((rect) => rect.id === toId)?.kind,
     )
-    if (poly === undefined || poly.length < 2) return undefined
+    if (poly === undefined || poly.length < 2) {
+      detourRef.current = { key: cacheKey, value: undefined }
+      return undefined
+    }
     let corners = polylineCorners(poly)
     for (let eps = 12; corners.length > 7 && eps <= 96; eps *= 2) corners = thinPolyline(corners, eps)
-    if (corners.length < 2) return undefined
+    if (corners.length < 2) {
+      detourRef.current = { key: cacheKey, value: undefined }
+      return undefined
+    }
     const spline = cornerSpline(corners)
-    return { spline: spline.path, samples: spline.samples }
+    detourResult = { spline: spline.path, samples: spline.samples }
+    detourRef.current = { key: cacheKey, value: detourResult }
+    return detourResult
   })()
   const bow = interacting ? liveBow : (detour?.bow ?? 0)
   const curve = edgeCurve(sx, sy, srcPos, tx, ty, tgtPos, bow)

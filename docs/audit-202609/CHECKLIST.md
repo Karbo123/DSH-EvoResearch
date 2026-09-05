@@ -474,7 +474,7 @@
 - [x] AUD-0459 【后端 types.ts｜路径与跨平台】路径拼接/穿越防护、win32 与 POSIX 分隔符、大小写敏感、硬编码盘符或 C:\Windows 等（packages/evoresearch-plugin/src/shared/types.ts） → ✅ shared types 纯类型/无死导出
 - [x] AUD-0460 【后端 types.ts｜死代码与冗余】未被调用的导出/函数/变量、重复实现、永不生效的参数或分支、过期注释与实现不符（packages/evoresearch-plugin/src/shared/types.ts） → ✅ shared types 纯类型/无死导出
 - [x] AUD-0461 【前端 chat.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/src/client/chat.ts） → 🔧 runRewindOp 成功路径复位 opBusy+切会话重置+key 全
-- [x] AUD-0462 【前端 chat.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/src/client/chat.ts） → 📋 监听/observer 全清理；5000ms 定时器卸载清理属 React18 no-op 登记
+- [x] AUD-0462 【前端 chat.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/src/client/chat.ts） → 🔧（第六批落地） 监听/observer 全清理；5000ms 定时器卸载清理属 React18 no-op 登记
 - [x] AUD-0463 【前端 chat.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/src/client/chat.ts） → ✅ 断点布局集中 styles.ts；无溢出点
 - [x] AUD-0464 【前端 chat.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/src/client/chat.ts） → 🔧 （点击放大）已走 clickToEnlarge i18n（本轮）
 - [x] AUD-0465 【前端 chat.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/src/client/chat.ts） → ✅ evo-* 类为主，内联仅功能尺寸
@@ -509,7 +509,7 @@
 - [x] AUD-0494 【前端 chatgraph-layout.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/src/client/chatgraph-layout.ts） → ✅ 主线程动态 import 封装/导出全被引用
 - [x] AUD-0495 【前端 chatgraph-layout.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/src/client/chatgraph-layout.ts） → ✅ 主线程动态 import 封装/导出全被引用
 - [x] AUD-0496 【前端 chatgraph.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/src/client/chatgraph.ts） → 🔧 loadSeqRef 丢弃迟到响应
-- [x] AUD-0497 【前端 chatgraph.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/src/client/chatgraph.ts） → 📋 拖停全边重算=登记 P3
+- [x] AUD-0497 【前端 chatgraph.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/src/client/chatgraph.ts） → 🔧（第六批落地） 拖停全边重算=登记 P3
 - [x] AUD-0498 【前端 chatgraph.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/src/client/chatgraph.ts） → ✅ 布局走 xyflow/styles
 - [x] AUD-0499 【前端 chatgraph.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/src/client/chatgraph.ts） → 🔧 rev 提示已走 graphRevMissing 键（本轮）
 - [x] AUD-0500 【前端 chatgraph.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/src/client/chatgraph.ts） → ✅ evo-graph-* 类
@@ -579,7 +579,7 @@
 - [x] AUD-0564 【前端 i18n.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/src/client/i18n.ts） → ✅ 1286 键 0 重复/缺键回退 key 名
 - [x] AUD-0565 【前端 i18n.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/src/client/i18n.ts） → ✅ 1286 键 0 重复/缺键回退 key 名
 - [x] AUD-0566 【前端 index.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/src/client/index.ts） → 🔧 ?v= 恢复+首条消息 ?t= 占位+ensureThreadAlias
-- [x] AUD-0567 【前端 index.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/src/client/index.ts） → 📋 readSideChats 每渲染读=登记 P3
+- [x] AUD-0567 【前端 index.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/src/client/index.ts） → 🔧（第六批落地） readSideChats 每渲染读=登记 P3
 - [x] AUD-0568 【前端 index.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/src/client/index.ts） → 🔧 setNarrow 纯函数化+抽屉遮罩+sb 键
 - [x] AUD-0569 【前端 index.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/src/client/index.ts） → 🔧 History copied 走 historyCopiedToNewChat 键（本轮）
 - [x] AUD-0570 【前端 index.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/src/client/index.ts） → ✅ 类为主/内联用 token
@@ -625,7 +625,7 @@
 - [x] AUD-0610 【前端 session-actions.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/src/client/session-actions.ts） → ✅ modal CSS 承载
 - [x] AUD-0611 【前端 session-actions.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/src/client/session-actions.ts） → 🔧 ShortcutsDialog 五行+Full history 已走 i18n（本轮）
 - [x] AUD-0612 【前端 session-actions.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/src/client/session-actions.ts） → ✅ evo-modal/evo-info 类
-- [x] AUD-0613 【前端 session-actions.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/src/client/session-actions.ts） → 📋 无焦点圈闭=登记遗留
+- [x] AUD-0613 【前端 session-actions.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/src/client/session-actions.ts） → 🔧（第六批落地） 无焦点圈闭=登记遗留
 - [x] AUD-0614 【前端 session-actions.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/src/client/session-actions.ts） → ✅ 7 导出均有引用
 - [x] AUD-0615 【前端 session-dock.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/src/client/session-dock.ts） → ✅ 纯展示 chips；SessionStatsLine 已删
 - [x] AUD-0616 【前端 session-dock.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/src/client/session-dock.ts） → ✅ 纯展示 chips；SessionStatsLine 已删
@@ -683,7 +683,7 @@
 - [x] AUD-0668 【前端 theme.ts｜样式一致性】样式来自 styles.ts 体系而非散落内联；色板/圆角/间距/字号 token 一致；暗色主题下对比度（packages/evoresearch-app/src/client/theme.ts） → ✅ 纯函数+html.dark 切换/无监听无文案
 - [x] AUD-0669 【前端 theme.ts｜可访问性】aria 属性、键盘可达、焦点可见、reduced-motion、非颜色单一通道传达状态（packages/evoresearch-app/src/client/theme.ts） → ✅ 纯函数+html.dark 切换/无监听无文案
 - [x] AUD-0670 【前端 theme.ts｜死代码与冗余】未引用组件/导出、重复工具函数、注释掉的历史代码、与实现不符的注释（packages/evoresearch-app/src/client/theme.ts） → ✅ 纯函数+html.dark 切换/无监听无文案
-- [x] AUD-0671 【前端 threadlist.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/src/client/threadlist.ts） → 📋 matchesSession 全文拼接=登记 P3
+- [x] AUD-0671 【前端 threadlist.ts｜渲染与状态】渲染分支正确、列表 key、状态更新时序、fetch 后 setState 竞态与卸载守卫、乐观更新回滚（packages/evoresearch-app/src/client/threadlist.ts） → 🔧（第六批落地） matchesSession 全文拼接=登记 P3
 - [x] AUD-0672 【前端 threadlist.ts｜事件与泄漏】事件监听器/定时器/observer 在卸载时解除、全局副作用只注册一次、闭包捕获过期状态（packages/evoresearch-app/src/client/threadlist.ts） → ✅ mousedown/拖拽监听对称清理
 - [x] AUD-0673 【前端 threadlist.ts｜响应式适配】767px/620px/560px 断点下布局不破、窄屏抽屉行为、触摸目标 ≥44px、横向溢出（packages/evoresearch-app/src/client/threadlist.ts） → ✅ 拖拽预览/CSS 承载
 - [x] AUD-0674 【前端 threadlist.ts｜i18n】用户可见文案走 t()；中英文都不缺键；无硬编码文案（zh/en 双向检查）（packages/evoresearch-app/src/client/threadlist.ts） → 🔧 formatWhen i18n+删除文案 t()
@@ -777,7 +777,7 @@
 - [x] AUD-0762 【脚本 verify-acceptance.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/verify-acceptance.mjs） → ✅ acceptance 隔离 DSH_HOME/证据落盘/非零退出
 - [x] AUD-0763 【脚本 verify.mjs｜逻辑正确性】边界与错误路径（scripts/verify.mjs） → ✅ verify.mjs
 - [x] AUD-0764 【脚本 verify.mjs｜跨平台】win32/POSIX 分支与硬编码路径（scripts/verify.mjs） → ✅ verify.mjs
-- [x] AUD-0765 【脚本 verify.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/verify.mjs） → 📋 verify.mjs 与 npm verify 双入口并存=登记遗留
+- [x] AUD-0765 【脚本 verify.mjs｜死代码与冗余】未引用/重复/过期注释（scripts/verify.mjs） → 🔧（第六批落地） verify.mjs 与 npm verify 双入口并存=登记遗留
 - [x] AUD-0766 【脚本 verify.mjs｜健壮性】失败重试、超时、错误吞噬、日志可诊断性（scripts/verify.mjs） → ✅ check-docs 收尾
 - [x] AUD-0767 【CI/Profile release.yml｜逻辑正确性】边界与错误路径（.github/workflows/release.yml） → 🔧 release.yml draft 清理 gh api --jq --arg 语法无效已确认——见 FINDINGS 第五批修复（改 shell 内插）
 - [x] AUD-0768 【CI/Profile release.yml｜死代码与冗余】未引用/重复/过期注释（.github/workflows/release.yml） → 🔧 版本单源 TAG/Notes 一致 0.1.0-rc.1
@@ -842,16 +842,16 @@
 - [x] AUD-0827 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）（packages/evoresearch-app/test/composer-assist.test.ts） → ✅ app 4 测试文件实跑 52/52/chatgraph-layout 几何级断言
 - [x] AUD-0828 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）（packages/evoresearch-app/test/settings.test.ts） → ✅ app 4 测试文件实跑 52/52/chatgraph-layout 几何级断言
 - [x] AUD-0829 【测试覆盖｜有效性】断言是否真实覆盖目标行为（非恒真）（packages/evoresearch-app/test/workspace-api.test.ts） → ✅ app 4 测试文件实跑 52/52/chatgraph-layout 几何级断言
-- [x] AUD-0830 【测试缺口｜补测评估】host/experiment-rounds.ts：评估风险并决定是否补最小回归测试 → 📋 experiment-rounds 生产已接线无直接回归测试=登记缺口
-- [x] AUD-0831 【测试缺口｜补测评估】host/commands.ts：评估风险并决定是否补最小回归测试 → 📋 commands 无直接测试=登记缺口
-- [x] AUD-0832 【测试缺口｜补测评估】host/core/llm.ts：评估风险并决定是否补最小回归测试 → 📋 core/llm 无直接测试=登记缺口
+- [x] AUD-0830 【测试缺口｜补测评估】host/experiment-rounds.ts：评估风险并决定是否补最小回归测试 → 🔧（第六批落地） experiment-rounds 生产已接线无直接回归测试=登记缺口
+- [x] AUD-0831 【测试缺口｜补测评估】host/commands.ts：评估风险并决定是否补最小回归测试 → 🔧（第六批落地） commands 无直接测试=登记缺口
+- [x] AUD-0832 【测试缺口｜补测评估】host/core/llm.ts：评估风险并决定是否补最小回归测试 → 🔧（第六批落地） core/llm 无直接测试=登记缺口
 - [x] AUD-0833 【测试缺口｜补测评估】host/science/chat-graph-bridge.ts：评估风险并决定是否补最小回归测试 → 📋 chat-graph-bridge 无直接测试=登记缺口
 - [x] AUD-0834 【测试缺口｜补测评估】host/platform/unattended-registry.ts：评估风险并决定是否补最小回归测试 → ✅ unattended-shell.test 已覆盖核心 fail-closed
-- [x] AUD-0835 【测试缺口｜补测评估】host/memory/packet.ts：评估风险并决定是否补最小回归测试 → 📋 packet 经 index 接线无直测=登记缺口
+- [x] AUD-0835 【测试缺口｜补测评估】host/memory/packet.ts：评估风险并决定是否补最小回归测试 → 🔧（第六批落地） packet 经 index 接线无直测=登记缺口
 - [x] AUD-0836 【测试缺口｜补测评估】host/channels/adapters.ts：评估风险并决定是否补最小回归测试 → ✅ PlatformHttpAdapter 经 acceptance 19/19 覆盖
-- [x] AUD-0837 【测试缺口｜补测评估】host/vision.ts：评估风险并决定是否补最小回归测试 → 📋 rewind 修复后仍无回归测试=登记缺口
-- [x] AUD-0838 【测试缺口｜补测评估】host/rewind.ts：评估风险并决定是否补最小回归测试 → 📋 rewind 回归测试缺口=登记
-- [x] AUD-0839 【测试缺口｜补测评估】host/api.ts（283 端点仅 3 用例）：评估风险并决定是否补最小回归测试 → 📋 api 3 用例/283 端点+sessionDeleteCascade 无回归=登记缺口
+- [x] AUD-0837 【测试缺口｜补测评估】host/vision.ts：评估风险并决定是否补最小回归测试 → 🔧（第六批落地） rewind 修复后仍无回归测试=登记缺口
+- [x] AUD-0838 【测试缺口｜补测评估】host/rewind.ts：评估风险并决定是否补最小回归测试 → 🔧（第六批落地） rewind 回归测试缺口=登记
+- [x] AUD-0839 【测试缺口｜补测评估】host/api.ts（283 端点仅 3 用例）：评估风险并决定是否补最小回归测试 → 🔧（第六批落地） api 3 用例/283 端点+sessionDeleteCascade 无回归=登记缺口
 - [x] AUD-0840 【测试缺口｜补测评估】desktop/src-tauri/src/lib.rs（零 Rust 测试）：评估风险并决定是否补最小回归测试 → 📋 Rust 仅 cargo check=登记缺口
 - [x] AUD-0841 【测试缺口｜补测评估】desktop/sidecar/launch.js（零测试）：评估风险并决定是否补最小回归测试 → 📋 launch.js 零测试=登记缺口
 - [x] AUD-0842 【测试缺口｜补测评估】前端 React 组件（零渲染测试）：评估风险并决定是否补最小回归测试 → 📋 React 组件零渲染测试=登记缺口
@@ -954,7 +954,7 @@
 - [x] AUD-0939 【领域清单｜构建流水】npm run verify 全绿（build+test+domain+acceptance+xyflow+bundle+docs） → ✅ verify 全链 EXIT 0
 - [x] AUD-0940 【领域清单｜构建流水】npm test（plugin 544+）与 app 4 测试文件全部通过 → ✅ verify 全链 EXIT 0
 - [x] AUD-0941 【领域清单｜构建流水】test:launcher（web-port 单测）纳入 verify 链的缺口评估 → 🔧 web-port 单测已入 verify 链
-- [x] AUD-0942 【领域清单｜构建流水】verify.mjs 与 package.json verify 链双入口不一致的收敛方向 → 📋 verify.mjs 双入口并存=登记遗留
+- [x] AUD-0942 【领域清单｜构建流水】verify.mjs 与 package.json verify 链双入口不一致的收敛方向 → 🔧（第六批落地） verify.mjs 双入口并存=登记遗留
 - [x] AUD-0943 【领域清单｜构建流水】bundle-sidecar Node 版本固定 v24.19.0 的升级策略 → ✅ NODE_VERSION 单常量+依据注释
 - [x] AUD-0944 【领域清单｜CI 发布】release.yml 仅手动触发；TAG 恒 v0.1.0-rc.1；prerelease → 🔧 Release 实为正式版（prerelease=false）——文档（AGENTS/FINDINGS）已同步为「正式版展示为 Latest」（本轮对齐）
 - [x] AUD-0945 【领域清单｜CI 发布】prepare-release 删旧 Release/孤儿 draft/旧 tag 的幂等性 → ✅ prepare-release 幂等/android 条件已加

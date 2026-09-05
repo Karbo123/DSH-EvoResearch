@@ -1042,17 +1042,24 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }, [])
   const cwdNow = current === undefined ? null : (sessions.byId[current]?.cwd ?? null)
   // 全局侧聊 id 集合（供 Recents 隐藏；§22.1 内部/侧聊线程不混入普通列表）
+  // 渲染期内按 cwd 缓存 localStorage 读取：会话多时 O(会话数) 次同步 IO → O(去重 cwd 数)
+  const sideChatCache = new Map<string | null, string[]>()
+  const readSideChatsCached = (cwd: string | null): string[] => {
+    let list = sideChatCache.get(cwd)
+    if (list === undefined) { list = readSideChats(cwd); sideChatCache.set(cwd, list) }
+    return list
+  }
   const sideChatIds = new Set<string>()
   for (const sid of sessions.ids ?? []) {
     const s = sessions.byId[sid]
-    if (s !== undefined && !deletedIds.has(sid)) for (const sc of readSideChats(s.cwd ?? null)) sideChatIds.add(sc)
+    if (s !== undefined && !deletedIds.has(sid)) for (const sc of readSideChatsCached(s.cwd ?? null)) sideChatIds.add(sc)
   }
   const sideChats: Array<{ id: string; title: string; kind: 'fork' | 'blank' }> = (sessions.ids ?? [])
     .map((id) => sessions.byId[id])
     // cwd 未设置时镜像字段为 undefined，统一 null 化后再与 cwdNow 比较（§22.4 只展示当前 workspace）
     .filter((s) => s !== undefined && !deletedIds.has(s.id) && (s.cwd ?? null) === cwdNow && !promotedIds.has(s.id))
     // fork 子会话（parentSessionId 或本地记录）或本地记录的空白侧聊（§22.4 只展示当前 workspace）
-    .filter((s) => s.parentSessionId !== undefined || readSideChats(cwdNow).includes(s.id))
+    .filter((s) => s.parentSessionId !== undefined || readSideChatsCached(cwdNow).includes(s.id))
     .map((s) => ({
       id: s.id,
       title: s.displayTitle ?? s.id.slice(0, 12),

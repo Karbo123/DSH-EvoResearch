@@ -19,6 +19,11 @@
  *   node scripts/verify.mjs --list          # 只打印分层清单，不执行
  *
  * 退出码：全层通过 0；任一层失败 1（被 --skip-build/--only 过滤的层不参与判定）。
+ *
+ * 与 `npm run verify`（package.json 链）的关系（2026-09 审计澄清）：
+ *   npm 链 = 提交门禁（fail-fast：build → 单测 → launcher → domain → acceptance → xyflow → bundle → docs）；
+ *   本入口 = 分层/可选诊断入口，含 npm 链没有的 graph/paths/library 层，但不含 domain/acceptance/xyflow/bundle。
+ *   两者互补，勿混用；提交前请跑 `npm run verify`。
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
