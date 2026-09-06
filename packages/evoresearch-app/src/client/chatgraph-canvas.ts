@@ -228,7 +228,7 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
     })
   }
   const shortPreview = node.ref !== undefined
-    ? preview === undefined ? t('graphReading') : preview.ok ? (preview.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 24) : (preview.error ?? t('graphRefUnavailable')).slice(0, 24)
+    ? preview === undefined ? t('graphReading') : preview.ok ? (preview.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 24) : isEmptyNode ? t('graphNotYetCreated') : (preview.error ?? t('graphRefUnavailable')).slice(0, 24)
     : (node.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 24)
   // 缩放（右下角手柄）：下限=设计尺寸、上限=3×默认；尺寸持久化在节点数据里并参与布局计算
   const nodeDef = defaultNodeSize(node)
@@ -289,7 +289,8 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
           jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-in', style: { position: 'absolute', left: -4, top: PORT_OFFSETS.memory.in.default, transform: 'translate(-100%, -50%)' }, children: t('graphWriteIn') }),
           socket('output', 'source', 'evo-graph-socket-out', PORT_OFFSETS.memory.out),
           jsx('span', { className: 'evo-graph-socket-label evo-graph-socket-label-out', style: { position: 'absolute', right: -4, top: PORT_OFFSETS.memory.out, transform: 'translate(100%, -50%)' }, children: t('graphConnect') }),
-          node.ref !== undefined && jsx('span', { className: `evo-graph-node-preview${preview?.ok === false ? ' evo-graph-node-preview-err' : ''}`, title: preview?.text ?? preview?.error, children: shortPreview }),
+          // 空态节点（empty 徽标）的引用缺失是"尚未创建"而非错误：不套红字，细节留在悬浮 title
+          node.ref !== undefined && jsx('span', { className: `evo-graph-node-preview${preview?.ok === false && !isEmptyNode ? ' evo-graph-node-preview-err' : ''}`, title: preview?.text ?? preview?.error, children: shortPreview }),
         ] }),
       // 四角倒角三角（缩放提示）：几何与配色全部在样式表（外扩 0.5px 压住边框内缝）
       jsx('span', { className: 'evo-resize-chamfer evo-resize-chamfer-tl', 'aria-hidden': true }),

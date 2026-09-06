@@ -425,7 +425,8 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       }
       const err = preview.error ?? ''
       setRefPreviews((prev) => ({ ...prev, [node.id]: { ok: false, error: err } }))
-      setGraph((prev) => ({ ...prev, nodes: prev.nodes.map((item) => item.id === node.id ? { ...item, status: 'missing' as const } : item) }))
+      // 空态节点（empty 徽标 = 目标尚未创建）缺引用属预期：不打 missing 红框；非空节点的引用缺失才按异常处理
+      setGraph((prev) => ({ ...prev, nodes: prev.nodes.map((item) => item.id === node.id ? { ...item, status: node.empty === true ? undefined : 'missing' as const } : item) }))
       return null
     } catch {
       // 回退：直接读文件/目录（现有 /evoresearch/fs/read、/list）
