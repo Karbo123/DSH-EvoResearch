@@ -81,15 +81,20 @@ function run(command: string, args: string[], cwd: string): Promise<void> {
       const child = spawn(process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe', ['/d', '/s', '/c', [command, ...args].join(' ')], {
         cwd,
         windowsHide: true,
-        stdio: 'ignore',
+        // 捕获 stderr：安装失败只报"退出码 1"毫无线索（ registry 不可达/版本不存在等全被吞）
+        stdio: ['ignore', 'ignore', 'pipe'],
       })
+      let stderrTail = ''
+      child.stderr?.on('data', (chunk: unknown) => { stderrTail = (stderrTail + String(chunk)).slice(-600) })
       child.once('error', reject)
-      child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`${command} 退出码 ${String(code)}`)))
+      child.once('exit', (code) => code === 0
+        ? resolve()
+        : reject(new Error(`${command} 退出码 ${String(code)}${stderrTail.trim() !== '' ? `：${stderrTail.trim()}` : ''}`)))
     })
   }
   return new Promise((resolve, reject) => {
-    const child = execFile(command, args, { cwd, windowsHide: true }, (error) => error ? reject(error) : resolve())
-    child.stderr?.on('data', () => undefined)
+    // POSIX：execFile 非 0 退出的 error.message 自带 stderr 尾部，无需另收
+    execFile(command, args, { cwd, windowsHide: true }, (error) => error ? reject(error) : resolve())
   })
 }
 

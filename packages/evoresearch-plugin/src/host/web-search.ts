@@ -303,6 +303,9 @@ const PROVIDER_META: Record<WebSearchProviderId, ProviderMeta> = {
     defaultURL: OPENWEBSEARCH_DEFAULT_URL,
     requiresKey: false,
     freeTier: '开源自托管免费；受本机网络和所选引擎限制',
+    // 缺此字段时 test()/search() 不会走 ensureRunning——本地服务未启动也直接 fetch，
+    // 只会得到裸的 "fetch failed"（连接拒绝），自动安装与启动永不触发。
+    managed: 'openwebsearch',
   },
   openserp: {
     name: 'OpenSERP',
@@ -581,7 +584,17 @@ async function requestJson(
     else signal.addEventListener('abort', abort, { once: true })
   }
   try {
-    const response = await fetch(input, { ...init, signal: controller.signal })
+    let response: Response
+    try {
+      response = await fetch(input, { ...init, signal: controller.signal })
+    } catch (error) {
+      // undici 的 fetch 失败只给顶层 "fetch failed"，真实原因（ECONNREFUSED/DNS/超时）
+      // 藏在 error.cause 里——不透传就是一句"毫无提示的失败"。
+      if (controller.signal.aborted) throw new Error(`网络请求超时（20s）：${input}`)
+      const cause = (error as { cause?: { code?: string; message?: string } } | undefined)?.cause
+      const detail = cause?.code ?? cause?.message ?? (error instanceof Error ? error.message : String(error))
+      throw new Error(`网络请求失败（${input}）：${detail}`)
+    }
     const text = await response.text()
     if (!response.ok) throw new Error(`${response.status} ${text.slice(0, 240)}`)
     if (text.trim() === '') return {}
