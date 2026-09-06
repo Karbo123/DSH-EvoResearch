@@ -103,7 +103,7 @@ function fmtTokens(n: number): string {
   return String(n)
 }
 
-/** 会话统计栏（始终渲染；无会话时显示占位）。 */
+/** 会话统计栏；无会话（或无统计）时不渲染，避免输入框下方残留孤行占位。 */
 export function StatusBar({ session }: { session: any }) {
   const notifier = session?.notifier
   const eventsLen = useSyncExternalStore(
@@ -112,9 +112,7 @@ export function StatusBar({ session }: { session: any }) {
   )
   const stats = useMemo(() => computeStats(session?.events ?? []), [session, eventsLen])
   const hasSession = session !== undefined && session !== null && stats.steps > 0
-  if (!hasSession) {
-    return jsx('div', { className: 'evo-statusbar', children: jsx('span', { className: 'evo-statusbar-empty', children: '—' }) })
-  }
+  if (!hasSession) return null
   const llmSec = stats.llmMs / 1000
   const tokPerSec = llmSec > 0 ? Math.round(stats.outTokens / llmSec) : 0
   const cacheHit = stats.inTokens + stats.cacheRead > 0 ? Math.round((stats.cacheRead / (stats.inTokens + stats.cacheRead)) * 100) : 0
