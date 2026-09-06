@@ -15,3 +15,13 @@
 - insert:
     - id: tool-ask-user
       name: '@deepseek-ai/dsh-tool-ask-user'
+
+# 系统时间注入（dsh-base 默认组合不启用 time-context）：每轮请求前把当前时间
+# 作为上下文注给模型，否则模型无法回答"今天几号/最近七年"之类的时间敏感问题。
+# 自定义前端不上报浏览器时区 → timeZone 兜底；60s 内不重复注入，避免刷屏。
+- insert:
+    - id: time-context
+      name: '@deepseek-ai/dsh-time-context'
+      config:
+        timeZone: Asia/Shanghai
+        refreshIntervalMs: 60000
