@@ -1168,8 +1168,9 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-resize-chamfer-tr { top: -1px; right: -1px; border-top-right-radius: 16px; clip-path: polygon(0 0, 100% 0, 100% 100%); }
 .evo-resize-chamfer-bl { bottom: -1px; left: -1px; border-bottom-left-radius: 16px; clip-path: polygon(0 0, 0 100%, 100% 100%); }
 .evo-resize-chamfer-br { bottom: -1px; right: -1px; border-bottom-right-radius: 16px; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
-.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--graph-muted); white-space: nowrap; opacity: 0.9; pointer-events: none; background: var(--graph-node-surface); border: 1px solid var(--graph-control-border); border-radius: 4px; padding: 0 4px; }
-.evo-graph-node:hover .evo-graph-socket-label, .evo-graph-node-sel .evo-graph-socket-label { opacity: 1; color: var(--color-text-secondary); }
+/* 端口小字默认隐藏（避免常驻遮挡连线走向），悬停该节点时才浮现；键盘 Tab 导航（focus-visible）同样显示 */
+.evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--graph-muted); white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.12s ease, visibility 0.12s ease; pointer-events: none; background: var(--graph-node-surface); border: 1px solid var(--graph-control-border); border-radius: 4px; padding: 0 4px; }
+.evo-graph-node:hover .evo-graph-socket-label, .evo-graph-node:has(:focus-visible) .evo-graph-socket-label { opacity: 1; visibility: visible; color: var(--color-text-secondary); }
 .evo-graph-node-sid { font-size: 12px; line-height: 16px; color: var(--graph-muted); font-family: var(--graph-font-mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-graph-node-preview { font-size: 12px; line-height: 16px; color: var(--graph-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* 连线：demo 风格平滑贝塞尔；类型色仅保留 fork/引用/关系三类语义 */
