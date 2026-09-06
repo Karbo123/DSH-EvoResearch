@@ -479,6 +479,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     // （技能加载动作已通过工具卡片可见，模型也能正常读取这些内容）。
     '<system-reminder>',
     'A skill is a reusable set',
+    // dsh-time-context 的时间注入（profile 挂载）：以 user 角色进入会话但并非用户发送，
+    // 显示成「你的消息」会误导对话归属；模型仍从会话历史正常读取该时间上下文。
+    'Time sampled while preparing',
   ]
   const isSystemLeak = (n: any): boolean => {
     if (n === null || n.data === undefined) return false
