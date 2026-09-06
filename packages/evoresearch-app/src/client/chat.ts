@@ -473,8 +473,8 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
   })
 }
 
-/** 助手消息（头像 + 内容 + Thinking 折叠 + 工具卡片分组）。 */
-function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onOpenProjectFile }: { node: ChatNode; nodeKey?: string; highlight?: boolean; toolResults: Record<string, { text: string; isError: boolean }>; sessionId: string | null; onOpenProjectFile?: (relPath: string) => void }) {
+/** 助手消息（头像 + 内容 + Thinking 折叠 + 工具卡片分组）；continued=连续回复续行（不重复头像）。 */
+function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onOpenProjectFile, continued }: { node: ChatNode; nodeKey?: string; highlight?: boolean; toolResults: Record<string, { text: string; isError: boolean }>; sessionId: string | null; onOpenProjectFile?: (relPath: string) => void; continued?: boolean }) {
   const text = assistantText(node)
   const reasoning = assistantReasoning(node)
   const tools = assistantTools(node, toolResults)
@@ -498,10 +498,11 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onO
     }
   }
   return jsxs('div', {
-    className: `evo-msg-row${highlight ? ' evo-msg-jump' : ''}`,
+    className: `evo-msg-row${continued ? ' evo-msg-cont' : ''}${highlight ? ' evo-msg-jump' : ''}`,
     'data-node-key': nodeKey,
     onClick: onRowClick,
     children: [
+      // 续行仍渲染头像占位（visibility 隐藏）保证文本与首条左对齐
       jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsxs(Fragment, { children: [jsx(Atom, {})] }) }),
       jsxs('div', {
         className: 'evo-msg-body',
@@ -1598,6 +1599,14 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   const shown = viewNodes.slice(-visibleCount)
   const hasMore = viewNodes.length > visibleCount
   const showMessages = hasMessages && !clearView
+  // 连续 AI 回复分组：上一条可见节点也是 AI 侧（非 user）时，本条不重复渲染头像，
+  // 避免同一次回答的多段消息被误解为多次独立回复（头像仅在分组首条出现）。
+  const aiContinuedKeys = new Set<string>()
+  for (let i = 1; i < shown.length; i++) {
+    if (shown[i].kind !== 'user' && shown[i - 1].kind !== 'user') aiContinuedKeys.add(shown[i].key)
+  }
+  // 流式 partial（不在 shown 里）紧接 AI 侧末条时同样视为续行
+  const partialContinued = partial !== null && !shown.some((n) => n.key === partial.key) && shown.length > 0 && shown[shown.length - 1].kind !== 'user'
   const toolResults = toolResultsOf(session)
   // P0-2：探测工具结果中的图片资产（命中后触发一次重渲染）
   const [, setToolImagesState] = useState(0)
@@ -1668,7 +1677,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
                       onBranch: onBranchFromMessage,
                       rewindConfirming: rewindConfirm === node.data.seq,
                     }, node.key)
-                  : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults, sessionId, onOpenProjectFile }, node.key)),
+                  : jsx(AssistantBubble, { node, nodeKey: node.key, highlight: node.key === jumpKey, toolResults, sessionId, onOpenProjectFile, continued: aiContinuedKeys.has(node.key) }, node.key)),
                 // 首条消息乐观占位：会话尚未建立、真实节点还没出现时，立即显示
                 // 「我的消息 + AI 加载中」（真实快照出现后此条件失效，占位自动消失）。
                 nodes.length === 0 && partial === null && pendingFirst !== null
@@ -1705,7 +1714,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
                       ],
                     })
                   : null,
-                partial !== null && !userOnly && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults, sessionId, onOpenProjectFile }, partial.key),
+                partial !== null && !userOnly && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults, sessionId, onOpenProjectFile, continued: partialContinued }, partial.key),
                 showJump && jsx('button', {
                   type: 'button',
                   className: 'evo-jump-latest',

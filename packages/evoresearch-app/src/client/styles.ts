@@ -447,6 +447,9 @@ body { margin: 0; }
 .evo-jump-latest:hover { border-color: var(--brand); color: var(--brand); transform: translateY(-1px); }
 .evo-jump-latest svg { width: 14px; height: 14px; }
 .evo-msg-row { display: flex; gap: 10px; align-items: flex-start; }
+/* 连续 AI 回复续行：头像仅分组首条出现；续行保留占位对齐文本、收紧与上一条的间距 */
+.evo-msg-row.evo-msg-cont { margin-top: -8px; }
+.evo-msg-row.evo-msg-cont .evo-msg-avatar { visibility: hidden; }
 .evo-msg-user { flex-direction: row-reverse; }
 .evo-msg-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .evo-msg-avatar svg { width: 15px; height: 15px; }
