@@ -302,6 +302,8 @@ export function ComposerModelInfo() {
           : info.reasoningEffort === 'max' ? t('effortMax')
             : null
   const detail = [`${info.model}（${info.provider ?? '?'}）`, currentEffortLabel !== null ? t('reasoningLevelLabel').replace('{v}', currentEffortLabel) : null].filter(Boolean).join(' · ')
+  // 徽章只显示角色缩略名（如「编码者」），完整模型名保留在悬浮 title 中。
+  const nameLabel = info.tier != null && tierMeta[info.tier] != null ? tierMeta[info.tier].name : String(info.model)
   return jsxs(Fragment, { children: [
     jsxs('button', {
       ref: btnRef,
@@ -314,7 +316,7 @@ export function ComposerModelInfo() {
       onClick: toggle,
       children: [
         jsx(Cpu, {}),
-        jsx('span', { className: 'evo-composer-model-name', children: String(info.model) }),
+        jsx('span', { className: 'evo-composer-model-name', children: nameLabel }),
         currentEffortLabel !== null && jsx('span', { className: 'evo-composer-model-effort', children: `${t('reasoningEffort')} ${currentEffortLabel}` }),
       ],
     }),
