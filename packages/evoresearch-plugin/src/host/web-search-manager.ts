@@ -8,8 +8,22 @@ export const OPENWEBSEARCH_DEFAULT_URL = 'http://127.0.0.1:3210'
 const OPENWEBSEARCH_VERSION = '2.1.11'
 const OPENWEBSEARCH_PACKAGE = 'open-websearch'
 const MCP_SEARCH_TIMEOUT_MS = 30_000
+/** 引擎可用性缓存有效期；过期后下次搜索/状态拉取时懒触发重探。 */
+const ENGINE_PROBE_TTL_MS = 10 * 60_000
 
 export type ManagedSearchBackendId = 'openwebsearch' | 'google-ai-mode' | 'free-search'
+
+/** open-websearch 内置的全部引擎 id（build/engines 目录，v2.1.11）。 */
+export const OPENWEBSEARCH_ALL_ENGINES = [
+  'baidu', 'bing', 'brave', 'csdn', 'duckduckgo', 'exa', 'github', 'juejin', 'linuxdo', 'sogou', 'startpage', 'web', 'zhihu',
+] as const
+
+/** 引擎可用性探测结果缓存。 */
+export interface ManagedSearchEngineProbe {
+  healthy: string[]
+  dead: string[]
+  probedAt: number
+}
 
 export interface ManagedSearchBackendStatus {
   id: ManagedSearchBackendId
@@ -20,6 +34,8 @@ export interface ManagedSearchBackendStatus {
   endpoint: string
   state: 'ready' | 'installing' | 'starting' | 'stopped' | 'error'
   message?: string
+  /** 引擎可用性探测（服务运行中才有意义；未探测时缺省）。 */
+  engines?: ManagedSearchEngineProbe
 }
 
 export interface ManagedSearchManager {
@@ -30,6 +46,10 @@ export interface ManagedSearchManager {
   stop(): Promise<void>
   dispose(): Promise<void>
   search?(tool: string, args: Record<string, unknown>): Promise<unknown>
+  /** 引擎可用性探测（仅多引擎托管后端实现；返回缓存/新探测结果）。 */
+  probeEngines?(force?: boolean): Promise<ManagedSearchEngineProbe>
+  /** 最近一次探测的可用引擎列表（未探测过返回 undefined）。 */
+  healthyEngines?(): string[] | undefined
 }
 
 function npmCommand(): string {
@@ -105,6 +125,8 @@ export class OpenWebSearchManager {
   private message: string | undefined
   private operation: Promise<string> | undefined
   private readonly installRoot: string
+  private engineProbe: ManagedSearchEngineProbe | undefined
+  private engineProbeOp: Promise<ManagedSearchEngineProbe> | undefined
 
   constructor(dataRoot: string) {
     this.installRoot = join(dataRoot, 'web-search-backends', 'open-websearch')
@@ -116,6 +138,65 @@ export class OpenWebSearchManager {
 
   private installed(): boolean {
     return this.entry() !== undefined
+  }
+
+  /** 最近一次引擎探测结果（未探测过返回 undefined）。 */
+  healthyEngines(): string[] | undefined {
+    return this.engineProbe === undefined ? undefined : this.engineProbe.healthy
+  }
+
+  private async searchOnce(endpoint: string, engine: string, timeoutMs: number): Promise<boolean> {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const response = await fetch(`${endpoint.replace(/\/+$/, '')}/search`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: engine, limit: 1, engines: [engine] }),
+        signal: controller.signal,
+      })
+      if (!response.ok) return false
+      const body = await response.json() as { status?: string; data?: { results?: unknown[] } }
+      if (body.status === 'error') return false
+      return (body.data?.results?.length ?? 0) > 0
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  /**
+   * 引擎可用性探测：用引擎自身名字作查询（如 github 引擎查 "github"），
+   * 返回 ≥1 条结果即记为可用。并发探测全部内置引擎；缓存 TTL 内直接复用。
+   * 并发限 2 且失败重试一次：高并发探测会触发 sogou 等引擎的反爬限流，造成误判。
+   */
+  async probeEngines(force = false): Promise<ManagedSearchEngineProbe> {
+    const live = this.child !== undefined && this.child.exitCode === null ? await health(this.endpoint) : await health(OPENWEBSEARCH_DEFAULT_URL)
+    if (!live) return this.engineProbe ?? { healthy: [], dead: [], probedAt: 0 }
+    if (!force && this.engineProbe !== undefined && Date.now() - this.engineProbe.probedAt < ENGINE_PROBE_TTL_MS) return this.engineProbe
+    if (this.engineProbeOp !== undefined) return this.engineProbeOp
+    this.engineProbeOp = (async () => {
+      const healthy: string[] = []
+      const dead: string[] = []
+      const queue = [...OPENWEBSEARCH_ALL_ENGINES]
+      const worker = async (): Promise<void> => {
+        for (;;) {
+          const engine = queue.shift()
+          if (engine === undefined) return
+          const first = await this.searchOnce(this.endpoint, engine, 15_000)
+          if (first) { healthy.push(engine); continue }
+          // 失败不立即判死：稍候重试一次，排除瞬时限流/抖动
+          await new Promise((resolve) => setTimeout(resolve, 900))
+          if (await this.searchOnce(this.endpoint, engine, 15_000)) healthy.push(engine)
+          else dead.push(engine)
+        }
+      }
+      await Promise.all([worker(), worker()])
+      this.engineProbe = { healthy, dead, probedAt: Date.now() }
+      return this.engineProbe
+    })().finally(() => { this.engineProbeOp = undefined })
+    return this.engineProbeOp
   }
 
   async status(): Promise<ManagedSearchBackendStatus> {
@@ -133,6 +214,7 @@ export class OpenWebSearchManager {
       endpoint: this.endpoint,
       state: live ? 'ready' : this.state,
       ...(this.message !== undefined ? { message: this.message } : {}),
+      ...(live && this.engineProbe !== undefined ? { engines: this.engineProbe } : {}),
     }
   }
 
@@ -195,6 +277,8 @@ export class OpenWebSearchManager {
     while (Date.now() < deadline) {
       if (await health(this.endpoint)) {
         this.state = 'ready'
+        // 服务就绪后后台探测引擎可用性（不阻塞搜索首次调用）
+        void this.probeEngines(true).catch(() => { /* 探测失败保持缓存为空，搜索走默认引擎 */ })
         return this.endpoint
       }
       if (child.exitCode !== null) break

@@ -243,8 +243,10 @@ test('Open-WebSearch daemon 读取 data.results', async () => {
   const previousFetch = globalThis.fetch
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     assert.equal(String(input), 'http://127.0.0.1:3210/search')
-    const body = JSON.parse(String(init?.body)) as { limit?: number }
-    assert.equal(body.limit, 8)
+    const body = JSON.parse(String(init?.body)) as { limit?: number; engines?: string[] }
+    // 未探测到可用引擎时走兜底对，limit 按引擎数放大（2 × 8 = 16）
+    assert.deepEqual(body.engines, ['sogou', 'bing'])
+    assert.equal(body.limit, 16)
     return { ok: true, text: async () => JSON.stringify({ status: 'ok', data: { results: [{ title: 'Local result', url: 'https://example.test/local', description: 'local summary' }] } }) } as Response
   }) as typeof fetch
   const { ctx } = fakeContext({ activeProvider: 'openwebsearch', providers: { openwebsearch: { baseURL: 'http://127.0.0.1:3210' } } })

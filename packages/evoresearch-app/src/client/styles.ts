@@ -632,6 +632,12 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-web-search-select { max-width: 420px; margin-top: 10px; }
 .evo-web-search-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--color-border-light); border-radius: 10px; background: var(--color-surface); }
 .evo-web-search-runtime { display: flex; flex-direction: column; gap: 7px; padding-top: 8px; border-top: 1px solid var(--color-border-light); }
+/* 引擎可用性：chips 按可用/不可用着色，悬停 title 说明 */
+.evo-web-search-engines { display: flex; flex-direction: column; gap: 7px; }
+.evo-web-search-engine-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.evo-web-search-engine-chip { padding: 1px 9px; border-radius: 999px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; line-height: 1.5; }
+.evo-web-search-engine-ok { border: 1px solid color-mix(in srgb, var(--color-success) 45%, transparent); background: color-mix(in srgb, var(--color-success) 9%, transparent); color: var(--color-success); }
+.evo-web-search-engine-dead { border: 1px dashed var(--color-border); background: transparent; color: var(--color-text-tertiary); text-decoration: line-through; opacity: 0.7; }
 .evo-web-search-name { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
 .evo-web-search-key { min-width: 0; max-width: 560px; }
 .evo-web-search-setting .evo-panel-input { box-sizing: border-box; min-width: 0; max-width: 100%; }

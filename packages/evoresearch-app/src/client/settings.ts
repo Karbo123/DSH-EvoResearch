@@ -393,6 +393,7 @@ interface WebSearchProviderRow {
   runtimeState?: string
   runtimeEndpoint?: string
   runtimeMessage?: string
+  runtimeEngines?: { healthy: string[]; dead: string[]; probedAt: number }
 }
 
 interface WebSearchSettingsValue {
@@ -458,6 +459,19 @@ function WebSearchSection() {
     if (active === 'none') return
     setDraftProviders((previous) => ({ ...previous, [active]: { ...(previous[active] ?? {}), baseURL } }))
   }
+  /** 探测 openwebsearch 引擎可用性：逐引擎试搜一次，结果以 chips 展示并用于自动选择。 */
+  const probeEngines = () => {
+    if (busy !== null || selected?.managed !== true) return
+    setBusy('engines'); setError(null); setNotice(null)
+    void fetch('/evoresearch/fs/web-search-engine-probe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then((r) => r.json()).then((json) => {
+        if (json.ok !== true) throw new Error(json.error?.message ?? t('webSearchBackendFailed'))
+        load()
+        const engines = (json.value as { engines?: { healthy: string[] } }).engines
+        setNotice(engines === undefined ? t('webSearchEngineProbeNeedRunning') : t('webSearchEngineProbed').replace('{n}', String(engines.healthy.length)))
+      }).catch((e: unknown) => setError(e instanceof Error ? e.message : t('webSearchBackendFailed')))
+      .finally(() => setBusy(null))
+  }
   const save = () => {
     if (busy !== null || settings === null) return
     setBusy('save'); setError(null); setNotice(null)
@@ -508,6 +522,17 @@ function WebSearchSection() {
           selected.managed === true && jsxs('div', { className: 'evo-web-search-runtime', children: [
             jsxs('div', { className: 'evo-setting-hint', children: [t('webSearchBackendStatus'), ': ', selected.running ? t('webSearchBackendRunning') : selected.runtimeState === 'installing' ? t('webSearchBackendInstalling') : t('webSearchBackendStoppedState'), selected.running && selected.runtimeEndpoint !== undefined ? ` · ${selected.runtimeEndpoint}` : ''] }),
             selected.runtimeMessage !== undefined && jsx('div', { className: 'evo-panel-error', children: selected.runtimeMessage }),
+            // 引擎可用性：搜索时自动使用全部可用引擎（每 10 分钟自动复检 + 手动按钮）
+            selected.running && jsxs('div', { className: 'evo-web-search-engines', children: [
+              jsx('div', { className: 'evo-setting-hint', children: selected.runtimeEngines === undefined
+                ? t('webSearchEngineUnprobed')
+                : `${t('webSearchEngineAuto')}（${t('webSearchEngineHealthyCount').replace('{n}', String(selected.runtimeEngines.healthy.length))}）` }),
+              selected.runtimeEngines !== undefined && jsxs('div', { className: 'evo-web-search-engine-chips', children: [
+                selected.runtimeEngines.healthy.map((engine) => jsx('span', { className: 'evo-web-search-engine-chip evo-web-search-engine-ok', children: engine }, engine)),
+                selected.runtimeEngines.dead.map((engine) => jsx('span', { className: 'evo-web-search-engine-chip evo-web-search-engine-dead', title: t('webSearchEngineDeadTitle'), children: engine }, engine)),
+              ] }),
+              jsx('button', { type: 'button', className: 'evo-btn evo-btn-test', disabled: busy !== null, onClick: probeEngines, children: busy === 'engines' ? t('webSearchEngineProbing') : t('webSearchEngineProbe') }),
+            ] }),
             jsxs('div', { className: 'evo-llm-actions', children: [
               jsx('button', { type: 'button', className: 'evo-btn evo-btn-ok', disabled: busy !== null, onClick: () => manageBackend('start'), children: selected.running ? t('webSearchBackendRestart') : selected.installed ? t('webSearchBackendStart') : t('webSearchBackendInstallStart') }),
               selected.running && jsx('button', { type: 'button', className: 'evo-btn', disabled: busy !== null, onClick: () => manageBackend('stop'), children: t('webSearchBackendStop') }),

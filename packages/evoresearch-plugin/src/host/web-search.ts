@@ -9,7 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { randomUUID } from 'node:crypto'
-import { OPENWEBSEARCH_DEFAULT_URL, OpenWebSearchManager, type ManagedSearchBackendId, type ManagedSearchManager, type ManagedSearchBackendStatus } from './web-search-manager.js'
+import { OPENWEBSEARCH_DEFAULT_URL, OpenWebSearchManager, type ManagedSearchBackendId, type ManagedSearchManager, type ManagedSearchBackendStatus, type ManagedSearchEngineProbe } from './web-search-manager.js'
 import { CROSSREF_DEFAULT_URL, OPENALEX_DEFAULT_URL, searchAcademic as searchAcademicSources, searchCrossref, searchOpenAlex, type AcademicSearchResult, type AcademicAuthor, type AcademicAuthorProfile, type AcademicReference } from './academic-search.js'
 import { AUTORELATEDWORK_DEFAULT_SCHOLAR_URL, searchAutoRelatedWork, type AutoRelatedWorkConfig } from './autorelatedwork-search.js'
 import { PAPER_NAVIGATOR_S2_URL, PAPER_NAVIGATOR_RECOMMEND_URL, searchPaperNavigator, traversePaperNavigator, recommendPaperNavigator, searchPaperNavigatorSnippets, type PaperNavigatorPaper } from './paper-navigator.js'
@@ -67,6 +67,7 @@ export interface WebSearchPublicProvider {
   runtimeState?: ManagedSearchBackendStatus['state']
   runtimeEndpoint?: string
   runtimeMessage?: string
+  runtimeEngines?: ManagedSearchBackendStatus['engines']
 }
 
 export interface WebSearchPublicSettings {
@@ -945,6 +946,7 @@ export class ConfiguredWebSearchProvider {
           runtimeKind: meta.runtimeKind,
           ...(managedStatus.endpoint !== '' ? { runtimeEndpoint: managedStatus.endpoint } : {}),
           ...(managedStatus.message !== undefined ? { runtimeMessage: managedStatus.message } : {}),
+          ...(managedStatus.engines !== undefined ? { runtimeEngines: managedStatus.engines } : {}),
         } : {}),
       })
     }
@@ -1122,6 +1124,13 @@ export class ConfiguredWebSearchProvider {
     return this.selectedManagedManager().status()
   }
 
+  /** 强制重新探测 openwebsearch 引擎可用性并返回后端状态（设置面板「检测引擎」按钮）。 */
+  async webSearchEngineProbe(): Promise<ManagedSearchBackendStatus & { engines?: ManagedSearchEngineProbe }> {
+    const manager = this.selectedManagedManager()
+    if (manager.probeEngines !== undefined) await manager.probeEngines(true)
+    return manager.status()
+  }
+
   async webSearchBackendInstall(): Promise<ManagedSearchBackendStatus> {
     const manager = this.selectedManagedManager()
     await manager.install()
@@ -1198,16 +1207,21 @@ export class ConfiguredWebSearchProvider {
       return exaResult(body)
     }
     if (id === 'openwebsearch') {
-      // 引擎选择：sogou 对中文查询的相关性远好于 bing（bing 的网页抓取会把"梧桐山"
-      // 这类多词中文查询搞成前缀匹配，返回百度百科噪声）；baidu 抓取被反爬拦截（恒 0 条）。
-      // sogou 首选；其完全无结果时回退 bing 兜底（英文/通用查询）。
-      const searchOnce = (engines: string[]) => requestJson(
+      // 引擎选择优先级：启动/定期探测到的全部可用引擎（更全面）→ 未探测到时用
+      // 已知可用对兜底（sogou 对中文查询相关性最好；bing 的网页抓取会把"梧桐山"
+      // 这类多词中文查询搞成前缀匹配返回百科噪声，仅作兜底；baidu 恒被反爬拦截）。
+      // limit 按引擎数放大（服务会把配额均分给各引擎）：单引擎 8 条的深度不因引擎多而变浅。
+      const healthy = this.manager('openwebsearch')?.healthyEngines?.()
+      const engines = healthy !== undefined && healthy.length > 0 ? healthy : ['sogou', 'bing']
+      const limit = Math.min(8 * engines.length, 24)
+      const searchOnce = (list: string[]) => requestJson(
         appendPath(baseURL, 'search'),
-        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: text, limit: 8, engines }) },
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: text, limit, engines: list }) },
         signal,
       )
-      let body = await searchOnce(['sogou'])
-      if (openWebSearchResult(body).sources.length === 0) body = await searchOnce(['bing'])
+      let body = await searchOnce(engines)
+      // 全部可用引擎都空手而归（抓取波动）→ 用兜底对再试一次
+      if (openWebSearchResult(body).sources.length === 0 && engines.join() !== 'sogou,bing') body = await searchOnce(['sogou', 'bing'])
       return openWebSearchResult(body)
     }
     if (id === 'openserp') {
