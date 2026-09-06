@@ -1548,10 +1548,11 @@ function LlmProviderSection() {
     setProviders((prev) => (prev ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)))
   }
 
-  /** 模型条目转写回 Provider 配置的 patch 字段（保留推理强度设置）。 */
+  /** 模型条目转写回 Provider 配置的 patch 字段（保留推理强度与上下文窗口设置）。 */
   const modelPatch = (m: LlmModelRow): Record<string, unknown> => ({
     id: m.id,
     name: m.name !== '' && m.name !== m.id ? m.name : undefined,
+    contextWindow: typeof m.contextWindow === 'number' && m.contextWindow > 0 ? m.contextWindow : undefined,
     reasoningEfforts: m.reasoningEfforts === null || m.reasoningEfforts === undefined ? undefined : m.reasoningEfforts,
   })
 
@@ -1578,7 +1579,8 @@ function LlmProviderSection() {
               return {
                 id: m.id as string,
                 name: m.name ?? String(m.id),
-                contextWindow: m.contextWindow ?? null,
+                // 目录未回传窗口时保留用户手填值（避免「获取模型」清掉设置）
+                contextWindow: m.contextWindow ?? old?.contextWindow ?? null,
                 reasoningEfforts: old?.reasoningEfforts ?? null,
                 supportedReasoning: Array.isArray(m.supportedReasoning) ? m.supportedReasoning : null,
               }
@@ -1778,6 +1780,7 @@ function LlmProviderSection() {
       models: provider.models.map((m) => {
         const entry: Record<string, unknown> = { id: m.id }
         if (m.name !== '' && m.name !== m.id) entry.name = m.name
+        if (typeof m.contextWindow === 'number' && m.contextWindow > 0) entry.contextWindow = m.contextWindow
         if (m.reasoningEfforts !== null && m.reasoningEfforts !== undefined) entry.reasoningEfforts = m.reasoningEfforts
         return entry
       }),
@@ -1802,13 +1805,25 @@ function LlmProviderSection() {
   }
 
   // 统一「已获取模型」：合并全部 Provider 的模型列表，按名称字母序排列。
-  const allModels = new Map<string, { id: string; name: string; count: number }>()
+  const allModels = new Map<string, { id: string; name: string; count: number; contextWindow: number | null }>()
   for (const p of providers ?? []) {
     for (const m of p.models) {
       const hit = allModels.get(m.id)
-      if (hit !== undefined) hit.count += 1
-      else allModels.set(m.id, { id: m.id, name: m.name !== '' ? m.name : m.id, count: 1 })
+      if (hit !== undefined) {
+        hit.count += 1
+        if (hit.contextWindow === null && m.contextWindow !== null) hit.contextWindow = m.contextWindow
+      } else allModels.set(m.id, { id: m.id, name: m.name !== '' ? m.name : m.id, count: 1, contextWindow: m.contextWindow })
     }
+  }
+  /** 编辑模型上下文窗口：作用于包含该模型的全部 Provider（与排除按钮同语义），点「保存」持久化。 */
+  const updateModelContext = (modelId: string, raw: string) => {
+    const trimmed = raw.trim()
+    const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : 0
+    const value = parsed > 0 ? parsed : null
+    setProviders((prev) => (prev ?? []).map((p) => ({
+      ...p,
+      models: p.models.map((m) => (m.id === modelId ? { ...m, contextWindow: value } : m)),
+    })))
   }
   const modelPills = [...allModels.values()].sort((a, b) => {
     const x = a.id.toLowerCase()
@@ -2016,6 +2031,18 @@ function LlmProviderSection() {
                   title: m.name !== m.id ? `${m.id}（${m.name}）` : m.id,
                   children: [
                     jsx('span', { className: 'evo-llm-model-id', children: m.id }),
+                    jsx('input', {
+                      type: 'number',
+                      className: 'evo-llm-model-ctx',
+                      min: 1,
+                      step: 1,
+                      value: m.contextWindow === null ? '' : String(m.contextWindow),
+                      placeholder: '262144',
+                      title: t('llmModelCtxHint'),
+                      'aria-label': `${t('llmModelCtxWindow')}: ${m.id}`,
+                      disabled: busyId !== null,
+                      onInput: (e: { currentTarget: HTMLInputElement }) => updateModelContext(m.id, e.currentTarget.value),
+                    }),
                     m.count > 1 && jsx('span', {
                       className: 'evo-llm-model-n',
                       title: t('fetchedModelsCount').replace('{n}', String(m.count)),

@@ -19,6 +19,7 @@ import {
   retainedTokensAfterCompaction,
   DEFAULT_WINDOW_SPEC,
   MODEL_WINDOW_CATALOG,
+  windowCatalogFromSettings,
 } from '../src/host/context/window.js'
 import {
   DEFAULT_PRUNE_BUDGET,
@@ -457,5 +458,56 @@ describe('describeContextSources', () => {
     const report = describeContextSources({ sessionId: 's1' })
     assert.deepEqual(report.totals, { summaries: 0, originalSnippets: 0, toolResults: 0, graphConnections: 0, estimatedTokens: 0 })
     assert.deepEqual(report.entries, [])
+  })
+})
+
+describe('windowCatalogFromSettings（对齐 dsh-llm-pi-ai 的窗口解析）', () => {
+  it('document 层：模型条目 contextWindow 优先，provider defaultContextWindow 兜底', () => {
+    const settings = {
+      document: {
+        'llm-pi-ai': {
+          providers: {
+            newapi: {
+              defaultContextWindow: 100_000,
+              models: [
+                { id: 'glm-5.3-flash', contextWindow: 200_000 },
+                { id: 'kimi-k3' },
+              ],
+            },
+          },
+        },
+      },
+    }
+    const catalog = windowCatalogFromSettings(settings)
+    assert.equal(catalog.windowTokensByModel?.['glm-5.3-flash'], 200_000)
+    assert.equal(catalog.windowTokensByModel?.['kimi-k3'], 100_000)
+    assert.equal(catalog.defaultWindowTokens, 262_144)
+  })
+
+  it('get() 解析层回退；无 defaultContextWindow 时模型按 262144 补齐', () => {
+    const settings = { get: (ns: string) => ns === 'llm-pi-ai' ? { providers: { p1: { models: [{ id: 'gpt-5.5' }] } } } : undefined }
+    const catalog = windowCatalogFromSettings(settings)
+    assert.equal(catalog.windowTokensByModel?.['gpt-5.5'], 262_144)
+    assert.equal(catalog.defaultWindowTokens, 262_144)
+  })
+
+  it('未配置 llm-pi-ai → 空目录（回退内置 catalog 与默认值）', () => {
+    assert.deepEqual(windowCatalogFromSettings(undefined), {})
+    assert.deepEqual(windowCatalogFromSettings({}), {})
+    assert.deepEqual(windowCatalogFromSettings({ document: {} }), {})
+    assert.deepEqual(windowCatalogFromSettings({ get: () => undefined }), {})
+  })
+
+  it('resolveWindowTokens 用该目录：显式模型条目 > provider 默认', () => {
+    const settings = {
+      document: {
+        'llm-pi-ai': {
+          providers: { newapi: { defaultContextWindow: 100_000, models: [{ id: 'glm-5.3-flash', contextWindow: 200_000 }, { id: 'kimi-k3' }] } },
+        },
+      },
+    }
+    const catalog = windowCatalogFromSettings(settings)
+    assert.equal(resolveWindowTokens('glm-5.3-flash', catalog), 200_000)
+    assert.equal(resolveWindowTokens('kimi-k3', catalog), 100_000)
   })
 })

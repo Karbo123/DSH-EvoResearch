@@ -570,6 +570,8 @@ const DICT: Record<string, [string, string]> = {
   fetchedModelsDesc: ['All models fetched from every provider, sorted by name. Click "Fetch available models" to re-pull the union, or × to exclude a model.', '所有 Provider 获取到的模型统一汇总，按名称排序；点击「获取可用模型」会从全部 Provider 重新拉取并集，点击 × 可从列表中排除该模型。'],
   fetchedModelsEmpty: ['No fetched models yet. Click "Fetch available models" to pull from every provider.', '暂无已获取的模型。点击右侧「获取可用模型」从所有 Provider 拉取。'],
   excludeModel: ['Exclude this model', '排除该模型'],
+  llmModelCtxWindow: ['Context window (tokens)', '上下文窗口（token）'],
+  llmModelCtxHint: ['Max context tokens for this model. Empty = provider default (262144). Takes effect after Save; drives the context usage meter and overflow/compaction thresholds.', '该模型的上下文最大 token 数，留空用默认 262144；点「保存」后生效，用于上下文用量显示与溢出/自动压缩判断。'],
   modelExcluded: ['Excluded model {id} from {n} provider(s)', '已排除模型 {id}（涉及 {n} 个 Provider）'],
   modelExcludeFailed: ['Failed to exclude model', '排除模型失败'],
   llmSaved: ['Model provider saved', '模型提供商已保存'],

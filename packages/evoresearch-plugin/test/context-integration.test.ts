@@ -374,3 +374,25 @@ describe('Graph 加权：连接材料排前（×1.5 生效，未连接不屏蔽�
     assert.equal(boosted.find((c) => c.id === 't1')?.score, 10)
   })
 })
+
+describe('guard windowCatalogProvider（动态窗口目录对齐请求层）', () => {
+  it('provider 返回的目录优先于静态 windowCatalog', () => {
+    const guard = new ContextWindowRuntime({
+      dataRoot: './',
+      windowCatalog: { windowTokens: 111 },
+      windowCatalogProvider: () => ({ windowTokensByModel: { 'm-custom': 222 }, defaultWindowTokens: 333 }),
+    })
+    const fakeSession = { id: 's1' }
+    assert.equal(guard.detectPressure(fakeSession, 'm-custom').windowTokens, 222)
+    assert.equal(guard.detectPressure(fakeSession, 'm-unknown').windowTokens, 333)
+  })
+
+  it('provider 未返回目录（undefined）时回落静态 windowCatalog', () => {
+    const guard = new ContextWindowRuntime({
+      dataRoot: './',
+      windowCatalog: { windowTokens: 111 },
+      windowCatalogProvider: () => undefined,
+    })
+    assert.equal(guard.detectPressure({ id: 's1' }, 'whatever').windowTokens, 111)
+  })
+})

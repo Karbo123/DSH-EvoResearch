@@ -48,6 +48,44 @@ export interface WindowCatalogConfig {
   readonly defaultWindowTokens?: number
 }
 
+/** dsh-llm-pi-ai 请求层的硬编码默认窗口（provider 未配置 defaultContextWindow 时生效）。 */
+export const PI_AI_DEFAULT_CONTEXT_WINDOW = 262_144
+
+/**
+ * 从 settings.yaml 的 llm-pi-ai 段解析窗口目录：镜像 dsh-llm-pi-ai 的 contextWindow
+ * 解析规则（模型条目 contextWindow > provider defaultContextWindow > PI_AI_DEFAULT_CONTEXT_WINDOW），
+ * 保证压力检测/自动压缩与请求层看到同一窗口。未配置 llm-pi-ai 时返回空目录（走内置 catalog）。
+ */
+export function windowCatalogFromSettings(settings: unknown): WindowCatalogConfig {
+  const providers = (() => {
+    try {
+      const raw = (settings as { document?: Record<string, unknown> } | undefined)?.document?.['llm-pi-ai'] as { providers?: Record<string, unknown> } | undefined
+      if (raw?.providers !== undefined && typeof raw.providers === 'object') return raw.providers
+    } catch { /* 原始层不可读 → 回退解析层 */ }
+    try {
+      const resolved = (settings as { get?: (ns: string) => unknown } | undefined)?.get?.('llm-pi-ai') as { providers?: Record<string, unknown> } | undefined
+      return resolved?.providers ?? {}
+    } catch { return {} }
+  })()
+  if (providers === null || typeof providers !== 'object') return {}
+  const byModel: Record<string, number> = {}
+  let sawProvider = false
+  for (const profile of Object.values(providers)) {
+    const p = profile as { defaultContextWindow?: unknown; models?: unknown }
+    if (typeof p !== 'object' || p === null) continue
+    sawProvider = true
+    const effectiveDefault = typeof p.defaultContextWindow === 'number' && p.defaultContextWindow > 0 ? p.defaultContextWindow : PI_AI_DEFAULT_CONTEXT_WINDOW
+    const models = Array.isArray(p.models) ? p.models : []
+    for (const m of models) {
+      const entry = m as { id?: unknown; contextWindow?: unknown }
+      if (typeof entry?.id !== 'string' || entry.id === '') continue
+      if (typeof entry.contextWindow === 'number' && entry.contextWindow > 0) byModel[entry.id] = entry.contextWindow
+      else if (byModel[entry.id] === undefined) byModel[entry.id] = effectiveDefault
+    }
+  }
+  return sawProvider ? { windowTokensByModel: byModel, defaultWindowTokens: PI_AI_DEFAULT_CONTEXT_WINDOW } : {}
+}
+
 /**
  * 解析某模型（或未指明模型）的窗口上限。
  * 优先级：显式 windowTokens > windowTokensByModel[model] > MODEL_WINDOW_CATALOG[model] > default。

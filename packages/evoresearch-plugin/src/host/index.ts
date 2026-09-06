@@ -46,6 +46,7 @@ import { ManuscriptService } from './manuscript.js'
 import { SignalStore } from './evolution/signals.js'
 import { CandidateRegistry } from './evolution/registry.js'
 import { ContextRuntime } from './platform/context-runtime.js'
+import { windowCatalogFromSettings } from './context/window.js'
 import { ContextAssembler, suspendSyncPdfRead } from './context/assembler.js'
 import { callText } from './core/llm.js'
 import { ExpertService, type ExpertConfig } from './experts.js'
@@ -261,6 +262,9 @@ function apply(ctx: Context): void {
     windowConfig: {
       dataRoot,
       auxiliaryModel: config.auxiliaryModel,
+      // 窗口目录动态对齐 settings.yaml（模型条目 contextWindow / provider 默认），
+      // 与 dsh-llm-pi-ai 请求层同源：状态栏用量、自动压缩阈值都基于真实窗口。
+      windowCatalogProvider: () => windowCatalogFromSettings(ctx.get('settings')),
       // v4 ChatGraph 压缩徽标（§6.1）：压缩记录到达终态（completed）→ 对应会话
       // 节点 compactionCount+1 并落盘；与 compactions.jsonl 落账同一挂点
       //（compactionLog.onAppend），同 compactionId 双路径去重在 bumpCompaction 内。

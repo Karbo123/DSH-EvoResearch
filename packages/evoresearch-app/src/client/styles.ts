@@ -948,6 +948,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-llm-model-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 12px; border: 1px solid var(--color-border-light); border-radius: 999px; background: var(--color-surface); }
 .evo-llm-model-pill .evo-llm-model-id { flex: 0 1 auto; min-width: 0; max-width: 260px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-llm-model-n { flex: 0 0 auto; min-width: 16px; text-align: center; font-size: 10.5px; line-height: 1; padding: 2px 5px; border-radius: 999px; background: var(--color-border-light); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+/* 胶囊内嵌上下文窗口输入：窄位数字框，留空即默认 */
+.evo-llm-model-pill .evo-llm-model-ctx { flex: 0 0 auto; width: 88px; padding: 1px 8px; border: 1px solid var(--color-border-light); border-radius: 999px; background: var(--color-background); font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 18px; color: var(--color-text-primary); text-align: right; }
+.evo-llm-model-pill .evo-llm-model-ctx:focus { border-color: var(--brand); outline: none; }
+.evo-llm-model-pill .evo-llm-model-ctx:disabled { opacity: 0.55; }
 .evo-llm-model-x { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: 999px; background: transparent; color: var(--color-text-tertiary); cursor: pointer; }
 .evo-llm-model-x:hover { background: var(--color-border-light); color: var(--color-text-primary); }
 .evo-llm-model-x svg { width: 12px; height: 12px; }

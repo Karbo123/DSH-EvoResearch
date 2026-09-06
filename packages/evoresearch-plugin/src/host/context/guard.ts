@@ -115,6 +115,12 @@ export interface ContextWindowConfig {
   readonly dataRoot?: string
   readonly enabled?: boolean
   readonly windowCatalog?: WindowCatalogConfig
+  /**
+   * 动态窗口目录提供器：每次压力检测时调用，优先于静态 windowCatalog。
+   * 用于对齐 LLM 请求层的真实窗口（settings.yaml 模型条目 contextWindow /
+   * provider defaultContextWindow，与 dsh-llm-pi-ai 的解析规则一致）。
+   */
+  readonly windowCatalogProvider?: () => WindowCatalogConfig | undefined
   readonly spec?: Readonly<Partial<WindowSpec>>
   readonly pruneBudget?: PruneBudget
   /** 辅助模型（压缩摘要等后台调用；缺省取 agentDefaultModel 当前选择）。 */
@@ -229,6 +235,7 @@ export function resolveContextWindowConfig(config: ContextWindowConfig = {}): Re
 export class ContextWindowRuntime implements ContextWindowGuard {
   readonly config: ResolvedConfig
   readonly compactionLog = new CompactionLog()
+  private readonly windowCatalogProvider?: () => WindowCatalogConfig | undefined
   private readonly onCompactionCompleted?: (record: CompactionRecord) => void
   private readonly prunes: ToolResultArchiveRecord[] = []
   private readonly repairs: ToolHistoryRepairRecord[] = []
@@ -241,6 +248,7 @@ export class ContextWindowRuntime implements ContextWindowGuard {
 
   constructor(config: ContextWindowConfig = {}) {
     this.config = resolveContextWindowConfig(config)
+    this.windowCatalogProvider = config.windowCatalogProvider
     this.onCompactionCompleted = config.onCompactionCompleted
   }
 
@@ -381,7 +389,9 @@ export class ContextWindowRuntime implements ContextWindowGuard {
    */
   detectPressure(session: PressureSessionLike, model?: string): PressureReport {
     const resolvedModel = model ?? this.modelOf(session)
-    const windowTokens = resolveWindowTokens(resolvedModel, this.config.windowCatalog)
+    // 动态目录优先（对齐 LLM 请求层的真实窗口），回落静态配置
+    const catalog = this.windowCatalogProvider?.() ?? this.config.windowCatalog
+    const windowTokens = resolveWindowTokens(resolvedModel, catalog)
     const adapters = {
       compaction: this.compaction !== undefined,
       tokenMeter: this.tokenMeter !== undefined,
