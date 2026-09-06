@@ -1220,9 +1220,15 @@ export class ConfiguredWebSearchProvider {
         signal,
       )
       let body = await searchOnce(engines)
+      let used = engines
       // 全部可用引擎都空手而归（抓取波动）→ 用兜底对再试一次
-      if (openWebSearchResult(body).sources.length === 0 && engines.join() !== 'sogou,bing') body = await searchOnce(['sogou', 'bing'])
-      return openWebSearchResult(body)
+      if (openWebSearchResult(body).sources.length === 0 && engines.join() !== 'sogou,bing') {
+        used = ['sogou', 'bing']
+        body = await searchOnce(used)
+      }
+      const result = openWebSearchResult(body)
+      // content 会成为工具卡与模型可见输出的首行：明示本次实际使用的引擎
+      return { ...result, content: `本次搜索使用的引擎：${used.join('、')}` }
     }
     if (id === 'openserp') {
       const url = new URL(openSerpSearchURL(baseURL))
