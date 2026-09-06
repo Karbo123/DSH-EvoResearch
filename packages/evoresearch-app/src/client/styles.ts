@@ -383,19 +383,18 @@ body { margin: 0; }
 .evo-composer-tool-start { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; gap: 4px; }
 .evo-composer-tool-end { display: flex; align-items: center; justify-content: flex-end; flex: 0 1 auto; min-width: 0; gap: 4px; margin-left: auto; }
 .evo-composer-tool {
-  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 6px 9px; border: none; background: none;
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 7px 10px; border: none; background: none;
   border-radius: 8px; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer;
 }
 .evo-composer-tool:hover { background: var(--hover-bg); color: var(--color-text-primary); }
-.evo-composer-tool svg { width: 16px; height: 16px; }
+.evo-composer-tool svg { width: 17px; height: 17px; }
 .evo-composer-tool[data-on] { color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, var(--color-surface)); }
 .evo-composer-tool.evo-aa-on { color: #e05d5d; }
-/* 动作项文字（§25.5）：窄容器只显示图标，hover 时该项文字平滑展开 */
-.evo-composer-tool span { max-width: 140px; opacity: 1; overflow: hidden; white-space: nowrap; transition: max-width 0.18s ease, opacity 0.18s ease, margin-left 0.18s ease; }
+/* 窄容器：收紧间距尽量保持单行；右侧组不再强制换行，放不下时由 flex-wrap 自然兜底（换行后仍右对齐） */
 @container (max-width: 640px) {
-  .evo-composer-tool span { max-width: 0; opacity: 0; margin-left: -6px; }
-  .evo-composer-tool:hover span { max-width: 140px; opacity: 1; margin-left: 0; }
-  .evo-composer-tool-end { flex: 1 1 100%; margin-left: 0; justify-content: flex-end; }
+  .evo-composer-tools { gap: 2px; padding: 5px 6px 7px; }
+  .evo-composer-tool-start, .evo-composer-tool-end { gap: 2px; }
+  .evo-composer-tool { padding: 6px 7px; }
 }
 .evo-composer-spacer { flex: 1; }
 .evo-send {
@@ -1984,7 +1983,7 @@ html.dark .evo-composer-editor-host .milkdown .ProseMirror pre { background: col
   .evo-composer-markdown-state { display: none; }
   .evo-composer-markdown-toggle { width: 26px; height: 26px; }
 }
-@container (max-width: 480px) {
+@container (max-width: 560px) {
   .evo-composer-perm .evo-dropdown-value,
   .evo-composer-model-name,
   .evo-composer-model-effort { display: none; }
