@@ -749,8 +749,12 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
     if (syncEditor && composerEditorRef.current !== null) replaceEditorMarkdown(value)
     if (cursorToEnd) requestAnimationFrame(() => moveCursorToEnd())
   }
-  // 滚动容器 = 中间栏（消息区内容自适应、页面整体滚动；输入框 sticky 常驻底部）
-  const scrollBox = () => document.querySelector<HTMLElement>('.evo-center')
+  // 滚动容器 = 聊天区自身：.evo-center 只是 overflow:hidden 的外壳，真正滚动发生在
+  // .evo-chat（flex 子项、overflow-y:auto）。旧实现误指 .evo-center——scrollTop 写入
+  // 与 scroll 监听全部落空，贴底跟随/回到最新等滚动功能整体失效。
+  const chatRootRef = useRef<HTMLDivElement | null>(null)
+  const scrollBox = (): HTMLElement | null =>
+    chatRootRef.current ?? document.querySelector<HTMLElement>('.evo-chat')
 
   // ── 会话动作（§25.6）：Current / Search / Notify / Shortcuts / Compact / Clear view ──
   const [actionDialog, setActionDialog] = useState<null | 'current' | 'search' | 'shortcuts' | 'compact' | 'wf-clear' | 'auto-approve' | 'edit-resend'>(null)
@@ -1079,15 +1083,31 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   // 仅在用户原本位于底部时自动跟随新消息；不在底部时显示"回到最新"按钮。
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [showJump, setShowJump] = useState(false)
+  // "位于底部"判定阈值：分式像素缩放（Windows 125%/150%）下 0 与 1px 偏差常见，
+  // 阈值过小会把"明明在最下面"误判为已脱离跟随，此后永不吸附——放宽到 48px。
+  const NEAR_BOTTOM_PX = 48
   const nearBottomRef = useRef(true)
   const anchorRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null)
+  // 加载更早历史后的锚定恢复窗口：期间内容骤增，禁止吸附（避免破坏视觉位置恢复）
+  const followFreezeUntilRef = useRef(0)
+
+  const stickToBottom = () => {
+    const box = scrollBox()
+    if (box !== null) box.scrollTop = box.scrollHeight
+  }
 
   // 新消息/流式更新时：仅当位于底部才滚动到底部（§9.3）
   useEffect(() => {
-    const box = scrollBox()
-    if (box === null || !nearBottomRef.current) return
-    box.scrollTop = box.scrollHeight
+    if (!nearBottomRef.current) return
+    stickToBottom()
   }, [nodes.length, partial?.data.blocks])
+
+  // 切换会话：重置为跟随态并直接落到底部（新会话首屏消息到达后由上面的 effect 接力）
+  useEffect(() => {
+    nearBottomRef.current = true
+    setShowJump(false)
+    stickToBottom()
+  }, [sessionId])
 
   // Mermaid 惰性渲染（§31.5）：流式期间不绘制，回答结束后按需加载 /assets/mermaid.js
   useEffect(() => {
@@ -1108,7 +1128,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   const onListScroll = () => {
     const box = scrollBox()
     if (box === null) return
-    const near = box.scrollHeight - box.scrollTop - box.clientHeight <= 1
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight <= NEAR_BOTTOM_PX
     nearBottomRef.current = near
     setShowJump(!near)
   }
@@ -1123,6 +1143,8 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   const loadEarlier = () => {
     const box = scrollBox()
     if (box !== null) anchorRef.current = { scrollTop: box.scrollTop, scrollHeight: box.scrollHeight }
+    // 短暂冻结吸附：历史展开会让内容骤增，避免 ResizeObserver 误吸到底部破坏锚定
+    followFreezeUntilRef.current = performance.now() + 400
     setVisibleCount((v) => v + PAGE_SIZE)
   }
 
@@ -1553,6 +1575,21 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   const hasMessages = nodes.length > 0 || partial !== null || pendingFirst !== null
   const ordered = [...nodes].sort((a, b) => a.anchorSeq - b.anchorSeq)
 
+  // 内容实际增高（流式文本/图片/KaTeX/Mermaid/工具卡片）→ 仍在底部则持续吸附。
+  // 与 React deps 无关：任何 DOM 增高都跟随；不在底部（用户上滚过）绝不打扰。
+  // 依赖 hasMessages：空会话时尚无消息列表 DOM，首条消息渲染后再挂观察器。
+  useEffect(() => {
+    const root = listRef.current
+    if (root === null || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      if (!nearBottomRef.current) return
+      if (performance.now() < followFreezeUntilRef.current) return
+      stickToBottom()
+    })
+    ro.observe(root)
+    return () => ro.disconnect()
+  }, [hasMessages])
+
   // ── Dynamic Workflow（§24）：workflow-run 节点 → 输入区上方阶段条 ──
   const workflowNodes = (nodes as Array<ChatNode & { data?: any }>).filter((n) => n.kind === 'workflow-run')
   const messageNodes = ordered.filter((n) => n.kind !== 'workflow-run')
@@ -1590,6 +1627,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   return jsxs(Fragment, {
     children: [
       jsx('div', {
+        ref: chatRootRef,
         className: `evo-chat${dragOver ? ' evo-chat-dragover' : ''}`,
         'data-attachments': pendingImages.length > 0 || undefined,
         onDragOver: (e: { preventDefault(): void }) => { e.preventDefault(); setDragOver(true) },
