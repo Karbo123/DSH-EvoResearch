@@ -1198,7 +1198,16 @@ export class ConfiguredWebSearchProvider {
       return exaResult(body)
     }
     if (id === 'openwebsearch') {
-      const body = await requestJson(appendPath(baseURL, 'search'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: text, limit: 8 }) }, signal)
+      // 引擎选择：sogou 对中文查询的相关性远好于 bing（bing 的网页抓取会把"梧桐山"
+      // 这类多词中文查询搞成前缀匹配，返回百度百科噪声）；baidu 抓取被反爬拦截（恒 0 条）。
+      // sogou 首选；其完全无结果时回退 bing 兜底（英文/通用查询）。
+      const searchOnce = (engines: string[]) => requestJson(
+        appendPath(baseURL, 'search'),
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: text, limit: 8, engines }) },
+        signal,
+      )
+      let body = await searchOnce(['sogou'])
+      if (openWebSearchResult(body).sources.length === 0) body = await searchOnce(['bing'])
       return openWebSearchResult(body)
     }
     if (id === 'openserp') {

@@ -141,6 +141,14 @@ export class OpenWebSearchManager {
     this.state = 'installing'
     this.message = undefined
     mkdirSync(this.installRoot, { recursive: true })
+    // 关键：在本目录钉一个私有 package.json，把 npm 的项目根固定在 installRoot。
+    // 否则 npm 沿目录树向上找 package.json，开发机会把包装进仓库根/.tmp-dev
+    // （装完 packageEntry(installRoot) 仍找不到可执行文件，等于安装失败）。
+    writeFileSync(join(this.installRoot, 'package.json'), JSON.stringify({
+      name: 'evoresearch-open-websearch-host',
+      version: '0.0.0',
+      private: true,
+    }), 'utf8')
     try {
       await run(npmCommand(), ['install', '--no-save', '--no-package-lock', `${OPENWEBSEARCH_PACKAGE}@${OPENWEBSEARCH_VERSION}`], this.installRoot)
       if (!this.installed()) throw new Error('Open-WebSearch 安装完成，但未找到可执行文件')
@@ -171,7 +179,8 @@ export class OpenWebSearchManager {
     this.state = 'starting'
     const child = spawn(process.execPath, [entry, 'serve', '--host', '127.0.0.1', '--port', String(port)], {
       cwd: this.installRoot,
-      env: { ...process.env, OPEN_WEBSEARCH_DAEMON_PORT: String(port), MODE: 'http' },
+      // 默认引擎与 requestJson 请求侧一致：sogou 对中文查询相关性最好，bing 兜底
+      env: { ...process.env, OPEN_WEBSEARCH_DAEMON_PORT: String(port), MODE: 'http', SEARCH_ENGINES: 'sogou,bing' },
       stdio: 'ignore',
       windowsHide: true,
     })
