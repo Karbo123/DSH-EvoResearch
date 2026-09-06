@@ -216,13 +216,6 @@ body { margin: 0; }
   .evo-graph-search input { width: 100%; }
   .evo-graph-canvas { overflow: auto; }
   .evo-graph-inspector { display: none; }
-  .evo-composer-wrap { padding-inline: 8px; }
-  .evo-composer { width: 100%; max-width: none; }
-  .evo-composer-stats { max-width: 100%; }
-  .evo-composer-tools { gap: 2px; padding: 4px 6px 6px; }
-  .evo-composer-tool { width: 26px; height: 28px; padding: 4px 5px; gap: 0; justify-content: center; }
-  .evo-composer-tool svg { width: 15px; height: 15px; }
-  .evo-send { width: 30px; height: 28px; }
 }
 /* ── 左侧栏 ── */
 .evo-tl { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -404,6 +397,23 @@ body { margin: 0; }
 .evo-send:hover { background: var(--brand-hover); }
 .evo-send:disabled { opacity: .5; cursor: default; }
 .evo-send svg { width: 16px; height: 16px; }
+/* 窄视口（≤819px）：输入框不再 100% 顶边，左右留 10px 呼吸位；按钮略收紧保单行。
+   注意须放在上方桌面规则之后——同优先级后者胜，放前面会被桌面 shorthand 覆盖成死规则。 */
+@media (max-width: 819px) {
+  .evo-composer-wrap { padding: 4px 10px 8px; }
+  .evo-composer { width: 100%; max-width: none; }
+  .evo-composer-stats { max-width: 100%; }
+  .evo-composer-tools { gap: 2px; }
+  .evo-composer-tool-start, .evo-composer-tool-end { gap: 2px; }
+  .evo-composer-tool { width: 26px; height: 28px; padding: 4px 5px; gap: 0; justify-content: center; }
+  .evo-composer-tool svg { width: 16px; height: 16px; }
+  .evo-send { width: 30px; height: 28px; }
+}
+/* 超窄容器（小屏手机）：间距压到 1px，尽量保住单行；再窄才自然换行 */
+@container (max-width: 430px) {
+  .evo-composer-tools { gap: 1px; }
+  .evo-composer-tool-start, .evo-composer-tool-end { gap: 1px; }
+}
 /* ── 右侧 inspector ── */
 .evo-insp { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-insp-tabs { display: flex; align-items: center; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--color-border); }
