@@ -25,6 +25,13 @@ export interface ManagedSearchEngineProbe {
   probedAt: number
 }
 
+/** 一次搜索实际使用的引擎登记（供前端展示"本次用了哪些引擎"）。 */
+export interface ManagedSearchEngineUsage {
+  query: string
+  engines: string[]
+  at: number
+}
+
 export interface ManagedSearchBackendStatus {
   id: ManagedSearchBackendId
   managed: true
@@ -50,6 +57,10 @@ export interface ManagedSearchManager {
   probeEngines?(force?: boolean): Promise<ManagedSearchEngineProbe>
   /** 最近一次探测的可用引擎列表（未探测过返回 undefined）。 */
   healthyEngines?(): string[] | undefined
+  /** 登记一次搜索实际使用的引擎。 */
+  recordEngineUsage?(query: string, engines: string[]): void
+  /** 最近的引擎使用记录（新→旧）。 */
+  recentEngineUsage?(): ManagedSearchEngineUsage[]
 }
 
 function npmCommand(): string {
@@ -143,6 +154,17 @@ export class OpenWebSearchManager {
   /** 最近一次引擎探测结果（未探测过返回 undefined）。 */
   healthyEngines(): string[] | undefined {
     return this.engineProbe === undefined ? undefined : this.engineProbe.healthy
+  }
+
+  private recentUsage: ManagedSearchEngineUsage[] = []
+
+  recordEngineUsage(query: string, engines: string[]): void {
+    this.recentUsage.unshift({ query, engines, at: Date.now() })
+    if (this.recentUsage.length > 20) this.recentUsage.length = 20
+  }
+
+  recentEngineUsage(): ManagedSearchEngineUsage[] {
+    return this.recentUsage
   }
 
   private async searchOnce(endpoint: string, engine: string, timeoutMs: number): Promise<boolean> {

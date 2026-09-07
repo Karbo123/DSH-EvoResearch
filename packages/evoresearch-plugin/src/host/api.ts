@@ -1020,6 +1020,12 @@ export class EvoResearchApiService extends TypertRemoteService {
     return this.services.webSearch.webSearchEngineProbe()
   }
 
+  @Remote('webSearchRecentEngines')
+  webSearchRecentEngines(): unknown {
+    if (this.services.webSearch === undefined) throw new Error('联网搜索服务不可用')
+    return this.services.webSearch.webSearchRecentEngines()
+  }
+
   /** 当前进程实际使用的数据路径；不是从前端缓存或 cwd 推断。 */
   @Remote('dataPathsGet')
   dataPathsGet() {

@@ -344,7 +344,7 @@ function ToolImageThumb({ asset }: { asset: ToolImageAsset }) {
 }
 
 /** 工具卡片（§21.1）：名称/状态/参数折叠/结果（success·error·running）+ 图片资产缩略图（P0-2）。 */
-function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; args: string; result?: string; isError?: boolean }; running: boolean; defaultExpanded: boolean }) {
+function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; args: string; result?: string; isError?: boolean; engines?: string[] }; running: boolean; defaultExpanded: boolean }) {
   const [argsOpen, setArgsOpen] = useState(defaultExpanded)
   const [resultOpen, setResultOpen] = useState(false)
   const status = running ? 'running' : tool.result === undefined ? 'running' : tool.isError ? 'error' : 'success'
@@ -362,6 +362,8 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
               ? jsx(XCircle, {})
               : jsx(CheckCircle2, {}),
           jsx('span', { className: 'evo-tool-name', children: tool.name }),
+          // web_search 实际使用的引擎（host 登记，UI 徽标展示；不写入结果文本）
+          tool.engines !== undefined && tool.engines.length > 0 && jsx('span', { className: 'evo-tool-engine-chip', title: t('webSearchEngineUsedTitle'), children: `${t('webSearchEngineUsed')}${tool.engines.join('、')}` }),
           jsx('span', { className: 'evo-tool-state', children: status }),
         ],
       }),
@@ -394,7 +396,7 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
 }
 
 /** 带图片资产的工具卡片包装（P0-2）：在原 ToolCard 下方渲染缩略图网格。 */
-function ToolCardWithImages({ callId, tool, running, defaultExpanded }: { callId: string; tool: { name: string; args: string; result?: string; isError?: boolean }; running: boolean; defaultExpanded: boolean }) {
+function ToolCardWithImages({ callId, tool, running, defaultExpanded }: { callId: string; tool: { name: string; args: string; result?: string; isError?: boolean; engines?: string[] }; running: boolean; defaultExpanded: boolean }) {
   const assets = toolImageCache.get(callId)
   return jsxs(Fragment, {
     children: [
@@ -474,10 +476,48 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
 }
 
 /** 助手消息（头像 + 内容 + Thinking 折叠 + 工具卡片分组）；continued=连续回复续行（不重复头像）。 */
+/** web_search 实际使用的引擎记录（host 端 recent 登记；模块级缓存 30s，避免每条消息重复拉取）。 */
+interface WebSearchEngineUsage { query: string; engines: string[]; at: number }
+let engineUsageCache: { at: number; list: WebSearchEngineUsage[] } | undefined
+let engineUsagePromise: Promise<WebSearchEngineUsage[]> | undefined
+function recentEngineUsage(): Promise<WebSearchEngineUsage[]> {
+  if (engineUsageCache !== undefined && Date.now() - engineUsageCache.at < 30_000) return Promise.resolve(engineUsageCache.list)
+  engineUsagePromise ??= fetch('/evoresearch/fs/web-search-recent-engines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    .then((r) => r.json())
+    .then((json) => {
+      const list = (json?.ok === true ? json.value?.list ?? [] : []) as WebSearchEngineUsage[]
+      engineUsageCache = { at: Date.now(), list }
+      return list
+    })
+    .catch(() => [] as WebSearchEngineUsage[])
+    .finally(() => { engineUsagePromise = undefined })
+  return engineUsagePromise
+}
+
 function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onOpenProjectFile, continued }: { node: ChatNode; nodeKey?: string; highlight?: boolean; toolResults: Record<string, { text: string; isError: boolean }>; sessionId: string | null; onOpenProjectFile?: (relPath: string) => void; continued?: boolean }) {
   const text = assistantText(node)
   const reasoning = assistantReasoning(node)
   const tools = assistantTools(node, toolResults)
+  // web_search 卡片标注实际使用的引擎（按查询串匹配最近一次登记；旧消息无登记则不显示）
+  const hasWebSearch = tools.some((tl) => tl.name === 'web_search')
+  const [engineUsage, setEngineUsage] = useState<WebSearchEngineUsage[]>([])
+  useEffect(() => {
+    if (!hasWebSearch) return
+    let alive = true
+    void recentEngineUsage().then((list) => { if (alive) setEngineUsage(list) })
+    return () => { alive = false }
+  }, [hasWebSearch])
+  const enginesFor = (tool: { name: string; args: string }): string[] | undefined => {
+    if (tool.name !== 'web_search' || engineUsage.length === 0) return undefined
+    let queries: string[] = []
+    try {
+      const parsed = JSON.parse(tool.args) as { queries?: unknown }
+      queries = Array.isArray(parsed?.queries) ? parsed.queries.filter((q): q is string => typeof q === 'string') : []
+    } catch { return undefined }
+    if (queries.length === 0) return undefined
+    const hit = engineUsage.find((u) => queries.some((q) => q === u.query || q.includes(u.query) || u.query.includes(q)))
+    return hit?.engines
+  }
   const running = node.data.status === 'running'
   const settled = node.data.status === 'settled'
   // 推理默认折叠（§31.6：小号 Thinking 行，展开后左侧 2px 边线 + 次级文字）
@@ -566,7 +606,7 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onO
                 children: tools.map((tool, i) => {
                   // P0-2：按 callId 关联图片资产（assistantTools 保留 blocks 顺序，callId 从原块取）
                   const callId = (node.data.blocks ?? []).filter((b) => b.kind === 'tool-call')[i]?.callId ?? ''
-                  return jsx(ToolCardWithImages, { callId, tool, running: running || tool.result === undefined, defaultExpanded: anyRunning }, `${node.key}-tool-${i}`)
+                  return jsx(ToolCardWithImages, { callId, tool: { ...tool, engines: enginesFor(tool) }, running: running || tool.result === undefined, defaultExpanded: anyRunning }, `${node.key}-tool-${i}`)
                 }),
               }),
             ],

@@ -252,7 +252,7 @@ test('Open-WebSearch daemon 读取 data.results', async () => {
   const { ctx } = fakeContext({ activeProvider: 'openwebsearch', providers: { openwebsearch: { baseURL: 'http://127.0.0.1:3210' } } })
   try {
     const result = await new ConfiguredWebSearchProvider(ctx as never).search({ query: 'local search' })
-    assert.deepEqual(result, { sources: [{ url: 'https://example.test/local', title: 'Local result', snippet: 'local summary' }], truncated: false, content: '本次搜索使用的引擎：sogou、bing' })
+    assert.deepEqual(result, { sources: [{ url: 'https://example.test/local', title: 'Local result', snippet: 'local summary' }], truncated: false })
   } finally {
     globalThis.fetch = previousFetch
   }

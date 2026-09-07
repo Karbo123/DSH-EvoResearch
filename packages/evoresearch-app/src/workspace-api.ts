@@ -1461,14 +1461,16 @@ export function registerWorkspaceApi(ctx: any): void {
           }
           return
         }
-        if (method === 'web-search-backend-status' || method === 'web-search-backend-install' || method === 'web-search-backend-start' || method === 'web-search-backend-stop' || method === 'web-search-engine-probe') {
+        if (method === 'web-search-backend-status' || method === 'web-search-backend-install' || method === 'web-search-backend-start' || method === 'web-search-backend-stop' || method === 'web-search-engine-probe' || method === 'web-search-recent-engines') {
           const methodName = method === 'web-search-backend-status'
             ? 'webSearchBackendStatus'
             : method === 'web-search-backend-install'
               ? 'webSearchBackendInstall'
               : method === 'web-search-backend-start'
                 ? 'webSearchBackendStart'
-                : method === 'web-search-engine-probe' ? 'webSearchEngineProbe' : 'webSearchBackendStop'
+                : method === 'web-search-engine-probe'
+                ? 'webSearchEngineProbe'
+                : method === 'web-search-recent-engines' ? 'webSearchRecentEngines' : 'webSearchBackendStop'
           if (evoresearch?.[methodName] === undefined) throw httpError(400, 'method-error', '联网搜索后端管理服务不可用')
           try {
             writeOk(res, await (evoresearch[methodName] as () => Promise<unknown>)())

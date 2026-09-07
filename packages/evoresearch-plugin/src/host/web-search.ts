@@ -9,7 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { randomUUID } from 'node:crypto'
-import { OPENWEBSEARCH_DEFAULT_URL, OpenWebSearchManager, type ManagedSearchBackendId, type ManagedSearchManager, type ManagedSearchBackendStatus, type ManagedSearchEngineProbe } from './web-search-manager.js'
+import { OPENWEBSEARCH_DEFAULT_URL, OpenWebSearchManager, type ManagedSearchBackendId, type ManagedSearchManager, type ManagedSearchBackendStatus, type ManagedSearchEngineProbe, type ManagedSearchEngineUsage } from './web-search-manager.js'
 import { CROSSREF_DEFAULT_URL, OPENALEX_DEFAULT_URL, searchAcademic as searchAcademicSources, searchCrossref, searchOpenAlex, type AcademicSearchResult, type AcademicAuthor, type AcademicAuthorProfile, type AcademicReference } from './academic-search.js'
 import { AUTORELATEDWORK_DEFAULT_SCHOLAR_URL, searchAutoRelatedWork, type AutoRelatedWorkConfig } from './autorelatedwork-search.js'
 import { PAPER_NAVIGATOR_S2_URL, PAPER_NAVIGATOR_RECOMMEND_URL, searchPaperNavigator, traversePaperNavigator, recommendPaperNavigator, searchPaperNavigatorSnippets, type PaperNavigatorPaper } from './paper-navigator.js'
@@ -1131,6 +1131,11 @@ export class ConfiguredWebSearchProvider {
     return manager.status()
   }
 
+  /** 最近若干次搜索实际使用的引擎（前端工具卡徽标数据源）。 */
+  webSearchRecentEngines(): ManagedSearchEngineUsage[] {
+    return this.manager('openwebsearch')?.recentEngineUsage?.() ?? []
+  }
+
   async webSearchBackendInstall(): Promise<ManagedSearchBackendStatus> {
     const manager = this.selectedManagedManager()
     await manager.install()
@@ -1220,15 +1225,11 @@ export class ConfiguredWebSearchProvider {
         signal,
       )
       let body = await searchOnce(engines)
-      let used = engines
       // 全部可用引擎都空手而归（抓取波动）→ 用兜底对再试一次
-      if (openWebSearchResult(body).sources.length === 0 && engines.join() !== 'sogou,bing') {
-        used = ['sogou', 'bing']
-        body = await searchOnce(used)
-      }
-      const result = openWebSearchResult(body)
-      // content 会成为工具卡与模型可见输出的首行：明示本次实际使用的引擎
-      return { ...result, content: `本次搜索使用的引擎：${used.join('、')}` }
+      if (openWebSearchResult(body).sources.length === 0 && engines.join() !== 'sogou,bing') body = await searchOnce(['sogou', 'bing'])
+      // 登记实际使用的引擎（前端经 web-search-recent-engines 拉取后以徽标展示），不写入结果文本
+      this.manager('openwebsearch')?.recordEngineUsage?.(text, engines)
+      return openWebSearchResult(body)
     }
     if (id === 'openserp') {
       const url = new URL(openSerpSearchURL(baseURL))
