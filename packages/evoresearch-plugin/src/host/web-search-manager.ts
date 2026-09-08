@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
@@ -10,6 +10,30 @@ const OPENWEBSEARCH_PACKAGE = 'open-websearch'
 const MCP_SEARCH_TIMEOUT_MS = 30_000
 /** 引擎可用性缓存有效期；过期后下次搜索/状态拉取时懒触发重探。 */
 const ENGINE_PROBE_TTL_MS = 10 * 60_000
+/** 引擎使用记录保留条数（持久化于 plugins/web-search-engine-usage.json）。 */
+const ENGINE_USAGE_KEEP = 200
+
+/** 读取引擎使用记录；损坏/缺失一律返回空数组（展示用途，不值得为它报错）。 */
+function loadEngineUsage(file: string): ManagedSearchEngineUsage[] {
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((u): u is ManagedSearchEngineUsage =>
+      typeof u === 'object' && u !== null && typeof (u as ManagedSearchEngineUsage).query === 'string'
+      && Array.isArray((u as ManagedSearchEngineUsage).engines) && typeof (u as ManagedSearchEngineUsage).at === 'number',
+    ).slice(0, ENGINE_USAGE_KEEP)
+  } catch {
+    return []
+  }
+}
+
+/** 引擎使用记录落盘（同步写：搜索低频，量小；失败静默——徽标属增强展示）。 */
+function persistEngineUsage(file: string, list: ManagedSearchEngineUsage[]): void {
+  try {
+    mkdirSync(join(file, '..'), { recursive: true })
+    writeFileSync(file, JSON.stringify(list, undefined, 2))
+  } catch { /* 展示用途，写失败不影响搜索 */ }
+}
 
 export type ManagedSearchBackendId = 'openwebsearch' | 'google-ai-mode' | 'free-search'
 
@@ -136,11 +160,15 @@ export class OpenWebSearchManager {
   private message: string | undefined
   private operation: Promise<string> | undefined
   private readonly installRoot: string
+  /** 引擎使用记录持久化文件（<dataRoot>/plugins/web-search-engine-usage.json）：内存缓冲会随进程重启丢失，历史会话的徽标依赖它。 */
+  private readonly usageFile: string
   private engineProbe: ManagedSearchEngineProbe | undefined
   private engineProbeOp: Promise<ManagedSearchEngineProbe> | undefined
 
   constructor(dataRoot: string) {
     this.installRoot = join(dataRoot, 'web-search-backends', 'open-websearch')
+    this.usageFile = join(dataRoot, 'plugins', 'web-search-engine-usage.json')
+    this.recentUsage = loadEngineUsage(this.usageFile)
   }
 
   private entry(): string | undefined {
@@ -160,7 +188,8 @@ export class OpenWebSearchManager {
 
   recordEngineUsage(query: string, engines: string[]): void {
     this.recentUsage.unshift({ query, engines, at: Date.now() })
-    if (this.recentUsage.length > 20) this.recentUsage.length = 20
+    if (this.recentUsage.length > ENGINE_USAGE_KEEP) this.recentUsage.length = ENGINE_USAGE_KEEP
+    persistEngineUsage(this.usageFile, this.recentUsage)
   }
 
   recentEngineUsage(): ManagedSearchEngineUsage[] {

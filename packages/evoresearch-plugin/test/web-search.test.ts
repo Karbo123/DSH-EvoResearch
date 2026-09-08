@@ -411,3 +411,22 @@ test('AutoRelatedWork 兼容原 Python .env 的 DS/SEM_SCH/NET 变量', async ()
     }
   }
 })
+
+test('引擎使用记录持久化：重启（新实例读同一 dataRoot）后仍可读', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { OpenWebSearchManager } = await import('../src/host/web-search-manager.js')
+  const root = mkdtempSync(join(tmpdir(), 'evo-engine-usage-'))
+  try {
+    const first = new OpenWebSearchManager(root)
+    first.recordEngineUsage('北京 天气', ['sogou', 'bing'])
+    const [record] = first.recentEngineUsage()
+    assert.ok(record)
+    // 新实例 = 进程重启后从同一 dataRoot 构造；记录应从 plugins/web-search-engine-usage.json 恢复
+    const second = new OpenWebSearchManager(root)
+    assert.deepEqual(second.recentEngineUsage(), [record])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
