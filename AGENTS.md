@@ -9,7 +9,7 @@
 ## 1. 项目全貌
 
 - **名称**：EvoResearch — 面向科研的自主智能体工作台（对话、文献、项目文件、实验记录与长期记忆联动）。
-- **基座**：`@deepseek-ai/dsh` **0.1.1-rc.2**（务必用此版本或兼容更新版，见 `README.md` 与 `profiles/evoresearch/package.json`）。
+- **基座**：`@deepseek-ai/dsh` **0.1.3-alpha.2**（2026-09 自 0.1.1-rc.2 升级；npm `latest` 仍是 0.1.2-rc.1，启动须显式指定版本。agent 平面工具行已移入 agent preset；`dsh-client-runtime`/`dsh-host-apiproxy` 停止发布，会话/工作区客户端运行时改由 `dsh-api-session/workspace-controller` 提供，装配注册表为 `ctx.uiConversation.events/views`；web 默认 token 鉴权，URL 经 `connection.authenticatedUrl`）。
 - **结构**：monorepo（`packages/*` workspaces）：`packages/evoresearch-plugin`（后端插件，Host 侧 Cordis 服务）、`packages/evoresearch-app`（前端，React + Cordis slots）、`desktop/`（Tauri 2 桌面壳，sidecar 启动 DSH + 自绘标题栏）、`profiles/evoresearch/`（DSH profile：`cordis.yml` / `cordis.patch.yml` 叠加）、`docs/`（设计与决策文档）、`scripts/`（构建与校验脚本）。
 
 ---
@@ -107,14 +107,14 @@ npm install && npm run build   # 修改 packages/* 后必须重新 build
 手工启动（PowerShell；`Start-Process` 必须加 `-Environment`，否则环境变量不传递）：
 
 ```powershell
-Start-Process npx.cmd "@deepseek-ai/dsh@0.1.1-rc.2 --profile evoresearch --port 3081" -WindowStyle Hidden `
+Start-Process npx.cmd "@deepseek-ai/dsh@0.1.3-alpha.2 --profile evoresearch --port 3081" -WindowStyle Hidden `
   -Environment @{ EVORESEARCH_ROOT="D:\DSH-Research\.tmp-dev\.evoresearch-data";
                   DSH_HOME="D:\DSH-Research\.tmp-dev\.evoresearch-data";
                   EVORESEARCH_DATA_ROOT="D:\DSH-Research\.tmp-dev\.evoresearch-data" }
 # 打开 http://127.0.0.1:3081（调试桌面标题栏加 ?desktop=1）
 ```
 
-bash 等价形式：以上三个变量取同值（`D:\\DSH-Research\\.tmp-dev\\.evoresearch-data`）作前缀，接 `npx @deepseek-ai/dsh@0.1.1-rc.2 --profile evoresearch --port 3081`。
+bash 等价形式：以上三个变量取同值（`D:\\DSH-Research\\.tmp-dev\\.evoresearch-data`）作前缀，接 `npx @deepseek-ai/dsh@0.1.3-alpha.2 --profile evoresearch --port 3081`。
 
 **验证启动成功**：① 日志出现 `[evoresearch] host 插件激活（dataRoot: …）` 且 dataRoot 符合 §2（主仓库或分支独立根）；② 用启动器日志打印的实际 URL（3081 起，占用自动递增）访问返回 200；③ 左侧项目列表来自对应 dataRoot。
 
@@ -174,7 +174,7 @@ node scripts/verify-chatgraph-xyflow.mjs / verify-bundle.mjs / check-docs.mjs
 - **Tauri resources**：`tauri.conf.json` 的 `resources: ../sidecar/dist/**/*` 会把 junction 展开为真实目录（`--install-links` 保证可移植）；**移动端必须用 `tauri.<platform>.conf.json` 清空 resources**（sidecar glob 在无 dist 的 CI 直接报错；壳侧 main.rs 已拆 desktop/mobile 双入口）。
 - **iOS 构建三坑**：① `tauri ios build --target` 只认短名 `aarch64/aarch64-sim/x86_64`；② `tauri ios init` 生成的 Xcode phase 是 `npm run tauri --` → 根 package.json 须有 `"tauri": "tauri"` script 且 `@tauri-apps/cli` 在 devDependencies；③ 用 `npx tauri`（cargo 版子命令不同）。
 - **gh api**：布尔值用 `-F` 不用 `-f`（字符串 "false" 会 422）；PATCH release 只认 `/releases/{id}`，by-tag 路由 404。
-- **依赖版本**：`@deepseek-ai/dsh-client-schema-form@rc.7`、`dsh-client-web-react@rc.7` 等无 `0.1.1-rc.2` 版本的包保持历史可用版本（ETARGET 限制；web-react@rc.7 锁定的 `dsh-client-ui-slots@rc.8` 传递依赖亦保留）。
+- **依赖版本**：`@deepseek-ai/dsh-client-schema-form@0.1.0-rc.7`、`dsh-client-web-react@0.1.0-rc.7` 无 0.1.3-alpha.2 版本，保持不动（ETARGET 限制）。**fs-ext**：0.1.3 起会话持久化的原生依赖，npm/pnpm 内置 node-gyp 12.x 在 Node 26 下构建报 LNK1117——根 devDep `node-gyp@13` 经 `node_modules/.bin` 供构建（start-web.mjs 注入 `npm_config_node_gyp`；profile 的 pnpm-workspace.yaml `allowBuilds` 含 fs-ext；根 `.npmrc` allow-scripts 含 fs-ext）。
 - **`.serena/`**：Serena MCP（LSP 检索）项目配置与缓存，gitignore，与本应用运行无关。
 
 ---
@@ -226,4 +226,4 @@ node scripts/verify-chatgraph-xyflow.mjs / verify-bundle.mjs / check-docs.mjs
 
 ---
 
-*最后更新：2026-08-28（文件头新增硬性规则：本文件上限 24,000 字符，每次修改后必须复查字符数，超限须继续精简；全文精简压缩至限额内；§9.0 自动 Git 管理；worktree 数据根隔离与并行验收约定不变）*
+*最后更新：2026-09-08（基座升级 @deepseek-ai/dsh 0.1.1-rc.2 → 0.1.3-alpha.2：agent preset 架构、client-runtime 拆分、token 鉴权、zstd 会话日志、fs-ext 原生依赖构建链；§8 依赖版本注记更新；worktree 数据根隔离与自动 Git 管理约定不变）*

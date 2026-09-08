@@ -1,26 +1,32 @@
-# EvoResearch 自定义浏览器表面 bundle patch。
+# EvoResearch 自定义浏览器表面 bundle patch（基座 @deepseek-ai/dsh 0.1.3-alpha.2）。
 #
 # 本 bundle 替代官方 dsh-web-app 的浏览器表面：host 行全部复用官方包
-# （webserver / api-gateway / connection / client-runtime / modules ...），
-# 但【不加载】任何官方 ui-* 外壳行（ui-layout / ui-sidebar / ui-conversation /
-# ui-settings ...）；浏览器端只加载本包的 evoresearch-ui 行，注册 root slot
-# 渲染 EvoResearch 工作台。
+# （webserver / api-gateway / connection / api-*-controller / modules ...），
+# 但【不加载】任何官方 ui-* 外壳行（ui-layout / ui-sidebar / ui-chat 等；
+# ui-settings / ui-conversation 除外，见 roster）；浏览器端只加载本包的
+# evoresearch-ui 行，注册 root slot 渲染 EvoResearch 工作台。
 #
 # 与官方 web 表面（dsh-web-app）的关键差别：
-# 1. 官方把 agent 平面工具行（tool-*）全部 disabled、改由 agent preset 挂载；
-#    本表面【不禁用】它们 —— 保持 dsh-base 的完整工具集（TUI 式），
-#    不依赖 agent preset。
-# 2. 官方 web-runtime 行 serve 官方前端 dist（@deepseek-ai/dsh-web-frontend）；
-#    本表面的 app-runtime 行（本包 node half）serve 本包自己的 dist。
+# 1. agent 平面工具行沿用官方 Web 决策：全部 disabled、由 agent preset
+#    （dsh-agent-presets，default: standard）按会话挂载。EvoResearch 的
+#    品牌人设不与 preset persona 竞争（preset 会遮蔽部署默认），改由
+#    app-runtime 的 surface prompt 段按会话注入（见 runtime.ts）。
+# 2. 官方 web-runtime 行 serve 官方前端 dist；本表面的 app-runtime 行
+#    （本包 node half）serve 本包自己的 dist。
 # 3. 官方 ui-layout 提供 app-shell 硬依赖的 layout 服务 —— 本表面的
 #    evoresearch-ui 行自己提供 layout 服务并注册 root slot。
+# 4. storage 栈 / projection-cache 等行 0.1.3 起已收进 dsh-base，
+#    本 patch 不再重复 insert；message-feedback 行改为显式停用。
 
-# ── base 行的配置覆盖（与官方 web 表面一致的决策）───────────────────────────
+# ── base 行的配置覆盖 ───────────────────────────────────────────────────────
 - id: system-prompt
   config:
-    persona: >-
+    # 0.1.3 起 persona 拆分为前缀/后缀（部署默认，仅作用于未挂 preset 的
+    # agent；挂 preset 的会话以 preset persona 为准）。工作目录行放后缀，
+    # 与官方 web 表面一致。
+    personaPrefix: >-
       你是 EvoResearch，面向科研的自主智能体，基于 deepseek-harness（DSH）构建。
-      你的工作目录是 {{cwd}}。
+    personaSuffix: 你的工作目录是 {{cwd}}。
 
 - id: hmr
   disabled: true
@@ -36,58 +42,105 @@
     # 与官方 web 表面相同的工具呈现模式开关。
     mode: !!js process.env.DSH_TOOLS_MODE
 
-# ── 表面 host 行、传输层与浏览器 roster ─────────────────────────────────────
+# ── agent 平面移入 preset（官方 Web 同款决策）────────────────────────────────
+# 每个 disabled 行都是「单个 agent 为会话贡献的东西」：工具、提示段、委托后端。
+# 基座为 TUI 保留它们；Web 会话改由 preset 挂载。registry（tools/jobs/skill/
+# subagents/goal 等服务本体）留在 host 平面，preset 行经 ctx.get 消费。
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: skill-filesystem
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: command-goal
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: plan-mode
+  disabled: true
+- id: compaction-basic
+  disabled: true
+- id: command-compact
+  disabled: true
+- id: tool-result-pruner
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: workflow-worker-thread
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-ralph
+  disabled: true
+- id: agent-instructions
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-web
+  disabled: true
+
+# preset 名册：default 指向内置 standard（完整编码 agent：文件编辑、Shell、
+# 检索、Skills、计划、目标、子代理、工作流）。`<dshHome>/.agent-presets`
+# 用户根自动并入，后续可放置 EvoResearch 专属 preset。
 - insert:
-    - id: code-runtime
-      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
-
-    - id: storage
-      name: '@deepseek-ai/dsh-storage'
-
-    - id: storage-json
-      name: '@deepseek-ai/dsh-storage-json'
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
       config:
-        root: !!js dshHomePath('storages')
-
-    - id: storage-domain
-      name: '@deepseek-ai/dsh-storage-domain'
-      config:
-        backend: json
+        default: standard
 
     - id: message-feedback
       name: '@deepseek-ai/dsh-message-feedback'
-      disabled: true
-      config:
-        maxNoteBytes: 8192
-
-    - id: session-log-download
-      name: '@deepseek-ai/dsh-session-log-export'
       disabled: true
 
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
-    - id: session-projection-cache
-      name: '@deepseek-ai/dsh-session-projection-cache'
-      config:
-        writeEveryEvents: 200
-        writeIntervalMs: 5000
+    # preset 委托工具的模型选择设置命名空间（官方 Web 同款）：standard preset
+    # 的 tool-subagent 行硬依赖它，缺失时 preset 挂载失败、会话无法创建。
+    - id: subagent-model-selection-settings
+      name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
-    - id: session-stats
-      name: '@deepseek-ai/dsh-session-stats'
-
-    # 目录选择：官方 auto 包（win32 回环挂 native 后端）的 client 面依赖
-    # ui-workspace 外壳，自定义表面不加载 —— 用本包的桩服务替代
-    # （capability kind: 'none'，消费方隐藏选择 UI；阶段 1 接入 browse 后端）。
+    # 目录选择：官方 auto 包的 client 面依赖 ui-workspace 外壳，自定义表面
+    # 不加载 —— 用本包的桩服务替代（capability kind: 'none'，消费方隐藏选择
+    # UI；阶段 1 接入 browse 后端）。
     - id: directory-picker
       name: '@evoresearch/dsh-app/directory-picker'
 
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
 
-    # API gateway：所有客户端形态共享的中立分发面（官方注释原话）。
-    - id: api-gateway
-      name: '@deepseek-ai/dsh-host-apiproxy'
+    # API 网关（0.1.3 起取代 dsh-host-apiproxy）：host 半区由 dsh-base 的
+    # typert-gateway 行装载（@deepseek-ai/dsh-api-gateway），此处【不要】重复
+    # insert —— 同一服务二次注册会让 profile 拒绝加载。client 半区经各
+    # controller 包的 dsh.client.inject 元数据自动进入浏览器引导清单。
+    #
+    # 会话/工作区/设置三类 Typert Remote 控制器（0.1.3 起从网关拆出）：
+    # client 半区提供 ctx.sessions / ctx.workspaces 与 remote.* 命名空间。
+    # session-controller 的 host 半区 inject fileUploads 服务 —— 该服务由
+    # 下文 file-upload 行（dsh-client-file-upload 双面行）的 node 半区提供，
+    # 官方 web 表面同样装配。
+    - id: session-controller
+      name: '@deepseek-ai/dsh-api-session-controller'
+
+    - id: settings-controller
+      name: '@deepseek-ai/dsh-api-settings-controller'
+
+    - id: workspace-controller
+      name: '@deepseek-ai/dsh-api-workspace-controller'
 
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
@@ -116,6 +169,9 @@
         trustedHosts: !!js ctx.webStartup.trustedHosts
 
     # ── 浏览器插件 roster（dsh.client 行）──────────────────────────────────
+    # 顺序对齐官方 web 表面：内核 → 传输 → 远程 → 主题/区域 → 会话/工作区/
+    # 会话装配 → EvoResearch UI（最后，root slot）。typert-registry 与
+    # api-gateway 的 client 半区经各包 dsh.client.inject 元数据自动入列。
     - id: modules
       name: '@deepseek-ai/dsh-client-modules'
 
@@ -125,11 +181,13 @@
       config:
         trustedHosts: !!js ctx.webRuntime.trustedHosts
 
+    # 原始 Blob/流上传（独立于 Connection 的 RPC）：node 半区提供 fileUploads
+    # 服务（session-controller host 半区 inject 它），client 半区为浏览器上传面。
+    - id: file-upload
+      name: '@deepseek-ai/dsh-client-file-upload'
+
     - id: api-remotes
       name: '@deepseek-ai/dsh-api-remotes'
-
-    - id: client-runtime
-      name: '@deepseek-ai/dsh-client-runtime'
 
     - id: cordis-client-runner
       name: '@deepseek-ai/dsh-cordis-client-runner'
@@ -140,13 +198,28 @@
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'
 
+    # 设置域装配（settingsScope）：EvoResearch 设置面板主要走自有
+    # /evoresearch/fs 路由，此行保留最小依赖面；确认无用后可移除。
     - id: ui-settings
       name: '@deepseek-ai/dsh-client-ui-settings'
 
-    # 应用 root 渲染器（rc.2 内核要求 uiRenderer 服务；安装 slot renderer 并
-    # 挂载根组件渲染 root slot）。官方 web 表面同样装配该行。
+    # 应用 root 渲染器（安装 slot renderer 并挂载根组件渲染 root slot）。
     - id: ui-renderer
       name: '@deepseek-ai/dsh-client-ui-renderer'
+
+    # 0.1.3 起会话/工作区/会话装配三件套（原 dsh-client-runtime 拆分）：
+    # ui-session 消费 ctx.sessions 并发布 root 钩子 useSessions；
+    # ui-workspace 发布全局 useWorkspaces 钩子；ui-conversation 提供
+    # uiConversation 服务（events/views 注册表，旧 conversationEvents /
+    # conversationViews 的后继）。
+    - id: ui-session
+      name: '@deepseek-ai/dsh-client-ui-session'
+
+    - id: ui-workspace
+      name: '@deepseek-ai/dsh-client-ui-workspace'
+
+    - id: ui-conversation
+      name: '@deepseek-ai/dsh-client-ui-conversation'
 
     # EvoResearch 工作台：提供 layout 服务（app-shell 硬依赖）并注册 root slot。
     - id: evoresearch-ui

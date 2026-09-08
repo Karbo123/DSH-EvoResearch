@@ -29,6 +29,7 @@ import { TabFileEditor } from './tab-file'
 import { fileKind } from './file-kind'
 import { ConfirmDialog } from './session-actions'
 import { registerConversation } from './conversation'
+import { setEventSourceResolver } from './session-events'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
@@ -44,7 +45,10 @@ import { TrajectoryPanel } from './trajectory'
 import { ChatGraphPanel } from './chatgraph'
 import { WorkspaceTabPicker } from './tab-files'
 
-const inject = ['slots', 'sessions', 'workspaces', 'conversationEvents', 'conversationViews', 'connection']
+// 0.1.3：sessions 由 api-session-controller client 提供；workspaces 由
+// api-workspace-controller client 提供；uiConversation（会话注册表）由
+// ui-conversation 提供（旧 conversationEvents/conversationViews 的后继）。
+const inject = ['slots', 'sessions', 'workspaces', 'uiConversation', 'connection']
 
 /** 桌面模式（无边框窗口 + 自绘标题栏）：由 Tauri 壳以 ?desktop=1 加载。 */
 function isDesktop(): boolean {
@@ -62,6 +66,9 @@ let sessionsService: {
   /** 官方 session.fork 在服务内部 manager 上（复制源会话历史创建子会话）。 */
   manager?: { fork?(opts: { sessionId: string; atSeq?: number }): Promise<{ ok: boolean; value?: { sessionId: string } }> }
 } | null = null
+
+// 0.1.3：会话装配服务（events/views 注册表 + 每会话快照绑定）。
+let uiConversationService: { binding(id: string): { snapshot: any; target(t: string): any } | undefined } | null = null
 
 let workspacesService: {
   create(input: { path: string }): Promise<any>
@@ -451,18 +458,19 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     if (jobs.some((j) => j.status === 'running' || j.status === 'stopping')) runningIds.add(sid)
   }
 
-  // ── 会话快照订阅：notifier → snapshotCache（chat legacy 节点 + promptError）──
+  // ── 会话快照订阅：0.1.3 起 conversation 装配快照由 uiConversation 服务持有，
+  // 经 binding(id).target('chat') 读取本工作台注册的 chat view builder 输出
+  // （{ order, nodes, legacy }，legacy 形状与 rc.2 snapshotCache.chat.legacy 一致）。
+  // promptError 在新 SessionSnapshot（contract/snapshot.d.ts）上，经 session face 读。
+  const chatTargetSource = current === undefined
+    ? null
+    : (uiConversationService?.binding(current)?.target('chat') ?? null)
   const sessionSnapshot = useSyncExternalStore(
-    (onChange) => {
-      const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
-      return s === undefined ? () => {} : s.notifier.subscribe(onChange)
-    },
-    () => {
-      const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
-      return s === undefined ? null : s.snapshotCache
-    },
+    (onChange) => chatTargetSource?.subscribe(onChange) ?? (() => {}),
+    () => chatTargetSource?.getSnapshot() ?? null,
   )
-  const chatLegacy = sessionSnapshot?.chat?.legacy
+  const currentSessionFace = current === undefined ? undefined : sessionsService?.binding(current)?.session
+  const chatLegacy = (sessionSnapshot as any)?.legacy
   // Bug #3：系统级上下文不得泄漏到聊天界面——dsh-system-prompt 的 runtime context /
   // 策略说明与科研记忆/身份/代码模式 XML 包会以 visibility='visible' 的节点出现，
   // 渲染前按文本前缀过滤（内容匹配，与可见性无关，防御上游变更）。
@@ -496,7 +504,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const nodes: ChatNode[] = (chatLegacy?.nodes ?? []).filter((n: any) => n !== null && n.visibility === 'visible' && !isSystemLeak(n))
   const partial: ChatNode | null = chatLegacy?.partial ?? null
-  const promptError: string | null = sessionSnapshot?.promptError?.error?.message ?? null
+  // 0.1.3：session face 本身即 ObservableSnapshot<SessionSnapshot>，promptError 在其上。
+  const promptError: string | null = (currentSessionFace as any)?.getSnapshot?.()?.promptError?.error?.message ?? null
 
   // 会话对象（投影/排队数据读取入口）
   const sessionObj = current === undefined ? null : (sessionsService?.binding(current)?.session ?? null)
@@ -504,7 +513,16 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   const [, setProjTick] = useState(0)
   useEffect(() => {
     const s = current === undefined ? undefined : sessionsService?.binding(current)?.session
-    return s === undefined ? undefined : s.projections?.subscribeAny(() => setProjTick((v) => v + 1))
+    if (s === undefined) return undefined
+    // 0.1.3：ProjectionsFace 只有 faceOf(key)（无 subscribeAny）—— 逐键订阅。
+    const disposers: Array<() => void> = []
+    for (const key of ['sessionStats', 'tokenUsage', 'contextPressure', 'permissions', 'goal']) {
+      const face = (s.projections as any)?.faceOf?.(key)
+      if (face?.subscribe) disposers.push(face.subscribe(() => setProjTick((v) => v + 1)))
+    }
+    const anyApi = (s.projections as any)?.subscribeAny
+    if (typeof anyApi === 'function') disposers.push(anyApi.call(s.projections, () => setProjTick((v) => v + 1)))
+    return () => { for (const dispose of disposers) { try { dispose() } catch { /* 已失效 */ } } }
   }, [current])
 
   const openSession = (id: string) => {
@@ -2178,10 +2196,18 @@ function apply(ctx: any) {
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
     workspacesService = ctx.workspaces ?? null
+    uiConversationService = ctx.uiConversation ?? null
     // 调试钩子：浏览器控制台可访问会话服务（开发诊断用）
-    ;(window as any).__evoresearch = { sessions: sessionsService }
-    // 连接状态源：快照存在 = 已握手；断连/重连经 subscribe 通知 UI。
-    connectionSource = ctx.get('connection')?.hostDescription ?? null
+    ;(window as any).__evoresearch = { sessions: sessionsService, uiConversation: uiConversationService }
+    // 事件源 resolver：session face → 绑定 eventSource（0.1.3 数据路径）。
+    setEventSourceResolver((session) => {
+      const id = session?.sessionId ?? session?.id
+      return id !== undefined && id !== null ? sessionsService?.binding(String(id))?.eventSource ?? null : null
+    })
+    // 连接状态源：0.1.3 起 hostDescription 改名 generation（快照存在 = 已握手，
+    // 内含 host 握手信息；state 为 connected/connecting 等字符串状态）。
+    // 断连/重连经 subscribe 通知 UI。
+    connectionSource = ctx.get('connection')?.generation ?? ctx.get('connection')?.hostDescription ?? null
     const disposeService = ctx.reflect.provide('layout', {
       toggleSidebar() {},
       openDetails() {},
@@ -2214,6 +2240,7 @@ function apply(ctx: any) {
       disposeService()
       connectionSource = null
       sessionsService = null
+      uiConversationService = null
       workspacesService = null
       document.removeEventListener('contextmenu', suppressNativeContextMenu, true)
     }

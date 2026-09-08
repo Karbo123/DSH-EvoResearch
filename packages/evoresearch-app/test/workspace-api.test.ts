@@ -106,8 +106,9 @@ test('插件版本从 profile 中实际加载的 package.json 读取', () => {
   try {
     for (const dshHome of ['D:\\DSH-Research\\profiles\\evoresearch', 'D:\\DSH-Research\\.tmp-dev\\.evoresearch-data']) {
       process.env.DSH_HOME = dshHome
-      assert.equal(pluginPackageVersion({ options: { name: '@deepseek-ai/cordis-plugin-hmr' } }), '1.0.16')
-      assert.equal(pluginPackageVersion({ options: { name: '@deepseek-ai/cordis-plugin-timer' } }), '1.1.3')
+      // 版本随 dsh 0.1.3-alpha.2 的依赖树更新（hmr 1.0.17 / timer 1.1.4）
+      assert.equal(pluginPackageVersion({ options: { name: '@deepseek-ai/cordis-plugin-hmr' } }), '1.0.17')
+      assert.equal(pluginPackageVersion({ options: { name: '@deepseek-ai/cordis-plugin-timer' } }), '1.1.4')
     }
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME

@@ -423,7 +423,10 @@ export class MemoryRuntime implements GoalRuntime {
     }
     // MEM-02/MEM-03：assistant 正文现场累积（chunk 到达即按 step 累积 text-delta；
     // 最终 assistant/message 到达时以它替换该 step 的 chunk 合并稿，避免重复正文）
-    if (event.type === 'assistant/chunk' || event.type === 'assistant/message') {
+    // 0.1.3 起 assistant/chunk 不在持久事件类型联合内（流式 chunk 本就不落盘），
+    // 但运行时订阅仍可能收到 —— 用字符串比较保留现场累积行为。
+    const memoryEventType = event.type as string
+    if (memoryEventType === 'assistant/chunk' || memoryEventType === 'assistant/message') {
       this.activeTurns.get(session.id)?.accumulator.feedEvent(event)
       return
     }

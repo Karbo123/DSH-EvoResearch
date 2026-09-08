@@ -7,10 +7,11 @@
  * 149 tok/s | 缓存命中 100% | 输入 2411M token`
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Cpu } from 'lucide-react'
 import { toast } from './toast'
 import { t } from './i18n'
+import { useSessionEvents } from './session-events'
 import { TIER_KEYS, tierMeta, effortLabel } from './session-actions'
 
 interface TrajStats {
@@ -105,12 +106,9 @@ function fmtTokens(n: number): string {
 
 /** 会话统计栏；无会话（或无统计）时不渲染，避免输入框下方残留孤行占位。 */
 export function StatusBar({ session }: { session: any }) {
-  const notifier = session?.notifier
-  const eventsLen = useSyncExternalStore(
-    (onChange: () => void) => (notifier?.subscribe(onChange) ?? (() => {})),
-    () => (session?.events?.length ?? 0),
-  )
-  const stats = useMemo(() => computeStats(session?.events ?? []), [session, eventsLen])
+  // 0.1.3：事件列表经 eventSource 适配（session face 不再直接带 events）
+  const events = useSessionEvents(session)
+  const stats = useMemo(() => computeStats(events), [events])
   const hasSession = session !== undefined && session !== null && stats.steps > 0
   if (!hasSession) return null
   const llmSec = stats.llmMs / 1000

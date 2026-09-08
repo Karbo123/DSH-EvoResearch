@@ -1,7 +1,7 @@
 # 00 · 技术选型决策（Tech Decisions）
 
 > 本项目基于 deepseek-harness（DSH）构建，TypeScript / Node.js 实现，运行于
-> [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）0.1.1-rc.2 平台。
+> [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）0.1.3-alpha.2 平台（2026-09 自 0.1.1-rc.2 升级）。
 > 本文记录每项关键选型的**决策依据**与**否决项**，便于后续维护者复核。
 > 硬性约束：Node.js 后端、不使用 Python、不基于 deepagents、Windows 优先（Web + 桌面）、
 > 桌面打包体积最小、文档与注释使用中文。
@@ -72,8 +72,17 @@
 
 ## 8. 版本基线说明
 
-npm 上 `@deepseek-ai/dsh` 系列发布的版本为 `0.1.0-rc.2 / rc.3 / rc.6 / rc.8`，
-**不存在 rc.5 / rc.7**。当前基线为 **0.1.1-rc.2**（同系列最新，在 rc.8 基础上继续演进；
-rc.8 起 `dsh-host-frontend-static` 向 HTML 注入 `__ModuleLoader__` 预引导，
-EvoResearch 前端以 vendored `dsh-client-modules` 覆盖兼容）。
-本插件自身版本 `0.1.0-rc.1`，依赖声明使用 `^0.1.1-rc.2` 范围。
+当前基线为 **0.1.3-alpha.2**（2026-09 自 0.1.1-rc.2 升级；npm dist-tag `alpha`，
+`latest` 仍为 0.1.2-rc.1，故启动命令显式指定版本）。0.1.3 的关键架构变化
+（详见 profiles/evoresearch 与 packages/evoresearch-app/cordis.patch.yml 注释）：
+- agent 平面工具行全部移入 agent preset（`dsh-agent-presets`，default: standard），
+  registry（tools/jobs/skill/subagents/goal 等服务本体）留在 host 平面；
+- `dsh-client-runtime` / `dsh-host-apiproxy` 停止发布：会话/工作区客户端运行时
+  拆入 `dsh-api-session-controller` / `dsh-api-workspace-controller`（client 半区），
+  会话装配注册表改为 `ctx.uiConversation.events/views`；网关 host 半区由 base 的
+  `typert-gateway` 行装载 `dsh-api-gateway`；
+- persona 配置拆分 `personaPrefix` / `personaSuffix`；web 传输默认 per-process
+  token 柵门（`connection.authenticatedUrl` 拼 URL，首访种 cookie）；
+- 会话日志改 zstd 压缩（session.v2.jsonl.zstd）；`dsh-session-persistence-jsonl`
+  引入原生依赖 fs-ext（仓库以 devDep node-gyp@13 + .npmrc allow-scripts 构建）。
+本插件自身版本 `0.1.0-rc.1`，依赖声明使用 `^0.1.3-alpha.2` 范围。

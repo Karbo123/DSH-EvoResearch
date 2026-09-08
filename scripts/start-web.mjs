@@ -82,7 +82,7 @@ const restartFile = resolve(restartEnv && restartEnv.trim() !== '' ? restartEnv 
 // 每个 worktree 加载自己的 profile 和构建产物，确保代码验收对应当前分支。
 // worktree 的依赖安装/构建由开发者按 §4.1 在该 worktree 内完成。
 const profileSource = join(root, 'profiles', 'evoresearch')
-const dshVersion = '@deepseek-ai/dsh@0.1.1-rc.2'
+const dshVersion = '@deepseek-ai/dsh@0.1.3-alpha.2'
 
 function option(name, fallback) {
   // 取最后一个匹配（package.json 的 start:web 预置 --port 3081 在前，
@@ -175,16 +175,24 @@ function startChild(paths, port) {
   ensureProfile(paths.dshHome)
   const npxCli = process.env.EVORESEARCH_NPX_CLI
   const hasNpxCli = npxCli !== undefined && npxCli.trim() !== ''
-  const command = hasNpxCli
+  // 优先用仓库 devDep 安装的 dsh（npm install 已带原生依赖 fs-ext 的构建产物），
+  // 彻底绕开 npx 缓存的安装时构建；缺失时回退 npx（首次会现场下载构建）。
+  const localDshBin = join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  const useLocalDsh = !hasNpxCli && existsSync(localDshBin)
+  const command = useLocalDsh
     ? process.execPath
-    : process.platform === 'win32'
-      ? (process.env.ComSpec ?? 'cmd.exe')
-      : 'npx'
-  const args = hasNpxCli
-    ? [npxCli, '--yes', dshVersion, '--profile', 'evoresearch', '--port', String(port)]
-    : process.platform === 'win32'
-      ? ['/d', '/s', '/c', `npx.cmd --yes ${dshVersion} --profile evoresearch --port ${port}`]
-      : ['--yes', dshVersion, '--profile', 'evoresearch', '--port', String(port)]
+    : hasNpxCli
+      ? process.execPath
+      : process.platform === 'win32'
+        ? (process.env.ComSpec ?? 'cmd.exe')
+        : 'npx'
+  const args = useLocalDsh
+    ? [localDshBin, '--profile', 'evoresearch', '--port', String(port)]
+    : hasNpxCli
+      ? [npxCli, '--yes', dshVersion, '--profile', 'evoresearch', '--port', String(port)]
+      : process.platform === 'win32'
+        ? ['/d', '/s', '/c', `npx.cmd --yes ${dshVersion} --profile evoresearch --port ${port}`]
+        : ['--yes', dshVersion, '--profile', 'evoresearch', '--port', String(port)]
   return spawn(command, args, {
     cwd: root,
     stdio: 'inherit',
@@ -196,8 +204,20 @@ function startChild(paths, port) {
       EVORESEARCH_DATA_ROOT: paths.evoresearchRoot,
       EVORESEARCH_PATHS_CONFIG: configPath,
       EVORESEARCH_RESTART_FILE: restartFile,
+      // 0.1.3 起 dsh 树依赖原生模块 fs-ext（会话持久化的文件锁）。npm/pnpm 内置的
+      // node-gyp 12.x 在 Node 26 头文件下给 MSVC link.exe 传 LLD 专属旗标
+      // （LNK1117 opt:lldltojobs=2）导致构建失败、npx 缓存半残且 dsh 静默退出；
+      // 统一指向仓库 devDep 的 node-gyp 13+（用户显式设置的优先）。
+      ...resolveWorkspaceNodeGyp(),
     },
   })
+}
+
+/** 仓库 devDep 的 node-gyp 绝对路径；用户已设 npm_config_node_gyp 或依赖缺失时返回空。 */
+function resolveWorkspaceNodeGyp() {
+  if (process.env.npm_config_node_gyp !== undefined && process.env.npm_config_node_gyp.trim() !== '') return {}
+  const candidate = join(root, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js')
+  return existsSync(candidate) ? { npm_config_node_gyp: candidate } : {}
 }
 
 async function startChildOnAvailablePort(paths, preferredPort) {

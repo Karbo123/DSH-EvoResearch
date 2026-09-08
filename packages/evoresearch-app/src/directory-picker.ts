@@ -1,9 +1,9 @@
 /**
  * directoryPicker 服务桩（阶段 0）。
  *
- * 官方 api-gateway（dsh-host-apiproxy）硬依赖 directoryPicker 服务；官方
- * 由 dsh-host-directory-picker-auto 提供（win32 回环下挂载 native 后端，
- * 其 client 面依赖 ui-workspace 外壳 —— 自定义表面不加载）。
+ * 官方 web 表面的目录选择由 dsh-host-directory-picker-auto 提供
+ * （win32 回环下挂载 native 后端，其 client 面依赖 ui-workspace 外壳 ——
+ * 自定义表面不加载；0.1.3 起 api-gateway 亦不再硬依赖 directoryPicker）。
  *
  * 本桩提供 `{ kind: 'none' }` capability：消费方按 seam 约定隐藏
  * picking 而非失败（README 原话：documented default for an unknown kind

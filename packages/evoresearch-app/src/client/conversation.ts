@@ -7,13 +7,61 @@
  *
  * 注册后，Session 的 ConversationSnapshot.chat.legacy 提供
  * { nodes, partial, runningCalls } 供工作台渲染。
+ *
+ * 0.1.3 起注册表由 dsh-client-runtime 拆分至 dsh-client-ui-conversation：
+ * ctx.uiConversation.events / ctx.uiConversation.views（官方 ui-chat 同款）。
  */
-import {
-  toAssistantBlocks,
-  emptyAssistantBlock,
-  isAppendSurfaceEvent,
-  isTokenDelta,
-} from '@deepseek-ai/dsh-client-runtime/client'
+// ── surface 事件判定（官方 @deepseek-ai/dsh-session/surface 语义的本地复刻；
+//    0.1.3 起该包无 client 半区，浏览器模块表无法 require，只能内联）──────
+const SURFACE_EVENT_TYPES = new Set(['user/message', 'assistant/message', 'tool/result'])
+
+/** 事件是否为追加到 surface 尾部的消息事件（user/message 等 + surfaceOp: 'append'）。 */
+function isAppendSurfaceEvent(event) {
+  return SURFACE_EVENT_TYPES.has(event.type) && event.surfaceOp === 'append'
+}
+
+// ── 本地块分类 helper（原 dsh-client-runtime/client 导出，0.1.3 起该包
+//    停止发布；语义对齐官方 dsh-client-ui-chat 的 event-projection 实现）──
+
+/** 把一个已定稿内容块分类为 UI 块（ToolCallBlock 的 id/arguments 映射为 callId/argsRaw）。 */
+function toAssistantBlock(block) {
+  switch (block.type) {
+    case 'text': return { kind: 'text', text: block.text }
+    case 'reasoning': return { kind: 'reasoning', text: block.text }
+    case 'image': return { kind: 'image', attachment: block.attachment }
+    case 'tool-call': return {
+      kind: 'tool-call',
+      callId: String(block.id),
+      name: block.name,
+      argsRaw: block.arguments,
+    }
+    default: return { kind: 'other', block }
+  }
+}
+
+function toAssistantBlocks(content) {
+  return content.map(toAssistantBlock)
+}
+
+/** 流式 block-start 的空块（blockType 与官方分类语义一致）。 */
+function emptyAssistantBlock(blockType) {
+  switch (blockType) {
+    case 'text': return { kind: 'text', text: '' }
+    case 'reasoning': return { kind: 'reasoning', text: '' }
+    case 'tool-call': return { kind: 'tool-call', callId: '', name: '', argsRaw: '' }
+    default: return { kind: 'other', block: null }
+  }
+}
+
+/** 流式 chunk 是否携带可见模型输出（首 token 边界；空 delta 不算）。 */
+function isTokenDelta(chunk) {
+  switch (chunk.type) {
+    case 'text-delta':
+    case 'reasoning-delta': return chunk.text !== ''
+    case 'tool-call-delta': return chunk.argumentsDelta !== '' || chunk.name !== undefined
+    default: return false
+  }
+}
 
 // ── assistant-step：一个 step 的流式/最终/中断消息 ────────────────────────
 
@@ -66,7 +114,7 @@ function updateChunk(state, match) {
       break
     }
     case 'block-end':
-      blocks[chunk.index] = toAssistantBlockCompat(chunk.block)
+      blocks[chunk.index] = toAssistantBlock(chunk.block)
       break
     case 'usage':
       return { ...state, usage: chunk.usage }
@@ -84,21 +132,6 @@ function updateChunk(state, match) {
   }
 }
 
-/** 兼容包装：block-end 的 block 直接分类（official toAssistantBlock 语义）。 */
-function toAssistantBlockCompat(block) {
-  switch (block.type) {
-    case 'text': return { kind: 'text', text: block.text }
-    case 'reasoning': return { kind: 'reasoning', text: block.text }
-    case 'tool-call': return {
-      kind: 'tool-call',
-      callId: String(block.id),
-      name: block.name,
-      argsRaw: block.arguments,
-    }
-    default: return { kind: 'other', block }
-  }
-}
-
 /** 每个 step 一条 assistant 消息（流式 + 最终 + 工具调用块保留）。
  * 工具结果（§21.1 running/success/error 与结果展示）不折叠进 Definition——
  * 引擎的已定稿节点视图不随 tool/result 更新重绘，改由渲染层按 callId 从
@@ -108,14 +141,17 @@ const assistantDefinition = {
   target: 'chat',
   match: (event) => {
     if (event.type === 'step/start') return { id: `${event.data.turn}:${event.data.step}`, role: 'start' }
-    if (event.type === 'assistant/chunk' || (event.type === 'assistant/message' && isAppendSurfaceEvent(event))) {
+    // 0.1.3：流式 chunk 以瞬态 assistant/live-chunk 条目进入事件窗口（chunk 在
+    // event.data.chunk，与旧 assistant/chunk 同构）；rc.2 的 assistant/chunk 保留兼容。
+    const chunkEvent = event.type === 'assistant/chunk' || event.type === 'assistant/live-chunk'
+    if (chunkEvent || (event.type === 'assistant/message' && isAppendSurfaceEvent(event))) {
       return { id: `${event.data.turn}:${event.data.step}`, role: 'update' }
     }
     return null
   },
   start: (_context, match) => initialState(match.event.data.turn, match.event.data.step),
   update: (context, match) => {
-    if (match.event.type === 'assistant/chunk') return updateChunk(context.state, match)
+    if (match.event.type === 'assistant/chunk' || match.event.type === 'assistant/live-chunk') return updateChunk(context.state, match)
     if (match.event.type === 'assistant/message') {
       const finalBlocks = toAssistantBlocks(match.event.data.message.content)
       // 最终消息通常只含文本：保留流式期已出现的工具调用块与推理块
@@ -146,7 +182,7 @@ const assistantDefinition = {
   },
   publication: (match) => {
     if (match.event.type === 'step/start') return 'none'
-    if (match.event.type !== 'assistant/chunk') return 'immediate'
+    if (match.event.type !== 'assistant/chunk' && match.event.type !== 'assistant/live-chunk') return 'immediate'
     const type = match.event.data.chunk.type
     return type === 'usage' || type === 'finish' ? 'none' : 'animation-frame'
   },
@@ -304,10 +340,10 @@ const workflowRunDefinition = {
   },
 }
 
-/** 注册消息 Definition 与 chat view（在 client-runtime apply 之后、任何会话打开之前）。 */
+/** 注册消息 Definition 与 chat view（在 ui-conversation apply 之后、任何会话打开之前）。 */
 export function registerConversation(ctx) {
-  ctx.conversationEvents.register(assistantDefinition)
-  ctx.conversationEvents.register(messageDefinition)
-  ctx.conversationEvents.register(workflowRunDefinition)
-  ctx.conversationViews.register({ target: 'chat', create: createChatViewBuilder })
+  ctx.uiConversation.events.register(assistantDefinition)
+  ctx.uiConversation.events.register(messageDefinition)
+  ctx.uiConversation.events.register(workflowRunDefinition)
+  ctx.uiConversation.views.register({ target: 'chat', create: createChatViewBuilder })
 }

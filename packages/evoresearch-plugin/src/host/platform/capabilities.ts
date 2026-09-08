@@ -4,8 +4,9 @@
  * 本模块是全插件唯一保存「DSH 版本能力认知」的静态知识库：
  * - `DSH_CAPABILITY_MATRIX`：针对 DSH 0.1.0-rc.6 安装面的静态矩阵（能力 → rc.6 现状
  *   available/partial/missing → 适配层策略 → 降级路径）。当前部署基线已随依赖
- *   声明升至 **0.1.1-rc.2**，但 rc.6 / rc.8 / rc.2 在本次升级涉及的 Cordis 服务面
- *   （sessions/llm/tools/approval/skills/subagents/jobs 等）无 API 差异，本矩阵
+ *   声明升至 **0.1.3-alpha.2**（0.1.3 起 agent 平面工具行移入 agent preset、
+ *   dsh-client-runtime/host-apiproxy 停止发布并拆分，host 服务面
+ *   sessions/llm/tools/approval/skills/subagents/jobs 等无 API 差异），本矩阵
  *   仍为有效参考；实际能力以 `probeCapabilities(ctx)` 运行时探测为准；
  * - `probeCapabilities(ctx)`：运行时探测，读取 `ctx.get(...)` 中对应 Cordis
  *   服务是否真实存在，返回实际可用集。

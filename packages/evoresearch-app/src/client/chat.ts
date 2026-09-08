@@ -26,6 +26,7 @@ import {
   Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2,
 } from 'lucide-react'
 import { t } from './i18n'
+import { sessionEventsSync } from './session-events'
 import { clientStateDelete, clientStateGet, clientStateSet } from './client-state'
 import { toast } from './toast'
 import { SessionStatusLine } from './session-dock'
@@ -239,10 +240,11 @@ function assistantTools(node: ChatNode, toolResults: Record<string, { text: stri
     })
 }
 
-/** 从会话原始事件提取工具结果（§21.1）：tool/result → callId → {text, isError}。 */
+/** 从会话原始事件提取工具结果（§21.1）：tool/result → callId → {text, isError}。
+ * 0.1.3：事件列表经 eventSource 适配（session-events.ts），session face 不再直接带 events。 */
 function toolResultsOf(session: any): Record<string, { text: string; isError: boolean }> {
   const map: Record<string, { text: string; isError: boolean }> = {}
-  for (const ev of session?.events ?? []) {
+  for (const ev of sessionEventsSync(session)) {
     if (ev?.type !== 'tool/result') continue
     const d = ev.data ?? {}
     const block = Array.isArray(d.message?.content) ? d.message.content.find((b) => b?.type === 'tool-result') : undefined
@@ -838,7 +840,8 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   const [queueOpen, setQueueOpen] = useState(false)
   const [queueEditId, setQueueEditId] = useState<string | null>(null)
   const [queueEditText, setQueueEditText] = useState('')
-  const queueItems = session?.snapshotCache?.queue ?? []
+  // 0.1.3：排队列表在 session face 快照（SessionSnapshot.queue）；rc.2 回退 snapshotCache。
+  const queueItems: any[] = session?.getSnapshot?.()?.queue ?? session?.snapshotCache?.queue ?? []
 
   // ── 后台任务（§21.6）：会话 jobsBySession 快照 → 弹层 ──
   const [jobsOpen, setJobsOpen] = useState(false)

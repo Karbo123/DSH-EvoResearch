@@ -10,6 +10,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { ListTodo, Target, Gauge } from 'lucide-react'
 import { t } from './i18n'
+import { projectionGet } from './session-events'
 
 /** token 格式化（官方 formatTokens 语义：k/M 缩写）。 */
 function formatTokens(n: number): string {
@@ -26,10 +27,10 @@ export interface SessionDockData {
 export function SessionStatusLine({ session }: SessionDockData) {
   if (session === null) return null
 
-  const projections = session.projections
-  const queue = session.snapshotCache?.queue ?? []
-  const goal = projections?.get('goal')
-  const pressure = projections?.get('contextPressure')
+  // 0.1.3：投影经 faceOf(key) 读取；排队列表在 session face 快照的 queue 字段。
+  const queue = session?.getSnapshot?.()?.queue ?? session?.snapshotCache?.queue ?? []
+  const goal = projectionGet(session, 'goal')
+  const pressure = projectionGet(session, 'contextPressure')
   const occupancy = (() => {
     const used = pressure?.projectedTokens ?? pressure?.pressureTokens
     const total = pressure?.contextWindow

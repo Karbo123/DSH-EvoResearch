@@ -96,16 +96,23 @@ function apply(ctx, config) {
     })
   }
   if (config.printUrl) {
-    const printUrl = () => {
-      const lanCandidate = runtime.lanAddresses[0]
-      const port = ctx.webServer.port
-      console.log(`evoresearch: ${localWebUrl(ctx)}${lanCandidate === undefined ? '' : ` (LAN: http://${lanCandidate}:${String(port)})`}`)
-    }
-    const settled = ctx.get('loader')?.await()
-    if (settled === undefined) printUrl()
-    else settled.then(() => {
-      if (ctx.get('webServer') !== undefined) printUrl()
-    }, () => {})
+    // 0.1.3 起 web 传输默认带 per-process token 柵门（裸 URL 返回 401）。
+    // 经 connection.authenticatedUrl 取得带 token 的规范 URL（官方 web 表面同款）。
+    ctx.inject(['connection'], (printCtx) => {
+      const printUrl = () => {
+        const lanCandidate = runtime.lanAddresses[0]
+        const port = ctx.webServer.port
+        const authenticate = (url) => (typeof printCtx.connection?.authenticatedUrl === 'function' ? printCtx.connection.authenticatedUrl(url) : url)
+        const url = authenticate(localWebUrl(ctx))
+        const lanUrl = lanCandidate === undefined ? undefined : authenticate(`http://${lanCandidate}:${String(port)}`)
+        console.log(`evoresearch: ${url}${lanUrl === undefined ? '' : ` (LAN: ${lanUrl})`}`)
+      }
+      const settled = ctx.get('loader')?.await()
+      if (settled === undefined) printUrl()
+      else settled.then(() => {
+        if (ctx.get('webServer') !== undefined) printUrl()
+      }, () => {})
+    })
   }
 }
 

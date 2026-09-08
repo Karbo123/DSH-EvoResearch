@@ -12,8 +12,9 @@
  * （首回合 1/n，末回合 100%）；同一回合内的 step/call 行沿用所在回合的进度。
  */
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useMemo, useState } from 'react'
 import { t } from './i18n'
+import { useSessionEvents } from './session-events'
 import { renderMarkdown } from './markdown'
 import { ChevronDown, ChevronRight, Search, Timer, Zap, MessageSquareText, Wrench, CheckCircle2, XCircle, CircleDashed, CornerDownRight, User } from 'lucide-react'
 
@@ -178,12 +179,9 @@ function truncate(text: string, max: number): string {
 
 /** 轨迹面板：点击行展开/收起，详情 Markdown 渲染。 */
 export function TrajectoryPanel({ session }: { session: any }) {
-  const notifier = session?.notifier
-  const eventsLen = useSyncExternalStore(
-    (onChange: () => void) => (notifier?.subscribe(onChange) ?? (() => {})),
-    () => (session?.events?.length ?? 0),
-  )
-  const turns = useMemo(() => buildTrajectory(session?.events ?? []), [session, eventsLen])
+  // 0.1.3：事件列表经 eventSource 适配（session face 不再直接带 events）
+  const events = useSessionEvents(session)
+  const turns = useMemo(() => buildTrajectory(events), [events])
 
   const [barMode, setBarMode] = useState<'duration' | 'turn'>('duration')
   const [query, setQuery] = useState('')

@@ -41,9 +41,13 @@ fn desktop_main() {
                 failure_page_url("后端启动失败")
             } else {
                 match wait_for_port(&app_data_dir, Duration::from_secs(60)) {
-                    Some(port) => {
-                        log(&format!("[shell] 后端就绪，端口={port}"));
-                        Ok(format!("http://127.0.0.1:{port}"))
+                    Some((port, token)) => {
+                        log(&format!("[shell] 后端就绪，端口={port} token={}", token.is_some()));
+                        // 0.1.3 token 柵门：首跳携带 token 换 cookie（desktop=1 一并带上）
+                        match token {
+                            Some(token) => Ok(format!("http://127.0.0.1:{port}/?desktop=1&token={token}")),
+                            None => Ok(format!("http://127.0.0.1:{port}")),
+                        }
                     }
                     None => {
                         log("[shell] sidecar 未在 60s 内就绪，加载失败页");
@@ -313,18 +317,34 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
 /// 其服务（无害），已退出则端口无监听、页面加载失败概率极低（新 sidecar 随即
 /// 覆盖端口文件）。轮询语义保持不变。
 #[cfg(desktop)]
-fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<u16> {
+/// 读端口文件，返回 (端口, 可选 token)。0.1.3 起 web 传输默认 per-process token
+/// 鉴权：sidecar 从启动日志捕获 `?token=` 写入端口文件，壳把它拼进首跳 URL
+/// 完成 token → cookie 交换（旧版 sidecar 无 token 字段 → None，兼容）。
+#[cfg(desktop)]
+fn read_port_token(app_data_dir: &PathBuf) -> Option<(u16, Option<String>)> {
     let file = port_file(app_data_dir);
-    let start = Instant::now();
-    while start.elapsed() < timeout {
-        if let Ok(raw) = fs::read_to_string(&file) {
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
-                if let Some(port) = value.get("port").and_then(|p| p.as_u64()) {
-                    if port > 0 && port < 65536 {
-                        return Some(port as u16);
-                    }
+    if let Ok(raw) = fs::read_to_string(&file) {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
+            if let Some(port) = value.get("port").and_then(|p| p.as_u64()) {
+                if port > 0 && port < 65536 {
+                    let token = value
+                        .get("token")
+                        .and_then(|t| t.as_str())
+                        .map(|s| s.to_string())
+                        .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+                    return Some((port as u16, token));
                 }
             }
+        }
+    }
+    None
+}
+
+fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<(u16, Option<String>)> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if let Some(pair) = read_port_token(app_data_dir) {
+            return Some(pair);
         }
         thread::sleep(Duration::from_millis(300));
     }

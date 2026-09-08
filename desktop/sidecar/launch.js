@@ -134,7 +134,9 @@ function startDsh() {
   return child
 }
 
-/** 从 dsh stdout 解析监听端口（JSON 行 {"port": N}、"Listening on ...:N" 或 "dsh web: http://127.0.0.1:N"）。 */
+/** 从 dsh stdout 解析监听端口（JSON 行 {"port": N}、"Listening on ...:N" 或 "dsh web: http://127.0.0.1:N"）。
+ * 0.1.3 起 web 传输默认 per-process token 鉴权：同时从打印的 URL 捕获 ?token=
+ * 一并写入端口文件，桌面壳拼接首跳 URL 完成 token → cookie 交换。 */
 let portWritten = false
 function parseOutput(chunk) {
   if (portWritten) return
@@ -146,7 +148,8 @@ function parseOutput(chunk) {
     }
     const urlMatch = /http:\/\/127\.0\.0\.1:(\d+)/.exec(line)
     if (urlMatch) {
-      writePortFile(urlMatch[1])
+      const tokenMatch = /token=([A-Za-z0-9_-]+)/.exec(line)
+      writePortFile(urlMatch[1], tokenMatch ? tokenMatch[1] : undefined)
       continue
     }
     const listening = /:(\d{4,5})/.exec(line)
@@ -156,11 +159,12 @@ function parseOutput(chunk) {
   }
 }
 
-/** 写端口文件（只写一次：后续无关日志行不再覆写）。 */
-function writePortFile(port) {
+/** 写端口文件（只写一次：后续无关日志行不再覆写）。token 可选（旧版引擎无）。 */
+function writePortFile(port, token) {
   if (portWritten) return
   portWritten = true
-  writeFileSync(portFile, JSON.stringify({ port: Number(port) }), 'utf8')
+  const payload = token !== undefined ? { port: Number(port), token } : { port: Number(port) }
+  writeFileSync(portFile, JSON.stringify(payload), 'utf8')
   console.log(`EvoResearch ready on port ${port}`)
 }
 

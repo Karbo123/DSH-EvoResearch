@@ -12,6 +12,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows_|_macOS_|_Linux-0078d6?style=flat-square)](https://github.com/Karbo123/DSH-EvoResearch/releases)
 [![Android](https://img.shields.io/badge/Android-APK-3ddc84?style=flat-square)](https://github.com/Karbo123/DSH-EvoResearch/releases)
 [![iOS](https://img.shields.io/badge/iOS-Beta-000000?style=flat-square)](https://github.com/Karbo123/DSH-EvoResearch/releases)
+[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek_Harness-0.1.3--alpha.2-4D6BFE?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.3-alpha.2)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/Karbo123/DSH-EvoResearch?style=flat-square&color=f1c40f)](https://github.com/Karbo123/DSH-EvoResearch/stargazers)
 
@@ -102,6 +103,7 @@
 
 ## ⭐ 与众不同的细节
 
+- 🧬 基于 DeepSeek Harness（DSH）**0.1.3-alpha.2** 引擎（2026-09 升级：agent preset 会话组合、长会话加载与内存优化、子代理消息队列与 Steer）
 - 🌓 深色 / 浅色双主题，中英双语界面
 - 🖼️ 图片附件、代码高亮、Mermaid 流程图开箱即用
 - 📤 实验一键导出，论文素材随手可得
