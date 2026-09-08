@@ -55,3 +55,21 @@ export function projectionGet(session: any, key: string): any {
   if (value !== undefined) return value
   return typeof session?.projections?.get === 'function' ? session.projections.get(key) : undefined
 }
+
+/** 投影值订阅读取（0.1.3 faceOf(key)：整值替换语义；以内容签名作快照令牌）。 */
+export function useProjectionValue(session: any, key: string): any {
+  const face = session?.projections?.faceOf?.(key)
+  const signature = useSyncExternalStore(
+    (onChange) => face?.subscribe?.(onChange) ?? (() => {}),
+    () => {
+      const value = face?.getSnapshot?.()
+      if (value === undefined) return ''
+      try { return JSON.stringify(value) } catch { return String(value) }
+    },
+  )
+  return useMemo(() => {
+    const value = face?.getSnapshot?.()
+    return value === undefined ? null : value
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [face, signature])
+}

@@ -8,7 +8,7 @@
 #
 # 与官方 web 表面（dsh-web-app）的关键差别：
 # 1. agent 平面工具行沿用官方 Web 决策：全部 disabled、由 agent preset
-#    （dsh-agent-presets，default: standard）按会话挂载。EvoResearch 的
+#    （dsh-agent-presets，default: evoresearch）按会话挂载。EvoResearch 的
 #    品牌人设不与 preset persona 竞争（preset 会遮蔽部署默认），改由
 #    app-runtime 的 surface prompt 段按会话注入（见 runtime.ts）。
 # 2. 官方 web-runtime 行 serve 官方前端 dist；本表面的 app-runtime 行
@@ -93,14 +93,19 @@
 - id: tool-web
   disabled: true
 
-# preset 名册：default 指向内置 standard（完整编码 agent：文件编辑、Shell、
-# 检索、Skills、计划、目标、子代理、工作流）。`<dshHome>/.agent-presets`
-# 用户根自动并入，后续可放置 EvoResearch 专属 preset。
+# preset 名册：default 指向 EvoResearch 科研 preset（官方 standard 完整工具集 +
+# EvoResearch 品牌人设，底本随官方 preset 演进手动同步）；`includeShippedRoot`
+# 仍并入内置 standard 等，会话创建时可切换；`<dshHome>/.agent-presets` 用户根
+# 自动并入（includeUserRoot）。
 - insert:
     - id: agent-presets
       name: '@deepseek-ai/dsh-agent-presets'
       config:
-        default: standard
+        default: evoresearch
+        roots:
+          # preset 源随 profile 分发（junction 直通，改文件即时生效，无需种子）
+          - path: !!js dshHomePath('profiles', 'evoresearch', 'agent-presets')
+            trust: system
 
     - id: message-feedback
       name: '@deepseek-ai/dsh-message-feedback'
@@ -108,6 +113,12 @@
 
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
+
+    # turnOutline 投影（0.1.3 新功能）：全量回合目录（turn/seq/prompt/response），
+    # 事件窗口分页加载时轨迹面板仍可见全部回合；projection registry 缺席时本行
+    # 静默不注册（官方 chat turn rail 同款消费语义）。
+    - id: session-turn-outline
+      name: '@deepseek-ai/dsh-session-turn-outline'
 
     # preset 委托工具的模型选择设置命名空间（官方 Web 同款）：standard preset
     # 的 tool-subagent 行硬依赖它，缺失时 preset 挂载失败、会话无法创建。
@@ -122,6 +133,16 @@
 
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
+
+    # Open in（0.1.3 新功能）：解析本机已装的编辑器/终端/文件管理器并在
+    # webServer 上注册 /open-in-app/{apps,icon,open} 三条路由；前端 OpenInMenu
+    # 自绘消费（官方 ui-open-in-app 为 slot UI，自绘表面不加载）。
+    - id: open-in-app
+      name: '@deepseek-ai/dsh-host-open-in-app'
+      config:
+        probeTimeoutMs: 10000
+        iconTimeoutMs: 10000
+        launchWatchMs: 1000
 
     # API 网关（0.1.3 起取代 dsh-host-apiproxy）：host 半区由 dsh-base 的
     # typert-gateway 行装载（@deepseek-ai/dsh-api-gateway），此处【不要】重复
@@ -220,6 +241,11 @@
 
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'
+
+    # HITL（§21.2/§21.3）：审批与 ask_user 的 Remote Event 瀑布征答由本包
+    # client 的自建 answerer 接单（hitl.ts；官方 ui-approval/ui-user-questions
+    # 的 answerer 带 scopeOf 门，根作用域永远委托，slot UI 亦无宿主 slot，
+    # 故不装载这两个包）。
 
     # EvoResearch 工作台：提供 layout 服务（app-shell 硬依赖）并注册 root slot。
     - id: evoresearch-ui

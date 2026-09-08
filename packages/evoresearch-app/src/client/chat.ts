@@ -27,6 +27,8 @@ import {
 } from 'lucide-react'
 import { t } from './i18n'
 import { sessionEventsSync } from './session-events'
+import { OpenInMenu } from './open-in'
+import { useHitlWaits } from './hitl'
 import { clientStateDelete, clientStateGet, clientStateSet } from './client-state'
 import { toast } from './toast'
 import { SessionStatusLine } from './session-dock'
@@ -156,6 +158,7 @@ export interface ChatAreaProps {
   cwd: string | null
   /** 当前会话的后台任务（§21.6，jobsBySession 快照）。 */
   jobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
+
   /** 打开另一个会话（Search 全历史结果跳转）。 */
   onOpenThread: (id: string) => void
   /** 从一条用户消息创建只继承到该消息的新方向。 */
@@ -891,24 +894,33 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   }
 
   // ── HITL 审批（§21.2）：会话待审批工具调用卡片 ──
-  const pendingApprovals = (session?.snapshotCache?.pending ?? []).filter((p: any) => p?.kind === 'approval')
+  // 0.1.3：pending 来自 SessionPendingInteraction（ui-approval/ui-user-questions
+  // client 包经 Remote Event 瀑布发布，root 钩子 useSessionPendingInteraction 读取，
+  // 每会话一个当前生效交互）；PendingApproval 暴露 toolName/callId/reason 与
+  // answer(outcome)。rc.2 的 snapshotCache.pending 路径保留为回退。
+  const hitlWaits = useHitlWaits()
+  const legacyPending: any[] = session?.snapshotCache?.pending ?? []
+  const pendingApprovals: any[] = hitlWaits.filter((p) => p?.kind === 'approval')
   const respondApproval = (wait: any, outcome: 'allowed-once' | 'rejected') => {
     try {
+      if (typeof wait.answer === 'function') { void wait.answer(outcome); return }
       wait.respond({ ok: true, value: { sessionId: wait.sessionId, approvalId: wait.payload?.approvalId, outcome } })
     } catch { /* 已结算 */ }
   }
 
-  // ── Ask User 问题卡片（§21.3）：模型 ask_user_question 工具 → snapshotCache.pending kind='question' ──
-  const pendingQuestions = (session?.snapshotCache?.pending ?? []).filter((p: any) => p?.kind === 'question')
+  // ── Ask User 问题卡片（§21.3）：模型 ask_user_question 工具 → pending kind='question'/'plan-review' ──
+  const pendingQuestions: any[] = hitlWaits.filter((p) => p?.kind === 'question' || p?.kind === 'plan-review')
   const [questionSelections, setQuestionSelections] = useState<Record<string, string[]>>({})
   const [questionCustom, setQuestionCustom] = useState<Record<string, string>>({})
   const answerQuestion = (wait: any, answers: Array<{ id: string; selected: string[]; custom?: string }>) => {
     try {
+      if (typeof wait.answer === 'function') { void wait.answer({ answers }); return }
       wait.respond({ ok: true, value: { sessionId: wait.sessionId, answer: { answers } } })
     } catch { /* 已结算 */ }
   }
   const cancelQuestion = (wait: any) => {
     try {
+      if (typeof wait.cancel === 'function') { void wait.cancel(); return }
       wait.respond({ ok: false, error: { code: 'cancelled', message: 'the user closed this question request', details: {} } })
     } catch { /* 已结算 */ }
   }
@@ -1892,6 +1904,9 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
           className: 'evo-approval-list',
           children: pendingApprovals.map((wait: any) => {
             const payload = wait.payload ?? {}
+            const toolName: string = wait.toolName ?? payload.toolName ?? t('tool')
+            const callId = wait.callId !== undefined ? wait.callId : payload.callId
+            const reason: string | undefined = wait.reason !== undefined ? wait.reason : payload.reason
             return jsxs('div', {
               className: 'evo-approval-card',
               children: [
@@ -1905,11 +1920,11 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
                 jsxs('div', {
                   className: 'evo-approval-body',
                   children: [
-                    jsx('code', { className: 'evo-approval-tool', children: payload.toolName ?? t('tool') }),
-                    payload.callId !== undefined && jsx('span', { className: 'evo-approval-callid', children: payload.callId }),
+                    jsx('code', { className: 'evo-approval-tool', children: toolName }),
+                    callId !== undefined && jsx('span', { className: 'evo-approval-callid', children: String(callId) }),
                   ],
                 }),
-                payload.reason !== undefined && payload.reason !== '' && jsx('div', { className: 'evo-approval-reason', children: payload.reason }),
+                reason !== undefined && reason !== '' && jsx('div', { className: 'evo-approval-reason', children: reason }),
                 jsxs('div', {
                   className: 'evo-approval-acts',
                   children: [
@@ -1938,7 +1953,8 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
         children: jsx('div', {
           className: 'evo-approval-list',
           children: pendingQuestions.map((wait: any) => {
-            const questions: Array<{ id: string; question: string; multiSelect?: boolean; options?: Array<{ label: string; description?: string }> }> = wait.payload?.questions ?? []
+            // 0.1.3 PendingQuestion.questions 直读；rc.2 回退 payload.questions
+            const questions: Array<{ id: string; question: string; multiSelect?: boolean; options?: Array<{ label: string; description?: string }> }> = wait.questions ?? wait.payload?.questions ?? []
             return jsxs('div', {
               className: 'evo-question-card',
               children: [
@@ -2079,6 +2095,8 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
                   }),
                   // 当前工作路径（§25.4）：自适应宽度、中间省略、tooltip 完整路径
                   cwd !== null && jsx(CwdPath, { path: cwd }),
+                  // 0.1.3 Open in：在已解析的本地应用中打开工作区目录
+                  cwd !== null && jsx(OpenInMenu, { path: cwd }),
                   jsx('span', { style: cwd !== null ? { flex: '0 0 12px' } : { flex: 1 } }),
                   // 停止本轮（官方 session.cancel；host 保留排队消息）
                   running && jsx('button', {

@@ -30,6 +30,7 @@ import { fileKind } from './file-kind'
 import { ConfirmDialog } from './session-actions'
 import { registerConversation } from './conversation'
 import { setEventSourceResolver } from './session-events'
+import { startHitlPolling } from './hitl'
 import { DesktopTitlebar } from './desktop'
 import { SettingsDialog } from './settings'
 import { t, readLang, setLang } from './i18n'
@@ -251,7 +252,8 @@ class ErrorBoundary extends (Component as any) {
 }
 
 /** 工作台根组件（root slot）。 */
-function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {  const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
+function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspaces: any }) {
+  const sessions = normalizeSessionsSnapshot(useSessions((s) => s))
   const workspaces = useWorkspaces((w) => w)
   const [projectScope, setProjectScope] = useState<{ name: string; path: string } | null>(null)
   const [inspector, setInspector] = useState(() => {
@@ -2204,6 +2206,9 @@ function apply(ctx: any) {
       const id = session?.sessionId ?? session?.id
       return id !== undefined && id !== null ? sessionsService?.binding(String(id))?.eventSource ?? null : null
     })
+    // HITL 轮询（§21.2/§21.3）：审批与 ask_user 请求经 workspace-api 的自有
+    // HTTP 通道暴露（host 事件桥），此处启动清单轮询驱动卡片。
+    startHitlPolling()
     // 连接状态源：0.1.3 起 hostDescription 改名 generation（快照存在 = 已握手，
     // 内含 host 握手信息；state 为 connected/connecting 等字符串状态）。
     // 断连/重连经 subscribe 通知 UI。

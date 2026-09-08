@@ -110,6 +110,10 @@ const DICT: Record<string, [string, string]> = {
   close: ['Close', '关闭'],
   version: ['Version', '版本'],
   basedOn: ['Based on deepseek-harness 0.1.3-alpha.2', '基于 deepseek-harness 0.1.3-alpha.2'],
+  openIn: ['Open in…', '打开方式…'],
+  trajUnloadedTurn: ['Turn (not loaded)', '回合（未载入）'],
+  openInTitle: ['Open this workspace in a local app', '在本地应用中打开当前工作区'],
+  openInFailed: ['Failed to open', '打开失败'],
   noSession: ['Open a conversation to choose a model', '打开会话后可选择模型'],
   current: ['Current', '当前'],
   // 顶栏 / 标题栏常用操作

@@ -14,7 +14,7 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useMemo, useState } from 'react'
 import { t } from './i18n'
-import { useSessionEvents } from './session-events'
+import { useProjectionValue, useSessionEvents } from './session-events'
 import { renderMarkdown } from './markdown'
 import { ChevronDown, ChevronRight, Search, Timer, Zap, MessageSquareText, Wrench, CheckCircle2, XCircle, CircleDashed, CornerDownRight, User } from 'lucide-react'
 
@@ -181,7 +181,18 @@ function truncate(text: string, max: number): string {
 export function TrajectoryPanel({ session }: { session: any }) {
   // 0.1.3：事件列表经 eventSource 适配（session face 不再直接带 events）
   const events = useSessionEvents(session)
-  const turns = useMemo(() => buildTrajectory(events), [events])
+  const loadedTurns = useMemo(() => buildTrajectory(events), [events])
+  // 0.1.3 turnOutline 投影：全量回合目录（turn/seq/prompt/response 整值替换）。
+  // 事件窗口按页加载后，未载入的回合也以大纲行出现（回合号 + 提问预览，无统计）。
+  const outline = useProjectionValue(session, 'turnOutline') as Array<{ turn: number; seq: number; prompt: string; response: string }> | null
+  const turns = useMemo(() => {
+    if (!Array.isArray(outline) || outline.length === 0) return loadedTurns
+    const known = new Set(loadedTurns.map((t) => t.turn))
+    const extras: TrajTurn[] = outline
+      .filter((o) => !known.has(o.turn))
+      .map((o) => ({ turn: o.turn, userText: o.prompt !== '' ? o.prompt : t('trajUnloadedTurn'), start: o.seq, end: o.seq, steps: [] }))
+    return extras.length === 0 ? loadedTurns : [...loadedTurns, ...extras].sort((a, b) => a.turn - b.turn)
+  }, [loadedTurns, outline])
 
   const [barMode, setBarMode] = useState<'duration' | 'turn'>('duration')
   const [query, setQuery] = useState('')

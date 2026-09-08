@@ -623,10 +623,68 @@ function sameOrigin(req: IncomingMessage): boolean {
   }
 }
 
+// ── HITL（§21.2 审批 / §21.3 Ask User）host 事件桥 ─────────────────────────
+// 0.1.3：host 的 user-questions / approval 服务经 cordis 事件瀑布
+// （'user-questions/request' / 'approval/request'，waterfall 语义：返回即应答、
+// next() 即委托）向「answerer 链」征答。官方把瀑布转发到浏览器 Remote Event，
+// 但分发是会话作用域的；自绘表面改走同进程自有通道：这里以未加作用域监听者
+// 接单（进程内事件总线必达），请求落到内存表，前端经 /evoresearch/fs/hitl-*
+// 轮询与应答 —— 与设置面板等自有路由同一条信任/同源策略。
+
+interface HitlEntry {
+  key: string
+  kind: 'approval' | 'question'
+  toolName?: string
+  callId?: unknown
+  reason?: string
+  questions?: unknown[]
+  resolve: (value: unknown) => void
+  reject: (reason?: unknown) => void
+}
+
+const hitlPending = new Map<string, HitlEntry>()
+let hitlSeq = 0
+
+function hitlView(entry: HitlEntry): Record<string, unknown> {
+  return {
+    key: entry.key,
+    kind: entry.kind,
+    ...(entry.toolName !== undefined ? { toolName: entry.toolName } : {}),
+    ...(entry.callId !== undefined ? { callId: entry.callId } : {}),
+    ...(entry.reason !== undefined ? { reason: entry.reason } : {}),
+    ...(entry.questions !== undefined ? { questions: entry.questions } : {}),
+  }
+}
+
+/** 挂 host 事件 answerer（app-runtime apply 时调用一次；事件总线进程内直达）。 */
+function registerHitlBridge(ctx: any): void {
+  ctx.on?.('user-questions/request', (request: any, next: () => unknown) => {
+    if (!Array.isArray(request?.questions) || request.questions.length === 0) return next()
+    return new Promise((resolve, reject) => {
+      const key = `hitl-q${++hitlSeq}`
+      hitlPending.set(key, { key, kind: 'question', questions: request.questions, resolve, reject })
+      request.signal?.addEventListener?.('abort', () => {
+        if (hitlPending.delete(key)) reject(request.signal.reason ?? new Error('aborted'))
+      })
+    })
+  })
+  ctx.on?.('approval/request', (request: any, next: () => unknown) => {
+    if (typeof request?.toolName !== 'string' || request.toolName === '') return next()
+    return new Promise((resolve, reject) => {
+      const key = `hitl-a${++hitlSeq}`
+      hitlPending.set(key, { key, kind: 'approval', toolName: request.toolName, callId: request.callId, reason: request.reason, resolve, reject })
+      request.signal?.addEventListener?.('abort', () => {
+        if (hitlPending.delete(key)) reject(request.signal.reason ?? new Error('aborted'))
+      })
+    })
+  })
+}
+
 /** 注册 /evoresearch/fs/* 路由。 */
 export function registerWorkspaceApi(ctx: any): void {
   const webServer = ctx.get('webServer')
   if (webServer === undefined) return
+  registerHitlBridge(ctx)
 
   ctx.effect(() => webServer.register({
     kind: 'prefix',
@@ -646,6 +704,23 @@ export function registerWorkspaceApi(ctx: any): void {
       const evoresearch = ctx.get('evoresearch') as Record<string, (args?: unknown) => unknown> | undefined
 
       try {
+        // GET /evoresearch/fs/hitl-pending → 当前待人工应答（审批/问题）清单
+        if (req.method === 'GET' && method === 'hitl-pending') {
+          writeJson(res, 200, { ok: true, value: [...hitlPending.values()].map(hitlView) })
+          return
+        }
+        // POST /evoresearch/fs/hitl-answer {key, value} 或 {key, error} → 应答/取消
+        if (req.method === 'POST' && method === 'hitl-answer') {
+          const payload = await readJsonBody(req)
+          const key = String(payload.key ?? '')
+          const entry = hitlPending.get(key)
+          if (entry === undefined) throw httpError(404, 'hitl/not-found', '未知或已结算的请求')
+          hitlPending.delete(key)
+          if (payload.error !== undefined) entry.reject(new Error(String(payload.error)))
+          else entry.resolve(payload.value)
+          writeOk(res, { key })
+          return
+        }
         // GET /evoresearch/fs/file?path= → 媒体/文本文件流
         if (req.method === 'GET' && method === 'file') {
           const target = requireAbsolute(url.searchParams.get('path') ?? '')
