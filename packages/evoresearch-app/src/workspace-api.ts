@@ -789,39 +789,6 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
-        // POST /evoresearch/fs/list-tree {root} → 递归目录（移植规范 §27.1：
-        // 上限 2000 项、深度 12、目录优先、隐藏 dotfile 与常见构建产物不列）
-        if (method === 'list-tree') {
-          const root = requireAbsolute(requireString(payload, 'root'))
-          const SKIP_DIRS = new Set(['.git', '.evosci-data', '.evoresearch-data', 'node_modules', '.venv', '__pycache__', '.next', 'dist', 'build', '.cache', '.idea', '.vscode'])
-          const SKIP_FILES = new Set(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'])
-          const MAX_ITEMS = 2000
-          const MAX_DEPTH = 12
-          const entries: Array<{ path: string; isDir: boolean }> = []
-          const walk = async (dir: string, depth: number): Promise<void> => {
-            if (depth > MAX_DEPTH || entries.length >= MAX_ITEMS) return
-            let level
-            try { level = await opendir(dir) } catch { return }
-            const items: Array<{ name: string; isDir: boolean }> = []
-            for await (const dirent of level) {
-              if (dirent.name.startsWith('.')) continue
-              if (dirent.isDirectory() && SKIP_DIRS.has(dirent.name)) continue
-              if (!dirent.isDirectory() && SKIP_FILES.has(dirent.name)) continue
-              items.push({ name: dirent.name, isDir: dirent.isDirectory() })
-            }
-            items.sort((a, b) => (a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })))
-            for (const item of items) {
-              if (entries.length >= MAX_ITEMS) return
-              const full = join(dir, item.name)
-              entries.push({ path: full, isDir: item.isDir })
-              if (item.isDir) await walk(full, depth + 1)
-            }
-          }
-          await walk(root, 0)
-          writeOk(res, { root, entries, truncated: entries.length >= MAX_ITEMS })
-          return
-        }
-
         // POST /evoresearch/fs/write {root, path, text} → 写文件（限制在 root 内；
         // text 允许空串——新建空文件/清空内容均是合法操作；自动创建父目录）
         if (method === 'write') {

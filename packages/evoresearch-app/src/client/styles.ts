@@ -333,8 +333,10 @@ body { margin: 0; }
 .evo-dashboard-label { font-size: 11.5px; color: var(--color-text-tertiary); }
 /* ── 输入面板：sticky 常驻中间栏底部（消息区内容自适应、页面整体滚动）── */
 .evo-composer-wrap { flex-shrink: 0; padding: 4px 0 8px; display: flex; flex-wrap: wrap; justify-content: center; position: sticky; bottom: 0; z-index: 30; background: var(--color-background); }
-/* ── 输入候选弹层（§23.2–23.5：斜杠命令 / @文件 / 输入历史）── */
-.evo-cand { position: absolute; bottom: calc(100% - 8px); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 96px)); max-height: 280px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18); z-index: 40; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+/* ── 输入候选弹层（§23.2–23.5：斜杠命令 / @文件与@会话 / 输入历史）──
+   max-width 独立于 width 声明：部分内嵌视口下 min() 的 100vw 解析偏大，
+   独立钳制保证窄屏（≤430px）弹层永不横向溢出。 */
+.evo-cand { position: absolute; bottom: calc(100% - 8px); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 96px)); max-width: calc(100vw - 96px); max-height: 280px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18); z-index: 40; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .evo-cand-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 10px 6px; border-bottom: 1px solid var(--color-border-light); }
 .evo-cand-label { color: var(--color-text-secondary); font-size: 11.5px; font-weight: 600; }
 .evo-cand-hint { color: var(--color-text-tertiary); font-size: 10.5px; white-space: nowrap; }

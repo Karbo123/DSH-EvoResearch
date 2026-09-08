@@ -155,6 +155,13 @@ async function buildClient() {
     platform: 'browser',
     target: 'es2022',
     external: ['@deepseek-ai/*', 'react', 'react-dom', 'react/jsx-runtime'],
+    // dsh-file-reference publishes a browser-safe grammar subpath but no
+    // standalone dsh.client entry. Bundle that official implementation into
+    // the EvoResearch adapter instead of asking ModuleLoader to require a
+    // Host-only package at runtime.
+    alias: {
+      '@deepseek-ai/dsh-file-reference/grammar': join(ROOT, 'node_modules', '@deepseek-ai', 'dsh-file-reference', 'lib', 'types', 'grammar.js'),
+    },
     sourcemap: false,
     minify: false,
     // Monaco codicon 图标字体等资源内联为 data URL

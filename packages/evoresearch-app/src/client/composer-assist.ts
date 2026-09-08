@@ -1,13 +1,16 @@
 /**
  * 输入辅助（移植规范 §23.2–23.5）：
  * - 斜杠命令候选（/）：目录从后端 dsh-commands 注册表动态读取；
- * - @文件 补全：按当前 workspace 递归文件树模糊搜索（§27.1 上限）；
- * - 输入历史：按 workspace 保存最近 200 条，输入时按内容匹配候选，空输入或普通输入均可用上下键浏览；
- * - 候选弹层：listbox/option 语义（Tab 应用、Esc 关闭；未实现 aria-activedescendant，选项自带语义）。
+ * - @引用：使用 DSH 官方 grammar，候选由 file/session reference Remote 提供；
+ * - 输入历史：按 workspace 保存最近 200 条；
+ * - 候选弹层：listbox/option 语义（Tab 应用、Esc 关闭）。
  */
-import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
+import { jsx, jsxs } from 'react/jsx-runtime'
 import { useEffect, useRef, useState } from 'react'
-import { Folder, FileText, Command } from 'lucide-react'
+import { Folder, FileText, Command, MessagesSquare } from 'lucide-react'
+import { activeAtToken, formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
+import type { FileReferenceCandidate } from '@deepseek-ai/dsh-file-reference/types'
+import type { SessionReferenceMentionCandidate } from '@deepseek-ai/dsh-session-reference/types'
 import { t } from './i18n'
 import { clientStateGet, clientStateSet } from './client-state'
 
@@ -15,7 +18,7 @@ export interface Candidate {
   key: string
   title: string
   subtitle?: string
-  kind: 'command' | 'file' | 'history'
+  kind: 'command' | 'file' | 'folder' | 'session' | 'history'
   insert: string
 }
 
@@ -27,6 +30,20 @@ export interface Trigger {
   query: string
   /** 替换起点：从该下标到光标之间的文本将被候选替换。 */
   start: number
+  /** @ token 是否由引号形式开启。 */
+  quoted?: boolean
+  /** 当前完整触发 token；编辑器适配层以此校验局部替换范围。 */
+  prefix?: string
+}
+
+export interface ReferenceCandidates {
+  files: FileReferenceCandidate[]
+  sessions: SessionReferenceMentionCandidate[]
+}
+
+export interface CandidateReplacement {
+  value: string
+  cursor: number
 }
 
 /** 发送给模型或渲染为用户消息前，去除输入两端的 Unicode 空白。 */
@@ -36,20 +53,28 @@ export function trimPromptEdges(value: string): string {
 
 /** 分析输入与光标位置，得出当前激活的候选触发（无触发返回 null）。 */
 export function detectTrigger(input: string, cursor: number): Trigger {
-  const before = input.slice(0, cursor)
-  // 行首斜杠命令：/name（光标前同词无空格）
+  const safeCursor = Math.max(0, Math.min(cursor, input.length))
+  const before = input.slice(0, safeCursor)
   const lineStart = before.lastIndexOf('\n') + 1
-  if (before[lineStart] === '/') {
-    const word = before.slice(lineStart + 1)
-    if (!/[\s/]/.test(word)) return { kind: 'command', query: word.toLowerCase(), start: lineStart }
+  const line = input.slice(lineStart, safeCursor)
+
+  if (line[0] === '/') {
+    const word = line.slice(1)
+    if (!/[\s/]/.test(word)) return { kind: 'command', query: word.toLowerCase(), start: lineStart, prefix: `/${word}` }
   }
-  // @文件：光标前最近一个 @，其后无空白
-  const at = before.lastIndexOf('@')
-  if (at !== -1 && at >= lineStart) {
-    const word = before.slice(at + 1)
-    if (!/[\s@]/.test(word)) return { kind: 'mention', query: word.toLowerCase(), start: at }
+
+  const token = activeAtToken(line, line.length)
+  if (token !== undefined) {
+    return {
+      kind: 'mention',
+      query: token.query,
+      start: safeCursor - token.prefix.length,
+      quoted: token.quoted,
+      prefix: token.prefix,
+    }
   }
-  // 普通文本：按已输入内容匹配历史记录。候选弹层会明确说明其来源与 Tab 操作。
+
+  // 保留普通文本按内容匹配历史记录的既有行为。
   if (input.trim() !== '') return { kind: 'history', query: before.toLowerCase(), start: 0 }
   return null
 }
@@ -81,14 +106,8 @@ export function pushHistory(cwd: string | null, text: string): void {
 }
 
 interface CommandEntry { name: string; description: string; hint?: string }
-interface FileEntry { path: string; isDir: boolean }
 
-/**
- * 平台命令静态补充（§23.3）。仅收录宿主 commands 注册表【不】包含、但
- * DSH 命令管线真实支持的两条；其余此前镜像的 help/model/threads/... 等
- * 宿主并不存在，选中后会把字面文本发给模型（幽灵命令），已移除。
- * 项目/记忆/定时任务等 6 条由后端注册表动态返回，无需在此重复。
- */
+/** 平台命令静态补充；其余命令由后端注册表动态返回。 */
 const PLATFORM_COMMANDS: CommandEntry[] = [
   { name: 'compact', description: 'Generate a summary projection of earlier active context (keeps history)', _i18nKey: 'cmdCompactDesc' },
   { name: 'plan', description: 'Enter plan mode', _i18nKey: 'cmdPlanDesc' },
@@ -115,28 +134,62 @@ export function useCommandCatalog(): CommandEntry[] {
   return catalog
 }
 
-/** 工作区递归文件树（按 root 缓存一次；§27.1 上限 2000/深度 12）。 */
-const TREE_CACHE = new Map<string, FileEntry[]>()
-export function useFileTree(cwd: string | null): FileEntry[] {
-  const [tree, setTree] = useState<FileEntry[]>([])
-  useEffect(() => {
-    if (cwd === null) { setTree([]); return }
-    const cached = TREE_CACHE.get(cwd)
-    if (cached !== undefined) { setTree(cached); return }
-    let cancelled = false
-    void fetch('/evoresearch/fs/list-tree', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ root: cwd }),
-    }).then((res) => res.json()).then((json) => {
-      if (cancelled) return
-      const entries: FileEntry[] = json.ok ? (json.value?.entries ?? []) : []
-      TREE_CACHE.set(cwd, entries)
-      setTree(entries)
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [cwd])
-  return tree
+function basename(path: string): string {
+  const parts = path.split(/[\\/]/)
+  return parts[parts.length - 1] || path
+}
+
+function parentPath(path: string): string {
+  const normalized = path.replace(/\\/g, '/')
+  const slash = normalized.lastIndexOf('/')
+  return slash > 0 ? normalized.slice(0, slash) : ''
+}
+
+// 弹层展示上限：官方 Remote 单次最多返回 20 个文件候选和 50 个会话候选，
+// 全量渲染既超出弹层可用高度，也远超一次补全的浏览需求。
+const MAX_FILE_CANDIDATES = 8
+const MAX_SESSION_CANDIDATES = 6
+
+/** 把官方 file/session discovery 结果映射为 EvoResearch 现有弹层的数据。 */
+export function buildReferenceCandidates(trigger: Trigger, source: ReferenceCandidates): Candidate[] {
+  if (trigger.kind !== 'mention') return []
+  const files: Candidate[] = source.files.flatMap((entry) => {
+    const insert = formatFileMention(entry, trigger.quoted === true)
+    if (insert === undefined) return []
+    const parent = parentPath(entry.path)
+    const folder = entry.kind === 'directory'
+    return [{
+      key: `file:${entry.kind}:${entry.path}`,
+      title: basename(entry.path),
+      subtitle: folder
+        ? [parent, t('folder')].filter(Boolean).join(' · ')
+        : parent || undefined,
+      kind: folder ? 'folder' : 'file',
+      insert,
+    }]
+  })
+  // 引号形式是官方约定的「只搜文件」模式，会话候选不参与。
+  if (trigger.quoted === true) return files.slice(0, MAX_FILE_CANDIDATES)
+  const sessions: Candidate[] = source.sessions.map((entry) => ({
+    key: `session:${entry.sessionId}`,
+    title: entry.label,
+    subtitle: entry.sameWorkspace
+      ? t('sameWorkspace')
+      : [t('otherWorkspace'), entry.cwd].filter(Boolean).join(' · '),
+    kind: 'session',
+    insert: entry.mention,
+  }))
+  return [...files.slice(0, MAX_FILE_CANDIDATES), ...sessions.slice(0, MAX_SESSION_CANDIDATES)]
+}
+
+/** 用触发区间替换纯文本草稿；目录 mention 以尾部 / 结束并继续保持补全。 */
+export function replaceTriggerText(input: string, cursor: number, trigger: Trigger | null, insert: string): CandidateReplacement {
+  const safeCursor = Math.max(0, Math.min(cursor, input.length))
+  if (trigger === null || (trigger.kind !== 'mention' && trigger.kind !== 'command')) {
+    return { value: insert, cursor: insert.length }
+  }
+  const value = input.slice(0, trigger.start) + insert + input.slice(safeCursor)
+  return { value, cursor: trigger.start + insert.length }
 }
 
 /** 候选弹层（listbox/option 语义，Tab 应用、Esc 关闭）。 */
@@ -179,101 +232,59 @@ export function CandidatePopup({
           jsx('span', { className: 'evo-cand-hint', children: hint }),
         ],
       }),
-      candidates.map((c, index) => {
-        const Icon = c.kind === 'command' ? Command : c.kind === 'file' ? (c.subtitle === 'folder' ? Folder : FileText) : FileText
+      candidates.map((candidate, index) => {
+        const Icon = candidate.kind === 'command'
+          ? Command
+          : candidate.kind === 'folder'
+            ? Folder
+            : candidate.kind === 'session'
+              ? MessagesSquare
+              : FileText
         return jsxs('div', {
           className: 'evo-cand-item',
           'data-index': index,
           'data-active': index === active || undefined,
+          'data-kind': candidate.kind,
           role: 'option',
           'aria-selected': index === active || undefined,
           id: `evo-cand-${index}`,
           onPointerEnter: () => onActive(index),
-          onPointerDown: (e: { preventDefault(): void }) => { e.preventDefault(); onApply(c) },
+          onPointerDown: (event: { preventDefault(): void }) => { event.preventDefault(); onApply(candidate) },
           children: [
             jsx(Icon, {}),
             jsxs('div', {
               className: 'evo-cand-text',
               children: [
-                jsx('div', { className: 'evo-cand-title', children: c.title }),
-                c.subtitle !== undefined && c.subtitle !== '' && jsx('div', { className: 'evo-cand-sub', children: c.subtitle }),
+                jsx('div', { className: 'evo-cand-title', children: candidate.title }),
+                candidate.subtitle !== undefined && candidate.subtitle !== '' && jsx('div', { className: 'evo-cand-sub', children: candidate.subtitle }),
               ],
             }),
           ],
-        }, c.key)
+        }, candidate.key)
       }),
     ],
   })
 }
 
-/** 组装各触发源的候选列表（纯函数，便于测试）。 */
-export function buildCandidates(trigger: Trigger, catalog: CommandEntry[], tree: FileEntry[], history: string[]): Candidate[] {
-  if (trigger === null) return []
+/** 组装命令和历史候选；@引用由异步官方 Remote 结果单独组装。 */
+export function buildCandidates(trigger: Trigger, catalog: CommandEntry[], history: string[]): Candidate[] {
   if (trigger.kind === 'command') {
     return matchQuery(
-      catalog.map((c) => ({ key: `cmd:${c.name}`, title: `/${c.name}`, subtitle: c.hint != null && c.hint !== '' ? c.hint : c.description, kind: 'command' as const, insert: `/${c.name}` })),
+      catalog.map((command) => ({
+        key: `cmd:${command.name}`,
+        title: `/${command.name}`,
+        subtitle: command.hint != null && command.hint !== '' ? command.hint : command.description,
+        kind: 'command' as const,
+        insert: `/${command.name}`,
+      })),
       trigger.query,
     )
   }
-  if (trigger.kind === 'mention') {
-    const items: Candidate[] = tree.map((entry) => ({
-      key: entry.path,
-      title: entry.path,
-      subtitle: entry.isDir ? t('folder') : undefined,
-      kind: 'file' as const,
-      insert: `@${entry.path}`,
-    }))
-    const q = trigger.query.trim().toLowerCase()
-    // 排序：基名前缀 > 基名包含 > 全路径包含；无查询时保持树顺序
-    const scored = items
-      .map((item) => {
-        const base = (item.title.split(/[\\/]/).pop() ?? item.title).toLowerCase()
-        let score = 3
-        if (q === '') score = 0
-        else if (base.startsWith(q)) score = 0
-        else if (base.includes(q)) score = 1
-        else if (item.title.toLowerCase().includes(q)) score = 2
-        return { item, score }
-      })
-      .filter((x) => x.score < 3)
-      .sort((a, b) => a.score - b.score || a.item.title.localeCompare(b.item.title))
-    return scored.slice(0, 8).map((x) => x.item)
+  if (trigger.kind === 'history' && trigger.query !== '') {
+    return matchQuery(
+      history.map((text) => ({ key: `hist:${text}`, title: text, kind: 'history' as const, insert: text })),
+      trigger.query,
+    )
   }
-  // 保留历史候选的组装能力，实际触发由显式历史入口决定。
-  if (trigger.query === '') return []
-  return matchQuery(
-    history.map((text) => ({ key: `hist:${text}`, title: text, kind: 'history' as const, insert: text })),
-    trigger.query,
-  )
-}
-
-/** 发送前解析 @引用（§23.4）：小型文本文件注入内容，其余保留路径。 */
-export async function resolveMentions(text: string, cwd: string | null): Promise<string> {
-  if (!text.includes('@') || cwd === null) return text
-  const tokens = text.match(/@(\S+)/g) ?? []
-  if (tokens.length === 0) return text
-  const MAX_INLINE_BYTES = 16 * 1024
-  const resolved = await Promise.all(tokens.map(async (token) => {
-    const ref = token.slice(1)
-    const path = ref.startsWith('/') || /^[A-Za-z]:[\\/]/.test(ref) ? ref : `${cwd}/${ref}`
-    try {
-      const res = await fetch('/evoresearch/fs/read', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-      const json = await res.json()
-      if (!json.ok) return null
-      const content: string = json.value?.text ?? ''
-      if (content.length > MAX_INLINE_BYTES) return null
-      return { token, block: `[@${ref}]\n\`\`\`\n${content}\n\`\`\`` }
-    } catch {
-      return null
-    }
-  }))
-  let out = text
-  for (const item of resolved) {
-    if (item !== null) out = out.replace(item.token, item.block)
-  }
-  return out
+  return []
 }

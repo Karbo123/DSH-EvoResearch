@@ -228,10 +228,21 @@ function userTextOf(data) {
   return ''
 }
 
+/**
+ * Only direct user-authored messages belong in the right-hand chat bubble.
+ * Old persisted logs may not carry source metadata; those remain compatible.
+ * Host-injected recall/context messages (notably session-reference) stay in the
+ * durable log for the model and audit trail, but are not presented as “me”.
+ */
+export function isVisibleUserMessage(data) {
+  const source = data?.source
+  return source === undefined || source === null || source.kind === 'user'
+}
+
 const messageDefinition = {
   kind: 'input-message',
   target: 'chat',
-  match: (event) => (event.type === 'user/message' && isAppendSurfaceEvent(event) ? { id: String(event.seq), role: 'start' } : null),
+  match: (event) => (event.type === 'user/message' && isAppendSurfaceEvent(event) && isVisibleUserMessage(event.data) ? { id: String(event.seq), role: 'start' } : null),
   start: (_context, match) => ({
     kind: 'user',
     seq: match.event.seq,

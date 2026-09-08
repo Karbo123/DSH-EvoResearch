@@ -114,6 +114,15 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
+    # 官方引用基础设施（0.1.3）：文件候选由 Agent cwd 绑定的本地索引提供，
+    # 会话引用由 Host 在 agent/pre-step 生成有界、可审计的跨会话快照。
+    # 自绘 Milkdown 只消费这些 Host Remote，不加载官方 UI input-trigger，避免双轨。
+    - id: session-reference
+      name: '@deepseek-ai/dsh-session-reference'
+
+    - id: file-reference-local
+      name: '@deepseek-ai/dsh-file-reference-local'
+
     # turnOutline 投影（0.1.3 新功能）：全量回合目录（turn/seq/prompt/response），
     # 事件窗口分页加载时轨迹面板仍可见全部回合；projection registry 缺席时本行
     # 静默不注册（官方 chat turn rail 同款消费语义）。

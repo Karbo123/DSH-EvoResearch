@@ -45,11 +45,17 @@ import { LibraryPanel } from './library-panel'
 import { TrajectoryPanel } from './trajectory'
 import { ChatGraphPanel } from './chatgraph'
 import { WorkspaceTabPicker } from './tab-files'
+import { queryReferenceCandidates, type ReferenceRemote } from './reference-bridge'
 
 // 0.1.3：sessions 由 api-session-controller client 提供；workspaces 由
 // api-workspace-controller client 提供；uiConversation（会话注册表）由
 // ui-conversation 提供（旧 conversationEvents/conversationViews 的后继）。
-const inject = ['slots', 'sessions', 'workspaces', 'uiConversation', 'connection']
+// Remote namespaces come from the generated api-remotes contributions; the
+// reference UI below uses them without loading the official input-trigger UI.
+const inject = [
+  'slots', 'sessions', 'workspaces', 'uiConversation', 'connection',
+  'remote', 'remote.fileReferences', 'remote.sessionReferenceResolver',
+]
 
 /** 桌面模式（无边框窗口 + 自绘标题栏）：由 Tauri 壳以 ?desktop=1 加载。 */
 function isDesktop(): boolean {
@@ -70,6 +76,9 @@ let sessionsService: {
 
 // 0.1.3：会话装配服务（events/views 注册表 + 每会话快照绑定）。
 let uiConversationService: { binding(id: string): { snapshot: any; target(t: string): any } | undefined } | null = null
+
+/** Official file/session reference Remote exposed by generated api-remotes. */
+let referenceRemoteService: ReferenceRemote | null = null
 
 let workspacesService: {
   create(input: { path: string }): Promise<any>
@@ -2090,6 +2099,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         sessionId: current ?? null,
                         session: sessionObj,
                         cwd: cwdNow,
+                        referenceSearch: (query, signal, allowSessions) => queryReferenceCandidates(referenceRemoteService, current ?? null, query, signal, allowSessions),
                         jobs: currentJobs,
                         onOpenThread: jumpToSession,
                         onBranchFromMessage: branchFromMessage,
@@ -2199,8 +2209,9 @@ function apply(ctx: any) {
     sessionsService = ctx.sessions ?? null
     workspacesService = ctx.workspaces ?? null
     uiConversationService = ctx.uiConversation ?? null
+    referenceRemoteService = ctx.remote ?? ctx.get('remote') ?? null
     // 调试钩子：浏览器控制台可访问会话服务（开发诊断用）
-    ;(window as any).__evoresearch = { sessions: sessionsService, uiConversation: uiConversationService }
+    ;(window as any).__evoresearch = { sessions: sessionsService, uiConversation: uiConversationService, references: referenceRemoteService }
     // 事件源 resolver：session face → 绑定 eventSource（0.1.3 数据路径）。
     setEventSourceResolver((session) => {
       const id = session?.sessionId ?? session?.id
@@ -2246,6 +2257,7 @@ function apply(ctx: any) {
       connectionSource = null
       sessionsService = null
       uiConversationService = null
+      referenceRemoteService = null
       workspacesService = null
       document.removeEventListener('contextmenu', suppressNativeContextMenu, true)
     }

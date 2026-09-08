@@ -625,9 +625,11 @@ const DICT: Record<string, [string, string]> = {
   collapseResult: ['Collapse result', '收起结果'],
   expandResult: ['Expand result', '展开结果'],
   commands: ['Commands', '命令'],
-  fileMentions: ['File mentions', '文件提及'],
+  referenceMentions: ['Files and conversations', '文件与会话'],
+  sameWorkspace: ['Current workspace', '当前工作区'],
+  otherWorkspace: ['Other workspace', '其他工作区'],
   historyInput: ['Input history', '历史输入'],
-  candidateKeyboardHint: ['↑↓ choose · Tab complete · Esc close', '↑↓ 选择 · Tab 补全 · Esc 关闭'],
+  candidateKeyboardHint: ['↑↓ choose · Tab/Enter complete · Esc close', '↑↓ 选择 · Tab/Enter 补全 · Esc 关闭'],
   backgroundJobs: ['Background jobs', '后台任务'],
   notificationsOn: ['Notifications on', '通知已开启'],
   userOnly: ['My messages only（hide AI replies）', '仅我的消息（隐藏 AI 回复）'],
@@ -1090,7 +1092,7 @@ const DICT: Record<string, [string, string]> = {
   addFailed: ['Add failed', '添加失败'],
   assignSavedPartialFail: ['Assignment saved, but writing reasoning effort back to the provider failed: {ids}', '分配已保存，但推理强度写回 Provider 失败：{ids}'],
   attachAdded: ['Added {n} attachment(s)', '已添加 {n} 个附件'],
-  attachImagesOnly: ['Only image attachments are supported (text files can be inlined with @ mentions)', '仅支持图片附件（文本文件可用 @ 引用注入内容）'],
+  attachImagesOnly: ['Only image attachments are supported (use @ to reference workspace files)', '仅支持图片附件（工作区文件请使用 @ 引用）'],
   attachMaxCount: ['At most {n} attachments per message', '一次最多 {n} 个附件'],
   attachOversized: ['{name} exceeds the 5MB limit', '{name} 超过 5MB 限制'],
   bgJobsCount: ['Background jobs ({n})', '后台任务（{n}）'],
@@ -1381,9 +1383,6 @@ const DICT: Record<string, [string, string]> = {
   catGeneral: ['General', '通用'],
   // P0-2 工具结果图片
   imageLoadRetry: ['Load failed · click to retry', '加载失败·点击重试'],
-  // P0-1 会话引用
-  mentionSession: ['Sessions', '会话'],
-  sessionMentionHint: ['Reference a past conversation', '引用一段过去的对话'],
   // P0-4 上下文占用条
   ctxUsageLabel: ['Context', '上下文'],
   ctxUsageDetail: ['About {used} / {total} tokens ({percent}%)', '约 {used} / {total} tokens（{percent}%）'],

@@ -31,13 +31,14 @@ import { OpenInMenu } from './open-in'
 import { useHitlWaits } from './hitl'
 import { clientStateDelete, clientStateGet, clientStateSet } from './client-state'
 import { toast } from './toast'
+import { isCurrentReferenceRequest } from './reference-bridge'
 import { SessionStatusLine } from './session-dock'
 import { ComposerModelInfo, StatusBar } from './statusbar'
 import { renderMarkdown, renderMermaidBlocks } from './markdown'
 import {
-  CandidatePopup, buildCandidates, detectTrigger, pushHistory, readHistory,
-  resolveMentions, trimPromptEdges, useCommandCatalog, useFileTree,
-  type Trigger, type TriggerKind, type Candidate,
+  CandidatePopup, buildCandidates, buildReferenceCandidates, detectTrigger, pushHistory, readHistory,
+  replaceTriggerText, trimPromptEdges, useCommandCatalog,
+  type Trigger, type TriggerKind, type Candidate, type ReferenceCandidates,
 } from './composer-assist'
 import { CurrentDialog, SearchDialog, ShortcutsDialog, ConfirmDialog } from './session-actions'
 import { ShieldCheck as ShieldCheckIcon, ShieldX } from 'lucide-react'
@@ -154,8 +155,10 @@ export interface ChatAreaProps {
   sessionId: string | null
   /** 会话对象（投影/排队数据；无会话时为 null）。 */
   session: any | null
-  /** 当前 workspace（@文件 补全与输入历史的根目录；无会话时为 null）。 */
+  /** 当前 workspace（官方 @引用与输入历史的根目录；无会话时为 null）。 */
   cwd: string | null
+  /** DSH 官方 file/session reference discovery。 */
+  referenceSearch: (query: string, signal?: AbortSignal, allowSessions?: boolean) => Promise<ReferenceCandidates>
   /** 当前会话的后台任务（§21.6，jobsBySession 快照）。 */
   jobs: Array<{ id: string; kind: string; label: string; status: string; detail?: string; startedAt?: number; finishedAt?: number }>
 
@@ -674,7 +677,7 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
   })
 }
 
-export function ChatArea({ nodes, partial, running, pendingFirst, error, currentTitle, sessionId, session, cwd, jobs, onOpenThread, onBranchFromMessage, onOpenProjectFile, onSend }: ChatAreaProps) {
+export function ChatArea({ nodes, partial, running, pendingFirst, error, currentTitle, sessionId, session, cwd, referenceSearch, jobs, onOpenThread, onBranchFromMessage, onOpenProjectFile, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   // ── 会话权限（§25.x）：跟随当前会话，不是全局设置；在输入框工具行切换 ──
   const [permPreset, setPermPreset] = useState<string | null>(null)
@@ -1056,9 +1059,9 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
     runRewindOp('/evoresearch/fs/rewind-execute', { sessionId, beforeSeq: seq })
   }
 
-  // ── 输入辅助（§23.2–23.5）：斜杠命令 / @文件 / 输入历史 ──
+  // ── 输入辅助（§23.2–23.5）：斜杠命令 / 官方 @文件与@会话 / 输入历史 ──
   const commandCatalog = useCommandCatalog()
-  const fileTree = useFileTree(cwd)
+  const [referenceCandidates, setReferenceCandidates] = useState<ReferenceCandidates>({ files: [], sessions: [] })
   const [history, setHistory] = useState<string[]>(() => readHistory(cwd))
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [trigger, setTrigger] = useState<Trigger | null>(null)
@@ -1075,39 +1078,111 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
     historyNavigationRef.current = false
     suppressCandidateTriggerRef.current = false
     setHistoryIndex(-1)
+    setReferenceCandidates({ files: [], sessions: [] })
   }, [cwd])
 
-  const candidates = trigger === null ? [] : buildCandidates(trigger, commandCatalog, fileTree, history)
+  const mentionQueryRef = useRef<AbortController | null>(null)
+  const mentionGenerationRef = useRef(0)
+  const referenceSearchRef = useRef(referenceSearch)
+  referenceSearchRef.current = referenceSearch
+  useEffect(() => {
+    mentionQueryRef.current?.abort()
+    mentionQueryRef.current = null
+    const currentTrigger = trigger
+    if (currentTrigger?.kind !== 'mention' || sessionId === null) {
+      setReferenceCandidates({ files: [], sessions: [] })
+      return
+    }
+    const controller = new AbortController()
+    mentionQueryRef.current = controller
+    const generation = ++mentionGenerationRef.current
+    // 引号形式（@"…"）只查文件；会话引用与官方 input-trigger 语义一致地跳过。
+    void referenceSearchRef.current(currentTrigger.query, controller.signal, currentTrigger.quoted !== true).then((result) => {
+      if (!isCurrentReferenceRequest(generation, mentionGenerationRef.current, controller.signal)) return
+      setReferenceCandidates(result)
+    }).catch(() => {
+      if (isCurrentReferenceRequest(generation, mentionGenerationRef.current, controller.signal)) setReferenceCandidates({ files: [], sessions: [] })
+    })
+    return () => controller.abort()
+  }, [trigger?.kind, trigger?.query, trigger?.quoted, sessionId])
+
+  // 触发点变化（换查询/换类型/挪动光标）时回到第一项；键盘导航只改 activeIndex，不会重跑本副作用。
+  useEffect(() => { setActiveIndex(0) }, [trigger?.kind, trigger?.start, trigger?.query])
+
+  const candidates = trigger === null
+    ? []
+    : trigger.kind === 'mention'
+      ? buildReferenceCandidates(trigger, referenceCandidates)
+      : buildCandidates(trigger, commandCatalog, history)
   candidatesRef.current = candidates
   activeIndexRef.current = activeIndex
   triggerKindRef.current = trigger?.kind ?? null
   historyRef.current = history
   inputRef.current = input
 
-  const refreshTrigger = (value: string, pos: number) => {
-    const next = detectTrigger(value, pos)
-    setTrigger(next)
-    setActiveIndex(0)
-  }
-
-  const applyCandidate = (c: Candidate) => {
-    const current = composerMarkdownRef.current || input
-    const pos = current.length
-    const t = detectTrigger(current, pos)
-    let next: string
-    if (t !== null && (t.kind === 'mention' || t.kind === 'command')) {
-      next = current.slice(0, t.start) + c.insert + current.slice(pos)
-    } else {
-      next = c.insert
-    }
+  const applyCandidate = (candidate: Candidate) => {
     historyNavigationRef.current = false
-    suppressCandidateTriggerRef.current = true
     historyIndexRef.current = -1
     historyDraftRef.current = null
-    setComposerMarkdown(next, true)
-    setTrigger(null)
     setHistoryIndex(-1)
-    requestAnimationFrame(() => moveCursorToEnd())
+
+    if (candidate.kind === 'history') {
+      suppressCandidateTriggerRef.current = true
+      setComposerMarkdown(candidate.insert, true)
+      setTrigger(null)
+      return
+    }
+
+    if (markdownPlainText) {
+      const current = composerMarkdownRef.current
+      const pos = composerPlainTextRef.current?.selectionStart ?? current.length
+      const currentTrigger = detectTrigger(current, pos)
+      const replacement = replaceTriggerText(current, pos, currentTrigger, candidate.insert)
+      // 目录候选以「@dir/」结尾，保持补全打开并立即按新位置重算触发。
+      setComposerMarkdown(replacement.value, false, false)
+      setTrigger(candidate.kind === 'folder' ? detectTrigger(replacement.value, replacement.cursor) : null)
+      requestAnimationFrame(() => {
+        const textarea = composerPlainTextRef.current
+        if (textarea !== null) {
+          textarea.focus()
+          textarea.setSelectionRange(replacement.cursor, replacement.cursor)
+        }
+      })
+      return
+    }
+
+    composerEditorRef.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      if (!view.state.selection.empty) return
+      const { $from } = view.state.selection
+      // 光标所在段落内、光标前的文本：官方 grammar 以它判定触发 token，
+      // 替换也只发生在这个段落的真实光标位置，绝不改写文档其他部分。
+      const before = $from.parent.textBetween(0, $from.parentOffset, '\n', '\n')
+      const currentTrigger = detectTrigger(before, before.length)
+      if (currentTrigger === null || (currentTrigger.kind !== 'mention' && currentTrigger.kind !== 'command')) return
+      // canonical 会话 mention 经 parser 变成真正的链接内联节点，序列化时
+      // 原样还原为 @[label](dsh-session:…)；普通文件 mention 则是纯文本。
+      const parsed = ctx.get(parserCtx)(candidate.insert)
+      const inline = parsed.firstChild?.content
+      if (inline === undefined) return
+      const from = $from.pos - (currentTrigger.prefix?.length ?? 0)
+      try {
+        const tr = view.state.tr.replaceWith(from, $from.pos, inline)
+        const cursor = Math.min(from + inline.size, tr.doc.content.size)
+        tr.setSelection(TextSelection.near(tr.doc.resolve(cursor)))
+        view.dispatch(tr)
+      } catch {
+        // 代码块等不接受链接 mark 的上下文无法承载 canonical mention：
+        // 拒绝这次应用比改写错误位置安全，弹层随下一次输入重新评估。
+        suppressCandidateTriggerRef.current = true
+        setTrigger(null)
+        return
+      }
+      view.focus()
+      // 目录候选保持补全打开（markdownUpdated 会按新 token 重算触发）。
+      suppressCandidateTriggerRef.current = candidate.kind === 'folder' ? false : true
+      if (candidate.kind !== 'folder') setTrigger(null)
+    })
   }
   applyCandidateRef.current = applyCandidate
 
@@ -1310,8 +1385,9 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
       }
       // 命令带附件但 executor 拒绝 → 降级为普通消息（附件随消息走）
     }
-    // @引用解析（§23.4）：小型文本文件注入内容，其余保留路径
-    const resolved = trimPromptEdges(await resolveMentions(text, cwd))
+    // @引用采用 DSH 官方 path-only 语义：Host 会话的 file-reference
+    // prompt 指引模型按需调用 read；不在浏览器侧重复读取并内联文件正文。
+    const resolved = trimPromptEdges(text)
     // 忙时也允许发送：消息进入 append-only 队列（§23.6），由 host 顺序消费
     const images = pendingImages
       .filter((img) => img.dataUrl !== '')
@@ -1346,8 +1422,19 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
     if (host === null) return
     let disposed = false
     let keyCleanup: (() => void) | null = null
-    // 捕获阶段监听：空行回车退出代码块（需在 ProseMirror 处理 Enter 之前拦截）。
+    // 捕获阶段监听：① 候选弹层按键（必须在 ProseMirror 之前消费——它的默认
+    // Enter 分段/方向键移动会先改文档或光标，让弹层与触发 token 脱节）；
+    // ② 空行回车退出代码块。
     const onKeydownCapture = (event: KeyboardEvent) => {
+      if (!event.isComposing) {
+        const popupCandidates = candidatesRef.current
+        if (popupCandidates.length > 0) {
+          if (event.key === 'ArrowDown') { event.preventDefault(); event.stopImmediatePropagation(); setActiveIndex((index) => (index + 1) % popupCandidates.length); return }
+          if (event.key === 'ArrowUp') { event.preventDefault(); event.stopImmediatePropagation(); setActiveIndex((index) => (index - 1 + popupCandidates.length) % popupCandidates.length); return }
+          if (event.key === 'Tab' || event.key === 'Enter') { event.preventDefault(); event.stopImmediatePropagation(); applyCandidateRef.current(popupCandidates[activeIndexRef.current] ?? popupCandidates[0]!); return }
+          if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); setTrigger(null); return }
+        }
+      }
       if (event.isComposing || event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
       const instance = composerEditorRef.current
       if (instance === null) return
@@ -1374,20 +1461,14 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
         historyDraftRef.current = null
         setHistoryIndex(-1)
       }
+      // 有候选弹层时方向键已在捕获阶段被消费；这里只剩空输入浏览历史等场景。
       const historyNavigation = triggerKindRef.current === 'history'
-        || currentCandidates.some((candidate) => candidate.kind === 'history')
         || suppressCandidateTriggerRef.current
         || inputRef.current === ''
       if (historyNavigation && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
         event.preventDefault()
         browseHistory(event.key === 'ArrowUp' ? -1 : 1)
         return
-      }
-      if (currentCandidates.length > 0) {
-        if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((index) => (index + 1) % currentCandidates.length); return }
-        if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((index) => (index - 1 + currentCandidates.length) % currentCandidates.length); return }
-        if (event.key === 'Tab') { event.preventDefault(); applyCandidateRef.current(currentCandidates[activeIndexRef.current] ?? currentCandidates[0]!); return }
-        if (event.key === 'Escape') { event.preventDefault(); setTrigger(null); return }
       }
       if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault()
@@ -1404,7 +1485,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
         ctx.set(rootCtx, host)
         ctx.set(defaultValueCtx, input)
         ctx.get(listenerCtx)
-          .markdownUpdated((_ctx, md) => {
+          .markdownUpdated((ctx, md) => {
             composerMarkdownRef.current = md
             setInput(md)
             inputRef.current = md
@@ -1413,7 +1494,21 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
               historyDraftRef.current = null
               setHistoryIndex(-1)
             }
-            if (!suppressCandidateTriggerRef.current) setTrigger(detectTrigger(md, md.length))
+            if (!suppressCandidateTriggerRef.current) {
+              try {
+                const selection = ctx.get(editorViewCtx).state.selection
+                const parent = selection.$from.parent
+                const line = parent.textBetween(0, selection.$from.parentOffset, '\n', '\n')
+                setTrigger(detectTrigger(line, line.length))
+              } catch {
+                // 编辑器视图尚未就绪的首个解析周期：下一次输入会重算触发。
+              }
+            }
+          })
+          .selectionUpdated((_ctx, selection) => {
+            const parent = selection.$from.parent
+            const line = parent.textBetween(0, selection.$from.parentOffset, '\n', '\n')
+            if (!suppressCandidateTriggerRef.current) setTrigger(detectTrigger(line, line.length))
           })
       })
       .use(commonmark)
@@ -1584,7 +1679,10 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
       historyDraftRef.current = null
       setHistoryIndex(-1)
     }
-    if (!suppressCandidateTriggerRef.current) setTrigger(detectTrigger(value, value.length))
+    // 纯文本模式没有 Milkdown 的 keydown 复位链：用户每次输入都无条件重算触发，
+    // 防止 WYSIWYG 里选完候选留下的 suppress 标记经模式切换泄漏后永久压住弹层。
+    suppressCandidateTriggerRef.current = false
+    setTrigger(detectTrigger(value, e.currentTarget.selectionStart))
   }
   const onComposerResizeStart = (e: { clientY: number; currentTarget: HTMLElement; pointerId: number; preventDefault(): void }) => {
     e.preventDefault()
@@ -2312,7 +2410,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
                 onActive: setActiveIndex,
                 onApply: applyCandidate,
                 onClose: () => setTrigger(null),
-                label: trigger?.kind === 'command' ? t('commands') : trigger?.kind === 'mention' ? t('fileMentions') : t('historyInput'),
+                label: trigger?.kind === 'command' ? t('commands') : trigger?.kind === 'mention' ? t('referenceMentions') : t('historyInput'),
                 hint: t('candidateKeyboardHint'),
               }),
               jsxs('div', {
