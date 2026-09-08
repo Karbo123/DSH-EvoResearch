@@ -480,12 +480,13 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
 interface WebSearchEngineUsage { query: string; engines: string[]; at: number }
 let engineUsageCache: { at: number; list: WebSearchEngineUsage[] } | undefined
 let engineUsagePromise: Promise<WebSearchEngineUsage[]> | undefined
-function recentEngineUsage(): Promise<WebSearchEngineUsage[]> {
-  if (engineUsageCache !== undefined && Date.now() - engineUsageCache.at < 30_000) return Promise.resolve(engineUsageCache.list)
+function recentEngineUsage(force = false): Promise<WebSearchEngineUsage[]> {
+  if (!force && engineUsageCache !== undefined && Date.now() - engineUsageCache.at < 30_000) return Promise.resolve(engineUsageCache.list)
   engineUsagePromise ??= fetch('/evoresearch/fs/web-search-recent-engines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
     .then((r) => r.json())
     .then((json) => {
-      const list = (json?.ok === true ? json.value?.list ?? [] : []) as WebSearchEngineUsage[]
+      // 信封 value 本身就是数组（writeOk 直接包 list），不是 { list }
+      const list = (json?.ok === true && Array.isArray(json.value) ? json.value : []) as WebSearchEngineUsage[]
       engineUsageCache = { at: Date.now(), list }
       return list
     })
@@ -500,13 +501,17 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onO
   const tools = assistantTools(node, toolResults)
   // web_search 卡片标注实际使用的引擎（按查询串匹配最近一次登记；旧消息无登记则不显示）
   const hasWebSearch = tools.some((tl) => tl.name === 'web_search')
+  // 已落地的 web_search 结果数：每落地一条强制刷新一次登记（登记在服务端执行搜索时写入）
+  const webSearchSettledCount = tools.filter((tl) => tl.name === 'web_search' && tl.result !== undefined).length
   const [engineUsage, setEngineUsage] = useState<WebSearchEngineUsage[]>([])
   useEffect(() => {
     if (!hasWebSearch) return
     let alive = true
-    void recentEngineUsage().then((list) => { if (alive) setEngineUsage(list) })
+    void recentEngineUsage(webSearchSettledCount > 0).then((list) => {
+      if (alive) setEngineUsage(list)
+    })
     return () => { alive = false }
-  }, [hasWebSearch])
+  }, [hasWebSearch, webSearchSettledCount])
   const enginesFor = (tool: { name: string; args: string }): string[] | undefined => {
     if (tool.name !== 'web_search' || engineUsage.length === 0) return undefined
     let queries: string[] = []
