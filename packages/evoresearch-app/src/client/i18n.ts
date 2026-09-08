@@ -430,7 +430,6 @@ const DICT: Record<string, [string, string]> = {
   webSearchBackendStop: ['Stop backend', '停止后端'],
   webSearchBackendStarted: ['Search backend is running', '搜索后端已启动'],
   webSearchBackendStopped: ['Search backend stopped', '搜索后端已停止'],
-  webSearchEngineUsed: ['Engines: ', '引擎：'],
   webSearchEngineUsedTitle: ['Search engines actually used by this search', '本次搜索实际使用的搜索引擎'],
   webSearchEngineProbe: ['Detect engines', '检测可用引擎'],
   webSearchEngineProbing: ['Probing engines…', '正在探测引擎…'],

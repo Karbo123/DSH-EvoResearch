@@ -638,8 +638,9 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-web-search-engine-chip { padding: 1px 9px; border-radius: 999px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; line-height: 1.5; }
 .evo-web-search-engine-ok { border: 1px solid color-mix(in srgb, var(--color-success) 45%, transparent); background: color-mix(in srgb, var(--color-success) 9%, transparent); color: var(--color-success); }
 .evo-web-search-engine-dead { border: 1px dashed var(--color-border); background: transparent; color: var(--color-text-tertiary); text-decoration: line-through; opacity: 0.7; }
-/* web_search 工具卡头部的引擎徽标（host 登记、UI 渲染，不污染结果文本） */
-.evo-tool-engine-chip { padding: 0 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: color-mix(in srgb, var(--brand) 7%, var(--color-surface)); color: var(--brand); font-size: 10px; line-height: 1.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46%; }
+/* web_search 工具卡头部的引擎徽标（host 登记、UI 渲染，不污染结果文本）：每个引擎一枚 chip */
+.evo-tool-engines { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.evo-tool-engine-chip { padding: 0 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: color-mix(in srgb, var(--brand) 7%, var(--color-surface)); color: var(--brand); font-size: 10px; line-height: 1.7; white-space: nowrap; }
 .evo-web-search-name { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
 .evo-web-search-key { min-width: 0; max-width: 560px; }
 .evo-web-search-setting .evo-panel-input { box-sizing: border-box; min-width: 0; max-width: 100%; }

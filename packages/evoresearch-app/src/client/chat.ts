@@ -363,7 +363,10 @@ function ToolCard({ tool, running, defaultExpanded }: { tool: { name: string; ar
               : jsx(CheckCircle2, {}),
           jsx('span', { className: 'evo-tool-name', children: tool.name }),
           // web_search 实际使用的引擎（host 登记，UI 徽标展示；不写入结果文本）
-          tool.engines !== undefined && tool.engines.length > 0 && jsx('span', { className: 'evo-tool-engine-chip', title: t('webSearchEngineUsedTitle'), children: `${t('webSearchEngineUsed')}${tool.engines.join('、')}` }),
+          tool.engines !== undefined && tool.engines.length > 0 && jsx('span', {
+            className: 'evo-tool-engines',
+            children: tool.engines.map((engine) => jsx('span', { className: 'evo-tool-engine-chip', title: t('webSearchEngineUsedTitle'), children: engine }, engine)),
+          }),
           jsx('span', { className: 'evo-tool-state', children: status }),
         ],
       }),
