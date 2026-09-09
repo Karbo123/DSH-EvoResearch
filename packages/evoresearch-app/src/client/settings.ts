@@ -422,7 +422,7 @@ function WebSearchSection() {
   const [active, setActive] = useState('none')
   const [apiKey, setApiKey] = useState('')
   const [query, setQuery] = useState('')
-  const [busy, setBusy] = useState<'load' | 'save' | 'test' | 'backend' | null>('load')
+  const [busy, setBusy] = useState<'load' | 'save' | 'test' | 'backend' | 'engines' | null>('load')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<{ count: number; sources: Array<{ title?: string; url: string }> } | null>(null)

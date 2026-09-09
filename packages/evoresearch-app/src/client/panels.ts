@@ -59,6 +59,9 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
   // History 时间线（§26.5）
   const [turns, setTurns] = useState<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }> | null>(null)
   const [turnOffset, setTurnOffset] = useState(0)
+  // 「加载更早」按钮的依据：上一次取回是否占满一页（满页才可能还有更早数据；
+  // turns 是累加数组，不能用 turns.length 判断，否则翻一页后按钮永久消失）
+  const [turnsHasMore, setTurnsHasMore] = useState(false)
   const TURN_PAGE = 30
   // Identity（§26.5）
   const [profile, setProfile] = useState<Array<{ name: string; text: string; bytes: number }> | null>(null)
@@ -79,6 +82,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
     void api<Array<{ turnId: string; sessionId: string; userText: string; categories: readonly string[]; status: string; createdAt: number }>>('memory-turns', { limit: TURN_PAGE, offset })
       .then((list) => {
         // 「加载更早」追加语义（与 research-notes 一致）：保留已加载轮次，按 turnId 去重
+        setTurnsHasMore(list.length === TURN_PAGE)
         setTurns((prev) => {
           if (offset === 0 || prev === null) return list
           const seen = new Set(prev.map((row) => row.turnId))
@@ -599,7 +603,7 @@ export function MemoryPanel({ onOpenThread }: { onOpenThread: (id: string) => vo
                           ],
                         }, turn.turnId)),
                       }),
-                (turns ?? []).length === TURN_PAGE && jsx('button', {
+                turnsHasMore && jsx('button', {
                   type: 'button',
                   className: 'evo-btn evo-btn-run',
                   onClick: () => loadTurns(turnOffset + TURN_PAGE),

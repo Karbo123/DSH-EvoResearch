@@ -78,7 +78,7 @@ import type { ApprovalPolicy, ApprovalDecision } from './platform/approval-polic
 import { decideApproval, defaultApprovalPolicy, validateApprovalPolicy } from './platform/approval-policy.js'
 import { unmarkUnattendedSession } from './platform/unattended-registry.js'
 import type { FallbackState, ModelRoute, SelectModelOptions } from './platform/models-selector.js'
-import { emptyFallbackState, routeKey, selectModel, recordFailure, recordSuccess } from './platform/models-selector.js'
+import { emptyFallbackState, selectModel, recordFailure, recordSuccess } from './platform/models-selector.js'
 import type { ToolDef } from './platform/tools-selector.js'
 import { selectToolsForTurn, BASE_TOOL_WHITELIST } from './platform/tools-selector.js'
 import type { SubagentRecord, SubagentCreateRequest, SubagentMode, SubagentOpResult } from './platform/subagents.js'
@@ -335,31 +335,6 @@ function sessionStoreRoot(): string {
   return path.join(resolveDshHomePath(), 'sessions')
 }
 
-/**
- * DSH 会话目录键：与 @deepseek-ai/dsh-session-persistence-jsonl 的 projectKey
- * 完全一致 —— 连续分隔符（/ \\ :）折叠为单个 `-`，不安全码元转义为 ~XXXX，
- * 去掉前导 `-` 并截断到 251 字符，最后以 `--` 包裹。
- */
-function sessionKeyOf(cwd: string): string {
-  if (cwd.length === 0) throw new Error('cannot encode an empty project path')
-  let readable = ''
-  let separatorRun = false
-  for (let i = 0; i < cwd.length; i += 1) {
-    const code = cwd.charCodeAt(i)
-    const ch = String.fromCharCode(code)
-    if (ch === '/' || ch === '\\' || ch === ':') {
-      if (!separatorRun) readable += '-'
-      separatorRun = true
-    } else if (ch !== '~' && /^[A-Za-z0-9._-]$/.test(ch)) {
-      readable += ch
-      separatorRun = false
-    } else {
-      readable += `~${code.toString(16).toUpperCase().padStart(4, '0')}`
-      separatorRun = false
-    }
-  }
-  return `--${(readable.replace(/^-+/, '') || 'root').slice(0, 251)}--`
-}
 
 /**
  * §29 会话元数据条目：置顶/标签色/归档 + URL 短别名 slug（§44 thread alias）。
@@ -2985,6 +2960,9 @@ export class EvoResearchApiService extends TypertRemoteService {
       const saved = this.services.chatGraph.save(name, next, graphRevBeforeFork)
       if (!saved.ok) {
         const reason = saved.conflict === true ? '图谱已被其他操作修改（版本冲突），请刷新图谱后重试继承' : (saved.error ?? '图谱保存失败')
+        // 子会话已创建但图谱未能落盘：当前无删除会话的宿主接口，孤儿只能留档。
+        // 记录 id 便于人工清理，也避免「重试再 fork 一个」时无人察觉累积。
+        console.warn(`[evoresearch] graphInherit: 图谱保存失败，已创建的子会话成为孤儿: ${finalId}（graph: ${name}）`)
         return { ok: false, error: reason }
       }
       return { ok: true, sessionId: finalId, replaced, notice, rev: this.services.chatGraph.rev(name) }

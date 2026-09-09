@@ -224,7 +224,7 @@ function FiguresTab({ onError }: { onError: (message: string) => void }) {
 
 // ── 工具 ────────────────────────────────────────────────────────────────────
 
-/** 简单 POST JSON 封装（与 research-notes.ts / panels.ts 同款）。 */
+/** 路径归一化（分隔符统一 /、去尾斜杠、小写），用于笔记/论文路径模糊匹配。 */
 function normForMatch(p: string): string {
   return p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
@@ -277,10 +277,14 @@ function PaperDetail({ project, paperId, initialPage, onBack, onChanged, onError
   const [saving, setSaving] = useState(false)
   const [busy, setBusy] = useState(false)
 
+  let loadSeq = 0
   const load = (withNotes = false) => {
+    const seq = ++loadSeq
     setBusy(true)
     void api<PaperSummary | null>('library-get', { project, paperId })
       .then((row) => {
+        // paperId 快速切换时丢弃迟到响应
+        if (seq !== loadSeq) return
         setBusy(false)
         if (row === null) {
           onError(t('paperNotFound').replace('{id}', paperId))

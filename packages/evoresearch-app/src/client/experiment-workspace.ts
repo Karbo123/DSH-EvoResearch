@@ -92,7 +92,7 @@ interface LogSlice {
   size: number
 }
 
-/** 简单 POST JSON 封装（与 experiments.ts / panels.ts 同款；兼容 { error } 载荷）。 */
+/** 时间格式化：本地时区 YYYY-MM-DD HH:mm。 */
 function fmtTime(ts: number): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ''

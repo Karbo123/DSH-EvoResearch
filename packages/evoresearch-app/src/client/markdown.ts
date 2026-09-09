@@ -117,7 +117,8 @@ function renderJsonBlock(lang: string, str: string): string | null {
   try { parsed = JSON.parse(str) } catch { return null }
   const ctx = { depth: 0 }
   const html = renderJsonValue(parsed, 0, ctx)
-  const bytes = str.length
+  // 阈值 JSON_COLLAPSE_BYTES 以 UTF-8 字节为语义；str.length 是 UTF-16 单元数，含 CJK 时偏小
+  const bytes = new TextEncoder().encode(str).length
   const large = bytes > JSON_COLLAPSE_BYTES || ctx.depth > JSON_COLLAPSE_DEPTH
   if (!large) {
     return `<pre class="evo-json"><code class="language-json">${html}</code></pre>`
@@ -196,7 +197,8 @@ function mathInlineRule(state: any, silent: boolean): boolean {
   const src = state.src
   const start = state.pos
   if (src[start] !== '$') return false
-  if (src[start + 1] === '$' || src[start + 1] === ' ' || src[start + 1] === '\n') return false
+  // `$$` 是 display math 分隔符，交由专门规则处理；空白/数字邻接由下方开闭符检查统一拒绝
+  if (src[start + 1] === '$') return false
   let pos = start + 1
   while (pos < state.posMax) {
     if (src[pos] === '\\') { pos += 2; continue }

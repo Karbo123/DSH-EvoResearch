@@ -843,7 +843,6 @@ export class ChatGraphService {
       try {
         if (globalReplaced) this.restoreBytes(gfile, oldGlobal)
         if (projectReplaced) this.restoreBytes(file, oldProject)
-        else if (globalReplaced && !projectReplaced) this.restoreBytes(gfile, oldGlobal)
       } catch (restoreError) {
         return { ok: false, error: `${error instanceof Error ? error.message : String(error)}（恢复失败：${restoreError instanceof Error ? restoreError.message : String(restoreError)}）` }
       } finally {

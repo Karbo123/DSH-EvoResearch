@@ -68,7 +68,7 @@ interface ExperimentSummaryRow {
   currentBranchId: string
 }
 
-/** 简单 POST JSON 封装（与 panels.ts 同款）。 */
+/** 时间格式化：本地时区 YYYY-MM-DD HH:mm。 */
 function fmtTime(ts: number): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ''
@@ -214,7 +214,12 @@ function ExperimentDetail({ row, workspaceDir, sessionId, onOpenSession, onReloa
     })
   }
 
+  // branches 可能是空数组（理论边界）：find 与 [0] 均为 undefined，下方渲染需兜底
+  // branches 为空数组属理论边界（服务端保证至少一条），仍兜底避免 TypeError
   const currentBranch = detail.branches.find((b) => b.id === detail.currentBranchId) ?? detail.branches[0]
+  if (currentBranch === undefined) {
+    return jsx('div', { className: 'evo-panel-hint', children: t('loading') })
+  }
   const togglePhase = (phaseId: string) => {
     setExpandedPhases((prev) => {
       const next = new Set(prev)

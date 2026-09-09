@@ -23,12 +23,11 @@ interface TrajStats {
   outTokens: number
   inTokens: number
   cacheRead: number
-  sampleSteps: number
 }
 
 /** 从事件日志统计轨迹指标（与轨迹面板同源）。 */
-export function computeStats(events: any[]): TrajStats {
-  const stats: TrajStats = { turns: 0, steps: 0, llmMs: 0, toolMs: 0, firstTokenAvgMs: 0, outTokens: 0, inTokens: 0, cacheRead: 0, sampleSteps: 0 }
+function computeStats(events: any[]): TrajStats {
+  const stats: TrajStats = { turns: 0, steps: 0, llmMs: 0, toolMs: 0, firstTokenAvgMs: 0, outTokens: 0, inTokens: 0, cacheRead: 0 }
   let stepStart: { turn: number; step: number; time: number } | null = null
   let stepEnd: { turn: number; step: number; time: number } | null = null
   let toolStart: { callId: string; time: number } | null = null
@@ -47,7 +46,9 @@ export function computeStats(events: any[]): TrajStats {
       stepEnd = null
       continue
     }
-    if (type === 'assistant/chunk') {
+    // 0.1.3：流式 chunk 以瞬态 assistant/live-chunk 进入事件窗口；
+    // rc.2 的 assistant/chunk 保留兼容（conversation.ts 同款双匹配）。
+    if (type === 'assistant/chunk' || type === 'assistant/live-chunk') {
       const chunk = data?.chunk
       if (chunk?.type === 'usage' && chunk.usage !== undefined) {
         stats.inTokens += chunk.usage.inputTokens ?? 0
@@ -83,7 +84,6 @@ export function computeStats(events: any[]): TrajStats {
     }
   }
   if (firstTokenSteps > 0) stats.firstTokenAvgMs = firstTokenMs / firstTokenSteps
-  stats.sampleSteps = firstTokenSteps
   return stats
 }
 

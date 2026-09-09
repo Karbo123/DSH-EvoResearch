@@ -781,9 +781,17 @@ export function registerWorkspaceApi(ctx: any): void {
         // POST /evoresearch/fs/read {path} → 文本内容
         if (method === 'read') {
           const target = requireAbsolute(requireString(payload, 'path'))
+          let size: number
+          try {
+            size = (await stat(target)).size
+          } catch (error) {
+            // ENOENT/EISDIR 直接映射为客户端可读的 fs-error，而非 500/internal
+            throw httpError(404, 'fs-error', `无法读取 "${target}": ${(error as Error).message}`)
+          }
           // 先 stat 校验大小：避免把超大文件整体读进内存再丢弃
-          if ((await stat(target)).size > MAX_READ_BYTES) throw httpError(400, 'fs-error', '文件过大（>4MiB）')
+          if (size > MAX_READ_BYTES) throw httpError(400, 'fs-error', '文件过大（>4MiB）')
           const buffer = await readFile(target)
+          // 读后二次校验属 TOCTOU 防御（stat 与 read 之间文件可能被替换/增长）
           if (buffer.length > MAX_READ_BYTES) throw httpError(400, 'fs-error', '文件过大（>4MiB）')
           writeOk(res, { path: target, text: buffer.toString('utf8') })
           return
@@ -2248,7 +2256,6 @@ export function registerWorkspaceApi(ctx: any): void {
           return
         }
 
-        // ── Assistant 消息反馈（PLAT-20）：追加式信号，不改写会话原文 ──
         // ── 实验管理（§5.1 Git 式分支/回退/checkpoint）──
         if (method === 'experiments-list' || method === 'experiments-get' || method === 'experiments-create' || method === 'experiments-update'
           || method === 'experiments-phase' || method === 'experiments-checkpoint' || method === 'experiments-rollback'
@@ -2338,7 +2345,8 @@ export function registerWorkspaceApi(ctx: any): void {
 
         // ── Chat Graph（节点/连线图，按项目存储）──
         // 注：update-node/remove-node/update-edge/remove-edge/move-nodes/add-group/update-group
-        // 七个粒度端点已随宿主一并移除（客户端编辑走 graph-save 全量写，仅 remove-group 在用）。
+        // 七个粒度端点已随宿主一并移除（客户端编辑走 graph-save 全量写）；
+        // add-node / add-edge / remove-group 仍被 ChatGraph 前端与 Context Trace 使用。
         if (method === 'graph-get' || method === 'graph-save' || method === 'graph-add-node' || method === 'graph-add-edge' || method === 'graph-remove-group' || method === 'graph-inherit' || method === 'graph-fork-from-message' || method === 'graph-preview' || method === 'graph-convert-note' || method === 'graph-memory-create' || method === 'graph-memory-copy' || method === 'graph-memory-collection' || method === 'graph-memory-write' || method === 'graph-sync' || method === 'graph-version' || method === 'graph-recent-hits' || method === 'graph-health-report' || method === 'graph-distill' || method === 'graph-restore-tombstones') {
           const serviceMethod = method === 'graph-get' ? 'graphGet'
             : method === 'graph-save' ? 'graphSave'
@@ -2528,13 +2536,5 @@ export function registerWorkspaceApi(ctx: any): void {
 }
 
 /** 根目录标签（面包屑/树根显示）。 */
-export function rootLabel(path: string): string {
-  const base = basename(path)
-  return base !== '' ? base : path
-}
 
 /** 父目录（文件系统根返回 undefined）。 */
-export function parentOf(path: string): string | undefined {
-  const parent = dirname(path)
-  return parent === path ? undefined : parent
-}

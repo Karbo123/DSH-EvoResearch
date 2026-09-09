@@ -218,6 +218,12 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
           if (pending === 0) { setUploading(false); setError(t('uploadFailed')); setRev((v) => v + 1) }
         })
       }
+      // 读取失败必须同样递减 pending，否则 uploading 永久卡在 true（按钮禁用）
+      reader.onerror = () => {
+        failed = true
+        pending -= 1
+        if (pending === 0) { setUploading(false); setError(t('uploadFailed')); setRev((v) => v + 1) }
+      }
       reader.readAsDataURL(file)
     }
   }
@@ -245,17 +251,20 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
     }).catch((e) => { setZipBusy(false); setError(String(e)) })
   }
 
-  // inspector 工具条的刷新/下载按钮经自定义事件接入（此前两个按钮无 onClick，点了没反应）
+  // inspector 工具条的刷新/下载按钮经自定义事件接入（此前两个按钮无 onClick，点了没反应）。
+  // 只挂一次（deps []）；downloadZip 经 ref 转发，保证拿到最新渲染闭包。
+  const downloadZipRef = useRef(() => {})
+  downloadZipRef.current = downloadZip
   useEffect(() => {
     const onRefresh = () => setRev((v) => v + 1)
-    const onDownload = () => downloadZip()
+    const onDownload = () => downloadZipRef.current()
     window.addEventListener('evo-workspace-files-refresh', onRefresh)
     window.addEventListener('evo-workspace-files-download', onDownload)
     return () => {
       window.removeEventListener('evo-workspace-files-refresh', onRefresh)
       window.removeEventListener('evo-workspace-files-download', onDownload)
     }
-  })
+  }, [])
 
   // 点击文件 → 在工作区中央 tab 打开（md 渲染/编辑、pdf 独立预览、文本编辑）；
   // 图片仍在侧边栏内嵌预览（中央无图片 tab）。派发 evo-open-tab 给 main 区。
@@ -290,7 +299,6 @@ export function WorkspaceFiles({ root }: WorkspaceFilesProps) {
     return jsx(FileViewer, { path: openPath, root: base, onBack: () => setOpenPath(null) })
   }
 
-  const parent = base.slice(0, base.lastIndexOf('\\')) || base.slice(0, base.lastIndexOf('/'))
 
   return jsxs('div', {
     className: 'evo-fs',

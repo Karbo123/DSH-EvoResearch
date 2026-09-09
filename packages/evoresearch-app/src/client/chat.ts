@@ -897,34 +897,30 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   }
 
   // ── HITL 审批（§21.2）：会话待审批工具调用卡片 ──
-  // 0.1.3：pending 来自 SessionPendingInteraction（ui-approval/ui-user-questions
-  // client 包经 Remote Event 瀑布发布，root 钩子 useSessionPendingInteraction 读取，
-  // 每会话一个当前生效交互）；PendingApproval 暴露 toolName/callId/reason 与
-  // answer(outcome)。rc.2 的 snapshotCache.pending 路径保留为回退。
+  // 0.1.3：pending 来自 SessionPendingInteraction 经 workspace-api 的 HTTP 轮询
+  // 通道（hitl.ts），PendingApproval/AskUser 卡片只消费 hitlWaits；wait.answer /
+  // wait.cancel 是 hitl.ts 产物的唯一结算入口（respond/payload 回退分支已随
+  // rc.2 通道移除，不可达）。
   const hitlWaits = useHitlWaits()
-  const legacyPending: any[] = session?.snapshotCache?.pending ?? []
   const pendingApprovals: any[] = hitlWaits.filter((p) => p?.kind === 'approval')
   const respondApproval = (wait: any, outcome: 'allowed-once' | 'rejected') => {
     try {
-      if (typeof wait.answer === 'function') { void wait.answer(outcome); return }
-      wait.respond({ ok: true, value: { sessionId: wait.sessionId, approvalId: wait.payload?.approvalId, outcome } })
+      void wait.answer(outcome)
     } catch { /* 已结算 */ }
   }
 
-  // ── Ask User 问题卡片（§21.3）：模型 ask_user_question 工具 → pending kind='question'/'plan-review' ──
-  const pendingQuestions: any[] = hitlWaits.filter((p) => p?.kind === 'question' || p?.kind === 'plan-review')
+  // ── Ask User 问题卡片（§21.3）：模型 ask_user_question 工具 → pending kind='question' ──
+  const pendingQuestions: any[] = hitlWaits.filter((p) => p?.kind === 'question')
   const [questionSelections, setQuestionSelections] = useState<Record<string, string[]>>({})
   const [questionCustom, setQuestionCustom] = useState<Record<string, string>>({})
   const answerQuestion = (wait: any, answers: Array<{ id: string; selected: string[]; custom?: string }>) => {
     try {
-      if (typeof wait.answer === 'function') { void wait.answer({ answers }); return }
-      wait.respond({ ok: true, value: { sessionId: wait.sessionId, answer: { answers } } })
+      void wait.answer({ answers })
     } catch { /* 已结算 */ }
   }
   const cancelQuestion = (wait: any) => {
     try {
-      if (typeof wait.cancel === 'function') { void wait.cancel(); return }
-      wait.respond({ ok: false, error: { code: 'cancelled', message: 'the user closed this question request', details: {} } })
+      void wait.cancel()
     } catch { /* 已结算 */ }
   }
   const toggleQuestionOption = (wait: any, question: any, optionLabel: string) => {
@@ -1299,43 +1295,21 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   // ── 斜杠命令直接执行（§23.3）：Enter 执行，结果以文本显示在输入区上方 ──
   const [cmdResult, setCmdResult] = useState<{ line: string; text: string; kind: string } | null>(null)
   const [cmdRunning, setCmdRunning] = useState(false)
-  const executeCommand = async (line: string): Promise<boolean> => {
+  // 斜杠命令执行（P2-4）：带附件时附件以 EncodedImageAttachment 形状透传给
+  // commands.execute——声明 input.images 的命令才接收；拒绝则由调用方降级为普通消息。
+  const executeCommand = async (line: string, withImages = false): Promise<boolean> => {
     if (sessionId === null) return false
     setCmdRunning(true)
     try {
+      const images = withImages
+        ? pendingImages
+            .filter((img) => img.dataUrl !== '')
+            .map((img) => ({ data: img.dataUrl.slice(img.dataUrl.indexOf(',') + 1), mediaType: img.mediaType, ...(img.name ? { name: img.name } : {}) }))
+        : undefined
       const res = await fetch('/evoresearch/fs/commands-execute', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, line }),
-      })
-      const json = await res.json()
-      if (json.ok && json.value?.matched === true && json.value?.result !== null) {
-        const outer = json.value.result
-        const inner = outer?.result ?? outer
-        setCmdResult({ line, text: inner?.text ?? '', kind: inner?.kind ?? 'success' })
-        return true
-      }
-      return false
-    } catch {
-      return false
-    } finally {
-      setCmdRunning(false)
-    }
-  }
-
-  // P2-4：带图片附件的命令执行——附件以 EncodedImageAttachment 形状透传给
-  // commands.execute（声明 input.images 的命令才接收；拒绝则返回 false 降级为普通消息）。
-  const executeCommandWithImages = async (line: string): Promise<boolean> => {
-    if (sessionId === null) return false
-    setCmdRunning(true)
-    try {
-      const images = pendingImages
-        .filter((img) => img.dataUrl !== '')
-        .map((img) => ({ data: img.dataUrl.slice(img.dataUrl.indexOf(',') + 1), mediaType: img.mediaType, ...(img.name ? { name: img.name } : {}) }))
-      const res = await fetch('/evoresearch/fs/commands-execute', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, line, images }),
+        body: JSON.stringify({ sessionId, line, ...(images !== undefined ? { images } : {}) }),
       })
       const json = await res.json()
       if (json.ok && json.value?.matched === true && json.value?.result !== null) {
@@ -1371,7 +1345,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
     if (text.startsWith('/') && !text.includes('\n')) {
       const matched = pendingImages.length === 0
         ? await executeCommand(text)
-        : await executeCommandWithImages(text)
+        : await executeCommand(text, true)
       if (matched) {
         pushHistory(cwd, text)
         setHistory(readHistory(cwd))
@@ -1777,14 +1751,27 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
     const raw = clientStateGet(`evoresearch-dynamic-workflows:${sessionId ?? ''}`)
     try { return JSON.parse(raw ?? '[]') } catch { return [] }
   })
+  // ChatArea 不按 sessionId 重挂载：切换会话时在渲染期重读新会话的清除列表
+  // （React 官方「props 变化时调整 state」模式）。持久化写入只跟随 wfCleared，
+  // 绝不能把依赖挂在 sessionId 上——那会把上一个会话的列表写进新会话的键。
+  const wfSessionRef = useRef(sessionId)
+  if (wfSessionRef.current !== sessionId) {
+    wfSessionRef.current = sessionId
+    const raw = clientStateGet(`evoresearch-dynamic-workflows:${sessionId ?? ''}`)
+    let next: string[] = []
+    try { next = JSON.parse(raw ?? '[]') } catch { next = [] }
+    setWfCleared(Array.isArray(next) ? next.filter((x) => typeof x === 'string') : [])
+  }
   const [wfTick, setWfTick] = useState(0)
+  // 每秒计时仅在有 workflow 节点（阶段条运行时长显示）时才需要驱动重渲染。
   useEffect(() => {
+    if (workflowNodes.length === 0) return
     const timer = setInterval(() => setWfTick((v) => v + 1), 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [workflowNodes.length])
   useEffect(() => {
-    clientStateSet(`evoresearch-dynamic-workflows:${sessionId ?? ''}`, JSON.stringify(wfCleared))
-  }, [wfCleared, sessionId])
+    clientStateSet(`evoresearch-dynamic-workflows:${wfSessionRef.current ?? ''}`, JSON.stringify(wfCleared))
+  }, [wfCleared])
   const latestWorkflow = workflowNodes[workflowNodes.length - 1] as (ChatNode & { data: { name?: string; members?: Array<{ seq: number; label: string; phase?: string | null; status: string }>; stopReason?: string; startedAt?: number; endedAt?: number } }) | undefined
   const wfVisible = latestWorkflow !== undefined && !wfCleared.includes(latestWorkflow.key)
   const formatDuration = (ms: number) => {
@@ -2001,10 +1988,9 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
         children: jsx('div', {
           className: 'evo-approval-list',
           children: pendingApprovals.map((wait: any) => {
-            const payload = wait.payload ?? {}
-            const toolName: string = wait.toolName ?? payload.toolName ?? t('tool')
-            const callId = wait.callId !== undefined ? wait.callId : payload.callId
-            const reason: string | undefined = wait.reason !== undefined ? wait.reason : payload.reason
+            const toolName: string = wait.toolName ?? t('tool')
+            const callId = wait.callId
+            const reason: string | undefined = wait.reason
             return jsxs('div', {
               className: 'evo-approval-card',
               children: [
@@ -2052,7 +2038,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
           className: 'evo-approval-list',
           children: pendingQuestions.map((wait: any) => {
             // 0.1.3 PendingQuestion.questions 直读；rc.2 回退 payload.questions
-            const questions: Array<{ id: string; question: string; multiSelect?: boolean; options?: Array<{ label: string; description?: string }> }> = wait.questions ?? wait.payload?.questions ?? []
+            const questions: Array<{ id: string; question: string; multiSelect?: boolean; options?: Array<{ label: string; description?: string }> }> = wait.questions ?? []
             return jsxs('div', {
               className: 'evo-question-card',
               children: [

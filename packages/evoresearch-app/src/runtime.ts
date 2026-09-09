@@ -111,7 +111,10 @@ function apply(ctx, config) {
       if (settled === undefined) printUrl()
       else settled.then(() => {
         if (ctx.get('webServer') !== undefined) printUrl()
-      }, () => {})
+      }, (error) => {
+        // loader 异常吞掉会导致 URL 既不打印也无任何日志，至少留一条告警
+        console.warn('[evoresearch] loader await failed; URL not printed:', error)
+      })
     })
   }
 }

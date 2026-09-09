@@ -671,6 +671,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-tier-option-detail { font-size: 12.5px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ── 业务面板（记忆/调度/团队/通道/技能）── */
 .evo-panel { max-width: 760px; margin: 0 auto; padding: 28px 28px 40px; }
+@media (max-width: 560px) { .evo-panel { padding: 16px 12px 32px; } }
 .evo-panel-head { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; color: var(--color-text-primary); margin-bottom: 20px; }
 .evo-panel-head svg { width: 19px; height: 19px; color: var(--brand); }
 .evo-panel-body { display: flex; flex-direction: column; gap: 16px; }

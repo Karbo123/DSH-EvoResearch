@@ -128,7 +128,9 @@ export function DailyReportCard({ workspaceDir, onClose, onError }: {
     }
     setScheduleBusy(true)
     const next: DailyReportSchedule = {
-      enabled: schedule?.enabled ?? true,
+      // 与复选框显示默认（schedule?.enabled ?? false）对齐：无既有配置时
+      // 不应出现「界面未勾选、保存却按启用提交」的错位
+      enabled: schedule?.enabled ?? false,
       mode,
       projectDir: workspaceDir,
       ...(iv !== undefined ? { intervalMinutes: iv } : {}),

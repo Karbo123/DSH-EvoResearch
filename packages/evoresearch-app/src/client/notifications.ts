@@ -2,11 +2,13 @@
  * §42.4 浏览器通知（自 index.ts 抽出，2026-09 审计的有界拆分第一阶段）：
  * 1) Scheduled 任务完成：10s 轮询 + 首次 baseline（不补发）+ taskId:lastRunAt
  *    去重（跨刷新持久化）；
- * 2) Ask User / 工具审批 pending 出现时通知（仅新出现的 pending）。
- * 权限 + 用户开关判断（notifyEnabled）随本模块走，调用方只传当前会话与快照。
+ * 2) Ask User / 工具审批 pending 出现时通知（仅新出现的 pending，数据来自
+ *    hitl.ts 的轮询订阅——chat view 快照没有 pending 字段，旧实现恒为空）。
+ * 权限 + 用户开关判断（notifyEnabled）随本模块走，调用方只传当前会话 id。
  */
 import { useEffect, useRef } from 'react'
 import { clientStateGet, clientStateSet } from './client-state'
+import { useHitlWaits } from './hitl'
 import { t } from './i18n'
 
 function notifyEnabled(): boolean {
@@ -15,10 +17,8 @@ function notifyEnabled(): boolean {
   })()
 }
 
-export function useBackgroundNotifications(
-  current: string | undefined,
-  sessionSnapshot: { pending?: Array<{ kind?: string; key?: string }> } | null | undefined,
-): void {
+export function useBackgroundNotifications(current: string | undefined): void {
+  const hitlWaits = useHitlWaits()
   // 1) Scheduled 任务完成
   useEffect(() => {
     if (typeof Notification === 'undefined') return
@@ -62,13 +62,12 @@ export function useBackgroundNotifications(
   // 2) Ask User / 工具审批出现时通知（仅新出现的 pending）
   const prevPendingRef = useRef<Set<string>>(new Set())
   useEffect(() => {
-    const pending: Array<{ kind?: string; key?: string }> = sessionSnapshot?.pending ?? []
-    const keys = new Set(pending.map((p) => `${p.kind ?? ''}:${p.key ?? ''}`))
+    const keys = new Set(hitlWaits.map((p) => `${p.kind}:${p.key}`))
     const fresh = [...keys].filter((k) => !prevPendingRef.current.has(k))
     prevPendingRef.current = keys
     if (fresh.length > 0 && notifyEnabled() && current !== undefined) {
       const labels = fresh.map((k) => (k.startsWith('question') ? t('askUserQuestion') : t('toolApproval')))
       try { new Notification(`${labels.join('、')}${t('pendingApprovalSuffix')}`) } catch { /* 静默退化 */ }
     }
-  }, [sessionSnapshot, current])
+  }, [hitlWaits, current])
 }

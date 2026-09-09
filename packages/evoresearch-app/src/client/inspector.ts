@@ -56,7 +56,9 @@ function AgentsPanel({ sessionId }: { sessionId: string | null }) {
   const [agents, setAgents] = useState<AgentRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  let loadSeq = 0
   const load = () => {
+    const seq = ++loadSeq
     if (sessionId === null) { setAgents([]); setError(null); return }
     setAgents(null)
     setError(null)
@@ -65,9 +67,11 @@ function AgentsPanel({ sessionId }: { sessionId: string | null }) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sessionId }),
     }).then((res) => res.json()).then((json) => {
+      // 会话快速切换时丢弃迟到响应，避免旧会话的 agents 覆盖当前列表
+      if (seq !== loadSeq) return
       if (json.ok) setAgents(json.value.agents as AgentRow[])
       else setError(json.error?.message ?? t('loadFailed'))
-    }).catch((e) => setError(String(e)))
+    }).catch((e) => { if (seq === loadSeq) setError(String(e)) })
   }
 
   useEffect(() => { load() }, [sessionId])

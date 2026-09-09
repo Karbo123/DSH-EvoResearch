@@ -520,7 +520,7 @@ function apply(ctx: Context): void {
     selectModelRoute: (routes, options) => selectModel(routes, modelFallbackState, options),
     selectToolsForTurn: (tools, query, options) => selectToolsForTurn(tools, query, options),
     approvalPolicy,
-    decideApproval: (toolName) => decisionFromPolicy(approvalPolicy, toolName),
+    decideApproval: (toolName) => decideApproval(approvalPolicy, toolName),
     subagents: { registry: subagentRegistry, providers: subagentProviders, facade: subagentFacade },
     mcp: mcpSupervisor,
     skillRegistry: layeredSkills,
@@ -1027,17 +1027,6 @@ function apply(ctx: Context): void {
 }
 
 export default { name, inject, apply }
-
-/** PLAT-15：基于策略做审批判定（薄包装，方便 closure 捕获）。 */
-function decisionFromPolicy(approvalPolicy: ReturnType<typeof defaultApprovalPolicy>, toolName: string) {
-  const dangerous = (approvalPolicy.dangerousTools ?? []).includes(toolName)
-  if (!dangerous) return { decision: 'allow' as const, reason: `工具 ${toolName} 不在危险清单`, dangerous: false }
-  const override = approvalPolicy.overrides?.[toolName]
-  const mode = override ?? approvalPolicy.mode
-  if (mode === 'allow') return { decision: 'allow' as const, reason: `工具 ${toolName} 被策略放行`, dangerous: true }
-  if (mode === 'deny') return { decision: 'deny' as const, reason: `工具 ${toolName} 被策略拒绝`, dangerous: true }
-  return { decision: 'ask' as const, reason: `工具 ${toolName} 需要审批`, dangerous: true }
-}
 
 /** 执行 shell 类命令的工具名（灾难命令兜底检查范围）。 */
 const CATASTROPHIC_SHELL_TOOLS: ReadonlySet<string> = new Set(['bash', 'shell', 'pwsh', 'powershell', 'run_command'])

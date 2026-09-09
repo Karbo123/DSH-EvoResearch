@@ -101,7 +101,7 @@ interface DraftDocRow extends DraftMetaRow {
   draft: string
 }
 
-/** 简单 POST JSON 封装（与 panels.ts / experiments.ts 同款）。 */
+/** 时间格式化：本地时区 YYYY-MM-DD HH:mm。 */
 function fmtTime(ts: number): string {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return ''
@@ -326,6 +326,8 @@ function NotesTab({ workspaceDir, onError }: { workspaceDir: string; onError: (m
   const [newTitle, setNewTitle] = useState('')
   const [newBody, setNewBody] = useState('')
   const [listOffset, setListOffset] = useState(0)
+  // 上一次取回占满一页才显示「加载更早」（list 是累加数组，长度不能作为判据）
+  const [listHasMore, setListHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const load = (fresh = false) => {
@@ -334,6 +336,7 @@ function NotesTab({ workspaceDir, onError }: { workspaceDir: string; onError: (m
     void api<NoteSummaryRow[]>('notes-list', { workspaceDir, limit: LIST_PAGE, offset: fresh ? 0 : listOffset })
       .then((rows) => {
         setLoading(false)
+        setListHasMore(rows.length === LIST_PAGE)
         setList((prev) => (fresh ? rows : [...(prev ?? []), ...rows]))
         if (fresh) setListOffset(rows.length)
         else setListOffset(listOffset + rows.length)
@@ -481,7 +484,7 @@ function NotesTab({ workspaceDir, onError }: { workspaceDir: string; onError: (m
                 }),
               }, note.noteId)),
             }),
-      (list ?? []).length === LIST_PAGE && jsx('button', {
+      listHasMore && jsx('button', {
         type: 'button',
         className: 'evo-btn evo-btn-run',
         disabled: loading,

@@ -594,6 +594,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       let cancelled = false
       let attempts = 0
       let resolvedFlag = false
+      let resendSent = false
       const tryOpen = (id: string) => {
         if (cancelled) return
         if (sessionsService === null || attempts > 30) return
@@ -607,12 +608,15 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       // 重发定时器只允许一条：解析成功路径与兜底路径互斥触发，避免同一段
       // 修正文本被两个 timer 先后 prompt 两次。
       const armResend = (id: string) => {
-        if (resend === null || resend === '') return
+        // 兜底直开与解析成功两条通道都可能 armResend：任何一路先发出即置位，
+        // 另一路的 timer 看到标志后自动退场——保证修正文本只 prompt 一次。
+        if (resend === null || resend === '' || resendSent) return
         const timer = setInterval(() => {
-          if (cancelled) { clearInterval(timer); return }
+          if (cancelled || resendSent) { clearInterval(timer); return }
           const s = sessionsService?.binding(id)?.session
           if (s !== undefined) {
             clearInterval(timer)
+            resendSent = true
             void s.prompt([{ type: 'text', text: resend }], 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
           }
         }, 200)
@@ -650,7 +654,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }, [current])
 
   // ── §42.4 浏览器通知事件（实现见 notifications.ts，2026-09 有界拆分） ──
-  useBackgroundNotifications(current, sessionSnapshot)
+  useBackgroundNotifications(current)
 
   // §43.5：view / inspector 状态写入 URL（可分享/可恢复；键名与值 §44 全短化）
   const setViewAndUrl = (v: SideView) => {
@@ -1003,7 +1007,6 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
-  const deleteSession: typeof deleteSessionById = deleteSessionById
 
   /**
    * 删除项目：删除该项目下的全部子聊天（host 删除持久化数据），
@@ -1516,14 +1519,19 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     return () => window.removeEventListener('evo-traj-jump-chat', onJumpChat)
   }, [])
   // §回溯/编辑重发：chat.ts 派发 evo-rewind → 提升子会话为主聊天 + 打开（编辑场景自动重发）
+  // 监听器只挂一次（deps []）；cwd 合成摘要所需的 current/sessions 经 ref 读最新值，
+  // 避免闭包捕获首帧快照导致子会话归错工作区。
+  const rewindStateRef = useRef({ current, sessions })
+  rewindStateRef.current = { current, sessions }
   useEffect(() => {
     const onRewind = (e: Event) => {
       const detail = (e as CustomEvent<{ childId?: string; resend?: string }>).detail
       if (typeof detail?.childId !== 'string' || detail.childId === '') return
       void (async () => {
         promoteSession(detail.childId)
+        const { current: currentNow, sessions } = rewindStateRef.current
         const manager = sessionsService?.manager as { mergeSummary?(s: Record<string, unknown>): unknown; refreshList?(): Promise<unknown> } | undefined
-        const cwd = current === undefined ? undefined : (sessions.byId[current]?.cwd ?? undefined)
+        const cwd = currentNow === undefined ? undefined : (sessions.byId[currentNow]?.cwd ?? undefined)
         // 本地合成摘要（对齐 manager.fork 的摘要形状）→ 可立即 select
         try {
           manager?.mergeSummary?.({ sessionId: detail.childId, updatedAt: Date.now(), running: false, blank: false, ...(cwd === undefined ? {} : { cwd }) })
@@ -1841,7 +1849,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   onSetProjectTagColor: setProjectTagColor,
                   hideIds: sideChatIds,
                   deletedIds,
-                  onDelete: deleteSession,
+                  onDelete: deleteSessionById,
                   onDeleteProject: deleteProject,
                   archivedIds,
                   onToggleArchive: toggleArchive,
@@ -2137,7 +2145,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   sideChats,
                   onNewSideChat: newSideChat,
                   onOpenSideChat: jumpToSession,
-                  onDeleteSideChat: deleteSession,
+                  onDeleteSideChat: deleteSessionById,
                 }),
               }),
             ],
@@ -2189,21 +2197,18 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
 function apply(ctx: any) {
   installCss()
   registerConversation(ctx)
-  // 在开发模式下压制 React key 警告——所有 .map() 调用均已正确传递 key（第三参数），
-  // 但 React 18 对 jsxs children 数组中条件渲染元素的校验会产生误报（误报发生在
-  // ui-renderer 挂载后异步首帧，非 apply 同步阶段，因此抑制保持到首帧渲染完成）。
-  // 此压制仅影响 key 警告本身，不影响任何功能。
-  const suppressKeyWarning = () => {
-    // 框架内部 slot 渲染路径存在已知且无法在调用方修复的 key 误报；对「恰好该条
-    // 文案」永久精确过滤，其余 console.error 一律原样放行。旧实现用「4 帧+2s」
-    // 时间窗：窗口漂移导致压制时有时无，且窗口语义让人误以为会吞其他错误。
+  // 压制 React key 警告——所有 .map() 调用均已正确传递 key（第三参数），但
+  // React 18 对 jsxs children 数组中条件渲染元素的校验会产生误报（发生在
+  // ui-renderer 挂载后的框架内部 slot 渲染路径，调用方无法修复）。
+  // 对「恰好该条文案」做永久精确过滤，其余 console.error 一律原样放行；
+  // 旧实现用「4 帧+2s」时间窗：窗口漂移导致压制时有时无，已废弃。
+  {
     const origError = console.error
     console.error = (...args: any[]) => {
       if (typeof args[0] === 'string' && args[0].includes('Each child in a list should have a unique "key" prop')) return
       origError.call(console, ...args)
     }
   }
-  suppressKeyWarning()
 
   ctx.effect(() => {
     sessionsService = ctx.sessions ?? null
