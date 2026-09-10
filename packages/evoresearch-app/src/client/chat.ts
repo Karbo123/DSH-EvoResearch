@@ -446,39 +446,41 @@ function UserBubble({ text, time, nodeKey, highlight, seq, onEdit, onRewind, onB
             className: 'evo-msg-bubble evo-msg-bubble-user',
             title: t('yourMessage'),
             'aria-label': `${t('yourMessage')}: ${text}`,
-            children: jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(displayText) } }),
-          }),
-          // 气泡外下方操作行（§用户反馈：复制/编辑/回溯 不进入气泡内部）
-          jsxs('div', {
-            className: 'evo-msg-meta',
-            children: [
-              jsx('div', { className: 'evo-msg-time', children: fmtTime(time) }),
-              onEdit !== undefined && seq !== undefined && jsx('button', {
-                type: 'button',
-                className: 'evo-msg-copy',
-                title: t('editMsg'),
-                'aria-label': t('editMsg'),
-                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onEdit?.(seq, text) },
-                children: jsx(PenLine, {}),
+            children: jsxs(Fragment, { children: [
+              jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(displayText) } }),
+              // 操作行：DOM 置于气泡内以贴合气泡左下角，视觉上绝对定位在气泡轮廓外
+              jsxs('div', {
+                className: 'evo-msg-meta',
+                children: [
+                  jsx('div', { className: 'evo-msg-time', children: fmtTime(time) }),
+                  onEdit !== undefined && seq !== undefined && jsx('button', {
+                    type: 'button',
+                    className: 'evo-msg-copy',
+                    title: t('editMsg'),
+                    'aria-label': t('editMsg'),
+                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onEdit?.(seq, text) },
+                    children: jsx(PenLine, {}),
+                  }),
+                  onRewind !== undefined && seq !== undefined && jsx('button', {
+                    type: 'button',
+                    className: `evo-msg-copy${rewindConfirming === true ? ' confirming' : ''}`,
+                    title: rewindConfirming === true ? t('rewindConfirm') : t('rewindToHere'),
+                    'aria-label': t('rewindToHere'),
+                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onRewind(seq) },
+                    children: jsx(History, {}),
+                  }),
+                  onBranch !== undefined && seq !== undefined && jsx('button', {
+                    type: 'button',
+                    className: 'evo-msg-copy',
+                    title: t('graphBranchFromHere'),
+                    'aria-label': t('graphBranchFromHere'),
+                    onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onBranch(seq) },
+                    children: jsx(GitBranch, {}),
+                  }),
+                  jsx(CopyButton, { text }),
+                ],
               }),
-              onRewind !== undefined && seq !== undefined && jsx('button', {
-                type: 'button',
-                className: `evo-msg-copy${rewindConfirming === true ? ' confirming' : ''}`,
-                title: rewindConfirming === true ? t('rewindConfirm') : t('rewindToHere'),
-                'aria-label': t('rewindToHere'),
-                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onRewind(seq) },
-                children: jsx(History, {}),
-              }),
-              onBranch !== undefined && seq !== undefined && jsx('button', {
-                type: 'button',
-                className: 'evo-msg-copy',
-                title: t('graphBranchFromHere'),
-                'aria-label': t('graphBranchFromHere'),
-                onClick: (e: { stopPropagation(): void }) => { e.stopPropagation(); onBranch(seq) },
-                children: jsx(GitBranch, {}),
-              }),
-              jsx(CopyButton, { text }),
-            ],
+            ] }),
           }),
         ],
       }),
@@ -581,24 +583,22 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onO
               thinkingOpen && jsx('div', { className: 'evo-thinking-body', children: reasoning }),
             ],
           }),
-          text !== '' && jsxs('div', {
+          text !== '' && jsx('div', {
             className: 'evo-msg-stack',
-            children: [
-              jsx('div', {
-                className: 'evo-msg-bubble evo-msg-bubble-assistant',
-                children: [
-                  jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
-                  running && jsx('span', { className: 'evo-msg-cursor' }),
-                ],
-              }),
-              // 气泡外下方操作行：复制
-              !running && jsxs('div', {
-                className: 'evo-msg-meta',
-                children: [
-                  jsx(CopyButton, { text }),
-                ],
-              }),
-            ],
+            children: jsx('div', {
+              className: 'evo-msg-bubble evo-msg-bubble-assistant',
+              children: jsxs(Fragment, { children: [
+                jsx('div', { className: 'evo-msg-text evo-md', dangerouslySetInnerHTML: { __html: renderMarkdown(text) } }),
+                running && jsx('span', { className: 'evo-msg-cursor' }),
+                // 操作行：DOM 置于气泡内以贴合气泡右下角，视觉上绝对定位在气泡轮廓外
+                !running && jsxs('div', {
+                  className: 'evo-msg-meta',
+                  children: [
+                    jsx(CopyButton, { text }),
+                  ],
+                }),
+              ] }),
+            }),
           }),
           tools.length > 0 && jsxs('div', {
             className: 'evo-tool-group',
