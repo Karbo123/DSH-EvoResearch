@@ -448,7 +448,8 @@ body { margin: 0; }
 .evo-jump-latest { position: sticky; bottom: 12px; align-self: flex-end; display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); transition: border-color 0.15s, color 0.15s, transform 0.15s; }
 .evo-jump-latest:hover { border-color: var(--brand); color: var(--brand); transform: translateY(-1px); }
 .evo-jump-latest svg { width: 14px; height: 14px; }
-.evo-msg-row { display: flex; gap: 10px; align-items: flex-start; }
+.evo-msg-row { display: flex; gap: 10px; align-items: flex-start; position: relative; }
+.evo-msg-row:hover { z-index: 6; }
 /* 连续 AI 回复续行：头像仅分组首条出现；续行保留占位对齐文本、收紧与上一条的间距 */
 .evo-msg-row.evo-msg-cont { margin-top: -8px; }
 .evo-msg-row.evo-msg-cont .evo-msg-avatar { visibility: hidden; }
@@ -993,13 +994,21 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-plugin-version { flex: none; color: var(--color-text-tertiary); font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: nowrap; }
 .evo-plugin-state { font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
 .evo-plugin-ok { color: var(--color-success); }
-/* ── 消息复制 / 编辑 / 回溯（气泡外下方操作行）── */
-.evo-msg-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; }
+/* ── 消息复制 / 编辑 / 回溯（气泡外下方操作行）──
+   悬浮徽片方案：操作行绝对定位、不占布局空间（此前常驻占位 ~20px/条，消息之间
+   总有一段为它留的空白）；行 hover 或按钮键盘聚焦时以带边框阴影的小浮片浮现，
+   压在消息间隙上。触屏（hover:none）没有 hover 态，回退为旧的常驻占位行为。 */
+.evo-msg-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; position: relative; }
 .evo-msg-user .evo-msg-stack { align-items: flex-end; gap: 2px; }
 .evo-msg-author { padding: 0 3px; color: var(--color-text-tertiary); font-size: 11px; line-height: 1.2; }
-.evo-msg-meta { display: flex; align-items: center; gap: 7px; min-height: 18px; opacity: 0; transition: opacity 0.12s ease; padding: 0 2px; }
-.evo-msg-row:hover .evo-msg-meta { opacity: 1; }
-.evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); }
+.evo-msg-meta { position: absolute; top: calc(100% + 3px); left: 0; z-index: 6; display: flex; align-items: center; gap: 5px; padding: 3px 6px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10); opacity: 0; pointer-events: none; transition: opacity 0.12s ease; }
+.evo-msg-user .evo-msg-meta { left: auto; right: 0; }
+.evo-msg-row:hover .evo-msg-meta, .evo-msg-meta:focus-within { opacity: 1; pointer-events: auto; }
+.evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 0; }
+@media (hover: none) {
+  .evo-msg-meta { position: static; gap: 7px; min-height: 18px; padding: 0 2px; border: 0; box-shadow: none; opacity: 0; }
+  .evo-msg-row:hover .evo-msg-meta { opacity: 1; }
+}
 .evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; padding: 0; }
 .evo-msg-copy:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-msg-copy.confirming { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
