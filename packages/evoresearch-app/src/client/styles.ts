@@ -1010,6 +1010,8 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-msg-row:hover .evo-msg-meta, .evo-msg-meta:focus-within { opacity: 1; pointer-events: auto; }
 .evo-msg-bubble::after { content: ''; position: absolute; top: 0; bottom: 0; left: calc(100% - 2px); width: 34px; clip-path: polygon(0 0, 100% calc(100% - 26px), 100% 100%, 0 100%); }
 .evo-msg-user .evo-msg-bubble::after { left: auto; right: calc(100% - 2px); width: 150px; clip-path: polygon(0 calc(100% - 26px), 100% 0, 100% 100%, 0 100%); }
+/* 悬停该消息时把感应梯形淡显出来：所见即悬浮范围（按钮就挂在梯形下段） */
+.evo-msg-row:hover .evo-msg-bubble::after { background: color-mix(in srgb, var(--brand) 16%, transparent); }
 .evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 0; margin-right: 3px; white-space: nowrap; flex-shrink: 0; }
 .evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 7px; cursor: pointer; padding: 0; }
 .evo-msg-copy:hover { background: var(--hover-bg); color: var(--brand); }
