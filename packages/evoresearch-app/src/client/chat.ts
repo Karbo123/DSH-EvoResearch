@@ -145,6 +145,8 @@ export interface ChatAreaProps {
   partial: ChatNode | null
   /** 首条消息乐观占位：会话尚未建立时立即显示「我的消息 + AI 加载中」。 */
   pendingFirst: { text: string; ts: number } | null
+  /** 已有会话的乐观回显：发送后立即显示用户气泡，快照回显同文本后由父级撤销。 */
+  pendingEcho: { text: string; ts: number } | null
   /** 会话是否正在运行。 */
   running: boolean
   /** 发送失败信息（promptError）。 */
@@ -679,7 +681,7 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
   })
 }
 
-export function ChatArea({ nodes, partial, running, pendingFirst, error, currentTitle, sessionId, session, cwd, referenceSearch, jobs, onOpenThread, onBranchFromMessage, onOpenProjectFile, onSend }: ChatAreaProps) {
+export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, error, currentTitle, sessionId, session, cwd, referenceSearch, jobs, onOpenThread, onBranchFromMessage, onOpenProjectFile, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
   // ── 会话权限（§25.x）：跟随当前会话，不是全局设置；在输入框工具行切换 ──
   const [permPreset, setPermPreset] = useState<string | null>(null)
@@ -1746,7 +1748,21 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
   }
   // 流式 partial（不在 shown 里）紧接 AI 侧末条时同样视为续行
   const partialContinued = partial !== null && !shown.some((n) => n.key === partial.key) && shown.length > 0 && shown[shown.length - 1].kind !== 'user'
+  // ── 发送即时反馈（§23.8）──
+  // 乐观回显：快照尚未回显同文本用户消息时，先在列表末尾本地渲染发送内容。
+  const echoVisible = pendingEcho !== null && !shown.some((n) => n.kind === 'user' && (n.data?.text ?? '') === pendingEcho.text)
+  // AI 思考指示：prompt 在途（running 或有乐观回显）但 AI 侧还没有任何可见内容
+  // （无 partial、最后一条用户消息之后也没有 assistant/工具节点）时，显示加载点。
+  const lastUserIdx = (() => { for (let i = shown.length - 1; i >= 0; i--) if (shown[i].kind === 'user') return i; return -1 })()
+  const aiReacting = lastUserIdx >= 0 && shown.slice(lastUserIdx + 1).some((n) => n.kind !== 'user')
+  const promptInFlight = running || echoVisible || pendingFirst !== null
+  // 空会话的加载点由下方 pendingFirst 占位分支自带（含用户气泡），此处不重复
+  const showThinking = !userOnly && showMessages && promptInFlight && partial === null && !aiReacting && (echoVisible || lastUserIdx >= 0)
   const toolResults = toolResultsOf(session)
+  // 乐观回显/思考点出现时同样贴底跟随（仅当用户本就位于底部）
+  useEffect(() => {
+    if (nearBottomRef.current) stickToBottom()
+  }, [echoVisible, showThinking])
   // P0-2：探测工具结果中的图片资产（命中后触发一次重渲染）
   const [, setToolImagesState] = useState(0)
   setToolImagesTick = setToolImagesState as unknown as (fn: (v: number) => number) => void
@@ -1867,6 +1883,36 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
                     })
                   : null,
                 partial !== null && !userOnly && !ordered.some((n) => n.key === partial.key) && jsx(AssistantBubble, { node: partial, toolResults, sessionId, onOpenProjectFile, continued: partialContinued }, partial.key),
+                // 已有会话的乐观回显：发送后立即显示，快照回显同文本后由 echoVisible 撤销
+                echoVisible && jsx(UserBubble, {
+                  text: pendingEcho.text,
+                  time: pendingEcho.ts,
+                  nodeKey: `pending-echo-${pendingEcho.ts}`,
+                }, `pending-echo-${pendingEcho.ts}`),
+                // AI 思考指示：prompt 在途且 AI 侧尚无任何可见内容时显示加载点，
+                // 消除「发出后界面无反应」的空窗（首条消息的加载点由 pendingFirst 分支自带）
+                showThinking && jsx('div', {
+                  className: 'evo-msg evo-msg-assistant evo-pending-loading',
+                  'aria-label': t('thinking'),
+                  children: jsxs('div', {
+                    className: 'evo-msg-stack',
+                    children: [
+                      jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsx(Atom, {}) }),
+                      jsx('div', {
+                        className: 'evo-msg-body',
+                        children: jsxs('span', {
+                          className: 'evo-pending-bubbles',
+                          'aria-hidden': true,
+                          children: [
+                            jsx('span', { className: 'evo-pending-dot', children: '' }),
+                            jsx('span', { className: 'evo-pending-dot', children: '' }),
+                            jsx('span', { className: 'evo-pending-dot', children: '' }),
+                          ],
+                        }),
+                      }),
+                    ],
+                  }),
+                }, 'pending-thinking'),
                 showJump && jsx('button', {
                   type: 'button',
                   className: 'evo-jump-latest',

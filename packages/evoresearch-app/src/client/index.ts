@@ -296,6 +296,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   // 首次发送（欢迎页无会话时）：乐观渲染「用户消息 + AI 加载中」，让界面立即响应，
   // 不等后台建会话/LLM 标题/建项目等串行链完成。真实快照出现后自动被覆盖。
   const [pendingFirst, setPendingFirst] = useState<{ text: string; ts: number } | null>(null)
+  // 已有会话的乐观回显：发送后立即显示用户气泡，快照回显同文本或 15s 超时后撤销
+  const [pendingEcho, setPendingEcho] = useState<{ text: string; ts: number } | null>(null)
   // 左上角 EvoResearch 品牌右键菜单（工作台导航入口）
   const [brandMenuOpen, setBrandMenuOpen] = useState(false)
   const brandBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -515,6 +517,26 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }
   const nodes: ChatNode[] = (chatLegacy?.nodes ?? []).filter((n: any) => n !== null && n.visibility === 'visible' && !isSystemLeak(n))
   const partial: ChatNode | null = chatLegacy?.partial ?? null
+  // 乐观反馈的撤销时机：真实快照出现同文本用户消息（或 AI 侧已开始输出）即撤销；
+  // 另有 15s/20s 超时兜底（发送链路失败路径也会主动清除），避免占位永久残留。
+  // 切换会话时无条件撤销回显——回显只属于发送时所在会话。
+  useEffect(() => {
+    setPendingEcho(null)
+  }, [current])
+  useEffect(() => {
+    if (pendingEcho === null) return
+    const echoed = nodes.some((n) => n.kind === 'user' && (n.data?.text ?? '') === pendingEcho.text)
+    if (echoed) { setPendingEcho(null); return }
+    const t = setTimeout(() => setPendingEcho(null), 15000)
+    return () => clearTimeout(t)
+  }, [pendingEcho, nodes])
+  useEffect(() => {
+    if (pendingFirst === null) return
+    const echoed = partial !== null || nodes.some((n) => n.kind === 'user' && (n.data?.text ?? '') === pendingFirst.text)
+    if (echoed) { setPendingFirst(null); return }
+    const t = setTimeout(() => setPendingFirst(null), 20000)
+    return () => clearTimeout(t)
+  }, [pendingFirst, nodes, partial])
   // 0.1.3：session face 本身即 ObservableSnapshot<SessionSnapshot>，promptError 在其上。
   const promptError: string | null = (currentSessionFace as any)?.getSnapshot?.()?.promptError?.error?.message ?? null
 
@@ -1595,6 +1617,8 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const effectiveCurrent = current ?? justCreatedSessionRef.current ?? undefined
     const s = effectiveCurrent === undefined ? undefined : sessionsService?.binding(effectiveCurrent)?.session
     if (s !== undefined && effectiveCurrent !== undefined) {
+      // 乐观回显：不等快照回合，立即在列表末尾显示用户气泡（快照回显同文本后撤销）
+      setPendingEcho({ text: normalized, ts: Date.now() })
       void s.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
       const autoState = readAutoTitleStates()[effectiveCurrent]
       if (autoState !== undefined && !autoState.finalized) {
@@ -1605,10 +1629,11 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     }
 
     // 欢迎页无活跃会话：左侧项目列表创建新项目；项目内子聊天列表创建该项目的新子聊天。
-    // 先判断首条输入是否足以命名，低信息输入仍会进入会话并等待后续输入。
+    // 标题判断（project-title-suggest）是服务端 LLM 调用、秒级耗时——并行执行、
+    // 不阻塞建会话与 prompt：首条消息的对话延迟不应取决于「标题起得好不好」。
     void (async () => {
       const kind: AutoTitleKind = projectScope === null ? 'project' : 'subchat'
-      const initialTitle = await judgeAutoTitle(kind, [normalized], 1)
+      const titlePromise = judgeAutoTitle(kind, [normalized], 1)
       let cwd: string | undefined = projectScope?.path
       let workspaceId: string | undefined
 
@@ -1617,7 +1642,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
           const res = await fetch('/evoresearch/fs/projects-auto', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ description: initialTitle.title ?? normalized }),
+            body: JSON.stringify({ description: normalized }),
           })
           const json = await res.json()
           if (json.ok === true && typeof json.value?.path === 'string') cwd = json.value.path
@@ -1646,22 +1671,25 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       // 首条消息创建的会话同样写 URL（裸 8 位占位，resolveThreadIdParam 可还原；
       // ensureThreadAlias 稍后原位升级为正式 slug）——此前不写 ?t=，刷新即丢会话定位。
       patchUrl({ [URL_KEY_THREAD]: id.replace(/^session-/, '').slice(0, 8), [URL_KEY_VIEW]: null })
-      void ensureThreadAlias(id, initialTitle.title ?? undefined)
+      void ensureThreadAlias(id, undefined)
       for (let i = 0; i < 30; i++) {
         const created = sessionsService?.binding(id)?.session
         if (created !== undefined) {
-          if (initialTitle.title === null) {
-            try { await created.rename(t(kind === 'subchat' ? 'newSubchatTitle' : 'newProjectTitle')) } catch { /* 占位标题失败不影响消息 */ }
-            if (workspaceId !== undefined && kind === 'project') {
-              try { await workspacesService?.rename(workspaceId, t('newProjectTitle')) } catch { /* 占位标题失败不影响消息 */ }
-            }
-          }
           await created.prompt(content, 'queue').catch(() => { /* 失败落在 snapshot.promptError */ })
-          // 真实快照（nodes/partial）已接管流式渲染；清除乐观占位（若尚未被覆盖）
-          setPendingFirst(null)
+          // 乐观占位的撤销由「真实内容可见才清除」的 effect 接管（含超时兜底）
           const manager = sessionsService?.manager as { refreshList?(): Promise<unknown> } | undefined
           try { await manager?.refreshList?.() } catch { /* 列表刷新失败不影响当前会话 */ }
-          if (initialTitle.title !== null && initialTitle.title !== '') await applyAutoTitle(id, kind, workspaceId)
+          // 标题判断完成后落地：可命名 → 应用自动标题；不可命名 → 占位名兜底
+          void titlePromise.then((judged) => {
+            if (judged.title !== null && judged.title !== '') {
+              void applyAutoTitle(id, kind, workspaceId)
+              return
+            }
+            try { void created.rename(t(kind === 'subchat' ? 'newSubchatTitle' : 'newProjectTitle')) } catch { /* 占位标题失败不影响消息 */ }
+            if (workspaceId !== undefined && kind === 'project') {
+              try { void workspacesService?.rename(workspaceId, t('newProjectTitle')) } catch { /* 工作区标题失败保留会话标题 */ }
+            }
+          })
           return
         }
         await new Promise((r) => setTimeout(r, 150))
@@ -2102,6 +2130,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                         partial,
                         running,
                         pendingFirst,
+                        pendingEcho,
                         error: promptError,
                         currentTitle,
                         sessionId: current ?? null,
