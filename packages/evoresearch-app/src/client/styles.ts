@@ -994,25 +994,25 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-plugin-version { flex: none; color: var(--color-text-tertiary); font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: nowrap; }
 .evo-plugin-state { font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
 .evo-plugin-ok { color: var(--color-success); }
-/* ── 消息复制 / 编辑 / 回溯（气泡外下方操作行）──
-   悬浮徽片方案：操作行绝对定位、不占布局空间（此前常驻占位 ~20px/条，消息之间
-   总有一段为它留的空白）；行 hover 或按钮键盘聚焦时以带边框阴影的小浮片浮现，
-   压在消息间隙上。触屏（hover:none）没有 hover 态，回退为旧的常驻占位行为。 */
+/* ── 消息复制 / 编辑 / 回溯（气泡外侧操作行）──
+   悬停时按钮出现在气泡旁的空白侧边（AI 消息在右、用户消息在左镜像），垂直居中
+   于气泡；完全不占布局空间、不遮挡任何内容。键盘聚焦同样浮现。
+   窄屏（≤819px 侧边余量不足）与触屏（hover:none）回退为旧的常驻占位行为。 */
 .evo-msg-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; position: relative; }
 .evo-msg-user .evo-msg-stack { align-items: flex-end; gap: 2px; }
 .evo-msg-author { padding: 0 3px; color: var(--color-text-tertiary); font-size: 11px; line-height: 1.2; }
-.evo-msg-meta { position: absolute; top: calc(100% + 3px); left: 0; z-index: 6; display: flex; align-items: center; gap: 5px; padding: 3px 6px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10); opacity: 0; pointer-events: none; transition: opacity 0.12s ease; }
-.evo-msg-user .evo-msg-meta { left: auto; right: 0; }
+.evo-msg-meta { position: absolute; top: 50%; transform: translateY(-50%); left: calc(100% + 10px); display: flex; align-items: center; gap: 2px; opacity: 0; pointer-events: none; transition: opacity 0.12s ease; }
+.evo-msg-user .evo-msg-meta { left: auto; right: calc(100% + 10px); }
 .evo-msg-row:hover .evo-msg-meta, .evo-msg-meta:focus-within { opacity: 1; pointer-events: auto; }
-.evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 0; }
-@media (hover: none) {
-  .evo-msg-meta { position: static; gap: 7px; min-height: 18px; padding: 0 2px; border: 0; box-shadow: none; opacity: 0; }
+.evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 0; margin-right: 3px; }
+@media (hover: none), (max-width: 819px) {
+  .evo-msg-meta { position: static; transform: none; gap: 7px; min-height: 18px; opacity: 0; }
   .evo-msg-row:hover .evo-msg-meta { opacity: 1; }
 }
-.evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 6px; cursor: pointer; padding: 0; }
-.evo-msg-copy:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 7px; cursor: pointer; padding: 0; }
+.evo-msg-copy:hover { background: var(--hover-bg); color: var(--brand); }
 .evo-msg-copy.confirming { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
-.evo-msg-copy svg { width: 13px; height: 13px; }
+.evo-msg-copy svg { width: 14px; height: 14px; }
 /* ── Agents 树（Inspector）── */
 .evo-insp-subtab-title { font-size: 11.5px; font-weight: 600; color: var(--color-text-tertiary); letter-spacing: 0.3px; text-transform: uppercase; padding: 2px 4px; }
 .evo-agent-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 12px; }
