@@ -997,21 +997,21 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 /* ── 消息复制 / 编辑 / 回溯（气泡侧边操作行）──
    悬停时按钮出现在气泡旁的空白侧边（AI 消息在右、用户消息在左镜像），按钮底边
    与气泡底边对齐；绝对定位不占布局空间。操作行 DOM 置于气泡内、以气泡为定位基准。
-   触达感应区（.evo-msg-bubble::after）：从气泡侧边外缘延伸到按钮外缘的直角梯形
-   （clip-path 裁剪即感应边界）：气泡侧取全高、按钮侧收窄到按钮高度，底边平齐——
-   鼠标沿任意路径从气泡滑向按钮都始终踩在梯形内，按钮不会中途消失；梯形不可见、
-   仅参与命中。 */
-.evo-msg-row:hover { z-index: 6; }
+   感应范围 = 气泡 AABB ∪ 直角梯形 ∪ 按钮 AABB：梯形（.evo-msg-bubble::after，
+   clip-path 裁剪即命中边界）从气泡侧边全高收敛到按钮高度、底边平齐，把「消息框
+   侧边—按钮外缘」之间的过渡区纳入感应；三者都是气泡子树，气泡 :hover 即覆盖
+   整个并集，行内气泡之外的空白不触发，鼠标离区按钮立即消失。纯 :hover 位置
+   驱动、与点击无关；键盘聚焦（:focus-visible）同样浮现。 */
 .evo-msg-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; position: relative; }
 .evo-msg-user .evo-msg-stack { align-items: flex-end; gap: 2px; }
 .evo-msg-author { padding: 0 3px; color: var(--color-text-tertiary); font-size: 11px; line-height: 1.2; }
 .evo-msg-meta { position: absolute; bottom: 0; left: calc(100% + 8px); z-index: 6; display: flex; align-items: center; flex-wrap: nowrap; gap: 2px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.12s ease; }
 .evo-msg-user .evo-msg-meta { left: auto; right: calc(100% + 8px); }
-.evo-msg-row:hover .evo-msg-meta, .evo-msg-meta:focus-within { opacity: 1; pointer-events: auto; }
+.evo-msg-bubble:hover .evo-msg-meta, .evo-msg-meta:has(:focus-visible) { opacity: 1; pointer-events: auto; }
 .evo-msg-bubble::after { content: ''; position: absolute; top: 0; bottom: 0; left: calc(100% - 2px); width: 34px; clip-path: polygon(0 0, 100% calc(100% - 26px), 100% 100%, 0 100%); }
 .evo-msg-user .evo-msg-bubble::after { left: auto; right: calc(100% - 2px); width: 150px; clip-path: polygon(0 calc(100% - 26px), 100% 0, 100% 100%, 0 100%); }
-/* 悬停该消息时把感应梯形淡显出来：所见即悬浮范围（按钮就挂在梯形下段） */
-.evo-msg-row:hover .evo-msg-bubble::after { background: color-mix(in srgb, var(--brand) 16%, transparent); }
+/* 悬停该消息时把感应区淡显出来：所见即悬浮范围（气泡矩形 + 梯形 + 按钮） */
+.evo-msg-bubble:hover::after { background: color-mix(in srgb, var(--brand) 16%, transparent); }
 .evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 0; margin-right: 3px; white-space: nowrap; flex-shrink: 0; }
 .evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 7px; cursor: pointer; padding: 0; }
 .evo-msg-copy:hover { background: var(--hover-bg); color: var(--brand); }
