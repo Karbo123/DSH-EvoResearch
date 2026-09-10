@@ -2225,11 +2225,6 @@ function apply(ctx: any) {
     // HITL 轮询（§21.2/§21.3）：审批与 ask_user 请求经 workspace-api 的自有
     // HTTP 通道暴露（host 事件桥），此处启动清单轮询驱动卡片。
     startHitlPolling()
-    // 调试开关：URL 带 ?debug-sense=1 时可视化消息操作按钮的悬停感应梯形
-    // （.evo-msg-bubble::after），供核对感应范围；无该参数时完全无感。
-    if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug-sense')) {
-      document.documentElement.setAttribute('data-debug-sense', '')
-    }
     // 连接状态源：0.1.3 起 hostDescription 改名 generation（快照存在 = 已握手，
     // 内含 host 握手信息；state 为 connected/connecting 等字符串状态）。
     // 断连/重连经 subscribe 通知 UI。

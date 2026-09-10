@@ -1017,9 +1017,6 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-msg-copy:hover { background: var(--hover-bg); color: var(--brand); }
 .evo-msg-copy.confirming { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
 .evo-msg-copy svg { width: 14px; height: 14px; }
-/* 感应区调试可视化：URL 带 ?debug-sense=1 时涂色（梯形=命中边界、青框=按钮组），生产无此参数零影响 */
-html[data-debug-sense] .evo-msg-bubble::after { background: rgba(255, 96, 0, 0.3); outline: 1px dashed rgba(255, 96, 0, 0.9); }
-html[data-debug-sense] .evo-msg-meta { outline: 1.5px dashed #066679; }
 /* ── Agents 树（Inspector）── */
 .evo-insp-subtab-title { font-size: 11.5px; font-weight: 600; color: var(--color-text-tertiary); letter-spacing: 0.3px; text-transform: uppercase; padding: 2px 4px; }
 .evo-agent-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 12px; }
