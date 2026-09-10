@@ -445,9 +445,11 @@ body { margin: 0; }
 .evo-load-earlier { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
 .evo-load-earlier:hover { border-color: var(--brand); color: var(--color-text-primary); }
 .evo-load-earlier svg { width: 13px; height: 13px; }
-.evo-jump-latest { position: sticky; bottom: 12px; align-self: flex-end; display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font-size: 12.5px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); transition: border-color 0.15s, color 0.15s, transform 0.15s; }
-.evo-jump-latest:hover { border-color: var(--brand); color: var(--brand); transform: translateY(-1px); }
-.evo-jump-latest svg { width: 14px; height: 14px; }
+/* 「回到最新」：iOS 风格圆形毛玻璃图标钮（纯图标 + tooltip，贴合苹果控制件语言） */
+.evo-jump-latest { position: sticky; bottom: 14px; align-self: flex-end; margin: 0 18px 2px 0; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--color-surface) 68%, transparent); backdrop-filter: blur(14px) saturate(1.6); -webkit-backdrop-filter: blur(14px) saturate(1.6); color: var(--color-text-secondary); cursor: pointer; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.12); transition: color 0.16s ease, border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease; }
+.evo-jump-latest:hover { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, transparent); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16); }
+.evo-jump-latest:active { transform: translateY(0); }
+.evo-jump-latest svg { width: 17px; height: 17px; }
 .evo-msg-row { display: flex; gap: 10px; align-items: flex-start; position: relative; }
 .evo-msg-row:hover { z-index: 6; }
 /* 连续 AI 回复续行：头像仅分组首条出现；续行保留占位对齐文本、收紧与上一条的间距 */

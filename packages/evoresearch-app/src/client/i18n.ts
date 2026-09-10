@@ -92,7 +92,6 @@ const DICT: Record<string, [string, string]> = {
   previewEmpty: ['Nothing to preview yet — start typing Markdown.', '暂无预览内容——开始输入 Markdown 吧。'],
   loadEarlier: ['Load earlier', '加载更早消息'],
   jumpToLatest: ['Jump to latest', '回到最新'],
-  latest: ['Latest', '最新'],
   // 检查器
   workspace: ['Workspace', '工作区'],
   agents: ['Agents', '智能体'],

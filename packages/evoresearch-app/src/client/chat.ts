@@ -1290,8 +1290,10 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
     if (box !== null) box.scrollTop = box.scrollHeight
     nearBottomRef.current = true
     setShowJump(false)
-    // 回到最新后释放旧页（§9.3：位于底部时 DOM 只保留最近一页）
+    // 回到最新后释放旧页（§9.3：位于底部时 DOM 只保留最近一页）。释放会让内容
+    // 高度骤缩、浏览器钳制 scrollTop，rAF 等布局完成后再补一次贴底确保到底。
     if (visibleCount > PAGE_SIZE) setVisibleCount(PAGE_SIZE)
+    requestAnimationFrame(stickToBottom)
   }
 
   // ── 斜杠命令直接执行（§23.3）：Enter 执行，结果以文本显示在输入区上方 ──
@@ -1871,9 +1873,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, error, current
                   title: t('jumpToLatest'),
                   'aria-label': t('jumpToLatest'),
                   onClick: jumpToLatest,
-                  children: jsxs(Fragment, {
-                    children: [jsx(ChevronDown, {}), jsx('span', { children: t('latest') })],
-                  }),
+                  children: jsx(ChevronDown, {}),
                 }),
               ],
             })
