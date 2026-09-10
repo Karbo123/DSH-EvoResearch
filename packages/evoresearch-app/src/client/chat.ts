@@ -509,7 +509,9 @@ function recentEngineUsage(force = false): Promise<WebSearchEngineUsage[]> {
 }
 
 function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onOpenProjectFile, continued }: { node: ChatNode; nodeKey?: string; highlight?: boolean; toolResults: Record<string, { text: string; isError: boolean }>; sessionId: string | null; onOpenProjectFile?: (relPath: string) => void; continued?: boolean }) {
-  const text = assistantText(node)
+  // trim：纯空白文本（部分模型在工具调用前会发空白段）不渲染空气泡，也就不会
+  // 在头像旁挂出一个孤儿复制按钮
+  const text = assistantText(node).trim()
   const reasoning = assistantReasoning(node)
   const tools = assistantTools(node, toolResults)
   // web_search 卡片标注实际使用的引擎（按查询串匹配最近一次登记；旧消息无登记则不显示）
