@@ -843,6 +843,13 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-composer-perm .evo-dropdown-btn:hover, .evo-composer-perm .evo-dropdown-btn.evo-dropdown-open { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); color: var(--brand); }
 .evo-composer-perm .evo-dropdown-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
 .evo-composer-perm .evo-dropdown-value { flex: 0 1 auto; min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 输入框状态行内的「打开方式」：紧凑幽灵胶囊（evo-dropdown 默认 width:100% 是给设置表单的，
+   放在 flex 行里会撑满整行并把右侧 Markdown 开关挤到下一行）。注意：本文件是模板字符串，勿写反引号 */
+.evo-dropdown.evo-composer-openin { display: inline-flex; width: auto; flex-shrink: 0; }
+.evo-composer-openin .evo-dropdown-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; width: auto; height: auto; padding: 2px 7px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--color-text-tertiary); font-size: 11px; font-weight: 400; line-height: 1.5; white-space: nowrap; }
+.evo-composer-openin .evo-dropdown-btn:hover, .evo-composer-openin .evo-dropdown-btn.evo-dropdown-open { border-color: var(--color-border-light); background: var(--hover-bg); color: var(--brand); }
+.evo-composer-openin .evo-dropdown-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+.evo-composer-openin .evo-dropdown-value { flex: 0 0 auto; min-width: 0; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-stats-sep { color: var(--color-border); margin-right: 8px; }
 /* ── 插件清单：自适应多列（窄 1~2 列、宽屏最多 4 列），撑满可用宽度、可垂直滚动 ──
    最大高度按“最多一次性展示 10 行”计算（行高约 31px + 6px 行距）；
@@ -2015,10 +2022,12 @@ html.dark .evo-composer-editor-host .milkdown .ProseMirror pre { background: col
 }
 @container (max-width: 560px) {
   .evo-composer-perm .evo-dropdown-value,
+  .evo-composer-openin .evo-dropdown-value,
   .evo-composer-model-name,
   .evo-composer-model-effort { display: none; }
   .evo-composer-perm .evo-dropdown-btn,
   .evo-composer-model { width: 30px; height: 28px; justify-content: center; padding-inline: 6px; gap: 0; }
+  .evo-composer-openin .evo-dropdown-btn { padding-inline: 5px; gap: 0; }
 }
 /* ── 科研回合（Part B：四阶段模板）── */
 .evo-rounds-card { gap: 10px; }

@@ -123,6 +123,14 @@ async function buildNodeHalf() {
 }
 
 async function buildClient() {
+  // 守卫：styles.ts 的 CSS 是一整块模板字符串（串首/串尾共 2 个反引号）。正文里
+  // 多出任何一个反引号都会把字符串提前截断，且截断后的残缺语法可能恰好合法——
+  // esbuild 照样产出 bundle，错误推迟到浏览器运行时才以 ReferenceError 爆发。
+  const stylesSource = readFileSync(join(PKG, 'src', 'client', 'styles.ts'), 'utf8')
+  const backtickCount = (stylesSource.match(/`/g) ?? []).length
+  if (backtickCount !== 2) {
+    throw new Error(`styles.ts 模板字符串守卫：反引号数量为 ${backtickCount}（应为 2：串首/串尾）。CSS 正文（含注释）禁止使用反引号，请改用普通引号或改写文案。`)
+  }
   // 生成 KaTeX CSS（字体内联为 data URL），供客户端注入
   generateKatexCss()
   // 生成 React Flow（@xyflow/react）必需样式，供客户端注入

@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import { jsx } from 'react/jsx-runtime'
+import { ExternalLink } from 'lucide-react'
 import { Dropdown } from './dropdown'
 import { toast } from './toast'
 import { t } from './i18n'
@@ -27,6 +28,8 @@ export function OpenInMenu({ path }: { path: string | null }) {
   if (path === null || apps.length === 0) return null
   return jsx(Dropdown, {
     value: '',
+    className: 'evo-composer-openin',
+    icon: ExternalLink,
     options: apps.map((a) => ({ value: a, label: a })),
     placeholder: t('openIn'),
     title: t('openInTitle'),
