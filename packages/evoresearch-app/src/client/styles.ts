@@ -994,17 +994,22 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-plugin-version { flex: none; color: var(--color-text-tertiary); font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: nowrap; }
 .evo-plugin-state { font-size: 10.5px; color: var(--color-text-tertiary); flex-shrink: 0; }
 .evo-plugin-ok { color: var(--color-success); }
-/* ── 消息复制 / 编辑 / 回溯（气泡外角操作行）──
-   悬停时按钮贴合气泡外角浮现：AI 消息在右下角外、用户消息在左下角外（镜像），
-   DOM 置于气泡内以便以气泡为定位基准，视觉上挂在气泡轮廓外、不占布局空间。
-   top 上提 4px 与气泡底边重叠，保证指针从气泡滑向按钮时不脱离 hover 链。
-   键盘聚焦（focus-within）同样浮现。 */
+/* ── 消息复制 / 编辑 / 回溯（气泡侧边操作行）──
+   悬停时按钮出现在气泡旁的空白侧边（AI 消息在右、用户消息在左镜像），按钮底边
+   与气泡底边对齐；绝对定位不占布局空间。操作行 DOM 置于气泡内、以气泡为定位基准。
+   触达感应区（.evo-msg-bubble::after）：从气泡侧边外缘延伸到按钮外缘的直角梯形
+   （clip-path 裁剪即感应边界）：气泡侧取全高、按钮侧收窄到按钮高度，底边平齐——
+   鼠标沿任意路径从气泡滑向按钮都始终踩在梯形内，按钮不会中途消失；梯形不可见、
+   仅参与命中。 */
+.evo-msg-row:hover { z-index: 6; }
 .evo-msg-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; position: relative; }
 .evo-msg-user .evo-msg-stack { align-items: flex-end; gap: 2px; }
 .evo-msg-author { padding: 0 3px; color: var(--color-text-tertiary); font-size: 11px; line-height: 1.2; }
-.evo-msg-meta { position: absolute; top: calc(100% - 4px); right: 0; z-index: 6; display: flex; align-items: center; flex-wrap: nowrap; gap: 2px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.12s ease; }
-.evo-msg-user .evo-msg-meta { right: auto; left: 0; }
+.evo-msg-meta { position: absolute; bottom: 0; left: calc(100% + 8px); z-index: 6; display: flex; align-items: center; flex-wrap: nowrap; gap: 2px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.12s ease; }
+.evo-msg-user .evo-msg-meta { left: auto; right: calc(100% + 8px); }
 .evo-msg-row:hover .evo-msg-meta, .evo-msg-meta:focus-within { opacity: 1; pointer-events: auto; }
+.evo-msg-bubble::after { content: ''; position: absolute; top: 0; bottom: 0; left: calc(100% - 2px); width: 34px; clip-path: polygon(0 0, 100% calc(100% - 26px), 100% 100%, 0 100%); }
+.evo-msg-user .evo-msg-bubble::after { left: auto; right: calc(100% - 2px); width: 150px; clip-path: polygon(0 calc(100% - 26px), 100% 0, 100% 100%, 0 100%); }
 .evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 0; margin-right: 3px; white-space: nowrap; flex-shrink: 0; }
 .evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: var(--color-text-tertiary); border-radius: 7px; cursor: pointer; padding: 0; }
 .evo-msg-copy:hover { background: var(--hover-bg); color: var(--brand); }
