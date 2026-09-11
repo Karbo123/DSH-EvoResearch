@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">Research OS</title>
-  <desc id="desc">A geometric R mark with a blue research focus point.</desc>
-  <rect width="64" height="64" rx="18" fill="#1d1d1f"/>
-  <path d="M20 44V20h11.5a9 9 0 0 1 0 18H20M31 38l11 6" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="46" cy="18" r="4" fill="#0a84ff"/>
+  <title id="title">EvoResearch</title>
+  <desc id="desc">Stone-brown R mark with a sage green focus point (Natural Organic palette).</desc>
+  <rect width="64" height="64" rx="20" fill="#5c4033"/>
+  <path d="M20 44V20h11.5a9 9 0 0 1 0 18H20M31 38l11 6" fill="none" stroke="#faf6f1" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="46" cy="18" r="4.5" fill="#8b9d77"/>
 </svg>

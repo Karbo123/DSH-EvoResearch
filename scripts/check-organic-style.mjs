@@ -39,6 +39,10 @@ function stripComments(src) {
 }
 const stylesCode = stripComments(styles)
 const codeOf = (file) => (file === 'styles.ts' ? stylesCode : stripComments(readFileSync(join(CLIENT, file), 'utf8')))
+/** 静态资源（svg 等）也按同一条调色板规则校验 */
+const ASSET_DIR = join(ROOT, 'packages', 'evoresearch-app', 'frontend')
+const assetFiles = readdirSync(ASSET_DIR).filter((f) => f.endsWith('.svg')).map((f) => `../frontend/${f}`)
+const assetCodeOf = (rel) => readFileSync(join(ASSET_DIR, rel.replace('../frontend/', '')), 'utf8')
 
 // ───────────────────────── ① 禁止项扫描 ─────────────────────────
 /** [正则, 说明, 豁免判断(行文本) => 是否豁免] */
@@ -91,9 +95,15 @@ const EXCEPTION_HEX = new Set([
   '#352d24', '#262119', '#c08a5e', '#3a3228', '#241f19', '#7d7260', '#c42b1c', '#221d18',
   '#d8cdbb', '#efe6d8', '#faf6f1', '#16130f', '#1e1b16', '#292420', '#17140f',
 ])
-for (const file of clientFiles) {
+/** 调色板白名单 = 令牌层定义的全部色值（浅 + 深）∪ 登记例外。
+    规则：styles.ts 之外出现的任何 hex 必须是"令牌里有的"或"登记过的"，杜绝随手写色。 */
+const tokenPalette = new Set(
+  [...styles.slice(styles.indexOf(':root {'), styles.indexOf('* { box-sizing')).matchAll(/:\s*(#[0-9a-fA-F]{3,8})\s*[;)]/g)].map((m) => m[1].toLowerCase()),
+)
+const allowedHex = new Set([...tokenPalette, ...EXCEPTION_HEX])
+for (const file of [...clientFiles, ...assetFiles]) {
   if (VENDOR.has(file)) continue
-  const lines = codeOf(file).split('\n')
+  const lines = (file.startsWith('../frontend/') ? assetCodeOf(file) : codeOf(file)).split('\n')
   for (let i = 0; i < lines.length; i += 1) {
     const found = lines[i].match(/#[0-9a-fA-F]{3,8}\b/g) ?? []
     for (const hex of found) {
@@ -108,8 +118,8 @@ for (const file of clientFiles) {
         fail(`禁止项[霓虹高饱和 ${sat.toFixed(0)}%] ${where}: ${hex}`)
         continue
       }
-      // styles.ts 的令牌块是色值来源；其他文件只允许登记过的例外色
-      if (file !== 'styles.ts' && !PALETTE_EXCEPTIONS.has(file) && !EXCEPTION_HEX.has(hex.toLowerCase())) {
+      // styles.ts 的令牌块是唯一色值来源；其他文件只允许令牌值或登记例外
+      if (file !== 'styles.ts' && !PALETTE_EXCEPTIONS.has(file) && !allowedHex.has(hex.toLowerCase())) {
         fail(`色值漂移[未登记] ${where}: ${hex}（请改用令牌或加入调色板）`)
       }
     }
