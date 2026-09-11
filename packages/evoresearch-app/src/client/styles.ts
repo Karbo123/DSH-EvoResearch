@@ -750,8 +750,8 @@ body { margin: 0; }
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .evo-insp-tab:hover { color: var(--color-text-primary); }
-.evo-insp-tab[data-active] { color: var(--color-text-primary); border-bottom-color: transparent; font-weight: 600; }
-.evo-insp-tab[data-active]::after { content: ''; position: absolute; left: 9px; right: 9px; bottom: -1px; height: 3px; border-radius: var(--r-pill); background: var(--brand); }
+/* 选中态用"浅底 + 字重"表达（与顶部页签同一语言，不再用彩色下划线） */
+.evo-insp-tab[data-active] { color: var(--color-text-primary); border-bottom-color: transparent; font-weight: 600; background: color-mix(in srgb, var(--color-text-primary) 8%, transparent); border-radius: var(--r-pebble-sm) var(--r-pebble-sm) 0 0; }
 .evo-insp-tab svg { width: 15px; height: 15px; }
 .evo-insp-close { margin-left: auto; }
 .evo-insp-body { flex: 1; overflow-y: auto; min-height: 0; }
@@ -2022,13 +2022,15 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
    ② 活动页签与下方内容面同色、只有上圆角、底边开口并盖住分割线（融接）；
    ③ 未活动页签只有悬停时才浮现底色，彼此之间是细分隔线；
    ④ 关闭钮在未活动页签上悬停才出现，活动页签常驻（Chromium 同款）。
-   本项目的自然有机风处理：上圆角用不等角（12/10），活动页签顶边一道鼠尾草
-   细线——对应 Chrome 的"标签组色线"，作为品牌签名。 */
+   尺寸与分区（用户验收反馈后调整）：页签有**最小宽度**（不再挤成一条），标题左对齐、
+   关闭钮右对齐，中间留出足够空白；关闭钮命中区只外扩 3px，不再覆盖标题尾部。
+   活动态只用"面 + 描边 + 字重"表达，**不加彩色顶线**——此前那道鼠尾草绿线是自创的
+   "标签组色线"，风格文档并未要求横线高亮，用户明确不喜欢，已移除。 */
 .evo-tabbar { display: flex; align-items: flex-end; gap: 0; padding: 6px 14px 0; background-color: var(--strip-bg); background-image: var(--organic-grain); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
 .evo-tab {
-  position: relative; display: inline-flex; align-items: center; gap: 6px;
-  max-width: 210px; height: 33px; padding: 0 10px 0 12px; margin-bottom: -1px;
-  border: 1px solid transparent; border-top: 2px solid transparent; border-bottom: none;
+  position: relative; display: inline-flex; align-items: center; gap: 10px;
+  min-width: 138px; max-width: 224px; height: 34px; padding: 0 8px 0 16px; margin-bottom: -1px;
+  border: 1px solid transparent; border-bottom: none;
   border-radius: 12px 10px 0 0;
   background: transparent; color: var(--color-text-secondary);
   font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap;
@@ -2042,18 +2044,20 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-tab:hover { background-color: color-mix(in srgb, var(--color-text-primary) 6%, transparent); color: var(--color-text-primary); }
 .evo-tab[data-active] {
   background: var(--color-background); color: var(--color-text-primary); font-weight: 600;
-  border-color: var(--color-border); border-top-color: var(--accent-sage);
+  border-color: var(--color-border);
 }
 /* 活动页签底部"封印"：盖住页签栏分割线，让页签与内容面连成一体 */
 .evo-tab[data-active]::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--color-background); }
 /* 拖拽中的 tab：抬起、加投影、禁止触摸滚动干扰；位置由内联 transform 跟随指针/FLIP */
 .evo-tab.evo-tab-dragging { cursor: grabbing; background: var(--color-surface); border-color: var(--color-border); border-radius: var(--r-pebble); box-shadow: var(--shadow-md); touch-action: none; transition: transform 0.1s ease, box-shadow 0.15s ease; }
-.evo-tab-title { overflow: hidden; text-overflow: ellipsis; }
+/* 标题占满左侧剩余空间（左对齐 + 省略号），关闭钮被 margin-left:auto 推到最右 */
+.evo-tab-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* 文件编辑 tab：未改动=斜体，有未保存改动=正体（仿 VSCode dirty 语义的斜体约定） */
 .evo-tab-title-file { font-style: italic; }
 .evo-tab-title-file.evo-tab-title-dirty { font-style: normal; font-weight: 700; color: var(--color-text-primary); }
-.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: var(--r-dot); cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0; pointer-events: none; position: relative; transition: opacity var(--dur-quick) var(--ease-organic), background-color var(--dur-quick) var(--ease-organic); }
-.evo-tab-close::after { content: ''; position: absolute; inset: -6px; }
+.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: auto; border: none; background: none; color: currentColor; border-radius: var(--r-dot); cursor: pointer; padding: 0; flex: 0 0 auto; opacity: 0; pointer-events: none; position: relative; transition: opacity var(--dur-quick) var(--ease-organic), background-color var(--dur-quick) var(--ease-organic); }
+/* 命中区只外扩 3px（原 -6px 会盖住标题尾部，容易点成关闭） */
+.evo-tab-close::after { content: ''; position: absolute; inset: -3px; }
 .evo-tab:hover .evo-tab-close, .evo-tab:focus-within .evo-tab-close, .evo-tab[data-active] .evo-tab-close { opacity: 0.7; pointer-events: auto; }
 .evo-tab-close:hover { background: color-mix(in srgb, var(--color-text-primary) 14%, transparent); opacity: 1; }
 .evo-tab-close svg { width: 11px; height: 11px; }
