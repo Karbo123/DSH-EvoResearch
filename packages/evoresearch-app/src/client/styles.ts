@@ -826,6 +826,30 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-ctx-ok { color: var(--color-success); }
 .evo-ctx-watch { color: var(--color-warning); }
 .evo-ctx-high { color: var(--color-error); }
+/* 胶囊本体是按钮：点击展开上下文明细浮层（§23.9） */
+.evo-ctx-wrap { position: relative; display: inline-flex; }
+.evo-ctx-meter { border: none; font: inherit; font-size: 11px; cursor: pointer; }
+.evo-ctx-meter:hover, .evo-ctx-meter-open { box-shadow: 0 0 0 1px currentColor; }
+/* 上下文明细浮层：标题 + 容量条 + 分类占比行 + 平均缓存命中率 */
+.evo-ctx-panel { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 3000; width: 288px; max-width: calc(100vw - 24px); padding: 12px 14px; border: 1px solid var(--color-border); border-radius: 11px; background: var(--color-surface); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); font-size: 12.5px; color: var(--color-text-secondary); }
+.evo-ctx-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.evo-ctx-panel-title { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+.evo-ctx-panel-value { font-size: 12.5px; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.evo-ctx-panel-bar { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--color-text-tertiary) 22%, transparent); overflow: hidden; margin-bottom: 10px; }
+.evo-ctx-panel-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 78%, white 8%), var(--brand)); }
+.evo-ctx-panel-rows { display: flex; flex-direction: column; gap: 7px; }
+.evo-ctx-panel-row { display: flex; align-items: center; gap: 9px; }
+.evo-ctx-panel-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: color-mix(in srgb, var(--color-text-tertiary) 60%, transparent); }
+.evo-ctx-panel-dot[data-key='messages'] { background: var(--brand); }
+.evo-ctx-panel-dot[data-key='mcp'] { background: color-mix(in srgb, var(--brand) 62%, var(--color-surface)); }
+.evo-ctx-panel-dot[data-key='tools'] { background: color-mix(in srgb, var(--brand) 46%, var(--color-surface)); }
+.evo-ctx-panel-dot[data-key='skills'] { background: color-mix(in srgb, var(--brand) 32%, var(--color-surface)); }
+.evo-ctx-panel-dot[data-key='system'] { background: color-mix(in srgb, var(--brand) 20%, var(--color-surface)); }
+.evo-ctx-panel-dot[data-key='other'] { background: color-mix(in srgb, var(--color-text-tertiary) 45%, transparent); }
+.evo-ctx-panel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-ctx-panel-pct { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+.evo-ctx-panel-foot { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--color-border-light); display: flex; align-items: center; justify-content: space-between; }
+.evo-ctx-panel-foot span:last-child { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
 /* 会话统计行：与输入框同宽，位于圆角框外部正下方、水平居中、紧贴。
    不设 max-width 上限——统计项在整行宽度内挤得下就不换行，只在确实放不下时
    flex 换行（此前 75% 上限会在中间列变窄时提前换行，明明放得下也占两行）。 */

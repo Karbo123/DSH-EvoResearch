@@ -1386,6 +1386,14 @@ const DICT: Record<string, [string, string]> = {
   // P0-4 上下文占用条
   ctxUsageLabel: ['Context', '上下文'],
   ctxUsageDetail: ['About {used} / {total} tokens ({percent}%)', '约 {used} / {total} tokens（{percent}%）'],
+  ctxCapacity: ['Context capacity', '上下文容量'],
+  ctxRowMessages: ['Messages', '消息'],
+  ctxRowMcp: ['MCP tools', 'MCP 工具'],
+  ctxRowTools: ['System tools', '系统工具'],
+  ctxRowSkills: ['Skills', '技能'],
+  ctxRowSystem: ['System prompt', '系统提示词'],
+  ctxRowOther: ['Other', '其他'],
+  ctxCacheHitAvg: ['Average cache hit rate', '平均缓存命中率'],
   ctxCompactNow: ['Compact now', '立即压缩'],
   // P0-3 后台任务面板
   jobHubTitle: ['Background tasks', '后台任务'],

@@ -554,7 +554,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     if (s === undefined) return undefined
     // 0.1.3：ProjectionsFace 只有 faceOf(key)（无 subscribeAny）—— 逐键订阅。
     const disposers: Array<() => void> = []
-    for (const key of ['sessionStats', 'tokenUsage', 'contextPressure', 'permissions', 'goal']) {
+    for (const key of ['sessionStats', 'tokenUsage', 'contextPressure', 'contextBreakdown', 'permissions', 'goal']) {
       const face = (s.projections as any)?.faceOf?.(key)
       if (face?.subscribe) disposers.push(face.subscribe(() => setProjTick((v) => v + 1)))
     }
