@@ -21,9 +21,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/workbench-dark.png" alt="深色工作台" width="32%">
-  <img src="docs/screenshots/light-workbench.png" alt="浅色工作台" width="32%">
-  <img src="docs/screenshots/research-chat.png" alt="科研对话" width="32%">
+  <img src="docs/screenshots/workbench-light.png" alt="EvoResearch 工作台（浅色主题，对话 + 项目侧栏 + 工作区文件）" width="100%">
 </p>
 
 ---

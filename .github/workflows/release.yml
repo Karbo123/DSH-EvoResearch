@@ -349,39 +349,26 @@ jobs:
 
   # ── 发布说明：全部产物上传完成后，按固定模板写入 Release body ──────────────
   # 模板：平台下载表（含 iOS）+ 卖点简介 + 自动提取的 commit 变更摘要。
+  # ── 发布说明：全部产物上传完成后，按固定模板写入 Release body ──────────────
+  # 模板：平台下载表（含 iOS）+ 卖点简介。不生成 commit 变更摘要——
+  # Release 是固定 tag 覆盖发布，"上一版"随时会被覆盖，commit 摘要没有对照意义。
   publish-notes:
     needs: [desktop, android]
     if: ${{ !cancelled() && needs.desktop.result == 'success' && needs.android.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout（取 commit 历史生成变更摘要）
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: 生成并写入 Release Notes（固定模板）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          # ── 变更摘要：相对上一个 tag 的 commit 首行（过滤 CI 调试噪音）──
-          PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)
-          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "${TAG}" ]; then
-            RANGE="${PREV_TAG}..${GITHUB_SHA}"
-          else
-            RANGE="-30 ${GITHUB_SHA}"
-          fi
-          CHANGES=$(git log --no-merges --format='- %s' ${RANGE} \
-            | grep -vE '^- (ci\(debug\)|chore: 数据目录)' || true)
-          CHANGES=$(echo "$CHANGES" | head -20)
-
           {
             cat <<'HEAD'
           > 🎉 **EvoResearch v0.1.0-rc.1 来了！** 一个为科研而生的智能体工作台：
           > 对话、文献、实验、记忆全流程打通。首次使用？看下面的表格选对你的设备就行。
-
+          
           ## 📦 下载哪个文件？
-
+          
           | 你的设备 | 下载这个 | 怎么用 |
           |---|---|---|
           | 🪟 **Windows 10/11** | `EvoResearch_0.1.0-rc.1_x64-setup.exe` | 双击安装，打开即用。**大多数用户选这个** ⭐ |
@@ -391,32 +378,28 @@ jobs:
           | 🤖 Android 手机 (arm64) | `app-arm64-release.apk` | 下载安装即可（预览版） |
           | 🤖 Android 其它架构 | `app-arm / app-x86 / app-x86_64-release.apk` | 按手机架构选择 |
           | 📱 iPhone / iPad | `ios-build.zip`（见本页 Assets 或 Actions 产物） | 解压出 .app；正式 IPA 需签名后提供 |
-
+          
           > 💡 不确定选哪个？Windows 用户无脑选第一个；Mac 选 aarch64.dmg；
           > Android/iOS 未签名包首次打开需允许「未知来源 / 开发者信任」。
-
+          
           ## ✨ 这个版本有什么？
-
+          
           EvoResearch 是一个懂科研的本地智能体工作台——你的对话、文献、
           项目文件、实验记录和长期记忆全部连成一体：
-
+          
           - 🧠 **科研记忆**：重要结论自动沉淀，下次对话随取随用
           - 🕸️ **Chat Graph**：从任意消息分叉探索不同假设，并行推进
           - 🧪 **实验控制台**：账本 + 回合 + 日报，每轮实验全程留痕
           - 👥 **多智能体协作**：规划、调研、编码、分析、写作组队干活
           - 📱 **全平台覆盖**：Windows / macOS / Linux 桌面 + Android + iOS
-
+          
           完整功能介绍见仓库 README。
-
-          ## 📝 相比上一版的更新
-
           HEAD
-            if [ -n "$CHANGES" ]; then echo "$CHANGES"; else echo "（首次发布）"; fi
             echo ""
             echo "---"
             echo "💬 有问题或建议？欢迎提 [Issue](https://github.com/${GITHUB_REPOSITORY}/issues) · 如果对你有帮助，给仓库点个 Star ⭐"
           } > release-notes.md
-
+          
           # PATCH 只支持 /releases/{id}（by-tag 路由会 404）；用 prepare-release
           # 传下来的 release_id，缺失时现场查询兜底
           RELEASE_ID=${{ needs.prepare-release.outputs.release_id }}
