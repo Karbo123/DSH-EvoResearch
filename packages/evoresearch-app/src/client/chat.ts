@@ -809,6 +809,8 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
     composerMarkdownRef.current = value
     if (syncEditor && composerEditorRef.current !== null) replaceEditorMarkdown(value)
     if (cursorToEnd) requestAnimationFrame(() => moveCursorToEnd())
+    // 内容变化后按新内容自适应高度（多行向上长高、清空回落）
+    requestAnimationFrame(() => fitComposerHeightRef.current())
   }
   // 滚动容器 = 聊天区自身：.evo-center 只是 overflow:hidden 的外壳，真正滚动发生在
   // .evo-chat（flex 子项、overflow-y:auto）。旧实现误指 .evo-center——scrollTop 写入
@@ -1474,6 +1476,8 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
               historyDraftRef.current = null
               setHistoryIndex(-1)
             }
+            // 富文本内容变化后自适应高度（与纯文本路径一致）
+            requestAnimationFrame(() => fitComposerHeightRef.current())
             if (!suppressCandidateTriggerRef.current) {
               try {
                 const selection = ctx.get(editorViewCtx).state.selection
@@ -1620,6 +1624,48 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
     const vh = typeof window !== 'undefined' ? window.innerHeight : 900
     return Math.max(composerMinHeight(), Math.min(Math.round(vh * 0.55) + (markdownToolbarOpen ? MARKDOWN_TOOLBAR_HEIGHT : 0), 520 + MARKDOWN_TOOLBAR_HEIGHT))
   }
+  // ── 内容自适应高度（§23.1b）：多行输入自动向上长高、尽量完整显示，上限与拖拽一致 ──
+  const composerBoxRef = useRef<HTMLDivElement | null>(null)
+  const composerHeightRef = useRef<number | null>(null)
+  composerHeightRef.current = composerHeight
+  // 当前高度是否来自自适应（拖拽后置 false，避免自动收缩覆盖用户手动高度）
+  const composerAutoHeightRef = useRef(true)
+  const fitComposerHeight = () => {
+    const box = composerBoxRef.current
+    if (box === null || composerResizeRef.current !== null) return
+    // 自然内容高度：纯文本模式量 textarea（textarea 不随内容自撑，百分百高度会退化），
+    // 富文本模式临时解除高度约束量编辑器实际内容高。
+    let natural: number
+    const ta = composerPlainTextRef.current
+    if (markdownPlainText && ta !== null) {
+      natural = Math.ceil(ta.scrollHeight)
+    } else {
+      const prev = box.style.height
+      box.style.height = 'auto'
+      natural = Math.ceil(box.getBoundingClientRect().height)
+      box.style.height = prev
+    }
+    const min = composerMinHeight()
+    const max = composerMaxHeight()
+    const next = Math.max(min, Math.min(natural, max))
+    const current = composerHeightRef.current ?? min
+    // 手动拖拽过的高度不被自动收缩覆盖；内容需要更高时仍自动长高
+    if (!composerAutoHeightRef.current && next <= current) return
+    composerAutoHeightRef.current = true
+    const applied = next <= min ? null : next
+    if (applied !== composerHeightRef.current) {
+      composerHeightRef.current = applied
+      setComposerHeight(applied)
+    }
+  }
+  const fitComposerHeightRef = useRef(fitComposerHeight)
+  fitComposerHeightRef.current = fitComposerHeight
+  // 视口变化会改变上限（55vh）：重新按当前内容适配
+  useEffect(() => {
+    const onResize = () => fitComposerHeightRef.current()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const toggleMarkdownToolbar = () => {
     const next = !markdownToolbarOpen
     setMarkdownToolbarOpen(next)
@@ -1628,6 +1674,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
       const adjusted = height + (next ? MARKDOWN_TOOLBAR_HEIGHT : -MARKDOWN_TOOLBAR_HEIGHT)
       return Math.max(COMPOSER_BASE_MIN_HEIGHT + (next ? MARKDOWN_TOOLBAR_HEIGHT : 0), adjusted)
     })
+    requestAnimationFrame(() => fitComposerHeightRef.current())
   }
   // 「实时 Markdown」切换的是编辑模式；铅笔按钮只负责工具栏显隐。
   const toggleMarkdownEditorMode = () => {
@@ -1639,7 +1686,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
         setComposerHeight((height) => height === null ? null : Math.max(COMPOSER_BASE_MIN_HEIGHT, height - MARKDOWN_TOOLBAR_HEIGHT))
       }
       setMarkdownPlainText(true)
-      requestAnimationFrame(() => composerPlainTextRef.current?.focus())
+      requestAnimationFrame(() => { composerPlainTextRef.current?.focus(); fitComposerHeightRef.current() })
       return
     }
     // 切回所见即所得前，先把纯文本编辑器中的最新 Markdown 重新解析到 Milkdown。
@@ -1648,6 +1695,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
     requestAnimationFrame(() => {
       focusEditor()
       moveCursorToEnd()
+      fitComposerHeightRef.current()
     })
   }
   const onPlainTextInput = (e: { currentTarget: HTMLTextAreaElement }) => {
@@ -1670,6 +1718,8 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
     if (el === null) return
     composerResizeCleanupRef.current?.()
     composerResizeRef.current = { startY: e.clientY, startH: composerHeight ?? el.offsetHeight, moved: false }
+    // 进入手动调整：此后内容变化不再自动收缩高度（内容变高仍会自动长高）
+    composerAutoHeightRef.current = false
     const handle = e.currentTarget
     composerResizeHandleRef.current = handle
     // Pointer capture is useful when the pointer leaves the 9px hot zone, but
@@ -2265,6 +2315,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
               }),
               jsx('div', {
                 className: 'evo-composer-editor',
+                ref: composerBoxRef,
                 'data-markdown-toolbar-open': markdownToolbarOpen && !markdownPlainText || undefined,
                 'data-markdown-plain': markdownPlainText || undefined,
                 role: 'textbox',
