@@ -826,8 +826,10 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-ctx-ok { color: var(--color-success); }
 .evo-ctx-watch { color: var(--color-warning); }
 .evo-ctx-high { color: var(--color-error); }
-/* 会话统计行：与输入框同宽，位于圆角框外部正下方、水平居中、紧贴。 */
-.evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: 75%; margin: 8px auto 0; display: flex; align-items: center; gap: 10px; }
+/* 会话统计行：与输入框同宽，位于圆角框外部正下方、水平居中、紧贴。
+   不设 max-width 上限——统计项在整行宽度内挤得下就不换行，只在确实放不下时
+   flex 换行（此前 75% 上限会在中间列变窄时提前换行，明明放得下也占两行）。 */
+.evo-composer-stats { flex: 0 0 100%; width: 100%; max-width: none; margin: 8px auto 0; display: flex; align-items: center; gap: 10px; }
 .evo-composer-stats:empty { margin: 0 auto; }
 .evo-composer-stats .evo-statusbar { flex: 1 1 auto; min-width: 0; width: auto; height: auto; min-height: 16px; padding: 0; border-top: 0; background: transparent; flex-wrap: wrap; row-gap: 0; overflow: visible; white-space: normal; line-height: 16px; justify-content: center; }
 /* 模型徽章：品牌色强调、输入框内右下侧（工具栏 spacer 之后、发送按钮之前），点击切换模型 */
