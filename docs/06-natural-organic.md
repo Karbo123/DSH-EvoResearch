@@ -85,7 +85,7 @@
 
 **字体**：`--font-sans` 去 Inter/Roboto，改 `Avenir Next / Segoe UI Variable Text / PingFang SC / Microsoft YaHei`；`--font-serif` = `Iowan Old Style / Palatino / 思源宋体 / Songti SC / SimSun`，用于欢迎标题、面板标题、模态标题、Markdown h1–h3（`tracking-tight`，行高舒适）；等宽字体沿用（代码/路径）。
 
-**纹理**：内联 SVG `feTurbulence` 纸纹（`--organic-grain`，约 3–5% 噪声、平铺 180px）铺在**结构底色**（页面底、左右栏、顶栏、输入区）上；卡片/面板保持干净表面——形成"纸面覆于织物"的层次，也保证正文锐利度（正文不叠噪声）。
+**纹理**：内联 SVG `feTurbulence` 纸纹（`--organic-grain`，浅色 7% / 深色 6% 噪声、平铺 180px、stitchTiles 消接缝）铺在**结构底色**（页面底、左右栏、顶栏、输入区）上；卡片/面板保持干净表面——形成"纸面覆于织物"的层次，也保证正文锐利度（正文不叠噪声）。
 
 **动效**：`--ease-organic: cubic-bezier(.4,0,.2,1)`；`--dur-organic: 480ms`（卡片/菜单/模态等有份量的元素，"植物生长速度"）；`--dur-quick: 200ms`（密集工具区微交互，避免误工效率）；`--dur-morph: 600ms`（blob 形变）。
 - Soft Earth Press：按钮/行 hover 下移 0.5px 并加深土色（不用漂浮/弹跳）。
@@ -169,7 +169,7 @@
 | 大地色系 amber/stone/olive/sage | 令牌层唯一色相来源；冷色主调（色相 190°–300°）由守卫脚本零容忍 |
 | 背景暖米色 | 浅 `#faf6f1`；卡片为暖白 `#fffdf9` 而非纯白 |
 | 不规则圆角 / blob | `--r-blob` 用于卡片与图谱节点，`--r-blob-lg` 用于模态与输入容器，可交互卡片 hover 缓慢形变 |
-| 纸张/织物纹理 | 内联 SVG feTurbulence 纸纹铺在结构底色（页面/左右栏/顶栏/输入区/标签栏/状态栏/轨迹/设置导航） |
+| 纸张/织物纹理 | 内联 SVG feTurbulence 纸纹铺在结构底色（页面/左右栏/顶栏/输入区/标签栏/状态栏/轨迹/设置导航）；像素实测有色阶微噪声（浅色 stddev 0.86 / 深色 1.38，纯色填充应为 0），3× 放大目检为均匀纸面颗粒、无接缝与脏点 |
 | 手写风格或衬线字体 | `--font-serif` 用于欢迎标题、面板/模态/卡片标题与 Markdown 标题（含 Milkdown 编辑器） |
 | 按钮柔和过渡 | 统一 `--dur-*` + `--ease-organic`，hover 加深土色并下沉 0.5px（Soft Earth Press） |
 | 禁止纯黑 / 冷色 / 尖锐几何 / 高科技感 / 霓虹 | 守卫脚本逐条断言（含纯黑、线性渐变、>78% 饱和度、正圆、≤5px 直角、shadow-xl 级重阴影、Inter/Roboto/Geist） |

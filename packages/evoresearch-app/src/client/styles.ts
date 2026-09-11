@@ -89,9 +89,9 @@ export const CSS = `
   --shadow-sm: 0 1px 2px rgb(92 64 51 / 6%);
   --shadow-md: 0 6px 18px rgb(92 64 51 / 10%), 0 1px 3px rgb(92 64 51 / 6%);
   --shadow-lg: 0 14px 34px rgb(74 51 39 / 16%), 0 3px 9px rgb(74 51 39 / 8%);
-  /* ── 纹理：内联 SVG 纸纹（feTurbulence，约 4% 噪声）。
+  /* ── 纹理：内联 SVG 纸纹（feTurbulence，浅色 7% / 深色 6% 噪声，平铺 180px，stitchTiles 消接缝）。
      只铺在结构底色（页面底/左右栏/顶栏/输入区），卡片表面保持干净，正文不叠噪声。 ── */
-  --organic-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.04'/%3E%3C/svg%3E");
+  --organic-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.07'/%3E%3C/svg%3E");
   --chat-max-width: 900px;
   --input-bg: #fffdf9;
   --hover-bg: #efe5d8;
