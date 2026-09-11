@@ -75,8 +75,6 @@ packages/evoresearch-app/src/client/xyflow-css.ts
 
 fork-probe-close.md
 
-.tmp-e2e/
-.playwright-cli/
 visual-composer-*.png
 
 HANDOFF.md
@@ -94,3 +92,15 @@ scripts/.tmp-*
 
 # Chat Graph 重设计计划书（不入库）
 TODO-*.md
+
+# ZCode CLI 工作区（计划、执行日志）与本机工具 hook 状态（运行产物，不入库）
+.zcode/
+.mimosa/
+
+# 本机上下文说明文档与生成图（CLAUDE-better.md 引用 CC-context.svg；
+# 图由 scripts/gen_cc_svg.py 生成——均为本机材料，需入库时再显式 git add -f）
+CLAUDE-better.md
+CC-context.svg
+CC-context.png
+evoresearch-context-assembly.svg
+scripts/gen_cc_svg.py
