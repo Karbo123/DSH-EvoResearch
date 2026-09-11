@@ -968,6 +968,7 @@ html:not(.dark) .evo-tb { background: #f4f4f5; border-bottom-color: #e4e4e7; col
 .evo-dropdown-option[data-active] { background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); }
 .evo-dropdown-option svg { width: 14px; height: 14px; flex: 0 0 auto; }
 .evo-dropdown-option span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evo-dropdown-option-icon { width: 16px; height: 16px; flex: 0 0 auto; border-radius: 4px; object-fit: contain; }
 /* 统一「已获取模型」：胶囊卡片按字母序排列 */
 .evo-llm-fetched { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--color-border-light); }
 .evo-llm-fetched-head { display: flex; align-items: center; gap: 8px; }

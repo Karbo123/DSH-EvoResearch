@@ -8,7 +8,7 @@ import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { Check, ChevronDown } from 'lucide-react'
 import { t } from './i18n'
 
-export interface DropdownOption { value: string; label: string }
+export interface DropdownOption { value: string; label: string; /** 可选项图标（应用图标等小尺寸位图，渲染在标签前）。 */ iconSrc?: string }
 
 export function Dropdown({ value, options, onChange, placeholder, className, icon, title, ariaLabel }: {
   value: string
@@ -111,6 +111,13 @@ export function Dropdown({ value, options, onChange, placeholder, className, ico
           'aria-selected': o.value === value || undefined,
           onClick: () => { onChange(o.value); setOpen(false) },
           children: [
+            o.iconSrc !== undefined && jsx('img', {
+              className: 'evo-dropdown-option-icon',
+              src: o.iconSrc,
+              alt: '',
+              loading: 'lazy',
+              onError: (e: { currentTarget: HTMLImageElement }) => { e.currentTarget.style.display = 'none' },
+            }),
             jsx('span', { children: o.label }),
             o.value === value && jsx(Check, {}),
           ],

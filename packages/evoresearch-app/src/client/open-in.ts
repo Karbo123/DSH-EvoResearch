@@ -14,6 +14,14 @@ import { Dropdown } from './dropdown'
 import { toast } from './toast'
 import { t } from './i18n'
 
+/** 已知应用的展示名（未知 id 首字母大写兜底）；图标走官方 /open-in-app/icon/<id>。 */
+function appLabel(id: string): string {
+  if (id === 'explorer') return t('openInExplorer')
+  if (id === 'vscode') return 'Visual Studio Code'
+  if (id === 'gitbash') return 'Git Bash'
+  return id.charAt(0).toUpperCase() + id.slice(1)
+}
+
 export function OpenInMenu({ path }: { path: string | null }) {
   const [apps, setApps] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -30,7 +38,7 @@ export function OpenInMenu({ path }: { path: string | null }) {
     value: '',
     className: 'evo-composer-openin',
     icon: ExternalLink,
-    options: apps.map((a) => ({ value: a, label: a })),
+    options: apps.map((a) => ({ value: a, label: appLabel(a), iconSrc: `/open-in-app/icon/${encodeURIComponent(a)}` })),
     placeholder: t('openIn'),
     title: t('openInTitle'),
     ariaLabel: t('openIn'),
