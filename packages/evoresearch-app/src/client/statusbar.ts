@@ -25,15 +25,29 @@ interface TrajStats {
   cacheRead: number
 }
 
+/** 从 assistant/message 的 stream 回放里取「首个可见 chunk」的时间戳（首 token 时刻）。 */
+function firstVisibleChunkTime(stream: unknown): number | null {
+  if (!Array.isArray(stream)) return null
+  for (const entry of stream as any[]) {
+    if (entry === null || typeof entry !== 'object') continue
+    if (entry.type === 'chunk' && entry.chunk?.type === 'block-start' && typeof entry.time === 'number') return entry.time
+    if ((entry.type === 'text-chunks' || entry.type === 'reasoning-chunks') && typeof entry.time0 === 'number') return entry.time0
+  }
+  return null
+}
+
 /** 从事件日志统计轨迹指标（与轨迹面板同源）。 */
 function computeStats(events: any[]): TrajStats {
   const stats: TrajStats = { turns: 0, steps: 0, llmMs: 0, toolMs: 0, firstTokenAvgMs: 0, outTokens: 0, inTokens: 0, cacheRead: 0 }
   let stepStart: { turn: number; step: number; time: number } | null = null
   let stepEnd: { turn: number; step: number; time: number } | null = null
   let toolStart: { callId: string; time: number } | null = null
-  let firstTokenMs = 0
-  let firstTokenSteps = 0
   const stepKey = (s: { turn: number; step: number }): string => `${s.turn}:${s.step}`
+  // 逐 step 归集：usage 取权威值（最终 assistant/message 覆盖流式 chunk 的近似值），
+  // 首 token 延迟两者取其一。瞬态 chunk 重载后不在窗口里，必须能从持久事件复算。
+  const stepStarts = new Map<string, number>()
+  const stepFirstToken = new Map<string, number>()
+  const stepUsage = new Map<string, { input: number; output: number; cacheRead: number }>()
   for (const ev of events ?? []) {
     if (ev === null || typeof ev !== 'object') continue
     const type = ev.type
@@ -44,21 +58,44 @@ function computeStats(events: any[]): TrajStats {
       stats.steps += 1
       stepStart = { turn: data.turn ?? 0, step: data.step ?? 0, time }
       stepEnd = null
+      stepStarts.set(stepKey(stepStart), time)
       continue
     }
     // 0.1.3：流式 chunk 以瞬态 assistant/live-chunk 进入事件窗口；
     // rc.2 的 assistant/chunk 保留兼容（conversation.ts 同款双匹配）。
     if (type === 'assistant/chunk' || type === 'assistant/live-chunk') {
       const chunk = data?.chunk
+      const key = stepKey({ turn: data.turn ?? 0, step: data.step ?? 0 })
       if (chunk?.type === 'usage' && chunk.usage !== undefined) {
-        stats.inTokens += chunk.usage.inputTokens ?? 0
-        stats.outTokens += chunk.usage.outputTokens ?? 0
-        stats.cacheRead += chunk.usage.cacheReadTokens ?? 0
+        // 流式期间的近似值，待最终 message 覆盖（同 step 不重复累加）
+        if (!stepUsage.has(key)) {
+          stepUsage.set(key, {
+            input: chunk.usage.inputTokens ?? 0,
+            output: chunk.usage.outputTokens ?? 0,
+            cacheRead: chunk.usage.cacheReadTokens ?? 0,
+          })
+        }
       }
-      if (stepStart !== null && (chunk?.type === 'text-delta' || chunk?.type === 'reasoning-delta' || chunk?.type === 'block-start')) {
-        firstTokenMs += time - stepStart.time
-        firstTokenSteps += 1
-        stepStart = null
+      if (!stepFirstToken.has(key) && (chunk?.type === 'text-delta' || chunk?.type === 'reasoning-delta' || chunk?.type === 'block-start') && stepStarts.has(key)) {
+        stepFirstToken.set(key, Math.max(0, time - (stepStarts.get(key) ?? time)))
+      }
+      continue
+    }
+    if (type === 'assistant/message') {
+      const key = stepKey({ turn: data.turn ?? 0, step: data.step ?? 0 })
+      const usage = data.usage
+      if (usage !== undefined && usage !== null) {
+        // 权威 usage（持久事件的 message.usage；含 cacheReadTokens）
+        stepUsage.set(key, {
+          input: usage.inputTokens ?? 0,
+          output: usage.outputTokens ?? 0,
+          cacheRead: usage.cacheReadTokens ?? 0,
+        })
+      }
+      if (!stepFirstToken.has(key)) {
+        const start = stepStarts.get(key)
+        const firstAt = firstVisibleChunkTime(data.stream)
+        if (start !== undefined && firstAt !== null) stepFirstToken.set(key, Math.max(0, firstAt - start))
       }
       continue
     }
@@ -83,7 +120,13 @@ function computeStats(events: any[]): TrajStats {
       continue
     }
   }
-  if (firstTokenSteps > 0) stats.firstTokenAvgMs = firstTokenMs / firstTokenSteps
+  for (const usage of stepUsage.values()) {
+    stats.inTokens += usage.input
+    stats.outTokens += usage.output
+    stats.cacheRead += usage.cacheRead
+  }
+  const latencies = [...stepFirstToken.values()]
+  if (latencies.length > 0) stats.firstTokenAvgMs = latencies.reduce((a, b) => a + b, 0) / latencies.length
   return stats
 }
 
