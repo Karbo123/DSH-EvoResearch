@@ -651,8 +651,6 @@ body { margin: 0; }
 .evo-suggest-card {
   padding: 9px 20px; font-size: 13px; box-shadow: var(--shadow-sm);
 }
-.evo-welcome-prompt { margin-top: 22px; padding: 0; border: 0; background: none; color: var(--color-text-placeholder); font: inherit; font-size: 13px; line-height: 1.55; cursor: text; }
-.evo-welcome-prompt:hover, .evo-welcome-prompt:focus-visible { color: var(--color-text-secondary); }
 /* ── 欢迎页 Research Dashboard（§31.7）── */
 .evo-dashboard { display: flex; gap: 10px; margin-top: 26px; }
 .evo-dashboard-card { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; padding: 12px 18px; border: 1px solid var(--color-border); border-radius: var(--r-md); background: var(--color-surface); }
