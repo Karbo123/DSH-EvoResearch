@@ -77,9 +77,11 @@ function hasVisibleContent(blocks) {
   })
 }
 
-/** 官方 updateChunk 的裁剪版（block-start / text-delta / reasoning-delta / tool-call-delta / block-end / usage）。 */
+/** 官方 updateChunk 的裁剪版（block-start / text-delta / reasoning-delta / tool-call-delta / block-end / usage）。
+ * 0.1.3 流式增量走瞬态 assistant/live-chunk（与 rc.2 的 assistant/chunk 同构），
+ * 两者都必须进入累加路径——只认旧类型会让流式文本到最终消息才整段出现。 */
 function updateChunk(state, match) {
-  if (match.event.type !== 'assistant/chunk') return state
+  if (match.event.type !== 'assistant/chunk' && match.event.type !== 'assistant/live-chunk') return state
   const chunk = match.event.data.chunk
   const blocks = [...state.blocks]
   switch (chunk.type) {

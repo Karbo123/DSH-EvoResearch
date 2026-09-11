@@ -392,7 +392,12 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
   }, [])
 
   const restoredCurrent = sessions.current
-  const current = homeMode ? undefined : restoredCurrent
+  // 新建会话建立后优先指向它：若 open() 对 store 的写入晚一拍，避免先渲染上次记住的
+  // 会话一帧（表现为「闪到别的对话」）。ref 在用户切会话/再新建时即清空，不会钉住。
+  const justCreated = justCreatedSessionRef.current
+  const current = homeMode
+    ? undefined
+    : (justCreated !== null && justCreated !== restoredCurrent ? justCreated : restoredCurrent)
   const currentTitle = current === undefined ? null : currentTitleOf(sessions, workspaces)
   const running = current !== undefined && sessions.byId[current]?.running === true
   // 当前会话的后台任务（§21.6：jobsBySession 快照）
@@ -1609,7 +1614,9 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
     const effectiveCurrentBefore = current ?? justCreatedSessionRef.current ?? undefined
     if (effectiveCurrentBefore === undefined && pendingFirst === null) {
       setPendingFirst({ text: normalized, ts: Date.now() })
-      setHomeMode(false)
+      // 不在这里退出首页态：此时新会话尚未创建，退出会让 current 回落到上次记住的
+      // 会话（sessions.current），界面先闪到别的对话几百毫秒~几秒再跳到新会话。
+      // 退出首页态统一放在新会话 open() 之后（乐观占位本身会盖住欢迎页）。
     }
     // content 是内容块数组（§23.7 附件：文本 + 图片块），mode 必填（queue = 追加到当前轮次之后）
     const content: Array<{ type: string; text?: string; data?: string; mediaType?: string; name?: string }> = [{ type: 'text', text: normalized }]
