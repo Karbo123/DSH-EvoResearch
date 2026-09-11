@@ -1995,32 +1995,32 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                               children: jsx(Plus, {}),
                             }),
                             tabMenuOpen && jsxs('div', {
-                              className: 'evo-tab-menu',
+                              className: 'evo-pop evo-tab-menu',
                               style: tabMenuPos ?? undefined,
                               children: [
                                 // 重新加回已关闭的固定标签（对话/图谱/轨迹）：各自最多同时 1 个
                                 !tabs.some((t) => t.kind === 'chat') && jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tab-menu-item',
+                                  className: 'evo-pop-item evo-tab-menu-item',
                                   onClick: () => openFixedTab('chat', t('chatTab')),
                                   children: jsxs(Fragment, { children: [jsx(MessagesSquare, {}), jsx('span', { children: t('chatTab') })] }),
                                 }),
                                 !tabs.some((t) => t.kind === 'chatgraph') && jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tab-menu-item',
+                                  className: 'evo-pop-item evo-tab-menu-item',
                                   onClick: () => openFixedTab('chatgraph', t('chatGraphTab')),
                                   children: jsxs(Fragment, { children: [jsx(Share2, {}), jsx('span', { children: t('chatGraphTab') })] }),
                                 }),
                                 !tabs.some((t) => t.kind === 'trajectory') && jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tab-menu-item',
+                                  className: 'evo-pop-item evo-tab-menu-item',
                                   onClick: () => openFixedTab('trajectory', t('trajectoryTab')),
                                   children: jsxs(Fragment, { children: [jsx(Activity, {}), jsx('span', { children: t('trajectoryTab') })] }),
                                 }),
                                 // 从工作区打开（懒加载目录树）
                                 jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tab-menu-item',
+                                  className: 'evo-pop-item evo-tab-menu-item',
                                   disabled: cwdNow === null || tabBusy,
                                   onClick: () => setTabPickerOpen((v) => !v),
                                   children: jsxs(Fragment, { children: [jsx(FolderOpen, {}), jsx('span', { children: t('openFromWorkspace') })] }),
@@ -2030,7 +2030,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                                 // 本地上传 PDF → 预览标签
                                 jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tab-menu-item',
+                                  className: 'evo-pop-item evo-tab-menu-item',
                                   disabled: cwdNow === null || tabBusy,
                                   onClick: () => tabFileInputRef.current?.click(),
                                   children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: t('openPdfTab') })] }),
@@ -2048,7 +2048,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                                 }),
                                 // 新建文本文件
                                 jsxs('div', {
-                                  className: 'evo-tab-menu-item evo-tab-menu-newfile',
+                                  className: 'evo-pop-item evo-tab-menu-item evo-tab-menu-newfile',
                                   children: [
                                     jsx(FileCode2, {}),
                                     jsx('input', {
@@ -2204,7 +2204,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
             'aria-label': t('workbenchMenu'),
             onClick: () => setBrandMenuOpen(false),
             children: jsxs('div', {
-              className: 'evo-brand-menu-panel',
+              className: 'evo-pop evo-brand-menu-panel',
               children: [
                 jsx('div', { className: 'evo-brand-menu-title', children: t('workbench') }),
                 ...MENU.map((item) => {
@@ -2212,7 +2212,7 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
                   const active = (item.key === 'import' && view === 'workspace') || view === item.key
                   return jsx('button', {
                     type: 'button',
-                    className: 'evo-brand-menu-item',
+                    className: 'evo-pop-item evo-brand-menu-item',
                     'data-active': active || undefined,
                     role: 'menuitem',
                     title: item.desc,

@@ -220,7 +220,7 @@ export function CandidatePopup({
 
   if (candidates.length === 0) return null
   return jsxs('div', {
-    className: 'evo-cand',
+    className: 'evo-pop evo-cand',
     role: 'listbox',
     'aria-label': label,
     ref: listRef,

@@ -220,7 +220,7 @@ function GraphNodeView({ data, selected }: NodeProps<XYNode<GraphNodeData>>) {
       id,
       type,
       position: type === 'source' ? Position.Right : Position.Left,
-      // demo 端点常显：10px gray-400(#99a1af) 圆点、无边框、圆心压在卡片边线上
+      // 端点常显：10px 土色圆点（--graph-handle）、无边框、圆心压在卡片边线上
       className: `evo-graph-socket ${className}`,
       style: { top, transform: 'translateY(-50%)' },
       'aria-label': id === 'context' ? t('graphSocketContext') : id === 'memory' ? t('graphSocketMemory') : id === 'in' ? t('graphSocketWriteIn') : t('graphSocketOutput'),
@@ -1058,7 +1058,7 @@ function ChatGraphCanvasInner(props: ChatGraphCanvasProps) {
             style: minimapOpen ? { left: minimapSize.width + 20, bottom: 46 } : { left: 12, bottom: 46 },
             children: jsx(Info, {}),
           }),
-          legendOpen && jsxs('div', { className: 'evo-graph-legend', role: 'dialog', 'aria-label': t('graphLegendToggle'), onClick: (event: MouseEvent) => event.stopPropagation(), style: minimapOpen ? { left: 12, bottom: minimapSize.height + 24 } : { left: 12, bottom: 80 }, children: [
+          legendOpen && jsxs('div', { className: 'evo-pop evo-graph-legend', role: 'dialog', 'aria-label': t('graphLegendToggle'), onClick: (event: MouseEvent) => event.stopPropagation(), style: minimapOpen ? { left: 12, bottom: minimapSize.height + 24 } : { left: 12, bottom: 80 }, children: [
             jsxs('div', { className: 'evo-graph-legend-head', children: [
               jsx('strong', { children: t('graphLegendToggle') }),
               jsx('button', {

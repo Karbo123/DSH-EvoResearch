@@ -98,8 +98,10 @@ export interface ThreadListProps {
   promotedIds: Set<string>
 }
 
-/** 标签调色板（§26.3）。 */
-const TAG_PALETTE = ['#e05d5d', '#e08a3c', '#d9b13b', '#5dbe85', '#3b9cb0', '#7a6fe0', '#b05dc4', '#908d83']
+/** 标签调色板（§26.3）。自然有机风 8 色：红陶/琥珀/芥黄/橄榄/灰青/黏土/棕/麦——
+    原盘含蓝紫（#3b9cb0/#7a6fe0/#b05dc4），与"禁用冷色主调"冲突，整体换为大地色。
+    选中的色值会写进项目 meta（持久化数据），新增/调整色值时保持已有值不变以免旧标签失配。 */
+const TAG_PALETTE = ['#c0563a', '#cf8b3a', '#bda43f', '#7d9163', '#5f8b7d', '#9c6b4f', '#8a7355', '#cbb184']
 
 type SortMode = 'recent' | 'title' | 'updated' | 'manual'
 type ManualOrder = { projects: string[]; chats: Record<string, string[]> }
@@ -638,7 +640,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
                 children: jsx(ListFilter, {}),
               }),
               sortOpen && jsx('div', {
-                className: 'evo-tl-sort-menu',
+                className: 'evo-pop evo-tl-sort-menu',
                 role: 'menu',
                 'aria-label': t('searchSort'),
                 children: sortOptions.map((option) => {
@@ -646,7 +648,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
                   const active = option.value === sortMode
                   return jsxs('button', {
                     type: 'button',
-                    className: 'evo-tl-sort-option',
+                    className: 'evo-pop-item evo-tl-sort-option',
                     'data-active': active || undefined,
                     role: 'menuitemradio',
                     'aria-checked': active,
@@ -741,7 +743,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
                           ],
                         }),
                         colorFor === key && jsx('div', {
-                          className: 'evo-tl-palette',
+                          className: 'evo-pop evo-tl-palette',
                           ref: colorAnchorRef,
                           children: TAG_PALETTE.map((color) => jsx('button', {
                             type: 'button',
@@ -779,31 +781,31 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
                                   children: jsx(MoreHorizontal, {}),
                                 }),
                                 menuFor === key && jsx('div', {
-                                  className: 'evo-tl-row-menu',
+                                  className: 'evo-pop evo-tl-row-menu',
                                   onClick: (e: { stopPropagation(): void }) => e.stopPropagation(),
                                   children: [
                                     jsx('button', {
                                       type: 'button',
-                                      className: 'evo-tl-menu-item',
+                                      className: 'evo-pop-item evo-tl-menu-item',
                                       onClick: () => { setMenuFor(null); setRenameValue(p.name); setRenaming(key) },
                                       children: jsxs(Fragment, { children: [jsx(Pencil, {}), jsx('span', { children: t('renameProject') })] }),
                                     }),
                                     jsx('button', {
                                       type: 'button',
-                                      className: 'evo-tl-menu-item',
+                                      className: 'evo-pop-item evo-tl-menu-item',
                                       onClick: () => { setMenuFor(null); setColorFor((v) => (v === key ? null : key)) },
                                       children: jsxs(Fragment, { children: [jsx(Palette, {}), jsx('span', { children: t('tagColor') })] }),
                                     }),
                                     jsx('button', {
                                       type: 'button',
-                                      className: 'evo-tl-menu-item',
+                                      className: 'evo-pop-item evo-tl-menu-item',
                                       onClick: () => { setMenuFor(null); onToggleProjectArchive(p.path) },
                                       children: jsxs(Fragment, { children: [jsx(Archive, {}), jsx('span', { children: t('archiveProject') })] }),
                                     }),
                                     jsx('div', { className: 'evo-tl-menu-sep' }),
                                     jsx('button', {
                                       type: 'button',
-                                      className: 'evo-tl-menu-item evo-tl-menu-danger',
+                                      className: 'evo-pop-item evo-tl-menu-item evo-tl-menu-danger',
                                       onClick: () => { setMenuFor(null); setConfirmDeleteProjectPath(p.path) },
                                       children: jsxs(Fragment, { children: [jsx(Trash2, {}), jsx('span', { children: t('deleteProject') })] }),
                                     }),
@@ -918,7 +920,7 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
                       }),
                     }),
                     colorFor === s.id && jsx('div', {
-                      className: 'evo-tl-palette',
+                      className: 'evo-pop evo-tl-palette',
                       ref: colorAnchorRef,
                       children: TAG_PALETTE.map((color) => jsx('button', {
                         type: 'button',
@@ -968,24 +970,24 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
                               children: jsx(MoreHorizontal, {}),
                             }),
                             menuFor === s.id && jsx('div', {
-                              className: 'evo-tl-row-menu',
+                              className: 'evo-pop evo-tl-row-menu',
                               onClick: (e: { stopPropagation(): void }) => e.stopPropagation(),
                               children: [
                                 jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tl-menu-item',
+                                  className: 'evo-pop-item evo-tl-menu-item',
                                   onClick: () => { setMenuFor(null); setRenameValue(s.displayTitle ?? ''); setRenaming(s.id) },
                                   children: jsxs(Fragment, { children: [jsx(Pencil, {}), jsx('span', { children: t('rename') })] }),
                                 }),
                                 jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tl-menu-item',
+                                  className: 'evo-pop-item evo-tl-menu-item',
                                   onClick: () => { setMenuFor(null); setColorFor((v) => (v === s.id ? null : s.id)) },
                                   children: jsxs(Fragment, { children: [jsx(Palette, {}), jsx('span', { children: t('tagColor') })] }),
                                 }),
                                 jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tl-menu-item',
+                                  className: 'evo-pop-item evo-tl-menu-item',
                                   onClick: () => { setMenuFor(null); onToggleArchive(s.id) },
                                   children: jsxs(Fragment, { children: [jsx(Archive, {}), jsx('span', { children: t('archive') })] }),
                                 }),
@@ -994,20 +996,20 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
                                 // 复制历史仍保留（生成独立会话）
                                 jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tl-menu-item',
+                                  className: 'evo-pop-item evo-tl-menu-item',
                                   onClick: () => { setMenuFor(null); copyRow(s.id) },
                                   children: jsxs(Fragment, { children: [jsx(Copy, {}), jsx('span', { children: t('menuCopyHistory') })] }),
                                 }),
                                 jsx('div', { className: 'evo-tl-menu-sep' }),
                                 jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tl-menu-item',
+                                  className: 'evo-pop-item evo-tl-menu-item',
                                   onClick: () => { setMenuFor(null); onExport(s.id, 'json', s.displayTitle ?? s.id.slice(0, 12)) },
                                   children: jsxs(Fragment, { children: [jsx(FileJson, {}), jsx('span', { children: t('exportJson') })] }),
                                 }),
                                 jsx('button', {
                                   type: 'button',
-                                  className: 'evo-tl-menu-item',
+                                  className: 'evo-pop-item evo-tl-menu-item',
                                   onClick: () => { setMenuFor(null); onExport(s.id, 'markdown', s.displayTitle ?? s.id.slice(0, 12)) },
                                   children: jsxs(Fragment, { children: [jsx(FileText, {}), jsx('span', { children: t('exportMarkdown') })] }),
                                 }),
@@ -1015,13 +1017,13 @@ export function ThreadList({ useSessions, useWorkspaces, onOpen, onNewChat, onPr
                                 delArm === s.id
                                   ? jsx('button', {
                                       type: 'button',
-                                      className: 'evo-tl-menu-item evo-tl-menu-danger',
+                                      className: 'evo-pop-item evo-tl-menu-item evo-tl-menu-danger',
                                       onClick: () => { setMenuFor(null); setDelArm(null); runDelete(s.id) },
                                       children: jsx('span', { children: t('deleteQ') }),
                                     })
                                   : jsx('button', {
                                       type: 'button',
-                                      className: 'evo-tl-menu-item evo-tl-menu-danger',
+                                      className: 'evo-pop-item evo-tl-menu-item evo-tl-menu-danger',
                                       onClick: () => {
                                         setDelArm(s.id)
                                         setTimeout(() => setDelArm((v) => (v === s.id ? null : v)), 5000)

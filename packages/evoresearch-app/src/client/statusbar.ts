@@ -359,7 +359,7 @@ export function ComposerModelInfo() {
       ],
     }),
     open && pos !== null && jsxs('div', {
-      className: 'evo-composer-model-menu',
+      className: 'evo-pop evo-composer-model-menu',
       ref: menuRef,
       role: 'listbox',
       'aria-label': t('selectModel'),

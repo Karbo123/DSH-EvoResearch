@@ -343,7 +343,7 @@ function ToolImageThumb({ asset }: { asset: ToolImageAsset }) {
       if (src === null) { load(); return }
       const win = typeof window !== 'undefined' ? window.open('') : null
       if (win !== null && win.document !== undefined) {
-        win.document.write(`<img src="${src}" style="max-width:100%;background:#fff" alt="${asset.name}">`)
+        win.document.write(`<img src="${src}" style="max-width:100%;background:#fffdf9" alt="${asset.name}">`)
         win.document.title = asset.name
       }
     },
@@ -2702,7 +2702,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
       }),
       // ── 忙时消息队列弹层（§23.6）──
       queueOpen && queueItems.length > 0 && jsxs('div', {
-        className: 'evo-queue',
+        className: 'evo-pop evo-queue',
         children: [
           jsxs('div', {
             className: 'evo-queue-head',
@@ -2795,7 +2795,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
       }),
       // ── 后台任务弹层（§21.6）──
       jobsOpen && jobs.length > 0 && jsxs('div', {
-        className: 'evo-queue',
+        className: 'evo-pop evo-queue',
         children: [
           jsx('div', {
             className: 'evo-queue-head',

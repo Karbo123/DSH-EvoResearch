@@ -148,7 +148,7 @@ node scripts/verify-chatgraph-xyflow.mjs / verify-bundle.mjs / check-docs.mjs
 ## 6. 通用项目规则
 
 1. **0 warnings / 0 errors**：端到端无 warnings/errors 为验收标准。
-2. **前端样式**：`packages/evoresearch-app/src/client/styles.ts` 为主；桌面标题栏样式在 `html.evo-desktop` 分支，`z-index` 谨慎（标题栏 `2147483647` 顶层，modal 等需让位）。
+2. **前端样式**：`packages/evoresearch-app/src/client/styles.ts` 为主，视觉风格为**自然有机风 Natural Organic**（方案见 `docs/06-natural-organic.md`）。样式只在三层落位：令牌层（`:root`/`html.dark`）→ 组件层（`.evo-pop*` / `.evo-btn*` / `.evo-field` / `.evo-chip` / `.evo-card` / `.evo-avatar` / `.evo-dot`，同类控件只在此定义配色与形状）→ 业务规则（只写布局、一律引用令牌）。**禁止**业务规则里硬编码色值、新写圆角像素、线性渐变、纯黑、冷色主调；改完须 `node scripts/check-organic-style.mjs` 通过（已并入 `npm run verify`：禁止项扫描 + 令牌完整性 + 调色板唯一性 + WCAG AA 对比度）。桌面标题栏样式在 `html.evo-desktop` 分支，`z-index` 谨慎（标题栏 `2147483647` 顶层，modal 等需让位）。
 3. **React key**：所有 `.map()` 必须传 key（第三参数）；`index.ts` 有 `suppressKeyWarning` 兜底（仅压制误报）。
 4. **Cordis 插件**：profile = `@deepseek-ai/dsh-base` + `@evoresearch/dsh-app` + `@evoresearch/dsh-plugin`；rc.2 起需 `ui-renderer` 提供 `uiRenderer` 服务（`cordis.patch.yml`）。
 5. **临时产物**：一律 `.tmp-dev/images/`；一次性调试脚本放 `scripts/.tmp-*`（gitignore）或 `.tmp-dev/`；不得污染项目根、用户目录、数据目录。
@@ -226,4 +226,4 @@ node scripts/verify-chatgraph-xyflow.mjs / verify-bundle.mjs / check-docs.mjs
 
 ---
 
-*最后更新：2026-09-08（基座升级 @deepseek-ai/dsh 0.1.1-rc.2 → 0.1.3-alpha.2：agent preset 架构、client-runtime 拆分、token 鉴权、zstd 会话日志、fs-ext 原生依赖构建链；§8 依赖版本注记更新；worktree 数据根隔离与自动 Git 管理约定不变）*
+*最后更新：2026-09-11（全站视觉改版为自然有机风 Natural Organic：令牌层 + 组件层 + 风格守卫脚本并入 verify，方案见 `docs/06-natural-organic.md`；§6.2 前端样式规则同步更新）*

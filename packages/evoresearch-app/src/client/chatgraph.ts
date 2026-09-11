@@ -1209,7 +1209,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     const otherTargets = graph.nodes.filter((node) => isMemoryKind(node) && !channelIds.has(node.id) && node.id !== chatNode?.id)
     const targetButton = (node: GraphNode, viaChannel: boolean) => jsx('button', {
       type: 'button',
-      className: 'evo-graph-menu-item',
+      className: 'evo-pop-item evo-graph-menu-item',
       disabled: busy,
       onClick: () => { if (chatNode !== undefined) void distillTo(chatNode, node) },
       children: jsxs(Fragment, { children: [
@@ -1218,7 +1218,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
       ] }),
     }, `distill-${node.id}`)
     return jsxs('div', {
-      className: 'evo-graph-menu evo-graph-menu-scroll',
+      className: 'evo-pop evo-graph-menu evo-graph-menu-scroll',
       style: { left: menu.x, top: menu.y },
       onClick: (event: MouseEvent) => event.stopPropagation(),
       children: [
@@ -1227,7 +1227,7 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
         channelTargets.length > 0 && otherTargets.length > 0 && jsx('div', { className: 'evo-graph-menu-sep' }),
         channelTargets.length > 0 && otherTargets.length > 0 && jsx('div', { className: 'evo-graph-menu-title', children: t('graphDistillOther') }),
         ...otherTargets.map((node) => targetButton(node, false)),
-        channelTargets.length === 0 && otherTargets.length === 0 && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: true, children: t('graphDistillNoTarget') }),
+        channelTargets.length === 0 && otherTargets.length === 0 && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: true, children: t('graphDistillNoTarget') }),
       ],
     })
   })()
@@ -1236,27 +1236,27 @@ export function ChatGraphPanel({ cwd, currentSessionId, onOpenSession, onCreateS
     style: { left: menu.x, top: menu.y },
     onClick: (event: MouseEvent) => event.stopPropagation(),
     children: [
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy || cwd === null, onClick: () => { void createChatNode() }, children: t('graphNewChat') }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryNode('project'), children: t('graphNewMemory') }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryNode('global'), children: t('graphNewGlobal') }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryCollection(), children: t('graphNewCollectionShort') }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: useExistingMemory, children: t('graphUseExistingMemory') }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: cwd === null, onClick: addResourceNode, children: t('graphPinResource') }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: layoutVisible, children: layoutPreview === null ? t('graphLayoutBtn') : t('graphRelayoutBtn') }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', title: t('graphFocusNeighbors'), onClick: () => setViewMode((mode) => mode === 'neighbors' ? 'all' : 'neighbors'), children: t('graphFocusNeighbors') }),
-      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', title: t('graphFocusBranch'), onClick: () => setViewMode((mode) => mode === 'branch' ? 'all' : 'branch'), children: t('graphFocusBranch') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.system !== true && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
-      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => editEdgeLabel(menu.edgeId as string), children: t('graphEditLabel') }),
-      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => toggleEdgeMode(menu.edgeId as string), children: t('graphToggleEdge') }),
-      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteEdge(menu.edgeId as string), children: t('graphDeleteEdge') }),
-      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => togglePinned(menu.nodeId as string), children: nodeById(menu.nodeId)?.pinned === true ? t('graphUnpinNode') : t('graphPinNode') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: () => forkDirection(menu.nodeId as string), children: t('graphBranchFromHere') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && nodeById(menu.nodeId)?.sessionId !== undefined && jsx('button', { type: 'button', className: 'evo-graph-menu-item', disabled: busy, onClick: () => setMenu({ x: menu.x, y: menu.y, nodeId: menu.nodeId, mode: 'distill' }), children: t('graphDistill') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const node = nodeById(menu.nodeId as string); if (node !== undefined) startEditMemory(node) }, children: t('graphEditMemory') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const target = currentChatNode; const source = nodeById(menu.nodeId as string); if (source !== undefined) connectReferenceFromNode(source) }, children: t('graphRefToChat') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => { const source = nodeById(menu.nodeId as string); if (source !== undefined) createNaturalRelation(source) }, children: t('graphRelateToChat') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && (nodeById(menu.nodeId)?.displayKind === 'memory' || nodeById(menu.nodeId)?.displayKind === 'memory-collection' || nodeById(menu.nodeId)?.type === 'memory') && jsx('button', { type: 'button', className: 'evo-graph-menu-item', onClick: () => copyMemoryNode(menu.nodeId as string), children: t('graphCopyMemory') }),
-      menu.nodeId !== undefined && nodeById(menu.nodeId)?.system !== true && jsx('button', { type: 'button', className: 'evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: t('graphDeleteNode') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: busy || cwd === null, onClick: () => { void createChatNode() }, children: t('graphNewChat') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryNode('project'), children: t('graphNewMemory') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryNode('global'), children: t('graphNewGlobal') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: cwd === null, onClick: () => createMemoryCollection(), children: t('graphNewCollectionShort') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: cwd === null, onClick: useExistingMemory, children: t('graphUseExistingMemory') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: cwd === null, onClick: addResourceNode, children: t('graphPinResource') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: busy, onClick: layoutVisible, children: layoutPreview === null ? t('graphLayoutBtn') : t('graphRelayoutBtn') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', title: t('graphFocusNeighbors'), onClick: () => setViewMode((mode) => mode === 'neighbors' ? 'all' : 'neighbors'), children: t('graphFocusNeighbors') }),
+      menu.nodeId === undefined && menu.edgeId === undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', title: t('graphFocusBranch'), onClick: () => setViewMode((mode) => mode === 'branch' ? 'all' : 'branch'), children: t('graphFocusBranch') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.system !== true && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', onClick: () => renameNode(menu.nodeId as string), children: t('graphRename') }),
+      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', onClick: () => editEdgeLabel(menu.edgeId as string), children: t('graphEditLabel') }),
+      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', onClick: () => toggleEdgeMode(menu.edgeId as string), children: t('graphToggleEdge') }),
+      menu.edgeId !== undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteEdge(menu.edgeId as string), children: t('graphDeleteEdge') }),
+      menu.nodeId !== undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', onClick: () => togglePinned(menu.nodeId as string), children: nodeById(menu.nodeId)?.pinned === true ? t('graphUnpinNode') : t('graphPinNode') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: busy, onClick: () => forkDirection(menu.nodeId as string), children: t('graphBranchFromHere') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type === 'chat' && nodeById(menu.nodeId)?.sessionId !== undefined && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', disabled: busy, onClick: () => setMenu({ x: menu.x, y: menu.y, nodeId: menu.nodeId, mode: 'distill' }), children: t('graphDistill') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', onClick: () => { const node = nodeById(menu.nodeId as string); if (node !== undefined) startEditMemory(node) }, children: t('graphEditMemory') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', onClick: () => { const target = currentChatNode; const source = nodeById(menu.nodeId as string); if (source !== undefined) connectReferenceFromNode(source) }, children: t('graphRefToChat') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', onClick: () => { const source = nodeById(menu.nodeId as string); if (source !== undefined) createNaturalRelation(source) }, children: t('graphRelateToChat') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.type !== 'chat' && (nodeById(menu.nodeId)?.displayKind === 'memory' || nodeById(menu.nodeId)?.displayKind === 'memory-collection' || nodeById(menu.nodeId)?.type === 'memory') && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item', onClick: () => copyMemoryNode(menu.nodeId as string), children: t('graphCopyMemory') }),
+      menu.nodeId !== undefined && nodeById(menu.nodeId)?.system !== true && jsx('button', { type: 'button', className: 'evo-pop-item evo-graph-menu-item evo-graph-menu-danger', onClick: () => deleteNode(menu.nodeId as string), children: t('graphDeleteNode') }),
     ],
   })
 

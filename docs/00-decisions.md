@@ -86,3 +86,27 @@
 - 会话日志改 zstd 压缩（session.v2.jsonl.zstd）；`dsh-session-persistence-jsonl`
   引入原生依赖 fs-ext（仓库以 devDep node-gyp@13 + .npmrc allow-scripts 构建）。
 本插件自身版本 `0.1.0-rc.1`，依赖声明使用 `^0.1.3-alpha.2` 范围。
+
+## 9. 视觉风格：自然有机风（Natural Organic）——令牌层 + 组件层 + 可执行守卫
+
+**决策**：网页端全站视觉遵循 Natural Organic 流派（大地色系、纸纹、有机形状、衬线标题）。
+样式只在 `packages/evoresearch-app/src/client/styles.ts` 三层里落位，禁止旁路：
+1. **令牌层**（`:root` / `html.dark`）：色盘、形状（含 blob）、字体、动效曲线、纹理、阴影、图谱色；
+2. **组件层**：`.evo-pop*` / `.evo-btn*` / `.evo-field` / `.evo-chip` / `.evo-card` / `.evo-avatar` / `.evo-dot`
+   —— 同类控件只在这一处定义配色与形状，业务规则只写布局；
+3. **业务规则**：一律引用令牌，不写 hex/rgb、不写圆角像素、不用线性渐变。
+
+浅色盘取自流派给定值（底 `#faf6f1`、Primary 石褐 `#5c4033`、Accent 鼠尾草 `#8b9d77` /
+暖沙 `#d4a373` / 雾 `#e9e0d4` / 灰青 `#75a191`）；深色盘为同族推导：深壤土底 `#1e1b16`、
+树皮面 `#292420`、交互浅鼠尾草 `#a9bf8e`、主按钮陶土 `#c08a5e`（石褐在深底不可读，按同色相提亮）。
+
+**依据**：同类控件各写一套配色是漂移根源（改版前 5 类菜单各有底色/圆角/阴影，全站并存 6 种以上圆角像素）。
+统一到组件层后实测 5 类浮层（工作台 / 排序 / 行操作 / 模型 / 打开方式菜单）半径同为 16px、
+底色边框阴影完全一致。风格禁止项与令牌完整性由 `scripts/check-organic-style.mjs` 机械校验并接入
+`npm run verify`（含 WCAG AA 对比度逐对核算），使"风格漂移"变成可失败的构建项而非人工评审项。
+
+**否决项**：否决"逐组件手写配色"（漂移）；否决为此引入 Tailwind 重写（迁移成本与 bundle 体积）；
+否决 `prefers-color-scheme` 自动跟随（已有手动偏好持久化，自动跟随会与之打架）；
+否决改动 vendored 样式（`monaco-css.ts` / `xyflow-css.ts` 属第三方，可见色改由令牌与自定义主题覆盖）。
+
+**方案与验收**：`docs/06-natural-organic.md`。

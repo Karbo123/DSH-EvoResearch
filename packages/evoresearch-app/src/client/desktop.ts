@@ -1,11 +1,12 @@
 /**
  * 桌面版自绘标题栏（无边框窗口）—— 视觉与交互规范：
  *
- * - 36px 高，fixed top；深色 #18181b/#3f3f46/#d4d4d8，浅色 #f4f4f5/#e4e4e7/#52525b
+ * - 36px 高，fixed top；深色 #221d18/#3e3529/#d8cdbb、浅色 #efe6d8/#e2d8c8/#5c4033
+ *   （自然有机风：暖土色标题栏，替代原冷灰 #18181b/#f4f4f5）
  * - 左：品牌（R logo + 名称，点击回首页）
  * - 左组（tools）：sidebar、new-chat
  * - 右组（actions）：health 状态、side-chats、language、theme、inspector、settings
- * - 最右（controls）：最小化 / 最大化(还原) / 关闭（hover 红 #e81123）
+ * - 最右（controls）：最小化 / 最大化(还原) / 关闭（hover 红用 Win11 约定的 #c42b1c）
  * - 空白区拖拽移动窗口（阈值后调 Tauri start_dragging），双击最大化
  *
  * 实现说明：标题栏与网页顶栏是同一 React 应用，直接调用同一批 handler。

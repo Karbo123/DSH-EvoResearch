@@ -75,7 +75,7 @@ function ContextMeter({ session, occupancy }: { session: any; occupancy: { perce
         ],
       }),
       open && jsxs('div', {
-        className: 'evo-ctx-panel',
+        className: 'evo-pop evo-ctx-panel',
         role: 'dialog',
         'aria-label': t('ctxCapacity'),
         children: [

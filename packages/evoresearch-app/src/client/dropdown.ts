@@ -95,7 +95,7 @@ export function Dropdown({ value, options, onChange, placeholder, className, ico
         ] }),
       }),
       open && pos !== null && jsxs('div', {
-        className: 'evo-dropdown-menu',
+        className: 'evo-pop evo-dropdown-menu',
         role: 'listbox',
         style: {
           left: pos.left,
@@ -105,14 +105,14 @@ export function Dropdown({ value, options, onChange, placeholder, className, ico
         },
         children: options.map((o) => jsxs('button', {
           type: 'button',
-          className: 'evo-dropdown-option',
+          className: 'evo-pop-item evo-dropdown-option',
           'data-active': o.value === value || undefined,
           role: 'option',
           'aria-selected': o.value === value || undefined,
           onClick: () => { onChange(o.value); setOpen(false) },
           children: [
             o.iconSrc !== undefined && jsx('img', {
-              className: 'evo-dropdown-option-icon',
+              className: 'evo-pop-item evo-dropdown-option-icon',
               src: o.iconSrc,
               alt: '',
               loading: 'lazy',
