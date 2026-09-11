@@ -316,7 +316,22 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
 /// 残留端口时，本实例可能在最多 60s 窗口内先连到旧端——旧实例仍在则直接复用
 /// 其服务（无害），已退出则端口无监听、页面加载失败概率极低（新 sidecar 随即
 /// 覆盖端口文件）。轮询语义保持不变。
+///
+/// 桌面专用：移动端无 sidecar/端口文件，本函数连同它引用的
+/// `read_port_token`/`PathBuf`/`Duration`/`Instant`/`thread` 都随 cfg(desktop)
+/// 消失——缺了这行属性，Android/iOS 的 lib 编译会报 cannot find `PathBuf` 等
+/// （曾导致 CI 的 android/ios 作业全挂，见 docs/05）。
 #[cfg(desktop)]
+fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<(u16, Option<String>)> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if let Some(pair) = read_port_token(app_data_dir) {
+            return Some(pair);
+        }
+        thread::sleep(Duration::from_millis(300));
+    }
+    None
+}
 /// 读端口文件，返回 (端口, 可选 token)。0.1.3 起 web 传输默认 per-process token
 /// 鉴权：sidecar 从启动日志捕获 `?token=` 写入端口文件，壳把它拼进首跳 URL
 /// 完成 token → cookie 交换（旧版 sidecar 无 token 字段 → None，兼容）。
@@ -336,17 +351,6 @@ fn read_port_token(app_data_dir: &PathBuf) -> Option<(u16, Option<String>)> {
                 }
             }
         }
-    }
-    None
-}
-
-fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<(u16, Option<String>)> {
-    let start = Instant::now();
-    while start.elapsed() < timeout {
-        if let Some(pair) = read_port_token(app_data_dir) {
-            return Some(pair);
-        }
-        thread::sleep(Duration::from_millis(300));
     }
     None
 }
