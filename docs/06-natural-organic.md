@@ -258,7 +258,8 @@
 - **未活动页签**：仅悬停浮现浅底；相邻页签之间有 1px 细分隔线，悬停/活动页签两侧自动让位；
 - **关闭钮**：未活动页签悬停/聚焦才浮现，活动页签常驻（Chromium 同款）；悬停底色改为 blob 圆点；
 - `+` 新建页签：竖直居中、悬停浅底返青；拖拽中的页签改为鹅卵石浮起卡片。
-验证（计算样式）：活动页签 `bg=surface / radius=12px 10px 0 0 / border-top=2px #8b9d77 / border-bottom=0 / margin-bottom=-1px / 关闭钮 opacity .7`；未活动页签 `bg=transparent / 关闭钮 opacity 0 → 悬停 .7`。
+验证（计算样式）：活动页签 `bg=--color-background（与内容面严格同色）/ radius=12px 10px 0 0 / border-top=2px #8b9d77 / border-bottom=0 / margin-bottom=-1px / 关闭钮 opacity .7 且可点`；未活动页签 `bg=transparent / 关闭钮 opacity 0（且 pointer-events:none，不吞页签点击）→ 悬停 .7 且可点`。
+页签栏本身比内容面**深一档**（`color-mix(background 92%, text 5%)` + 纸纹）——只有"条"比"页"深，"活动页签 = 内容面色"才真正读作融接（Chromium 的条/页关系）。实测浅色 `strip≈#f0ece6 / active=#faf6f1`、深色 `strip≈#292421 / active=#1e1b16`；关闭钮命中区测试 = `BUTTON.evo-tab-close`，点击后页签 3→2。
 
 **d. 上下文窗口改为分档下拉（交互重做）**
 用户要求"以 K/M 为单位、分档位、不允许逐个微调"。原实现是内嵌 number 输入框（带原生上下箭头，`262144` 当 placeholder 显示）。
