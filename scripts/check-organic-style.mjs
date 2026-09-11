@@ -135,6 +135,7 @@ const REQUIRED_ROOT = [
   '--accent-sage', '--accent-tan', '--accent-mist', '--accent-teal',
   '--brand', '--brand-hover', '--brand-solid', '--brand-foreground', '--focus-ring',
   '--r-2xs', '--r-xs', '--r-sm', '--r-md', '--r-lg', '--r-xl', '--r-pill', '--r-blob', '--r-blob-lg', '--r-dot',
+  '--r-pebble-sm', '--r-pebble', '--r-bubble-ai', '--r-bubble-user', '--sprig',
   '--font-sans', '--font-serif', '--font-mono',
   '--ease-organic', '--dur-organic', '--dur-morph', '--dur-quick',
   '--shadow-sm', '--shadow-md', '--shadow-lg', '--organic-grain', '--scrim',
@@ -155,6 +156,8 @@ const REQUIRED_DARK = [
 ]
 const rootBlock = styles.slice(styles.indexOf(':root {'), styles.indexOf('html.dark {'))
 const darkBlock = styles.slice(styles.indexOf('html.dark {'), styles.indexOf('* { box-sizing'))
+/** 令牌块结束行号（用于"裸圆角字面量"检查时豁免令牌定义本身） */
+const darkEndLine = styles.slice(0, styles.indexOf('* { box-sizing')).split('\n').length
 for (const tok of REQUIRED_ROOT) {
   if (!rootBlock.includes(`${tok}:`)) fail(`令牌缺失[浅色] ${tok}`)
 }
@@ -169,6 +172,35 @@ for (const cls of REQUIRED_COMPONENTS) {
     fail(`组件层缺失 ${cls}（同类控件应在组件层统一定义）`)
   }
 }
+// 组件层必须自带完整外观：.evo-btn 基础态必须有底色与描边，否则会回退成浏览器默认按钮
+// （历史回归：漏了 border/background，界面上出现 2px 黑边灰底的系统按钮）。
+const btnGroup = styles.slice(styles.indexOf('.evo-btn,'), styles.indexOf('.evo-btn:hover'))
+if (!/background:/.test(btnGroup) || !/border:/.test(btnGroup)) {
+  fail('组件层 .evo-btn 基础态缺少 background/border（会回退浏览器默认外观）')
+}
+// 禁止 hover 改圆角（Organic Morphing 在密集界面里读起来像渲染抖动，已废弃该动效）
+{
+  const codeLines = stylesCode.split('\n')
+  for (let i = 0; i < codeLines.length; i += 1) {
+    if (/:hover[^{]*\{[^}]*border-radius/.test(codeLines[i])) {
+      fail(`禁止 hover 改圆角 styles.ts:${i + 1}: ${codeLines[i].trim().slice(0, 90)}`)
+    }
+  }
+}
+// 禁止裸圆角字面量（令牌块之外必须用 --r-* / --graph-node-radius 令牌）
+{
+  const codeLines = stylesCode.split('\n')
+  for (let i = 0; i < codeLines.length; i += 1) {
+    const line = codeLines[i]
+    if (i < darkEndLine) continue
+    // 豁免：全屏面板（本身就是视口）与 <pre> 内联代码（直角是代码块几何的一部分）
+    if (/evo-modal-full|pre code/.test(line)) continue
+    if (/border(?:-(?:top|bottom|left|right)){0,2}-radius:\s*(?:\d+(?:\.\d+)?(?:px|rem)|\d+%|0)\s*[;}]/.test(line)) {
+      fail(`裸圆角字面量 styles.ts:${i + 1}: ${line.trim().slice(0, 90)}（请用 --r-* 令牌）`)
+    }
+  }
+}
+
 // 组件层必须位于业务规则之前（后面的具体规则才能覆盖尺寸）
 const firstComponent = styles.indexOf('.evo-pop,')
 const firstBiz = styles.indexOf('.evo-topbar {')

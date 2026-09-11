@@ -67,6 +67,12 @@ export const CSS = `
   --r-blob: 22px 17px 24px 15px;
   --r-blob-lg: 34px 26px 36px 22px;
   --r-dot: 50% 46% 52% 48% / 48% 52% 46% 54%;
+  /* 鹅卵石：按钮/输入/徽标的主形状——四角不等，避免"完美矩形"的工业感 */
+  --r-pebble-sm: 10px 8px 11px 9px;
+  --r-pebble: 15px 12px 16px 13px;
+  /* 气泡：一角收小（对话"叶尖"），其余大圆角 */
+  --r-bubble-ai: 6px 20px 20px 20px;
+  --r-bubble-user: 20px 6px 20px 20px;
   --radius: 16px;
   /* 遮罩（暖土 scrim，非纯黑）与加深混色基准 */
   /* 桌面自绘标题栏（暖土色，替代原冷灰） */
@@ -92,6 +98,9 @@ export const CSS = `
   /* ── 纹理：内联 SVG 纸纹（feTurbulence，浅色 7% / 深色 6% 噪声，平铺 180px，stitchTiles 消接缝）。
      只铺在结构底色（页面底/左右栏/顶栏/输入区），卡片表面保持干净，正文不叠噪声。 ── */
   --organic-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.07'/%3E%3C/svg%3E");
+  /* 植物小枝（mask 用，颜色由 background-color 给）：空态/面板头/欢迎页的图形签名 —— 
+     风格要求"自然/有机/手工"的视觉元素，这枚手绘感枝芽承担该角色（装饰性、aria-hidden）。 */
+  --sprig: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 60V24' stroke='black' stroke-width='3.4' stroke-linecap='round'/%3E%3Cellipse cx='19' cy='31' rx='11' ry='6' transform='rotate(-30 19 31)' fill='black'/%3E%3Cellipse cx='45' cy='39' rx='11' ry='6' transform='rotate(30 45 39)' fill='black'/%3E%3Cellipse cx='21' cy='48' rx='9' ry='5' transform='rotate(-26 21 48)' fill='black'/%3E%3Ccircle cx='32' cy='15' r='4.6' fill='black'/%3E%3C/svg%3E");
   --chat-max-width: 900px;
   --input-bg: #fffdf9;
   --hover-bg: #efe5d8;
@@ -259,8 +268,8 @@ body { margin: 0; }
 .evo-context-trace, .evo-toast {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--r-blob);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 5%, transparent);
   color: var(--color-text-primary);
 }
 /* 浮层行：hover 返青（Verdant Tint）+ 选中态鼠尾草底 */
@@ -268,7 +277,7 @@ body { margin: 0; }
 .evo-dropdown-option, .evo-brand-menu-item, .evo-tl-sort-option, .evo-tl-menu-item,
 .evo-tab-menu-item, .evo-graph-menu-item {
   display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0;
-  padding: 7px 10px; border: none; border-radius: var(--r-sm);
+  padding: 7px 10px; border: none; border-radius: var(--r-pebble-sm);
   background: transparent; color: var(--color-text-secondary);
   font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
   transition: background-color var(--dur-quick) var(--ease-organic), color var(--dur-quick) var(--ease-organic);
@@ -289,64 +298,88 @@ body { margin: 0; }
   padding: 4px 10px 6px; font-size: 10.5px; letter-spacing: 0.04em; color: var(--color-text-tertiary);
 }
 
-/* 按钮：pill 形状 + 缓慢土色加深（Soft Earth Press：hover 下沉 0.5px，不漂浮） */
+/* 按钮：鹅卵石形（四角不等）+ "底/边/影/字"四件套 + 缓慢土色过渡。
+   基础态的 .evo-btn 就是一套完整的次级按钮样式——任何 <button class="evo-btn"> 都自带
+   底色/描边/圆角/阴影，绝不回退到浏览器默认外观（早期版本漏了这点，界面上冒出过
+   "2px 黑边 + 灰底"的系统按钮，看起来像单独写的样式）。变体只改语义色，形状尺寸一致。
+   Soft Earth Press：hover 下沉 0.5px 并返青，active 再下沉 1px，不做漂浮弹跳。 */
 .evo-btn,
-.evo-btn-back, .evo-tl-back, .evo-graph-btn, .evo-setting-option, .evo-suggest-card, .evo-ledger-exp,
-.evo-sched-template, .evo-exp-branch-chip, .evo-data-path-root, .evo-panel-add, .evo-fs-save,
-.evo-tab-newfile-go, .evo-send, .evo-btn-run {
+.evo-btn-outline, .evo-btn-back, .evo-tl-back, .evo-graph-btn, .evo-setting-option,
+.evo-suggest-card, .evo-ledger-exp, .evo-sched-template, .evo-exp-branch-chip, .evo-data-path-root,
+.evo-panel-add, .evo-fs-save, .evo-tab-newfile-go, .evo-send, .evo-btn-run, .evo-btn-ok,
+.evo-btn-test, .evo-btn-teal, .evo-btn-danger {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border-radius: var(--r-pill);
-  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  padding: 6px 15px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-pebble);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-sm);
+  font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.5;
+  cursor: pointer; white-space: nowrap;
   transition: background-color var(--dur-quick) var(--ease-organic),
     border-color var(--dur-quick) var(--ease-organic),
     color var(--dur-quick) var(--ease-organic),
     transform var(--dur-quick) var(--ease-organic),
     box-shadow var(--dur-quick) var(--ease-organic);
 }
-/* 主按钮：石褐填充（风格 Primary）+ 暖米前景；hover 深绿（返青） */
+.evo-btn:hover, .evo-btn-outline:hover, .evo-btn-back:hover, .evo-tl-back:hover,
+.evo-graph-btn:hover:not(:disabled), .evo-setting-option:hover, .evo-suggest-card:hover,
+.evo-ledger-exp:hover, .evo-sched-template:hover, .evo-exp-branch-chip:hover, .evo-data-path-root:hover {
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--color-border));
+  background: color-mix(in srgb, var(--accent-sage) 13%, var(--color-surface));
+  color: var(--brand); transform: translateY(0.5px);
+}
+/* 主按钮：石褐/陶土填充（风格 Primary）+ 暖米前景 + 顶部一线内高光（手工漆面感）；
+   hover 返青为深绿/浅鼠尾草（Verdant Tint）。 */
 .evo-btn-primary, .evo-panel-add, .evo-fs-save, .evo-tab-newfile-go, .evo-send, .evo-btn-run,
 .evo-setting-option[data-active] {
-  border: 1px solid transparent; background: var(--brand-solid); color: var(--brand-foreground);
+  border-color: color-mix(in srgb, var(--shade) 18%, transparent);
+  background: var(--brand-solid); color: var(--brand-foreground);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 color-mix(in srgb, var(--brand-foreground) 20%, transparent);
 }
 .evo-btn-primary:hover, .evo-panel-add:hover, .evo-fs-save:hover, .evo-tab-newfile-go:hover,
 .evo-send:hover, .evo-btn-run:hover, .evo-setting-option[data-active]:hover {
-  background: var(--brand-hover); color: var(--accent-mist);
+  border-color: transparent; background: var(--brand-hover);
+  color: color-mix(in srgb, var(--brand-foreground) 82%, var(--color-background));
 }
-/* 次级按钮：描边 + 表面；hover 返青 */
-.evo-btn-outline, .evo-btn-back, .evo-tl-back, .evo-graph-btn, .evo-suggest-card, .evo-ledger-exp,
-.evo-sched-template, .evo-exp-branch-chip, .evo-data-path-root {
-  border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary);
-}
-.evo-btn-outline:hover, .evo-btn-back:hover, .evo-tl-back:hover, .evo-graph-btn:hover:not(:disabled),
-.evo-suggest-card:hover, .evo-ledger-exp:hover, .evo-sched-template:hover, .evo-exp-branch-chip:hover,
-.evo-data-path-root:hover {
-  border-color: color-mix(in srgb, var(--brand) 45%, var(--color-border));
-  background: color-mix(in srgb, var(--accent-sage) 12%, var(--color-surface));
-  color: var(--brand); transform: translateY(0.5px);
-}
-/* 语义按钮（柔和底色，无重填充） */
-.evo-btn-ok { border: 1px solid color-mix(in srgb, var(--color-success) 32%, transparent); background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
-.evo-btn-ok:hover { background: color-mix(in srgb, var(--color-success) 24%, transparent); }
-.evo-btn-teal, .evo-btn-test { border: 1px solid color-mix(in srgb, var(--accent-teal-ink) 32%, transparent); background: color-mix(in srgb, var(--accent-teal) 16%, transparent); color: var(--accent-teal-ink); }
-.evo-btn-teal:hover, .evo-btn-test:hover { background: color-mix(in srgb, var(--accent-teal) 28%, transparent); }
-.evo-btn-danger { border: 1px solid color-mix(in srgb, var(--color-error) 32%, transparent); background: color-mix(in srgb, var(--color-error) 13%, transparent); color: var(--color-error); }
-.evo-btn-danger:hover { background: color-mix(in srgb, var(--color-error) 24%, transparent); }
+/* 语义变体：柔和土色浆（不用纯色块，保持"浆染"手感） */
+.evo-btn-ok { border-color: color-mix(in srgb, var(--color-success) 34%, transparent); background: color-mix(in srgb, var(--color-success) 13%, var(--color-surface)); color: var(--color-success); }
+.evo-btn-ok:hover { background: color-mix(in srgb, var(--color-success) 22%, var(--color-surface)); border-color: color-mix(in srgb, var(--color-success) 52%, transparent); }
+.evo-btn-teal, .evo-btn-test { border-color: color-mix(in srgb, var(--accent-sage) 40%, transparent); background: color-mix(in srgb, var(--accent-sage) 15%, var(--color-surface)); color: var(--brand); }
+.evo-btn-teal:hover, .evo-btn-test:hover { background: color-mix(in srgb, var(--accent-sage) 26%, var(--color-surface)); border-color: color-mix(in srgb, var(--brand) 50%, transparent); }
+.evo-btn-danger { border-color: color-mix(in srgb, var(--color-error) 34%, transparent); background: color-mix(in srgb, var(--color-error) 12%, var(--color-surface)); color: var(--color-error); }
+.evo-btn-danger:hover { background: color-mix(in srgb, var(--color-error) 22%, var(--color-surface)); border-color: color-mix(in srgb, var(--color-error) 52%, transparent); }
+/* 幽灵按钮：工具条里的无框动作 */
+.evo-btn-ghost { border-color: transparent; background: transparent; box-shadow: none; }
+.evo-btn-ghost:hover { border-color: transparent; background: var(--hover-bg); color: var(--brand); }
 .evo-btn-primary:disabled, .evo-btn-outline:disabled, .evo-btn-ok:disabled, .evo-btn-teal:disabled,
 .evo-btn-danger:disabled, .evo-btn:disabled, .evo-send:disabled, .evo-panel-add:disabled,
 .evo-fs-save:disabled, .evo-tab-newfile-go:disabled, .evo-btn-run:disabled, .evo-suggest-card:disabled {
   opacity: 0.5; cursor: default; transform: none;
 }
-.evo-btn:active:not(:disabled), .evo-btn-outline:active:not(:disabled), .evo-btn-primary:active:not(:disabled) { transform: translateY(1px); }
+.evo-btn:active:not(:disabled), .evo-btn-outline:active:not(:disabled), .evo-btn-primary:active:not(:disabled),
+.evo-btn-ok:active:not(:disabled), .evo-btn-danger:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
 
-/* 输入控件：所有 input/textarea/select 共用一套表面与聚焦语言 */
+/* 输入控件：内凹"凿面"——暖底 + 1px 描边 + 极浅内阴影；聚焦时鼠尾草环。
+   所有 input/textarea/select 共用，避免出现第二套输入语言。 */
 .evo-field,
 .evo-panel-input, .evo-search-input, .evo-note-search, .evo-note-textarea, .evo-identity-edit,
 .evo-graph-editor-text, .evo-queue-input, .evo-question-custom, .evo-md-link-input,
 .evo-tl-search, .evo-tl-rename-input, .evo-tab-newfile-input, .evo-graph-search {
-  background: var(--input-bg); border: 1px solid var(--color-border); border-radius: var(--r-sm);
+  background: var(--input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-pebble-sm);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--shade) 6%, transparent);
   color: var(--color-text-primary); font: inherit; outline: none;
   transition: border-color var(--dur-quick) var(--ease-organic), box-shadow var(--dur-quick) var(--ease-organic),
     background-color var(--dur-quick) var(--ease-organic);
+}
+.evo-field:hover, .evo-panel-input:hover, .evo-search-input:hover, .evo-note-search:hover,
+.evo-note-textarea:hover, .evo-identity-edit:hover, .evo-graph-editor-text:hover,
+.evo-queue-input:hover, .evo-question-custom:hover, .evo-md-link-input:hover,
+.evo-tl-search:hover, .evo-tl-rename-input:hover, .evo-tab-newfile-input:hover, .evo-graph-search:hover {
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--color-border));
 }
 .evo-field:focus, .evo-field:focus-within,
 .evo-panel-input:focus, .evo-search-input:focus, .evo-note-search:focus, .evo-note-textarea:focus,
@@ -354,60 +387,91 @@ body { margin: 0; }
 .evo-question-custom:focus, .evo-md-link-input:focus, .evo-tl-search:focus-within,
 .evo-tl-rename-input:focus, .evo-tab-newfile-input:focus, .evo-graph-search:focus-within {
   border-color: color-mix(in srgb, var(--brand) 55%, var(--color-border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 16%, transparent);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--shade) 4%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--brand) 16%, transparent);
 }
 .evo-field::placeholder, .evo-panel-input::placeholder, .evo-search-input::placeholder,
 .evo-note-search::placeholder, .evo-note-textarea::placeholder, .evo-identity-edit::placeholder {
   color: var(--color-text-placeholder);
 }
 
-/* 徽标/胶囊：字号、圆角、底色统一；语义由变体给色 */
+/* 徽标/胶囊：鹅卵石形 + 浆染色 + 1px 同色描边（比纯底色更"手工"）；
+   -dashed 变体表示"未设置/默认值"，与"已设置"在形态上区分（不只靠颜色）。 */
 .evo-chip,
 .evo-status-chip, .evo-panel-tag, .evo-panel-item-badge, .evo-skill-status, .evo-skill-source,
 .evo-note-badge, .evo-lib-badge, .evo-ews-badge, .evo-report-badge, .evo-channel-badge,
 .evo-goal-evidence, .evo-wf-member, .evo-agent-mode, .evo-llm-model-n, .evo-tool-group-state,
 .evo-tool-engine-chip, .evo-rounds-phase-status, .evo-traj-tokens {
-  display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px;
-  border: 1px solid transparent; border-radius: var(--r-pill);
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--r-pebble-sm);
   background: var(--accent-mist); color: var(--color-text-secondary);
-  font-size: 11px; line-height: 1.6; white-space: nowrap; flex-shrink: 0;
+  font-size: 11px; line-height: 1.55; white-space: nowrap; flex-shrink: 0;
 }
-.evo-chip-sage { background: color-mix(in srgb, var(--accent-sage) 26%, transparent); color: var(--brand); }
-.evo-chip-tan { background: color-mix(in srgb, var(--accent-tan) 30%, transparent); color: var(--accent-tan-ink); }
-.evo-chip-teal { background: color-mix(in srgb, var(--accent-teal) 26%, transparent); color: var(--accent-teal-ink); }
-.evo-chip-ok { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
-.evo-chip-warn { background: color-mix(in srgb, var(--color-warning) 16%, transparent); color: var(--color-warning); }
-.evo-chip-err { background: color-mix(in srgb, var(--color-error) 13%, transparent); color: var(--color-error); }
+.evo-chip-sage { border-color: color-mix(in srgb, var(--accent-sage) 55%, transparent); background: color-mix(in srgb, var(--accent-sage) 22%, transparent); color: var(--brand); }
+.evo-chip-tan { border-color: color-mix(in srgb, var(--accent-tan) 60%, transparent); background: color-mix(in srgb, var(--accent-tan) 26%, transparent); color: var(--accent-tan-ink); }
+.evo-chip-teal { border-color: color-mix(in srgb, var(--accent-teal) 55%, transparent); background: color-mix(in srgb, var(--accent-teal) 22%, transparent); color: var(--accent-teal-ink); }
+.evo-chip-ok { border-color: color-mix(in srgb, var(--color-success) 42%, transparent); background: color-mix(in srgb, var(--color-success) 13%, transparent); color: var(--color-success); }
+.evo-chip-warn { border-color: color-mix(in srgb, var(--color-warning) 45%, transparent); background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
+.evo-chip-err { border-color: color-mix(in srgb, var(--color-error) 40%, transparent); background: color-mix(in srgb, var(--color-error) 12%, transparent); color: var(--color-error); }
+.evo-chip-dashed { border-style: dashed; background: transparent; color: var(--color-text-tertiary); }
 
-/* 卡片：不规则圆角（blob），可交互卡片在 hover 时缓慢形变（Organic Morphing） */
+/* 卡片：纸片感——不规则圆角（blob）+ 1px 暖描边 + 极轻投影。
+   hover 只做"上浮 + 描边返青"，不再改变圆角：早期按风格文档的 Organic Morphing 做过
+   hover 形变，实际读起来像渲染抖动（用户明确反馈），已废弃该动效。 */
 .evo-card,
 .evo-setting, .evo-panel-item, .evo-skill-card, .evo-ledger-card, .evo-report-section,
 .evo-ews-section, .evo-note-body, .evo-note-doc, .evo-note-card, .evo-web-search-card,
 .evo-tier-card, .evo-clear-row, .evo-rounds-phase, .evo-exp-item, .evo-env-card, .evo-history-row,
 .evo-goal-proposal, .evo-sidechat-tab, .evo-note-draft, .evo-lib-block, .evo-note-hit,
-.evo-skill-card, .evo-assign-tier, .evo-llm-provider, .evo-context-trace-item, .evo-data-path-entry {
+.evo-assign-tier, .evo-llm-provider, .evo-context-trace-item, .evo-data-path-entry {
   background: var(--color-surface);
   border: 1px solid var(--color-border-light);
   border-radius: var(--r-blob);
+  box-shadow: var(--shadow-sm);
   transition: border-color var(--dur-organic) var(--ease-organic),
-    border-radius var(--dur-morph) var(--ease-organic),
     background-color var(--dur-organic) var(--ease-organic),
-    box-shadow var(--dur-organic) var(--ease-organic);
+    box-shadow var(--dur-organic) var(--ease-organic),
+    transform var(--dur-organic) var(--ease-organic);
 }
-/* 可交互卡片：半径缓慢变形 + 轻微下沉；内层卡片不参与（避免嵌套卡片的双重动效） */
-.evo-card-bloom, .evo-note-card:hover, .evo-clear-row:hover, .evo-exp-item:hover,
-.evo-sidechat-tab:hover, .evo-note-hit:hover, .evo-note-doc:hover {
-  border-radius: var(--r-blob-lg);
+.evo-note-card, .evo-note-hit, .evo-clear-row, .evo-exp-item:hover, .evo-sidechat-tab:hover {
+  cursor: pointer;
 }
-.evo-note-card:hover, .evo-note-hit:hover {
-  border-color: color-mix(in srgb, var(--brand) 45%, var(--color-border));
+.evo-note-card:hover, .evo-note-hit:hover, .evo-clear-row:hover, .evo-exp-item:hover, .evo-sidechat-tab:hover {
+  border-color: color-mix(in srgb, var(--brand) 38%, var(--color-border));
+  box-shadow: var(--shadow-md); transform: translateY(-1px);
 }
 
-/* 头像与圆点：blob 而非正圆（风格禁止完美圆形） */
-.evo-avatar, .evo-msg-avatar, .evo-avatar-blob { border-radius: var(--r-dot); }
+/* 分段控件（视图切换/工具条开关）：凹槽轨道 + 鹅卵石滑块，替代散落的独立按钮 */
+.evo-md-toggle, .evo-traj-seg, .evo-setting-options, .evo-sched-modes {
+  gap: 3px; padding: 3px; border: 1px solid var(--color-border-light);
+  border-radius: var(--r-pebble); background: var(--color-background);
+}
+.evo-md-toggle-btn, .evo-traj-chip, .evo-insp-subtab { border: 1px solid transparent; border-radius: var(--r-pebble-sm); }
+.evo-md-toggle-btn[data-active], .evo-traj-chip[data-on], .evo-insp-subtab[data-active] {
+  border-color: color-mix(in srgb, var(--accent-sage) 45%, transparent);
+  background: color-mix(in srgb, var(--accent-sage) 24%, var(--color-surface));
+  color: var(--brand);
+}
+
+/* 头像与圆点：blob 而非正圆（风格禁止完美圆形）；头像加一圈暖描边，像贴纸 */
+.evo-avatar, .evo-msg-avatar, .evo-avatar-blob {
+  border-radius: var(--r-dot);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 85%, transparent);
+}
 .evo-dot, .evo-msg-avatar, .evo-ctx-panel-dot, .evo-tl-color-dot, .evo-tl-color-swatch,
 .evo-agent-dot, .evo-tb-dot, .evo-composer-dot, .evo-job-dot, .evo-history-dot,
 .evo-pending-dot, .evo-tl-running { border-radius: var(--r-dot); }
+
+/* 植物小枝（图形签名）：mask 上色 = currentColor，尺寸由使用处给 */
+.evo-sprig {
+  display: inline-block; width: 1em; height: 1em; flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-image: var(--sprig); mask-image: var(--sprig);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain; mask-size: contain;
+}
 
 /* 衬线标题（风格：Headings: font-serif, tracking-tight），正文/代码保持无衬线与等宽 */
 .evo-serif { font-family: var(--font-serif); font-weight: 600; letter-spacing: -0.01em; }
@@ -443,9 +507,9 @@ body { margin: 0; }
 .evo-brand-menu-item svg { width: 15px; height: 15px; color: var(--brand); flex-shrink: 0; }
 .evo-icon-btn {
   display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
-  border: none; background: none; border-radius: var(--r-sm); color: var(--color-text-secondary); cursor: pointer;
+  border: 1px solid transparent; background: none; border-radius: var(--r-pebble-sm); color: var(--color-text-secondary); cursor: pointer;
 }
-.evo-icon-btn:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-icon-btn:hover { background: var(--hover-bg); border-color: var(--color-border-light); color: var(--brand); }
 .evo-icon-btn svg { width: 20px; height: 20px; }
 .evo-cols { flex: 1; display: flex; min-height: 0; }
 .evo-left {
@@ -529,7 +593,7 @@ body { margin: 0; }
 .evo-tl-subchat-project svg { width: 12px; height: 12px; color: var(--brand); flex-shrink: 0; }
 .evo-tl-subchat-project > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-tl-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.evo-tl-section-action { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; border-radius: var(--r-xs); color: var(--color-text-tertiary); background: transparent; cursor: pointer; }
+.evo-tl-section-action { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; border-radius: var(--r-pebble-sm); color: var(--color-text-tertiary); background: transparent; cursor: pointer; }
 .evo-tl-section-action:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-tl-section-action svg { width: 14px; height: 14px; }
 .evo-tl-archived-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); background: transparent; border: none; border-radius: var(--r-sm); cursor: pointer; font: inherit; }
@@ -567,6 +631,11 @@ body { margin: 0; }
 /* ── 中间聊天区 ── */
 .evo-chat { flex: 1 1 auto; height: auto; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .evo-welcome { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 24px 32px; min-height: 0; }
+/* 欢迎页的植物水印（图形签名；装饰性，不参与语义）：一枚淡鼠尾草小枝压在标题上方 */
+.evo-welcome::before { content: ''; width: 58px; height: 58px; margin-bottom: 4px; opacity: 0.5;
+  background-color: var(--accent-sage);
+  -webkit-mask-image: var(--sprig); mask-image: var(--sprig); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center; -webkit-mask-size: contain; mask-size: contain; }
 .evo-welcome h1 { font-family: var(--font-serif); font-size: 26px; font-weight: 600; margin: 0 0 10px; color: var(--color-text-primary); letter-spacing: -.015em; }
 .evo-welcome p { margin: 0 0 28px; color: var(--color-text-secondary); font-size: 14px; max-width: 512px; line-height: 1.6; }
 .evo-suggest { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
@@ -668,12 +737,13 @@ body { margin: 0; }
 .evo-insp { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .evo-insp-tabs { display: flex; align-items: center; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--color-border); }
 .evo-insp-tab {
-  display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: none; background: none;
-  border-radius: var(--r-xs) var(--r-xs) 0 0; color: var(--color-text-tertiary); font-size: 13px; cursor: pointer;
+  position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px 9px; border: none; background: none;
+  border-radius: var(--r-pebble-sm) var(--r-pebble-sm) 0 0; color: var(--color-text-tertiary); font-size: 13px; cursor: pointer;
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .evo-insp-tab:hover { color: var(--color-text-primary); }
-.evo-insp-tab[data-active] { color: var(--color-text-primary); border-bottom-color: var(--brand); font-weight: 500; }
+.evo-insp-tab[data-active] { color: var(--color-text-primary); border-bottom-color: transparent; font-weight: 600; }
+.evo-insp-tab[data-active]::after { content: ''; position: absolute; left: 9px; right: 9px; bottom: -1px; height: 3px; border-radius: var(--r-pill); background: var(--brand); }
 .evo-insp-tab svg { width: 15px; height: 15px; }
 .evo-insp-close { margin-left: auto; }
 .evo-insp-body { flex: 1; overflow-y: auto; min-height: 0; }
@@ -683,6 +753,11 @@ body { margin: 0; }
 .evo-insp-subtab[data-active] { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-insp-empty { padding: 40px 20px; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
 .evo-insp-empty svg { width: 36px; height: 36px; color: var(--color-border); margin-bottom: 8px; }
+/* 已有图标语义的空态不叠小枝（避免两个图形元素打架），只在纯文字空态加 */
+.evo-insp-empty:not(:has(svg))::before, .evo-tl-empty:not(:has(svg))::before, .evo-graph-hint:not(:has(svg))::before { content: ''; display: block; width: 38px; height: 38px; margin: 0 auto 10px; opacity: 0.42;
+  background-color: var(--accent-sage);
+  -webkit-mask-image: var(--sprig); mask-image: var(--sprig); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center; -webkit-mask-size: contain; mask-size: contain; }
 .evo-view { flex: 1; overflow-y: auto; }
 /* ── 消息列表 ── */
 .evo-msg-list { flex: none; height: auto; overflow: visible; padding: 18px 24px 6px; display: flex; flex-direction: column; gap: 10px; width: 75%; max-width: none; min-width: 0; margin: 0 auto; position: relative; }
@@ -715,11 +790,11 @@ body { margin: 0; }
 .evo-msg-body { min-width: 0; max-width: 75%; display: flex; flex-direction: column; gap: 4px; }
 .evo-msg-user-body { min-width: 0; max-width: 75%; flex: 0 0 auto; }
 .evo-msg-user .evo-msg-stack { max-width: 75%; }
-.evo-msg-bubble { position: relative; padding: 8px 14px; border-radius: var(--r-md); font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-.evo-msg-bubble-user { padding-block: 8px; line-height: 1.5; background: var(--color-user-message-bg); color: var(--color-user-message); border-top-right-radius: var(--r-2xs); }
+.evo-msg-bubble { position: relative; padding: 9px 15px; border-radius: var(--r-bubble-ai); font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.evo-msg-bubble-user { padding-block: 8px; line-height: 1.5; background: var(--color-user-message-bg); color: var(--color-user-message); border-radius: var(--r-bubble-user); box-shadow: var(--shadow-sm); }
 .evo-msg-bubble-user .evo-md { line-height: 1.5; }
 .evo-msg-bubble-user .evo-md > p:only-child { margin-block: 0; }
-.evo-msg-bubble-assistant { background: var(--color-surface); border: 1px solid var(--color-border-light); border-top-left-radius: var(--r-2xs); color: var(--color-text-primary); }
+.evo-msg-bubble-assistant { background: var(--color-surface); border: 1px solid var(--color-border-light); border-radius: var(--r-bubble-ai); color: var(--color-text-primary); box-shadow: var(--shadow-sm); }
 .evo-msg-text { white-space: pre-wrap; word-break: break-word; }
 .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 3px; text-align: right; }
 .evo-msg-cursor { display: inline-block; width: 7px; height: 15px; margin-left: 2px; background: var(--brand); vertical-align: -2px; animation: evo-blink 1s steps(2) infinite; }
@@ -855,18 +930,18 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-data-path-actions, .evo-data-path-picker-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .evo-data-path-notice, .evo-data-path-pending { margin-top: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--color-success) 45%, var(--color-border)); border-radius: var(--r-sm); color: var(--color-success); font-size: 12px; line-height: 1.5; }
 .evo-data-path-pending { color: var(--color-warning); border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border)); }
-.evo-btn-small { padding: 5px 9px; font-size: 12px; }
+.evo-btn-small { padding: 4px 11px; font-size: 11.5px; border-radius: var(--r-pebble-sm); }
 .evo-btn-small svg { width: 14px; height: 14px; }
 .evo-data-path-picker-mask { z-index: 2100; }
 .evo-data-path-picker { width: min(680px, 94vw); max-width: min(680px, 94vw); height: min(680px, 86vh); max-height: 86vh; }
 .evo-data-path-picker-hint { padding: 10px 16px 0; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.5; }
 .evo-data-path-roots { display: flex; gap: 5px; flex-wrap: wrap; padding: 10px 16px 0; }
 .evo-data-path-root, .evo-data-path-crumb, .evo-data-path-up { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; font: inherit; }
-.evo-data-path-root { padding: 4px 9px; border-radius: var(--r-xs); font: 600 12px var(--font-mono); }
+.evo-data-path-root { padding: 4px 9px; border-radius: var(--r-pebble-sm); font: 600 12px var(--font-mono); }
 .evo-data-path-root:hover, .evo-data-path-crumb:hover, .evo-data-path-up:hover { border-color: var(--brand); color: var(--color-text-primary); }
 .evo-data-path-crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; padding: 10px 16px 0; overflow-x: auto; }
 .evo-data-path-crumbs svg { width: 13px; height: 13px; flex: none; color: var(--color-text-tertiary); }
-.evo-data-path-up { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; border-radius: var(--r-xs); }
+.evo-data-path-up { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex: none; border-radius: var(--r-pebble-sm); }
 .evo-data-path-up svg { width: 14px; height: 14px; }
 .evo-data-path-crumb { max-width: 180px; padding: 4px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: transparent; }
 .evo-data-path-current { margin: 10px 16px 0; padding: 7px 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--color-border-light); border-radius: var(--r-xs); color: var(--color-text-primary); background: var(--color-background); font: 12px/1.5 var(--font-mono); }
@@ -924,6 +999,9 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-panel { max-width: 760px; margin: 0 auto; padding: 28px 28px 40px; }
 @media (max-width: 560px) { .evo-panel { padding: 16px 12px 32px; } }
 .evo-panel-head { display: flex; align-items: center; gap: 10px; font-family: var(--font-serif); font-size: 18px; font-weight: 600; color: var(--color-text-primary); margin-bottom: 20px; letter-spacing: -.01em; }
+.evo-panel-head::before { content: ''; width: 20px; height: 20px; flex-shrink: 0; background-color: var(--accent-sage);
+  -webkit-mask-image: var(--sprig); mask-image: var(--sprig); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center; -webkit-mask-size: contain; mask-size: contain; }
 .evo-panel-head svg { width: 19px; height: 19px; color: var(--brand); }
 .evo-panel-body { display: flex; flex-direction: column; gap: 16px; }
 .evo-panel-row { display: flex; flex-direction: column; gap: 8px; }
@@ -975,7 +1053,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-goal-evidence { padding: 1px 8px; }
 .evo-goal-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .evo-goal-detail-meta { display: flex; gap: 12px; font-size: 11px; color: var(--color-text-tertiary); }
-.evo-btn-sm { padding: 3px 10px; font-size: 12px; border-radius: var(--r-sm); }
+.evo-btn-sm { padding: 4px 11px; font-size: 12px; border-radius: var(--r-pebble-sm); }
 .evo-goal-proposals { display: flex; flex-direction: column; gap: 7px; }
 .evo-goal-proposal { display: flex; flex-direction: column; gap: 5px; padding: 8px 11px; }
 .evo-goal-proposal-head { display: flex; align-items: baseline; gap: 8px; }
@@ -988,10 +1066,10 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-panel-input-cron { flex: 0 0 130px; min-width: 0; font-family: var(--font-mono); }
 .evo-panel-add { padding: 7px 16px; font-size: 13px; }
 .evo-panel-add svg { width: 14px; height: 14px; }
-.evo-panel-del { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: var(--r-xs); display: inline-flex; }
+.evo-panel-del { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: var(--r-pebble-sm); display: inline-flex; }
 .evo-panel-del:hover { color: var(--color-error); background: var(--hover-bg); }
 .evo-panel-del svg { width: 14px; height: 14px; }
-.evo-panel-act { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: var(--r-xs); display: inline-flex; }
+.evo-panel-act { border: none; background: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: var(--r-pebble-sm); display: inline-flex; }
 .evo-panel-act:hover { color: var(--brand); background: var(--hover-bg); }
 .evo-panel-act:disabled { opacity: .45; cursor: default; }
 .evo-panel-act svg { width: 14px; height: 14px; }
@@ -1050,7 +1128,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-composer-status { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; font-size: 12px; color: var(--color-text-tertiary); flex-wrap: wrap; }
 .evo-composer-editing { display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 2px 6px; border-radius: var(--r-xs); background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); }
 .evo-composer-editing > svg { width: 12px; height: 12px; flex: 0 0 auto; }
-.evo-composer-editing-cancel { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 1px; padding: 0; border: 0; border-radius: var(--r-2xs); background: transparent; color: currentColor; cursor: pointer; }
+.evo-composer-editing-cancel { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 1px; padding: 0; border: 0; border-radius: var(--r-pebble-sm); background: transparent; color: currentColor; cursor: pointer; }
 .evo-composer-editing-cancel:hover { background: color-mix(in srgb, var(--brand) 16%, transparent); }
 .evo-composer-editing-cancel svg { width: 12px; height: 12px; }
 /* 当前工作路径（§25.4）：单行省略 + tooltip 完整路径 */
@@ -1099,7 +1177,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-composer-stats:empty { margin: 0 auto; }
 .evo-composer-stats .evo-statusbar { flex: 1 1 auto; min-width: 0; width: auto; height: auto; min-height: 16px; padding: 0; border-top: 0; background: transparent; flex-wrap: wrap; row-gap: 0; overflow: visible; white-space: normal; line-height: 16px; justify-content: center; }
 /* 模型徽章：品牌色强调、输入框内右下侧（工具栏 spacer 之后、发送按钮之前），点击切换模型 */
-.evo-composer-model { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: var(--r-pill); border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--color-surface)); color: var(--brand); font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; line-height: 1.5; white-space: nowrap; transition: box-shadow 0.15s ease, border-color 0.15s ease; }
+.evo-composer-model { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: var(--r-pebble-sm); border: 1px solid color-mix(in srgb, var(--accent-sage) 55%, transparent); background: color-mix(in srgb, var(--accent-sage) 18%, var(--color-surface)); color: var(--brand); font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; line-height: 1.5; white-space: nowrap; transition: box-shadow var(--dur-quick) var(--ease-organic), border-color var(--dur-quick) var(--ease-organic); }
 .evo-composer-model:hover { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); }
 .evo-composer-model.evo-composer-model-open { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); }
 .evo-composer-model svg { width: 11px; height: 11px; flex-shrink: 0; }
@@ -1112,14 +1190,14 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-composer-model-menu .evo-panel-error { padding: 6px 8px; font-size: 12px; }
 /* 会话权限档位（输入框工具行）：仿模型徽章的胶囊下拉 */
 .evo-dropdown.evo-composer-perm { display: inline-flex; width: auto; flex-shrink: 0; }
-.evo-composer-perm .evo-dropdown-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; width: auto; height: auto; padding: 2px 10px; border-radius: var(--r-pill); border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent); background: color-mix(in srgb, var(--brand) 8%, var(--color-surface)); color: var(--brand); font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; }
+.evo-composer-perm .evo-dropdown-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px; width: auto; height: auto; padding: 2px 10px; border-radius: var(--r-pebble-sm); border: 1px solid color-mix(in srgb, var(--accent-sage) 55%, transparent); background: color-mix(in srgb, var(--accent-sage) 18%, var(--color-surface)); color: var(--brand); font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; }
 .evo-composer-perm .evo-dropdown-btn:hover, .evo-composer-perm .evo-dropdown-btn.evo-dropdown-open { border-color: var(--brand); box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 45%, transparent); color: var(--brand); }
 .evo-composer-perm .evo-dropdown-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
 .evo-composer-perm .evo-dropdown-value { flex: 0 1 auto; min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 输入框状态行内的「打开方式」：紧凑幽灵胶囊（evo-dropdown 默认 width:100% 是给设置表单的，
    放在 flex 行里会撑满整行并把右侧 Markdown 开关挤到下一行）。注意：本文件是模板字符串，勿写反引号 */
 .evo-dropdown.evo-composer-openin { display: inline-flex; width: auto; flex-shrink: 0; }
-.evo-composer-openin .evo-dropdown-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; width: auto; height: auto; padding: 2px 7px; border: 1px solid transparent; border-radius: var(--r-xs); background: transparent; color: var(--color-text-tertiary); font-size: 11px; font-weight: 400; line-height: 1.5; white-space: nowrap; }
+.evo-composer-openin .evo-dropdown-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; width: auto; height: auto; padding: 2px 7px; border: 1px solid transparent; border-radius: var(--r-pebble-sm); background: transparent; color: var(--color-text-tertiary); font-size: 11px; font-weight: 400; line-height: 1.5; white-space: nowrap; }
 .evo-composer-openin .evo-dropdown-btn:hover, .evo-composer-openin .evo-dropdown-btn.evo-dropdown-open { border-color: var(--color-border-light); background: var(--hover-bg); color: var(--brand); }
 .evo-composer-openin .evo-dropdown-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
 .evo-composer-openin .evo-dropdown-value { flex: 0 0 auto; min-width: 0; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1238,11 +1316,17 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-llm-fetched-title { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
 .evo-llm-fetched-count { font-size: 11.5px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
 .evo-llm-model-pills { display: flex; flex-wrap: wrap; gap: 10px 8px; }
-.evo-llm-model-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 12px; border: 1px solid var(--color-border-light); border-radius: var(--r-pill); background: var(--color-surface); }
+.evo-llm-model-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 5px 3px 12px; border: 1px solid var(--color-border); border-radius: var(--r-pebble); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+/* 上下文窗口：默认态是虚框"未设置"胶囊（显示人去化的默认值），点击才变成数字输入框——
+   早期直接把 262144 当 placeholder 显示，看起来像一个错误的数字（用户反馈）。 */
+.evo-llm-model-ctx-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px dashed color-mix(in srgb, var(--color-border) 90%, transparent); border-radius: var(--r-pebble-sm);
+  background: transparent; color: var(--color-text-tertiary); font: inherit; font-size: 11px; line-height: 1.6; cursor: text; }
+.evo-llm-model-ctx-chip[data-set] { border-style: solid; border-color: color-mix(in srgb, var(--accent-sage) 50%, transparent); background: color-mix(in srgb, var(--accent-sage) 16%, transparent); color: var(--brand); font-variant-numeric: tabular-nums; }
+.evo-llm-model-ctx-chip:hover { border-color: var(--brand); color: var(--brand); }
 .evo-llm-model-pill .evo-llm-model-id { flex: 0 1 auto; min-width: 0; max-width: 260px; font-family: var(--font-mono); font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-llm-model-n { min-width: 16px; text-align: center; font-size: 10.5px; line-height: 1; padding: 2px 5px; font-variant-numeric: tabular-nums; }
 /* 胶囊内嵌上下文窗口输入：窄位数字框，留空即默认 */
-.evo-llm-model-pill .evo-llm-model-ctx { flex: 0 0 auto; width: 88px; padding: 1px 8px; border: 1px solid var(--color-border-light); border-radius: var(--r-pill); background: var(--color-background); font-family: var(--font-mono); font-size: 11.5px; line-height: 18px; color: var(--color-text-primary); text-align: right; }
+.evo-llm-model-pill .evo-llm-model-ctx { flex: 0 0 auto; width: 96px; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: var(--r-pebble-sm); background: var(--color-background); font-family: var(--font-mono); font-size: 11.5px; line-height: 18px; color: var(--color-text-primary); text-align: right; box-shadow: inset 0 1px 2px color-mix(in srgb, var(--shade) 6%, transparent); }
 .evo-llm-model-pill .evo-llm-model-ctx:focus { border-color: var(--brand); outline: none; }
 .evo-llm-model-pill .evo-llm-model-ctx:disabled { opacity: 0.55; }
 .evo-llm-model-x { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: var(--r-pill); background: transparent; color: var(--color-text-tertiary); cursor: pointer; }
@@ -1281,7 +1365,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-msg-bubble::after { content: ''; position: absolute; top: 0; bottom: 0; left: calc(100% - 2px); width: 34px; clip-path: polygon(0 0, 100% calc(100% - 26px), 100% 100%, 0 100%); }
 .evo-msg-user .evo-msg-bubble::after { left: auto; right: calc(100% - 2px); width: 150px; clip-path: polygon(0 calc(100% - 26px), 100% 0, 100% 100%, 0 100%); }
 .evo-msg-meta .evo-msg-time { font-size: 10.5px; color: var(--color-text-tertiary); margin-top: 0; margin-right: 3px; white-space: nowrap; flex-shrink: 0; }
-.evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-xs); cursor: pointer; padding: 0; }
+.evo-msg-copy { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-pebble-sm); cursor: pointer; padding: 0; }
 .evo-msg-copy:hover { background: var(--hover-bg); color: var(--brand); }
 .evo-msg-copy.confirming { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
 .evo-msg-copy svg { width: 14px; height: 14px; }
@@ -1359,7 +1443,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-graph-legend { position: absolute; z-index: 7; width: min(340px, calc(100% - 24px)); max-height: min(430px, 72%); overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 .evo-graph-legend-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .evo-graph-legend-head strong { font-size: 12.5px; color: var(--color-text-primary); }
-.evo-graph-legend-close { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: var(--r-xs); background: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 12px; }
+.evo-graph-legend-close { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: var(--r-pebble-sm); background: none; color: var(--color-text-tertiary); cursor: pointer; font-size: 12px; }
 .evo-graph-legend-close:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-graph-legend-note { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
 .evo-graph-legend-row { display: flex; align-items: center; gap: 9px; min-width: 0; }
@@ -1437,8 +1521,9 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-graph-canvas .react-flow__resize-control.line { display: none; }
 /* 角落缩放提示（内侧倒角三角）：悬停某角手柄时，该角淡入节点类型色的直角三角形。
    颜色：跟随节点图标同款类型色（chat 蓝 / memory 绿 / 全局 memory 紫），半透明融入卡片。
-   几何：块 21×21、圆角 16px、外扩 1px 顶到卡片边框外沿。圆心恒为卡片角内 (16,16)
-   与外圆角曲线同心同径 → 三角外弧就是卡片最外沿本身，与选中描边环严丝合缝，零间隙；
+   几何：块 21×21、圆角 = --graph-node-radius（必须与卡片圆角同源，否则外弧与卡片边缘错位）、
+   外扩 1px 顶到卡片边框外沿。圆心恒为卡片角内 (半径, 半径) 与外圆角曲线同心同径 →
+   三角外弧就是卡片最外沿本身，与选中描边环严丝合缝，零间隙；
    斜边腿长 21px > 半径 → 两腿沿卡片边缘、斜边平直、外角沿圆弧的厚实倒角三角。
    悬停透明度 0.7（与卡片 70% 半透明表面同一语言，描边在外层仍隐约可读）。
    拖拽缩放进行中：按下的手柄在松开前始终匹配 :active（指针甩离手柄也一样），
@@ -1455,10 +1540,10 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-graph-node:has(.react-flow__resize-control.handle.bottom.left:active) .evo-resize-chamfer-bl,
 .evo-graph-node:has(.react-flow__resize-control.handle.bottom.right:hover) .evo-resize-chamfer-br,
 .evo-graph-node:has(.react-flow__resize-control.handle.bottom.right:active) .evo-resize-chamfer-br { opacity: 0.7; }
-.evo-resize-chamfer-tl { top: -1px; left: -1px; border-top-left-radius: 16px; clip-path: polygon(0 0, 100% 0, 0 100%); }
-.evo-resize-chamfer-tr { top: -1px; right: -1px; border-top-right-radius: 16px; clip-path: polygon(0 0, 100% 0, 100% 100%); }
-.evo-resize-chamfer-bl { bottom: -1px; left: -1px; border-bottom-left-radius: 16px; clip-path: polygon(0 0, 0 100%, 100% 100%); }
-.evo-resize-chamfer-br { bottom: -1px; right: -1px; border-bottom-right-radius: 16px; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.evo-resize-chamfer-tl { top: -1px; left: -1px; border-top-left-radius: var(--graph-node-radius); clip-path: polygon(0 0, 100% 0, 0 100%); }
+.evo-resize-chamfer-tr { top: -1px; right: -1px; border-top-right-radius: var(--graph-node-radius); clip-path: polygon(0 0, 100% 0, 100% 100%); }
+.evo-resize-chamfer-bl { bottom: -1px; left: -1px; border-bottom-left-radius: var(--graph-node-radius); clip-path: polygon(0 0, 0 100%, 100% 100%); }
+.evo-resize-chamfer-br { bottom: -1px; right: -1px; border-bottom-right-radius: var(--graph-node-radius); clip-path: polygon(100% 0, 100% 100%, 0 100%); }
 /* 端口小字默认隐藏（避免常驻遮挡连线走向），悬停该节点时才浮现；键盘 Tab 导航（focus-visible）同样显示 */
 .evo-graph-socket-label { font-size: 10px; letter-spacing: 0.2px; color: var(--graph-muted); white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.12s ease, visibility 0.12s ease; pointer-events: none; background: var(--graph-node-surface); border: 1px solid var(--graph-control-border); border-radius: var(--r-2xs); padding: 0 4px; }
 .evo-graph-node:hover .evo-graph-socket-label, .evo-graph-node:has(:focus-visible) .evo-graph-socket-label { opacity: 1; visibility: visible; color: var(--color-text-secondary); }
@@ -1572,7 +1657,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-graph-inspector-action, .evo-graph-inspector-links button { border: 1px solid var(--color-border); border-radius: var(--r-xs); padding: 5px 8px; background: var(--color-background); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 11px; }
 .evo-graph-inspector-action { margin: 3px 4px 3px 0; }
 .evo-graph-inspector-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--color-text-tertiary); }
-.evo-graph-inspector-reopen { position: absolute; z-index: 45; right: 12px; bottom: 12px; border: 1px solid var(--color-border); border-radius: var(--r-xs); padding: 6px 9px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 11px; }
+.evo-graph-inspector-reopen { position: absolute; z-index: 45; right: 12px; bottom: 12px; border: 1px solid var(--color-border); border-radius: var(--r-pebble-sm); padding: 6px 9px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 11px; }
 .evo-graph-minimap { position: absolute; z-index: 20; right: 12px; top: 12px; width: 142px; height: 86px; overflow: hidden; border: 1px solid var(--graph-control-border); border-radius: var(--r-xs); background: var(--graph-minimap); pointer-events: none; }
 .evo-graph-minimap-dot { position: absolute; width: 8px; height: 5px; border-radius: var(--r-2xs); background: var(--graph-minimap-resource); opacity: 0.72; }
 .evo-graph-minimap-dot.active { background: var(--graph-trace); opacity: 1; box-shadow: 0 0 0 1px var(--color-surface); }
@@ -1611,7 +1696,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-channel-badge { padding: 1px 9px; font-size: 10.5px; text-transform: capitalize; }
 .evo-channel-badge.online { background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }
 .evo-channel-counts { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.evo-channel-toggle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--color-border); border-radius: var(--r-sm); background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; }
+.evo-channel-toggle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--color-border); border-radius: var(--r-pebble-sm); background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; flex-shrink: 0; }
 .evo-channel-toggle:hover { border-color: var(--brand); color: var(--brand); }
 .evo-channel-toggle.stop { color: var(--color-error); }
 .evo-channel-toggle.stop:hover { border-color: var(--color-error); color: var(--color-error); }
@@ -1706,7 +1791,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-info-value { flex: 1; min-width: 0; font-size: 12.5px; color: var(--color-text-primary); display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; word-break: break-all; }
 .evo-info-mono { font-family: var(--font-mono); }
 .evo-info-path { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-text-secondary); }
-.evo-info-copy { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-xs); cursor: pointer; flex-shrink: 0; }
+.evo-info-copy { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-pebble-sm); cursor: pointer; flex-shrink: 0; }
 .evo-info-copy:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-info-copy svg { width: 13px; height: 13px; }
 .evo-info-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; }
@@ -1743,7 +1828,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-attach-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: var(--r-xs); flex-shrink: 0; }
 .evo-attach-thumb.evo-attach-loading { display: inline-flex; align-items: center; justify-content: center; font-size: 13px; color: var(--color-text-tertiary); background: var(--hover-bg); }
 .evo-attach-name { flex: 1; min-width: 0; font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.evo-attach-remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-2xs); cursor: pointer; flex-shrink: 0; }
+.evo-attach-remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-pebble-sm); cursor: pointer; flex-shrink: 0; }
 .evo-attach-remove:hover { color: var(--color-error); background: var(--hover-bg); }
 .evo-attach-remove svg { width: 13px; height: 13px; }
 /* ── Toast（§33.2）── */
@@ -1776,7 +1861,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 @keyframes evo-jump-flash { 0% { background: color-mix(in srgb, var(--brand) 26%, transparent); } 100% { background: transparent; } }
 /* ── Recents 操作（§26.3）与 Side Chat（§22.3-22.4）── */
 .evo-tl-row { display: flex; align-items: center; gap: 4px; }
-.evo-tl-drag-grip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 28px; margin: -4px 0 -4px -5px; padding: 0; border: 0; border-radius: var(--r-xs); background: transparent; color: var(--color-text-tertiary); cursor: grab; flex: 0 0 24px; touch-action: none; }
+.evo-tl-drag-grip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 28px; margin: -4px 0 -4px -5px; padding: 0; border: 0; border-radius: var(--r-pebble-sm); background: transparent; color: var(--color-text-tertiary); cursor: grab; flex: 0 0 24px; touch-action: none; }
 .evo-tl-drag-grip:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-tl-drag-grip:active, .evo-tl[data-dragging] .evo-tl-drag-grip { cursor: grabbing; }
 .evo-tl-drag-grip svg { width: 13px; height: 13px; }
@@ -1799,7 +1884,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-tl-row-main { flex: 1; min-width: 0; text-align: left; border: none; background: none; padding: 0; cursor: pointer; }
 .evo-tl-row-acts { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; align-items: center; }
 .evo-tl-row:hover .evo-tl-row-acts, .evo-tl-row:focus-within .evo-tl-row-acts { opacity: 1; }
-.evo-tl-row-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-xs); cursor: pointer; }
+.evo-tl-row-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-pebble-sm); cursor: pointer; }
 .evo-tl-row-act:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-tl-row-act[data-on] { color: var(--brand); }
 .evo-tl-row-act svg { width: 13px; height: 13px; }
@@ -1836,14 +1921,14 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-sidechat-new { display: inline-flex; align-items: center; gap: 5px; }
 .evo-sidechat-new svg { width: 13px; height: 13px; }
 /* ── 忙时消息队列（§23.6）── */
-.evo-queue-count { font-size: 10.5px; font-weight: 700; min-width: 15px; height: 15px; line-height: 15px; text-align: center; border-radius: var(--r-pill); background: var(--brand-solid); color: var(--brand-foreground); padding: 0 4px; }
+.evo-queue-count { font-size: 10.5px; font-weight: 700; min-width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: var(--r-pebble-sm); background: var(--brand-solid); color: var(--brand-foreground); padding: 0 4px; }
 .evo-queue { position: absolute; bottom: calc(100% - 8px); left: 50%; transform: translateX(-50%); width: min(520px, calc(100vw - 96px)); max-height: 300px; overflow-y: auto; z-index: 40; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .evo-queue-head { display: flex; align-items: center; gap: 8px; }
 .evo-queue-list { display: flex; flex-direction: column; gap: 4px; }
 .evo-queue-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--color-border-light); border-radius: var(--r-sm); background: var(--color-background); }
 .evo-queue-text { flex: 1; min-width: 0; font-size: 12.5px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-queue-input { flex: 1; min-width: 0; padding: 4px 10px; font-size: 12.5px; }
-.evo-queue-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-xs); cursor: pointer; flex-shrink: 0; }
+.evo-queue-act { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-pebble-sm); cursor: pointer; flex-shrink: 0; }
 .evo-queue-act:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-queue-act svg { width: 13px; height: 13px; }
 .evo-queue-steer { color: var(--brand); }
@@ -1888,7 +1973,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-wf-count { font-size: 11px; font-weight: 600; color: var(--color-text-secondary); flex-shrink: 0; }
 .evo-wf-duration { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .evo-wf-status { font-size: 11px; color: var(--color-warning); flex-shrink: 0; }
-.evo-wf-clear { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-xs); cursor: pointer; flex-shrink: 0; }
+.evo-wf-clear { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-pebble-sm); cursor: pointer; flex-shrink: 0; }
 .evo-wf-clear:hover { color: var(--color-error); background: var(--hover-bg); }
 .evo-wf-clear svg { width: 13px; height: 13px; }
 /* ── 后台任务（§21.6）── */
@@ -1916,7 +2001,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-cmd-output-md table { border-collapse: collapse; margin: 4px 0; }
 .evo-cmd-output-md th, .evo-cmd-output-md td { border: 1px solid var(--color-border); padding: 3px 10px; font-size: 12px; text-align: left; }
 .evo-cmd-output-md th { background: var(--hover-bg); font-weight: 600; }
-.evo-cmd-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-xs); cursor: pointer; flex-shrink: 0; }
+.evo-cmd-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-pebble-sm); cursor: pointer; flex-shrink: 0; }
 .evo-cmd-dismiss:hover { color: var(--color-text-primary); background: var(--hover-bg); }
 .evo-cmd-dismiss svg { width: 13px; height: 13px; }
 /* ── 标签栏（§5.2：轻量分段导航，接近原生桌面工具栏）── */
@@ -1924,21 +2009,23 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 14px; background-color: var(--color-background); background-image: var(--organic-grain); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
 .evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 10px; border: 1px solid transparent; border-radius: var(--r-xs); background: transparent; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.5s linear; will-change: transform; }
 .evo-tab:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.evo-tab { position: relative; }
 .evo-tab[data-active] { background: var(--color-surface); border-color: var(--color-border); color: var(--color-text-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
+.evo-tab[data-active]::after { content: ''; position: absolute; left: 9px; right: 9px; top: -1px; height: 3px; border-radius: var(--r-pill); background: var(--accent-sage); }
 /* 拖拽中的 tab：抬起、加投影、禁止触摸滚动干扰；位置由内联 transform 跟随指针/FLIP */
 .evo-tab.evo-tab-dragging { cursor: grabbing; background: var(--color-surface); border-color: var(--color-border); box-shadow: var(--shadow-md); touch-action: none; transition: transform 0.1s ease, box-shadow 0.15s ease; }
 .evo-tab-title { overflow: hidden; text-overflow: ellipsis; }
 /* 文件编辑 tab：未改动=斜体，有未保存改动=正体（仿 VSCode dirty 语义的斜体约定） */
 .evo-tab-title-file { font-style: italic; }
 .evo-tab-title-file.evo-tab-title-dirty { font-style: normal; font-weight: 700; color: var(--color-text-primary); }
-.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: var(--r-2xs); cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0.65; position: relative; }
+.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: var(--r-pebble-sm); cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0.65; position: relative; }
 .evo-tab-close::after { content: ''; position: absolute; inset: -6px; }
 .evo-tab-close:hover { background: color-mix(in srgb, var(--color-text-primary) 14%, transparent); opacity: 1; }
 .evo-tab-close svg { width: 11px; height: 11px; }
 .evo-tab-new-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 2px; }
 .evo-tab-new-wrap-drop-target::before { content: ''; position: absolute; left: -5px; top: 4px; bottom: 4px; width: 2px; border-radius: var(--r-2xs); background: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 18%, transparent); pointer-events: none; }
 .evo-tab-new-wrap-drop-target .evo-tab-new { color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent); }
-.evo-tab-new { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--color-text-tertiary); cursor: pointer; flex-shrink: 0; transition: background 0.12s ease, color 0.12s ease; }
+.evo-tab-new { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid transparent; border-radius: var(--r-pebble-sm); background: transparent; color: var(--color-text-tertiary); cursor: pointer; flex-shrink: 0; transition: background 0.12s ease, color 0.12s ease; }
 .evo-tab-new:hover:not(:disabled) { background: var(--hover-bg); color: var(--brand); }
 .evo-tab-new:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-tab-new svg { width: 14px; height: 14px; }
@@ -1957,7 +2044,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-tab-tree-head { display: flex; align-items: center; gap: 6px; padding: 3px 8px 5px; }
 .evo-tab-tree-head > svg { width: 13px; height: 13px; color: var(--brand); flex-shrink: 0; }
 .evo-tab-tree-root { font-size: 11px; color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-family: var(--font-mono); }
-.evo-tab-tree-refresh { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-2xs); cursor: pointer; flex-shrink: 0; }
+.evo-tab-tree-refresh { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: none; color: var(--color-text-tertiary); border-radius: var(--r-pebble-sm); cursor: pointer; flex-shrink: 0; }
 .evo-tab-tree-refresh:hover { background: var(--hover-bg); color: var(--color-text-primary); }
 .evo-tab-tree-refresh svg { width: 12px; height: 12px; }
 .evo-tab-tree-row { display: flex; align-items: center; gap: 6px; width: 100%; border: none; background: none; border-radius: var(--r-xs); padding: 4px 8px; font-size: 12.5px; color: var(--color-text-primary); cursor: pointer; text-align: left; min-width: 0; }
@@ -2088,7 +2175,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-traj-call-detail { padding: 2px 12px 10px 30px; display: flex; flex-direction: column; gap: 4px; }
 .evo-traj-detail { display: flex; flex-direction: column; gap: 4px; }
 .evo-traj-detail-head { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--color-text-tertiary); font-weight: 600; margin-top: 4px; }
-.evo-traj-goto { display: inline-flex; align-items: center; gap: 4px; border: none; background: none; color: var(--brand); font-size: 11px; font-weight: 600; cursor: pointer; padding: 2px 6px; border-radius: var(--r-xs); }
+.evo-traj-goto { display: inline-flex; align-items: center; gap: 4px; border: none; background: none; color: var(--brand); font-size: 11px; font-weight: 600; cursor: pointer; padding: 2px 6px; border-radius: var(--r-pebble-sm); }
 .evo-traj-goto:hover { background: var(--hover-bg); }
 .evo-traj-goto svg { width: 12px; height: 12px; }
 .evo-traj-meta { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
@@ -2360,7 +2447,7 @@ html.dark .evo-composer-editor-host .milkdown .ProseMirror pre { background: col
 .evo-ledger-exists { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .evo-ledger-notfound { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .evo-ledger-confirm { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-secondary); }
-.evo-ledger-cancel { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: var(--hover-bg); border-radius: var(--r-xs); color: var(--color-text-tertiary); cursor: pointer; }
+.evo-ledger-cancel { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: var(--hover-bg); border-radius: var(--r-pebble-sm); color: var(--color-text-tertiary); cursor: pointer; }
 .evo-ledger-cancel:hover { color: var(--color-text-primary); }
 .evo-ledger-log { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; }
 .evo-ledger-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--color-border-light); border-radius: var(--r-sm); background: var(--color-background); }

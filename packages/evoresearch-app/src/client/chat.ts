@@ -20,7 +20,7 @@ import { gfm, insertTableCommand, toggleStrikethroughCommand } from '@milkdown/p
 import { history as milkdownHistory } from '@milkdown/plugin-history'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import {
-  Paperclip, Send, Wrench, User, Copy, Check, PenLine, Atom,
+  Paperclip, Send, Wrench, User, Copy, Check, PenLine,
   ChevronDown, ChevronUp, ChevronRight, Shrink, Info, Search, Bell, BellOff, Keyboard,
   ListTodo, X as XIcon, Trash2, Terminal, XCircle, CheckCircle2, Command, Square, CornerUpRight, HelpCircle, History, GitBranch,
   Heading1, Bold, Italic, Strikethrough, Minus, Quote, List, ListOrdered, Table2, Link as LinkIcon, Code, Code2,
@@ -565,7 +565,7 @@ function AssistantBubble({ node, nodeKey, highlight, toolResults, sessionId, onO
     onClick: onRowClick,
     children: [
       // 续行仍渲染头像占位（visibility 隐藏）保证文本与首条左对齐
-      jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsxs(Fragment, { children: [jsx(Atom, {})] }) }),
+      jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsx('span', { className: 'evo-sprig', style: { width: 17, height: 17 } }) }),
       jsxs('div', {
         className: 'evo-msg-body',
         children: [
@@ -1913,7 +1913,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
                           children: jsxs('div', {
                             className: 'evo-msg-stack',
                             children: [
-                              jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsx(Atom, {}) }),
+                              jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsx('span', { className: 'evo-sprig', style: { width: 17, height: 17 } }) }),
                               jsx('div', {
                                 className: 'evo-msg-body',
                                 children: jsxs('span', {
@@ -1947,7 +1947,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
                   children: jsxs('div', {
                     className: 'evo-msg-stack',
                     children: [
-                      jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsx(Atom, {}) }),
+                      jsx('div', { className: 'evo-msg-avatar evo-msg-avatar-ai', 'aria-hidden': true, children: jsx('span', { className: 'evo-sprig', style: { width: 17, height: 17 } }) }),
                       jsx('div', {
                         className: 'evo-msg-body',
                         children: jsxs('span', {

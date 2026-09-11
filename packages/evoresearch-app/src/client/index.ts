@@ -388,7 +388,15 @@ function EvoFrame({ useSessions, useWorkspaces }: { useSessions: any; useWorkspa
       applyTheme()
     }
     mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
+    // 后端 client-state 回填后，偏好可能被改写（换浏览器/设备场景）：applyTheme 已
+    // 重刷 html.dark，但 React 的 themeDark 也要跟着同步——否则顶部主题按钮的图标/
+    // 提示仍是旧值，且按偏好取反的切换会"点一下没反应"（偏好与已应用主题同向）。
+    const onStateLoaded = () => { setThemeDark(resolvedTheme() === 'dark') }
+    window.addEventListener('evo:client-state-loaded', onStateLoaded)
+    return () => {
+      mq.removeEventListener('change', onChange)
+      window.removeEventListener('evo:client-state-loaded', onStateLoaded)
+    }
   }, [])
 
   const restoredCurrent = sessions.current
