@@ -586,6 +586,7 @@ const DICT: Record<string, [string, string]> = {
   llmModelCtxWindow: ['Context window (tokens)', '上下文窗口（token）'],
   llmModelCtxHint: ['Max context tokens for this model. Unset uses the default (262144). Takes effect after Save; drives the context usage meter and overflow/compaction thresholds.', '该模型的上下文最大 token 数；未设置时用默认值。点数值即可编辑，回车确认，点「保存」后生效。'],
   llmModelCtxDefault: ['Default {n}', '默认 {n}'],
+  llmModelCtxCustom: ['Custom {n}', '自定义 {n}'],
   modelExcluded: ['Excluded model {id} from {n} provider(s)', '已排除模型 {id}（涉及 {n} 个 Provider）'],
   modelExcludeFailed: ['Failed to exclude model', '排除模型失败'],
   llmSaved: ['Model provider saved', '模型提供商已保存'],

@@ -206,6 +206,27 @@ const firstComponent = styles.indexOf('.evo-pop,')
 const firstBiz = styles.indexOf('.evo-topbar {')
 if (firstComponent < 0 || firstBiz < 0 || firstComponent > firstBiz) fail('组件层位置异常：应位于业务规则之前')
 
+// ───────────────────────── ③ 回归守卫（踩过的坑不再复发） ─────────────────────────
+/** ① 图标类名不得带 evo-pop-item：该类给 <img> 加 display:flex，Chromium 下替换元素
+    内容不绘制 → 弹出菜单里的应用图标整排消失（实测踩过）。 */
+for (const file of clientFiles) {
+  if (VENDOR.has(file)) continue
+  const lines = readFileSync(join(CLIENT, file), 'utf8').split('\n')
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/evo-pop-item[^'"]*icon/.test(lines[i])) {
+      fail(`回归[图标被误挂 evo-pop-item] ${file}:${i + 1}（<img> 会因 display:flex 不绘制）`)
+    }
+  }
+}
+/** ② 列表标记按父容器（ul/ol）判定：li[data-list-type] 会被 Milkdown 有序列表输入规则
+    留下的默认值（bullet）带偏，把 "1. " 显示成圆点（实测踩过）。 */
+if (/li\[data-list-type=/.test(stylesCode)) {
+  fail('回归[列表标记按 li 属性判定] styles.ts：应使用 ul > li / ol > li 容器判定')
+}
+for (const need of ['.evo-composer-editor-host .milkdown .ProseMirror ul > li', '.evo-composer-editor-host .milkdown .ProseMirror ol > li']) {
+  if (!styles.includes(need)) fail(`缺失[列表标记规则] ${need}`)
+}
+
 // ───────────────────────── ④ 文本对比度（AA ≥ 4.5） ─────────────────────────
 const lum = (h) => {
   const [r, g, b] = hexToRgb(h).map((v) => {

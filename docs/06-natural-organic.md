@@ -233,3 +233,39 @@
 - `npm run verify` 全绿；守卫 4 项禁项 0 命中。
 - 浏览器实测：0 UA 默认按钮、hover 圆角稳定、模型胶囊"默认 262K → 128K"全流程可用、主题按钮三次循环正确。
 - 截图：`.tmp-dev/images/organic/70–82`（含 80 欢迎页深色水印、81 空态小枝、82 设置深色）。
+
+---
+
+## 9. 第三轮：用户验收反馈的四项修复与标签栏重设（2026-09-11）
+
+**a. 弹出菜单里的应用图标整排消失（真实缺陷，已修）**
+"打开方式"菜单只显示文字、图标全无。排查链：`/open-in-app/apps` 与 `/open-in-app/icon/<id>` 均 200 且是正常 PNG（32×32 RGBA），`<img>` 也 `complete`、`naturalWidth=32`、未 `display:none`，但屏幕上不绘制。
+根因：第二轮批量给浮层挂组件类时，把 `<img>` 的 `className: 'evo-dropdown-option-icon'` 也匹配成了 `'evo-pop-item evo-dropdown-option-icon'`；`.evo-pop-item` 带 `display:flex`，而 Chromium 对 `display:flex` 的替换元素（`<img>`）**不绘制其内容** → 图标在布局里占位却不可见。
+修复：图标 `<img>` 只保留自己的类；守卫新增回归断言——任何 className 字面量不得把 `evo-pop-item` 与 `icon` 拼在一起。
+验证：菜单元素级截图可见资源管理器 / VS Code / Git Bash 三枚图标。
+
+**b. 输入 `1. ` 被渲染成圆点（真实缺陷，已修）**
+根因有两层：① Milkdown 的有序列表输入规则（`^\s*\d+\.\s$`）在包 `ordered_list` 时，新建的 `list_item` 保留 schema 默认值 `listType: 'bullet'` / `label: '•'`（上游行为），DOM 于是成了 `<ol><li data-list-type="bullet" data-label="•">`；② 我此前按 **li 属性** 写 `list-style`，于是有序项被判为无序、渲染成圆点。
+修复：① CSS 改为按**父容器**判定（`ol > li { list-style: decimal }` / `ul > li { list-style: disc }`），对"输入规则 / 工具栏命令 / 粘贴"三条创建路径都成立；② 新增 ProseMirror 归一化插件（`appendTransaction`）按父容器纠正 `listType`/`label`，让 DOM 与语义一致（双保险）。
+验证：输入 `1. ` + 两行 → `<ol>`、`list-style: decimal`、`data-label="1."`、`data-list-type="ordered"`。
+守卫：禁止 `li[data-list-type=` 写法（回归即失败），并要求两条容器规则存在。
+
+**c. 标签栏重设为 Chrome / Edge 页签语言（设计重做）**
+用户指出旧实现"每个页签是一颗按钮卡片"不符合风格，也不符合标签栏语义。按 Chromium 页签解剖重做：
+- 页签栏（`.evo-tabbar`）改为"承载页签的条"：`align-items: flex-end`、底部不再留内边距，只有一条 1px 分割线；
+- 页签本体去掉卡片外观：无独立底色/描边/阴影，仅 `border-top: 2px transparent` 占位；只有**上圆角**（`12px 10px 0 0`，左右不等角）；
+- **活动页签**：与内容面同底色、底边开口（`border-bottom: none` + `margin-bottom: -1px` + `::after` 封印盖住分割线）→ 与内容面融接；顶边一道鼠尾草细线（对应 Chrome 的"标签组色线"，作为品牌签名）；
+- **未活动页签**：仅悬停浮现浅底；相邻页签之间有 1px 细分隔线，悬停/活动页签两侧自动让位；
+- **关闭钮**：未活动页签悬停/聚焦才浮现，活动页签常驻（Chromium 同款）；悬停底色改为 blob 圆点；
+- `+` 新建页签：竖直居中、悬停浅底返青；拖拽中的页签改为鹅卵石浮起卡片。
+验证（计算样式）：活动页签 `bg=surface / radius=12px 10px 0 0 / border-top=2px #8b9d77 / border-bottom=0 / margin-bottom=-1px / 关闭钮 opacity .7`；未活动页签 `bg=transparent / 关闭钮 opacity 0 → 悬停 .7`。
+
+**d. 上下文窗口改为分档下拉（交互重做）**
+用户要求"以 K/M 为单位、分档位、不允许逐个微调"。原实现是内嵌 number 输入框（带原生上下箭头，`262144` 当 placeholder 显示）。
+现为内嵌主题化下拉：默认态虚框胶囊「默认 256K」，已选态实线鼠尾草胶囊；档位与标签严格按用户给定：`16K / 32K / 128K / 256K / 300K / 400K / 500K / 1M / 2M`（值分别是 16384 / 32768 / 131072 / 262144 / 307200 / 409600 / 512000 / 1048576 / 2097152；标签用习惯写法，不做四舍五入显示——早期版本会把 32768 显示成 33K、2097152 显示成 2.1M，已纠正）；不在档位内的历史值单列一项 `自定义 <值>`，避免显示丢失。
+验证：`默认 256K` → 菜单 10 项（默认 + 9 档）→ 选 128K → 胶囊显示 `128K` 且不再是未设置态。
+
+**e. 本轮验收证据**
+- `npm run verify` 全绿（守卫含 4 类禁项 + 4 项回归/结构断言，均做过注入自检）。
+- 浏览器实测：图标可见、`1. ` → 有序列表、页签解剖（含悬停关闭钮）、分档下拉全流程，0 console 报错。
+- 截图：`.tmp-dev/images/organic/A1–A7`、`B1`（图标修复后）。

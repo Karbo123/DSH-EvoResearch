@@ -9,7 +9,8 @@
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { Editor, rootCtx, defaultValueCtx, commandsCtx, editorViewCtx, parserCtx } from '@milkdown/core'
-import { TextSelection } from '@milkdown/prose/state'
+import { Plugin, PluginKey, TextSelection } from '@milkdown/prose/state'
+import { $prose } from '@milkdown/utils'
 import {
   commonmark,
   wrapInHeadingCommand, toggleStrongCommand, toggleEmphasisCommand,
@@ -680,6 +681,42 @@ function ResearchDashboard({ cwd }: { cwd: string | null }) {
     }, card.label)),
   })
 }
+
+/** 列表项属性归一化（Milkdown 上游行为兜底）。
+ *
+ * Milkdown 的有序列表输入规则（^\s*\d+\.\s$）包一层 ordered_list 时，新建的
+ * list_item 会保留 schema 默认值 `listType: 'bullet'` / `label: '•'`；于是输入
+ * "1. " 得到的 DOM 是 <ol><li data-list-type="bullet" data-label="•">——界面上会
+ * 显示成圆点（用户实测反馈）。这里在每次文档变更后按父容器纠正 li 的
+ * listType/label（有序列表用序号、无序列表用圆点），让 DOM 与语义一致；
+ * 显示层另有 CSS 按 ul/ol 判定标记，双保险。
+ */
+const normalizeListItems = $prose(() => new Plugin({
+  key: new PluginKey('evo-normalize-list-items'),
+  appendTransaction: (transactions, _oldState, newState) => {
+    if (!transactions.some((tr) => tr.docChanged)) return null
+    const fixes: Array<{ pos: number; attrs: Record<string, unknown> }> = []
+    newState.doc.descendants((node, pos) => {
+      if (node.type.name !== 'ordered_list' && node.type.name !== 'bullet_list') return true
+      const ordered = node.type.name === 'ordered_list'
+      let index = ordered ? Number(node.attrs.order ?? 1) : 0
+      node.forEach((child, offset) => {
+        const wantLabel = ordered ? `${index}.` : '•'
+        const wantType = ordered ? 'ordered' : 'bullet'
+        if (child.type.name === 'list_item' && (child.attrs.listType !== wantType || child.attrs.label !== wantLabel)) {
+          fixes.push({ pos: pos + 1 + offset, attrs: { ...child.attrs, listType: wantType, label: wantLabel } })
+        }
+        index += 1
+      })
+      return true
+    })
+    if (fixes.length === 0) return null
+    const tr = newState.tr
+    // 逆序应用：位置基于新文档，从后往前改不会互相移位
+    for (const fix of fixes.reverse()) tr.setNodeMarkup(fix.pos, undefined, fix.attrs)
+    return tr.setMeta('addToHistory', false)
+  },
+}))
 
 export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, error, currentTitle, sessionId, session, cwd, referenceSearch, jobs, onOpenThread, onBranchFromMessage, onOpenProjectFile, onSend }: ChatAreaProps) {
   const [input, setInput] = useState('')
@@ -1495,6 +1532,7 @@ export function ChatArea({ nodes, partial, running, pendingFirst, pendingEcho, e
             if (!suppressCandidateTriggerRef.current) setTrigger(detectTrigger(line, line.length))
           })
       })
+      .use(normalizeListItems)
       .use(commonmark)
       .use(gfm)
       .use(milkdownHistory)

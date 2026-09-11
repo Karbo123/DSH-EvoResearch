@@ -1317,18 +1317,21 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-llm-fetched-count { font-size: 11.5px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
 .evo-llm-model-pills { display: flex; flex-wrap: wrap; gap: 10px 8px; }
 .evo-llm-model-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 5px 3px 12px; border: 1px solid var(--color-border); border-radius: var(--r-pebble); background: var(--color-surface); box-shadow: var(--shadow-sm); }
-/* 上下文窗口：默认态是虚框"未设置"胶囊（显示人去化的默认值），点击才变成数字输入框——
-   早期直接把 262144 当 placeholder 显示，看起来像一个错误的数字（用户反馈）。 */
-.evo-llm-model-ctx-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px dashed color-mix(in srgb, var(--color-border) 90%, transparent); border-radius: var(--r-pebble-sm);
-  background: transparent; color: var(--color-text-tertiary); font: inherit; font-size: 11px; line-height: 1.6; cursor: text; }
-.evo-llm-model-ctx-chip[data-set] { border-style: solid; border-color: color-mix(in srgb, var(--accent-sage) 50%, transparent); background: color-mix(in srgb, var(--accent-sage) 16%, transparent); color: var(--brand); font-variant-numeric: tabular-nums; }
-.evo-llm-model-ctx-chip:hover { border-color: var(--brand); color: var(--brand); }
+/* 上下文窗口：内嵌分档下拉（只允许选档位，不做逐数字微调）。
+   未设置（用默认）时按钮虚框、弱文字；已选档位时实线鼠尾草胶囊。
+   早期是一个裸 number 输入框（把 262144 当 placeholder 显示），既像错误数字
+   又带原生上下箭头，用户明确要求改成分档选择。 */
+.evo-llm-model-ctx-select { display: inline-flex; width: auto; flex-shrink: 0; }
+.evo-llm-model-ctx-select .evo-dropdown-btn { width: auto; height: auto; min-width: 84px; padding: 1px 7px 1px 9px; gap: 4px; border-radius: var(--r-pebble-sm);
+  background: color-mix(in srgb, var(--accent-sage) 16%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--accent-sage) 50%, transparent);
+  color: var(--brand); font-size: 11px; line-height: 1.6; font-weight: 600; font-variant-numeric: tabular-nums; }
+.evo-llm-model-ctx-select .evo-dropdown-btn svg { width: 12px; height: 12px; }
+.evo-llm-model-ctx-select.evo-ctx-unset .evo-dropdown-btn { border-style: dashed; border-color: color-mix(in srgb, var(--color-border) 90%, transparent);
+  background: transparent; color: var(--color-text-tertiary); font-weight: 500; }
+.evo-llm-model-ctx-select .evo-dropdown-btn:hover { border-color: var(--brand); color: var(--brand); }
 .evo-llm-model-pill .evo-llm-model-id { flex: 0 1 auto; min-width: 0; max-width: 260px; font-family: var(--font-mono); font-size: 12px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .evo-llm-model-n { min-width: 16px; text-align: center; font-size: 10.5px; line-height: 1; padding: 2px 5px; font-variant-numeric: tabular-nums; }
-/* 胶囊内嵌上下文窗口输入：窄位数字框，留空即默认 */
-.evo-llm-model-pill .evo-llm-model-ctx { flex: 0 0 auto; width: 96px; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--color-border)); border-radius: var(--r-pebble-sm); background: var(--color-background); font-family: var(--font-mono); font-size: 11.5px; line-height: 18px; color: var(--color-text-primary); text-align: right; box-shadow: inset 0 1px 2px color-mix(in srgb, var(--shade) 6%, transparent); }
-.evo-llm-model-pill .evo-llm-model-ctx:focus { border-color: var(--brand); outline: none; }
-.evo-llm-model-pill .evo-llm-model-ctx:disabled { opacity: 0.55; }
 .evo-llm-model-x { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: none; border-radius: var(--r-pill); background: transparent; color: var(--color-text-tertiary); cursor: pointer; }
 .evo-llm-model-x:hover { background: var(--color-border-light); color: var(--color-text-primary); }
 .evo-llm-model-x svg { width: 12px; height: 12px; }
@@ -2006,27 +2009,51 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-cmd-dismiss svg { width: 13px; height: 13px; }
 /* ── 标签栏（§5.2：轻量分段导航，接近原生桌面工具栏）── */
 .evo-tabwrap { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1; }
-.evo-tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 14px; background-color: var(--color-background); background-image: var(--organic-grain); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
-.evo-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 5px 10px; border: 1px solid transparent; border-radius: var(--r-xs); background: transparent; color: var(--color-text-secondary); font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap; transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.5s linear; will-change: transform; }
-.evo-tab:hover { background: var(--hover-bg); color: var(--color-text-primary); }
-.evo-tab { position: relative; }
-.evo-tab[data-active] { background: var(--color-surface); border-color: var(--color-border); color: var(--color-text-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
-.evo-tab[data-active]::after { content: ''; position: absolute; left: 9px; right: 9px; top: -1px; height: 3px; border-radius: var(--r-pill); background: var(--accent-sage); }
+/* ── 标签栏（Chrome / Edge 页签语言，不是按钮卡片）─────────────────────────
+   要点：① 页签栏是"承载页签的条"，页签本身没有独立卡片外观；
+   ② 活动页签与下方内容面同色、只有上圆角、底边开口并盖住分割线（融接）；
+   ③ 未活动页签只有悬停时才浮现底色，彼此之间是细分隔线；
+   ④ 关闭钮在未活动页签上悬停才出现，活动页签常驻（Chromium 同款）。
+   本项目的自然有机风处理：上圆角用不等角（12/10），活动页签顶边一道鼠尾草
+   细线——对应 Chrome 的"标签组色线"，作为品牌签名。 */
+.evo-tabbar { display: flex; align-items: flex-end; gap: 0; padding: 6px 14px 0; background-color: var(--color-background); background-image: var(--organic-grain); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
+.evo-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  max-width: 210px; height: 33px; padding: 0 10px 0 12px; margin-bottom: -1px;
+  border: 1px solid transparent; border-top: 2px solid transparent; border-bottom: none;
+  border-radius: 12px 10px 0 0;
+  background: transparent; color: var(--color-text-secondary);
+  font-size: 12.5px; cursor: pointer; user-select: none; white-space: nowrap;
+  transition: background-color var(--dur-quick) var(--ease-organic), color var(--dur-quick) var(--ease-organic), transform 0.5s linear;
+  will-change: transform;
+}
+/* 相邻未活动页签之间的细分隔线（悬停/活动页签两侧自动让位，Chromium 同款） */
+.evo-tab + .evo-tab::before { content: ''; position: absolute; left: -0.5px; top: 9px; bottom: 9px; width: 1px; background: var(--color-border); transition: opacity var(--dur-quick) var(--ease-organic); }
+.evo-tab:hover::before, .evo-tab[data-active]::before { opacity: 0; }
+.evo-tab:hover + .evo-tab::before { opacity: 0; }
+.evo-tab:hover { background-color: color-mix(in srgb, var(--color-text-primary) 6%, transparent); color: var(--color-text-primary); }
+.evo-tab[data-active] {
+  background: var(--color-surface); color: var(--color-text-primary); font-weight: 600;
+  border-color: var(--color-border); border-top-color: var(--accent-sage);
+}
+/* 活动页签底部"封印"：盖住页签栏分割线，让页签与内容面连成一体 */
+.evo-tab[data-active]::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--color-surface); }
 /* 拖拽中的 tab：抬起、加投影、禁止触摸滚动干扰；位置由内联 transform 跟随指针/FLIP */
-.evo-tab.evo-tab-dragging { cursor: grabbing; background: var(--color-surface); border-color: var(--color-border); box-shadow: var(--shadow-md); touch-action: none; transition: transform 0.1s ease, box-shadow 0.15s ease; }
+.evo-tab.evo-tab-dragging { cursor: grabbing; background: var(--color-surface); border-color: var(--color-border); border-radius: var(--r-pebble); box-shadow: var(--shadow-md); touch-action: none; transition: transform 0.1s ease, box-shadow 0.15s ease; }
 .evo-tab-title { overflow: hidden; text-overflow: ellipsis; }
 /* 文件编辑 tab：未改动=斜体，有未保存改动=正体（仿 VSCode dirty 语义的斜体约定） */
 .evo-tab-title-file { font-style: italic; }
 .evo-tab-title-file.evo-tab-title-dirty { font-style: normal; font-weight: 700; color: var(--color-text-primary); }
-.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: var(--r-pebble-sm); cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0.65; position: relative; }
+.evo-tab-close { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: none; background: none; color: currentColor; border-radius: var(--r-dot); cursor: pointer; padding: 0; flex-shrink: 0; opacity: 0; position: relative; transition: opacity var(--dur-quick) var(--ease-organic), background-color var(--dur-quick) var(--ease-organic); }
 .evo-tab-close::after { content: ''; position: absolute; inset: -6px; }
+.evo-tab:hover .evo-tab-close, .evo-tab:focus-within .evo-tab-close, .evo-tab[data-active] .evo-tab-close { opacity: 0.7; }
 .evo-tab-close:hover { background: color-mix(in srgb, var(--color-text-primary) 14%, transparent); opacity: 1; }
 .evo-tab-close svg { width: 11px; height: 11px; }
-.evo-tab-new-wrap { position: relative; display: inline-flex; align-items: center; margin-left: 2px; }
+.evo-tab-new-wrap { position: relative; display: inline-flex; align-items: center; align-self: center; margin-left: 6px; }
 .evo-tab-new-wrap-drop-target::before { content: ''; position: absolute; left: -5px; top: 4px; bottom: 4px; width: 2px; border-radius: var(--r-2xs); background: var(--brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 18%, transparent); pointer-events: none; }
 .evo-tab-new-wrap-drop-target .evo-tab-new { color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent); }
-.evo-tab-new { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid transparent; border-radius: var(--r-pebble-sm); background: transparent; color: var(--color-text-tertiary); cursor: pointer; flex-shrink: 0; transition: background 0.12s ease, color 0.12s ease; }
-.evo-tab-new:hover:not(:disabled) { background: var(--hover-bg); color: var(--brand); }
+.evo-tab-new { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid transparent; border-radius: var(--r-pebble-sm); background: transparent; color: var(--color-text-tertiary); cursor: pointer; flex-shrink: 0; transition: background-color var(--dur-quick) var(--ease-organic), color var(--dur-quick) var(--ease-organic); }
+.evo-tab-new:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text-primary) 8%, transparent); color: var(--brand); }
 .evo-tab-new:disabled { opacity: 0.45; cursor: not-allowed; }
 .evo-tab-new svg { width: 14px; height: 14px; }
 /* + 菜单：fixed 定位（坐标由 JS 按「+」按钮实时计算），脱离 tabbar 的 overflow 裁剪 */
@@ -2333,8 +2360,12 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
 .evo-composer-editor-host .milkdown .ProseMirror a { color: var(--brand); }
 .evo-composer-editor-host .milkdown .ProseMirror ul, .evo-composer-editor-host .milkdown .ProseMirror ol { margin: 4px 0; padding-left: 22px; }
 .evo-composer-editor-host .milkdown .ProseMirror li { margin: 1px 0; }
-.evo-composer-editor-host .milkdown .ProseMirror li[data-list-type="bullet"] { list-style: disc; }
-.evo-composer-editor-host .milkdown .ProseMirror li[data-list-type="ordered"] { list-style: decimal; }
+/* 列表标记以"父容器类型"（ul/ol）判定，而不是 li 的 data-list-type：
+   Milkdown 的有序列表输入规则（^\d+\.\s$）新建的 li 会保留 schema 默认
+   data-list-type="bullet"，按 li 属性渲染时输入 "1. " 会显示成圆点（用户实测反馈）。
+   按容器判定对输入规则 / 工具栏命令 / 粘贴三条创建路径都成立。 */
+.evo-composer-editor-host .milkdown .ProseMirror ul > li { list-style: disc; }
+.evo-composer-editor-host .milkdown .ProseMirror ol > li { list-style: decimal; }
 .evo-composer-editor-host .milkdown .ProseMirror li[data-item-type="task"] { list-style: none; display: flex; align-items: flex-start; gap: 6px; }
 .evo-composer-editor-host .milkdown .ProseMirror li[data-item-type="task"]::before { content: ''; flex: 0 0 auto; width: 13px; height: 13px; margin-top: 3px; border: 1.5px solid var(--color-text-tertiary); border-radius: var(--r-2xs); background: var(--color-background); cursor: pointer; }
 .evo-composer-editor-host .milkdown .ProseMirror li[data-item-type="task"][data-checked="true"]::before { background: var(--brand); border-color: var(--brand); }

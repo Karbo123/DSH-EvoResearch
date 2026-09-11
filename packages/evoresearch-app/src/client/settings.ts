@@ -197,6 +197,20 @@ type DataPathField = 'evoresearchRoot'
  */
 /** 未单独设置时生效的默认上下文窗口（与宿主默认一致）；UI 只展示人去化值，精确值放 tooltip。 */
 const CONTEXT_WINDOW_FALLBACK = 262144
+/** 允许选择的上下文窗口档位：值是精确 token 数，标签用习惯写法（256K = 262144 = 256Ki）。 */
+const CONTEXT_WINDOW_TIERS: Array<{ tokens: number; label: string }> = [
+  { tokens: 16384, label: '16K' },
+  { tokens: 32768, label: '32K' },
+  { tokens: 131072, label: '128K' },
+  { tokens: 262144, label: '256K' },
+  { tokens: 307200, label: '300K' },
+  { tokens: 409600, label: '400K' },
+  { tokens: 512000, label: '500K' },
+  { tokens: 1048576, label: '1M' },
+  { tokens: 2097152, label: '2M' },
+]
+/** 档位标签反查（非档位的历史值返回 null，由调用方回落到人去化显示）。 */
+const tierLabel = (tokens: number): string | null => CONTEXT_WINDOW_TIERS.find((tier) => tier.tokens === tokens)?.label ?? null
 
 export function normalizeDataPathsSnapshot(value: Record<string, unknown>): DataPathsSnapshot {
   const candidates = [value.evoresearchRoot, value.evoResearchDataRoot, value.dshHome]
@@ -1538,7 +1552,6 @@ function LlmProviderSection() {
   const [providers, setProviders] = useState<LlmProviderEditor[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   /** 正在编辑上下文窗口的模型 id（null = 全部显示为只读胶囊） */
-  const [ctxEditing, setCtxEditing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savedId, setSavedId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -1860,11 +1873,22 @@ function LlmProviderSection() {
     const y = b.id.toLowerCase()
     return x < y ? -1 : x > y ? 1 : 0
   })
-  /** 上下文窗口人去化显示：262144 → 256K、1048576 → 1M（精确值保留在 tooltip 与输入框里）。 */
+  /** 上下文窗口人去化显示：262144 → 256K、1048576 → 1M。 */
   const humanTokens = (n: number): string => {
     if (n >= 1_000_000) return `${Math.round((n / 1_000_000) * 10) / 10}M`
     if (n >= 1000) return `${Math.round(n / 1000)}K`
     return String(n)
+  }
+  /** 上下文窗口分档选项：只允许选档位（不再逐个数字微调）。
+      空值 = 用默认；不在档位内的历史值保留一项，避免显示丢失。 */
+  const ctxDefaultLabel = () => t('llmModelCtxDefault').replace('{n}', tierLabel(CONTEXT_WINDOW_FALLBACK) ?? humanTokens(CONTEXT_WINDOW_FALLBACK))
+  const ctxOptionsFor = (current: number | null) => {
+    const options = [{ value: '', label: ctxDefaultLabel() }]
+    for (const tier of CONTEXT_WINDOW_TIERS) options.push({ value: String(tier.tokens), label: tier.label })
+    if (current !== null && tierLabel(current) === null) {
+      options.push({ value: String(current), label: t('llmModelCtxCustom').replace('{n}', humanTokens(current)) })
+    }
+    return options
   }
 
   return jsxs('div', {
@@ -2067,32 +2091,15 @@ function LlmProviderSection() {
                   title: m.name !== m.id ? `${m.id}（${m.name}）` : m.id,
                   children: [
                     jsx('span', { className: 'evo-llm-model-id', children: m.id }),
-                    ctxEditing === m.id
-                      ? jsx('input', {
-                          type: 'number',
-                          className: 'evo-llm-model-ctx',
-                          min: 1,
-                          step: 1,
-                          value: m.contextWindow === null ? '' : String(m.contextWindow),
-                          placeholder: String(CONTEXT_WINDOW_FALLBACK),
-                          title: t('llmModelCtxHint'),
-                          'aria-label': `${t('llmModelCtxWindow')}: ${m.id}`,
-                          disabled: busyId !== null,
-                          onInput: (e: { currentTarget: HTMLInputElement }) => updateModelContext(m.id, e.currentTarget.value),
-                          onBlur: () => setCtxEditing(null),
-                          onKeyDown: (e: { key: string }) => { if (e.key === 'Enter' || e.key === 'Escape') setCtxEditing(null) },
-                        })
-                      : jsx('button', {
-                          type: 'button',
-                          className: 'evo-llm-model-ctx-chip',
-                          'data-set': m.contextWindow !== null ? '' : undefined,
-                          title: `${t('llmModelCtxWindow')}: ${m.contextWindow === null ? t('llmModelCtxDefault').replace('{n}', `${CONTEXT_WINDOW_FALLBACK}（${humanTokens(CONTEXT_WINDOW_FALLBACK)}）`) : m.contextWindow}`,
-                          disabled: busyId !== null,
-                          onClick: () => setCtxEditing(m.id),
-                          children: m.contextWindow === null
-                            ? t('llmModelCtxDefault').replace('{n}', humanTokens(CONTEXT_WINDOW_FALLBACK))
-                            : humanTokens(m.contextWindow),
-                        }),
+                    jsx(Dropdown, {
+                      value: m.contextWindow === null ? '' : String(m.contextWindow),
+                      className: `evo-llm-model-ctx-select${m.contextWindow === null ? ' evo-ctx-unset' : ''}`,
+                      options: ctxOptionsFor(m.contextWindow),
+                      placeholder: ctxDefaultLabel(),
+                      ariaLabel: `${t('llmModelCtxWindow')}: ${m.id}`,
+                      title: t('llmModelCtxHint'),
+                      onChange: (v: string) => updateModelContext(m.id, v),
+                    }),
                     m.count > 1 && jsx('span', {
                       className: 'evo-llm-model-n',
                       title: t('fetchedModelsCount').replace('{n}', String(m.count)),

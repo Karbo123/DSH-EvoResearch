@@ -112,7 +112,7 @@ export function Dropdown({ value, options, onChange, placeholder, className, ico
           onClick: () => { onChange(o.value); setOpen(false) },
           children: [
             o.iconSrc !== undefined && jsx('img', {
-              className: 'evo-pop-item evo-dropdown-option-icon',
+              className: 'evo-dropdown-option-icon',
               src: o.iconSrc,
               alt: '',
               loading: 'lazy',
