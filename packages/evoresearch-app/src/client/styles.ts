@@ -28,9 +28,9 @@ export const CSS = `
   --color-user-message: #4d3722;
   --color-user-message-bg: #f2e5d3;  --color-avatar-bg: #e9e0d4;
   --color-secondary: #6b5f50;
-  --color-success: #5d7a45;
-  --color-warning: #8f6019;
-  --color-info: #47776c;
+  --color-success: #526b3d;
+  --color-warning: #895c18;
+  --color-info: #416d63;
   --color-error: #a4472f;
   --color-background: #faf6f1;
   --color-surface: #fffdf9;
@@ -38,16 +38,16 @@ export const CSS = `
   --color-border-light: #ede4d8;
   --color-text-primary: #3b3226;
   --color-text-secondary: #6b5f50;
-  --color-text-tertiary: #786c5c;
+  --color-text-tertiary: #6e6355;
   /* placeholder 与三级文字同值：靠字体样式区分层级，不靠降低对比度（保证 AA） */
-  --color-text-placeholder: #786c5c;
+  --color-text-placeholder: #6e6355;
   /* 强调色：来自风格给定盘；sage/tan/mist/teal 仅作底/圆点/装饰，
      作为文字时用 -ink 深化值（原色在米底上不足 AA） */
   --accent-sage: #8b9d77;
   --accent-tan: #d4a373;
   --accent-mist: #e9e0d4;
   --accent-teal: #75a191;
-  --accent-tan-ink: #8a5f2b;
+  --accent-tan-ink: #845b29;
   --accent-teal-ink: #3f6f63;
   /* 交互色 = 鼠尾草深绿（Verdant Tint：hover 向深绿缓慢过渡）；
      主按钮 = 石褐填充（风格 Primary），前景暖米而非纯白 */
@@ -102,6 +102,8 @@ export const CSS = `
      风格要求"自然/有机/手工"的视觉元素，这枚手绘感枝芽承担该角色（装饰性、aria-hidden）。 */
   --sprig: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 60V24' stroke='black' stroke-width='3.4' stroke-linecap='round'/%3E%3Cellipse cx='19' cy='31' rx='11' ry='6' transform='rotate(-30 19 31)' fill='black'/%3E%3Cellipse cx='45' cy='39' rx='11' ry='6' transform='rotate(30 45 39)' fill='black'/%3E%3Cellipse cx='21' cy='48' rx='9' ry='5' transform='rotate(-26 21 48)' fill='black'/%3E%3Ccircle cx='32' cy='15' r='4.6' fill='black'/%3E%3C/svg%3E");
   --chat-max-width: 900px;
+  --strip-bg: #f0e9dd;
+  --surface-raised: #fffdf9;
   --input-bg: #fffdf9;
   --hover-bg: #efe5d8;
   /* Chat Graph tokens：大地色图谱（原 reactflow 官网白/黑 + 蓝紫语义色已替换为
@@ -144,62 +146,68 @@ html.dark {
   color-scheme: dark;
   /* ── 色盘（深）：同族推导——深壤土底 + 羊皮纸字；Primary 石褐提亮为陶土承担主按钮，
      Accent 1 鼠尾草提亮为浅绿承担交互色（深底上达 AA）。禁用纯黑与冷色。 ── */
-  --color-primary: #f0e9dd;
+  --color-primary: #f2ece1;
   --color-user-message: #ecdcc6;
   --color-user-message-bg: #3a2c20;
-  --color-avatar-bg: #3b3128;
-  --color-secondary: #c2b6a4;
-  --color-success: #8fb06c;
-  --color-warning: #d2a24a;
-  --color-info: #8ec0b1;
-  --color-error: #d9836b;
-  --color-background: #1e1b16;
-  --color-surface: #292420;
-  --color-border: #3e3529;
-  --color-border-light: #342c22;
-  --color-text-primary: #f0e9dd;
-  --color-text-secondary: #c2b6a4;
-  --color-text-tertiary: #9d9182;
-  --color-text-placeholder: #9d9182;
+  --color-avatar-bg: #3c332b;
+  --color-secondary: #d6cdbc;
+  --color-success: #a9c886;
+  --color-warning: #e3bd6f;
+  --color-info: #9eccbe;
+  --color-error: #eda78f;
+  /* ── 深色层次阶梯（相邻面 ΔL* ≥ 4.5，实测值见 docs/06 §10）──
+     井(5.0) → 输入(7.5) → 页面(12.0) → 卡片(17.1) → 抬起/浮层(22.0)；
+     悬停是"半透明洗"（相对父面抬亮，避免在小卡片里过亮压掉次要文字）。 */
+  --color-background: #231f19;
+  --color-surface: #302922;
+  --surface-raised: #3c332b;
+  --color-border: #4a4237;
+  --color-border-light: #3d342c;
+  --color-text-primary: #f2ece1;
+  --color-text-secondary: #d6cdbc;
+  --color-text-tertiary: #bfb4a5;
+  --color-text-placeholder: #bfb4a5;
   --accent-sage: #8b9d77;
   --accent-tan: #d4a373;
   --accent-mist: #4a4034;
   --accent-teal: #8fbfab;
-  --accent-tan-ink: #d4a373;
-  --accent-teal-ink: #8fbfab;
-  --brand: #a9bf8e;
-  --brand-hover: #bcd1a3;
+  --accent-tan-ink: #dcab7b;
+  --accent-teal-ink: #9eccbe;
+  --brand: #b6c99b;
+  --brand-hover: #c6d8ab;
   --brand-solid: #c08a5e;
   --brand-foreground: #241a12;
-  --focus-ring: #a9bf8e;
+  --focus-ring: #b6c99b;
   --shadow-sm: 0 1px 2px rgb(8 6 4 / 32%);
   --shadow-md: 0 6px 18px rgb(8 6 4 / 40%), 0 1px 3px rgb(8 6 4 / 30%);
   --shadow-lg: 0 14px 34px rgb(8 6 4 / 48%), 0 3px 9px rgb(8 6 4 / 34%);
   /* 深色下纸纹略提（深底上的噪声更不明显），仍只铺结构底色 */
   --organic-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.06'/%3E%3C/svg%3E");
-  --input-bg: #17140f;
-  --hover-bg: #352d24;
-  --titlebar-bg: #221d18;
-  --titlebar-border: #3e3529;
-  --titlebar-fg: #d8cdbb;
+  --input-bg: #151009;
+  /* 悬停：半透明暖洗（覆盖在任意父面上都成立，不会在小卡片里显得过亮） */
+  --hover-bg: color-mix(in srgb, var(--color-text-primary) 7%, transparent);
+  --strip-bg: #151009;
+  --titlebar-bg: #151009;
+  --titlebar-border: #3d342c;
+  --titlebar-fg: #d6cdbc;
   --titlebar-accent: #c42b1c;
   --scrim: rgb(10 8 6 / 62%);
   --shade: #0f0d0a;
-  --graph-canvas: #16130f;
+  --graph-canvas: #151009;
   --graph-glow-core: rgba(212, 163, 115, 0.20);
   --graph-glow-mid: rgba(139, 157, 119, 0.10);
-  --graph-node-surface: #201c17;
-  --graph-node-surface-alt: #262119;
-  --graph-node-border: #3a3228;
-  --graph-node-title: #f0e9dd;
-  --graph-muted: #a2967f;
+  --graph-node-surface: #302922;
+  --graph-node-surface-alt: #3c332b;
+  --graph-node-border: #4a4237;
+  --graph-node-title: #f2ece1;
+  --graph-muted: #bfb4a5;
   --graph-node-radius: 20px;
   --graph-card-shadow: 0 7px 9px 0 rgba(8, 6, 4, 0.32);
-  --graph-handle: #7d7260;
-  --graph-edge-default: #4a4136;
+  --graph-handle: #8a7f6d;
+  --graph-edge-default: #59503f;
   --graph-chat: #d99a63;
   --graph-memory: #a3bd82;
-  --graph-global: #8fbfab;
+  --graph-global: #9eccbe;
   --graph-resource: #d9b45e;
   --graph-fork: #d99a63;
   --graph-reference: #a3bd82;
@@ -212,8 +220,8 @@ html.dark {
   --graph-minimap-chat: #d99a63;
   --graph-minimap-resource: #d9b45e;
   --graph-trace: #c98f4f;
-  --graph-candidate: #b6a98c;
-  --graph-status-missing: #d9836b;
+  --graph-candidate: #c3b79f;
+  --graph-status-missing: #eda78f;
   --graph-status-running: #d9b45e;
   --graph-node-shadow: rgba(8, 6, 4, 0.5);
 }
@@ -266,7 +274,7 @@ body { margin: 0; }
 .evo-tab-menu, .evo-graph-menu, .evo-graph-legend, .evo-composer-model-menu, .evo-cand, .evo-queue,
 .evo-ctx-panel, .evo-graph-editor, .evo-graph-viewer, .evo-modal, .evo-report-card,
 .evo-context-trace, .evo-toast {
-  background: var(--color-surface);
+  background: var(--surface-raised);
   border: 1px solid var(--color-border);
   border-radius: var(--r-blob);
   box-shadow: var(--shadow-lg), inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 5%, transparent);
@@ -2016,7 +2024,7 @@ html.evo-desktop .evo-modal.evo-modal-full { top: 36px; bottom: 0; }
    ④ 关闭钮在未活动页签上悬停才出现，活动页签常驻（Chromium 同款）。
    本项目的自然有机风处理：上圆角用不等角（12/10），活动页签顶边一道鼠尾草
    细线——对应 Chrome 的"标签组色线"，作为品牌签名。 */
-.evo-tabbar { display: flex; align-items: flex-end; gap: 0; padding: 6px 14px 0; background-color: color-mix(in srgb, var(--color-background) 92%, var(--color-text-primary) 5%); background-image: var(--organic-grain); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
+.evo-tabbar { display: flex; align-items: flex-end; gap: 0; padding: 6px 14px 0; background-color: var(--strip-bg); background-image: var(--organic-grain); border-bottom: 1px solid var(--color-border); flex-shrink: 0; overflow-x: auto; scrollbar-width: thin; position: sticky; top: 0; z-index: 20; }
 .evo-tab {
   position: relative; display: inline-flex; align-items: center; gap: 6px;
   max-width: 210px; height: 33px; padding: 0 10px 0 12px; margin-bottom: -1px;

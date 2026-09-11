@@ -134,12 +134,13 @@ const REQUIRED_ROOT = [
   '--color-success', '--color-warning', '--color-error', '--color-info',
   '--accent-sage', '--accent-tan', '--accent-mist', '--accent-teal',
   '--brand', '--brand-hover', '--brand-solid', '--brand-foreground', '--focus-ring',
+  '--surface-raised', '--strip-bg', '--input-bg', '--hover-bg',
   '--r-2xs', '--r-xs', '--r-sm', '--r-md', '--r-lg', '--r-xl', '--r-pill', '--r-blob', '--r-blob-lg', '--r-dot',
   '--r-pebble-sm', '--r-pebble', '--r-bubble-ai', '--r-bubble-user', '--sprig',
   '--font-sans', '--font-serif', '--font-mono',
   '--ease-organic', '--dur-organic', '--dur-morph', '--dur-quick',
   '--shadow-sm', '--shadow-md', '--shadow-lg', '--organic-grain', '--scrim',
-  '--titlebar-bg', '--titlebar-border', '--titlebar-fg', '--titlebar-accent',
+  '--titlebar-bg', '--titlebar-border', '--titlebar-fg', '--titlebar-accent', '--strip-bg', '--surface-raised',
 ]
 /** 深色必须重定义（形状/字体/动效令牌由 :root 继承，无需重复） */
 const REQUIRED_DARK = [
@@ -149,6 +150,7 @@ const REQUIRED_DARK = [
   '--color-success', '--color-warning', '--color-error', '--color-info',
   '--accent-sage', '--accent-tan', '--accent-mist', '--accent-teal', '--accent-tan-ink', '--accent-teal-ink',
   '--brand', '--brand-hover', '--brand-solid', '--brand-foreground', '--focus-ring',
+  '--surface-raised', '--strip-bg', '--input-bg', '--hover-bg',
   '--shadow-sm', '--shadow-md', '--shadow-lg', '--organic-grain', '--scrim',
   '--titlebar-bg', '--titlebar-border', '--titlebar-fg',
   '--graph-canvas', '--graph-node-surface', '--graph-node-title', '--graph-handle',
@@ -244,26 +246,97 @@ const tokenOf = (block, name) => {
   const m = block.match(new RegExp(`\\${name}:\\s*(#[0-9a-fA-F]{3,8})`))
   return m === null ? null : m[1]
 }
-const CONTRAST_PAIRS = [
-  ['--color-text-primary', '--color-background'], ['--color-text-primary', '--color-surface'],
-  ['--color-text-secondary', '--color-background'], ['--color-text-secondary', '--color-surface'],
-  ['--color-text-tertiary', '--color-background'], ['--color-text-tertiary', '--color-surface'],
-  ['--color-text-placeholder', '--input-bg'],
-  ['--brand', '--color-background'], ['--brand', '--color-surface'], ['--brand', '--hover-bg'],
-  ['--color-success', '--color-surface'], ['--color-warning', '--color-background'],
-  ['--color-error', '--color-surface'], ['--color-info', '--color-surface'],
-  ['--color-user-message', '--color-user-message-bg'],
-  ['--brand-foreground', '--brand-solid'],
-  ['--accent-tan-ink', '--color-surface'], ['--accent-teal-ink', '--color-surface'],
+/** 令牌值解析：支持 #hex 与 color-mix(in srgb, var(--X) p%, transparent) 半透明洗
+ *  （半透明色按"叠加在最亮实心面"的最坏情况合成，这样洗色不会成为对比度盲区）。 */
+const resolveColor = (value, block, base) => {
+  if (value === null) return null
+  const v = value.trim()
+  if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v
+  const mix = v.match(/^color-mix\(in srgb,\s*var\((--[a-z-]+)\)\s+([\d.]+)%,\s*transparent\)$/i)
+  if (mix !== null && base !== null) {
+    const inner = tokenOf(block, mix[1])
+    if (inner === null) return null
+    const p = Number(mix[2]) / 100
+    const a = hexToRgb(inner)
+    const b = hexToRgb(base)
+    const out = a.map((x, i) => Math.round(x * p + b[i] * (1 - p)))
+    return '#' + out.map((x) => x.toString(16).padStart(2, '0')).join('')
+  }
+  return null
+}
+/** 文本令牌 × 实心面令牌：主/次/三/占位/语义色在所有可能出现文字的面上都要 AA。
+ *  hover 洗色按"叠在最亮实心面"的合成结果一并校验（避免"抬亮表面后次要文字掉 AA"）。 */
+const TEXT_TOKENS = [
+  '--color-text-primary', '--color-text-secondary', '--color-text-tertiary', '--color-text-placeholder',
+  '--brand', '--color-success', '--color-warning', '--color-error', '--color-info',
+  '--accent-tan-ink', '--accent-teal-ink',
 ]
+const SURFACE_TOKENS = ['--color-background', '--color-surface', '--surface-raised']
 for (const [name, block] of [['浅色', rootBlock], ['深色', darkBlock]]) {
-  for (const [fg, bg] of CONTRAST_PAIRS) {
+  const raised = tokenOf(block, '--surface-raised')
+  for (const fg of TEXT_TOKENS) {
+    for (const bg of SURFACE_TOKENS) {
+      const f = tokenOf(block, fg)
+      const b = tokenOf(block, bg)
+      if (f === null || b === null) { fail(`对比度检查缺令牌 ${name} ${fg}/${bg}`); continue }
+      const r = contrast(f, b)
+      if (r < 4.5) fail(`对比度不足[${name}] ${fg} on ${bg} = ${r.toFixed(2)}（需 ≥ 4.5）`)
+      else notes.push(`${name} ${fg}/${bg} ${r.toFixed(2)}`)
+    }
+    // 悬停洗色：合成到最亮实心面上再判
+    const hoverRaw = block.slice(block.indexOf('--hover-bg:'))
+    const hoverVal = (hoverRaw.match(/^--hover-bg:\s*([^;]+);/) ?? [])[1] ?? null
+    const hoverComposite = resolveColor(hoverVal, block, raised)
+    if (hoverComposite !== null) {
+      const f = tokenOf(block, fg)
+      const r = contrast(f, hoverComposite)
+      if (r < 4.5) fail(`对比度不足[${name} 悬停面 ${hoverComposite}] ${fg} = ${r.toFixed(2)}（需 ≥ 4.5）`)
+      else notes.push(`${name} ${fg}/hover ${r.toFixed(2)}`)
+    }
+  }
+  const pair = [['--color-user-message', '--color-user-message-bg'], ['--brand-foreground', '--brand-solid']]
+  for (const [fg, bg] of pair) {
     const f = tokenOf(block, fg)
     const b = tokenOf(block, bg)
     if (f === null || b === null) { fail(`对比度检查缺令牌 ${name} ${fg}/${bg}`); continue }
     const r = contrast(f, b)
     if (r < 4.5) fail(`对比度不足[${name}] ${fg} on ${bg} = ${r.toFixed(2)}（需 ≥ 4.5）`)
     else notes.push(`${name} ${fg}/${bg} ${r.toFixed(2)}`)
+  }
+}
+
+// ───────────────────────── ⑤ 深色层次阶梯（可辨性） ─────────────────────────
+/** CIE Lab 明度：两个大色块"看不出是两个颜色"的本质是 ΔL* 太小。
+ *  这里把"页面 / 卡片 / 浮层 / 输入 / 页签条"的相邻关系写成可失败断言：
+ *  深色主题相邻面 ΔL* ≥ 4.5（实测标定值见 docs/06 §10），浅色主题的实心面差异
+ *  由阴影与描边承担，只要求页面↔条 ≥ 3.5。 */
+const lstar = (h) => {
+  const [r, g, b] = hexToRgb(h).map((v) => v / 255)
+  const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  const Y = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+  const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116)
+  return 116 * f(Y) - 16
+}
+const LADDER_CHECKS = [
+  ['深色', darkBlock, [
+    ['--color-background', '--color-surface', 4.5, '页面 → 卡片'],
+    ['--color-surface', '--surface-raised', 4.5, '卡片 → 浮层'],
+    ['--color-background', '--strip-bg', 4.5, '页面 → 页签条'],
+    ['--input-bg', '--color-surface', 4.5, '输入（凹陷）→ 卡片'],
+  ]],
+  ['浅色', rootBlock, [
+    ['--color-background', '--strip-bg', 3.5, '页面 → 页签条'],
+    ['--hover-bg', '--color-background', 3.5, '悬停面 → 页面'],
+  ]],
+]
+for (const [name, block, pairs] of LADDER_CHECKS) {
+  for (const [a, b, min, label] of pairs) {
+    const ca = tokenOf(block, a)
+    const cb = tokenOf(block, b)
+    if (ca === null || cb === null) { fail(`层次检查缺令牌 ${name} ${a}/${b}`); continue }
+    const d = Math.abs(lstar(ca) - lstar(cb))
+    if (d < min) fail(`层次过近[${name}] ${label}：ΔL*=${d.toFixed(1)}（需 ≥ ${min}）——大色块会看不出是两个颜色`)
+    else notes.push(`${name} ${label} ΔL*=${d.toFixed(1)}`)
   }
 }
 
