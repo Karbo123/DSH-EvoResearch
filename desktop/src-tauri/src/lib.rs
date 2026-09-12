@@ -25,7 +25,11 @@ fn desktop_main() {
             // 实例的端口文件）；读到旧文件最多短暂连到旧端，由 wait_for_port
             // 轮询语义兜底，权衡见 wait_for_port 文档。
 
-            // 1) 启动 Node sidecar（数据根目录创建失败则直接走失败页）
+            // 1) 启动 Node sidecar（数据根目录创建失败则直接走失败页）。
+            // 记录 spawn 时刻：wait_for_port 只接受**晚于该时刻**写入的端口文件——
+            // 残留的上一轮 port.json（升级/重启场景）会被立刻读到，指向已死端口，
+            // WebView 报 ERR_CONNECTION_REFUSED 且不再重读（升级后首次启动必现）。
+            let sidecar_spawned_at = std::time::SystemTime::now();
             let spawn_result = spawn_sidecar(&resource_dir);
             if let Err(error) = &spawn_result {
                 log(&format!("[shell] sidecar 启动失败: {error}"));
@@ -44,7 +48,7 @@ fn desktop_main() {
                 log("[shell] sidecar 启动失败，加载失败页");
                 failure_page_url("后端启动失败")
             } else {
-                match wait_for_port(&app_data_dir, Duration::from_secs(60)) {
+                match wait_for_port(&app_data_dir, Duration::from_secs(60), sidecar_spawned_at) {
                     Some((port, token)) => {
                         log(&format!("[shell] 后端就绪，端口={port} token={}", token.is_some()));
                         match token {
@@ -315,21 +319,34 @@ fn spawn_sidecar(resource_dir: &PathBuf) -> std::io::Result<Child> {
 }
 
 /// 等待端口文件出现并返回端口。
-/// 权衡：不再启动即删旧 port.json（避免多实例互踩），因此读到上一次运行的
-/// 残留端口时，本实例可能在最多 60s 窗口内先连到旧端——旧实例仍在则直接复用
-/// 其服务（无害），已退出则端口无监听、页面加载失败概率极低（新 sidecar 随即
-/// 覆盖端口文件）。轮询语义保持不变。
+/// 权衡：不再启动即删旧 port.json（避免多实例互踩），但**只接受晚于本次
+/// sidecar spawn 时刻写入的端口文件**——否则升级/重启场景下会立刻读到上一轮
+/// 的残留文件（指向已死端口，token 也过期），WebView 停在 ERR_CONNECTION_REFUSED
+/// 且不再重读（升级后首次启动必现，用户实录）。多实例场景下，晚写文件的一方
+/// 胜出，先启动的一方会在自己的 60s 窗口内读到对方的文件（后端是活的，直接复用
+/// 其服务，无害）。
 ///
 /// 桌面专用：移动端无 sidecar/端口文件，本函数连同它引用的
 /// `read_port_token`/`PathBuf`/`Duration`/`Instant`/`thread` 都随 cfg(desktop)
 /// 消失——缺了这行属性，Android/iOS 的 lib 编译会报 cannot find `PathBuf` 等
 /// （曾导致 CI 的 android/ios 作业全挂，见 docs/05）。
 #[cfg(desktop)]
-fn wait_for_port(app_data_dir: &PathBuf, timeout: Duration) -> Option<(u16, Option<String>)> {
+fn wait_for_port(
+    app_data_dir: &PathBuf,
+    timeout: Duration,
+    not_before: std::time::SystemTime,
+) -> Option<(u16, Option<String>)> {
     let start = Instant::now();
     while start.elapsed() < timeout {
-        if let Some(pair) = read_port_token(app_data_dir) {
-            return Some(pair);
+        // 端口文件必须是本次 sidecar 启动后新写的（mtime 判定），残留文件直接跳过
+        let fresh = fs::metadata(port_file(app_data_dir))
+            .and_then(|meta| meta.modified())
+            .map(|modified| modified >= not_before)
+            .unwrap_or(false);
+        if fresh {
+            if let Some(pair) = read_port_token(app_data_dir) {
+                return Some(pair);
+            }
         }
         thread::sleep(Duration::from_millis(300));
     }
