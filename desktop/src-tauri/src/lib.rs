@@ -36,6 +36,10 @@ fn desktop_main() {
             }
 
             // 2) 等待端口并加载 WebUI（首次启动 sidecar 冷启动较慢，放宽到 60s）
+            // 0.1.3 token 柵门：首跳 URL 在这里**一次性**拼好（token 与 desktop=1
+            // 一起），外层不得再追加任何参数——曾因外层又拼了一次 `?desktop=1`，
+            // token 值被污染成 `TOKEN?desktop=1`，DSH 恒返回 401 鉴权页
+            // （实测：同样 token，正确拼接 303 换 cookie，污染后 401）。
             let url: Result<String, std::io::Error> = if sidecar_failed {
                 log("[shell] sidecar 启动失败，加载失败页");
                 failure_page_url("后端启动失败")
@@ -43,10 +47,10 @@ fn desktop_main() {
                 match wait_for_port(&app_data_dir, Duration::from_secs(60)) {
                     Some((port, token)) => {
                         log(&format!("[shell] 后端就绪，端口={port} token={}", token.is_some()));
-                        // 0.1.3 token 柵门：首跳携带 token 换 cookie（desktop=1 一并带上）
                         match token {
                             Some(token) => Ok(format!("http://127.0.0.1:{port}/?desktop=1&token={token}")),
-                            None => Ok(format!("http://127.0.0.1:{port}")),
+                            // 无 token（旧版 sidecar）：仅带桌面参数
+                            None => Ok(format!("http://127.0.0.1:{port}/?desktop=1")),
                         }
                     }
                     None => {
@@ -55,9 +59,8 @@ fn desktop_main() {
                     }
                 }
             };
-            // 失败页（file: 协议）不追加桌面参数；仅正式 WebUI 追加。
+            // 失败页（file:/about:blank）不经此处改写
             let url = match url {
-                Ok(url) if url.starts_with("http://") => format!("{}?desktop=1", url),
                 Ok(url) => url,
                 Err(error) => {
                     log(&format!("[shell] 失败页写入失败: {error}"));
