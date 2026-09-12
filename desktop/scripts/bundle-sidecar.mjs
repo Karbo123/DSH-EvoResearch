@@ -211,6 +211,40 @@ step('组装 app/（DSH_HOME 布局 + 依赖）', () => {
   pruneKoffiBuilds(nodeModules)
 })
 
+// ── 原生模块 ABI 冒烟校验（发布事故兜底）────────────────────────────────────
+// npm install 是用**打包机的 Node** 跑的，而 sidecar 运行时是**内嵌的
+// NODE_VERSION**（v24.19.0）。两者 major 不一致时，fs-ext 这类原生模块会按
+// 打包机的 ABI 编译/下载，运行时 ERR_DLOPEN_FAILED → dsh-session-persistence
+// 加载失败 → 端口文件永远写不出 → 安装包报「后端启动超时」
+// （2026-09 release 实录：CI 装 Node 22 打包，内嵌 Node 24，ABI 127 vs 137）。
+// 这里用内嵌 node 实加载 fs-ext 做终极校验：加载失败直接令打包失败，
+// 把运行时事故拦在发布之前。
+step('校验原生模块与内嵌 Node 的 ABI（实加载 fs-ext）', () => {
+  const runtimeAbi = spawnSync(join(DIST, NODE_BINARY), ['-p', 'process.versions.modules'], { encoding: 'utf8' })
+  if (runtimeAbi.status !== 0) throw new Error('内嵌 node 无法执行（下载/解压有问题？）')
+  const runtime = runtimeAbi.stdout.trim()
+  if (process.versions.modules !== runtime) {
+    throw new Error(
+      `[ABI 不匹配] 打包机 Node ${process.version}（ABI ${process.versions.modules}）≠ ` +
+      `内嵌 sidecar Node ${NODE_VERSION}（ABI ${runtime}）。` +
+      `npm install 按打包机 ABI 编译原生模块（fs-ext 等），装进包里运行时会 ERR_DLOPEN_FAILED。` +
+      `请改用 Node ${runtime === '137' ? '24' : `ABI ${runtime}`} 打包，或把 NODE_VERSION 调整为与打包机同 major。`,
+    )
+  }
+  // 终极校验：用内嵌 node 实加载 fs-ext（会话持久化依赖的原生模块）
+  const requireCheck = spawnSync(join(DIST, NODE_BINARY), ['-e', 'require("fs-ext"); console.log("[bundle-sidecar] fs-ext OK, ABI", process.versions.modules)'], {
+    cwd: join(DIST, 'app'),
+    encoding: 'utf8',
+  })
+  if (requireCheck.status !== 0) {
+    console.error('[bundle-sidecar] fs-ext 实加载失败，输出:')
+    console.error(requireCheck.stdout?.slice(-2000))
+    console.error(requireCheck.stderr?.slice(-2000))
+    throw new Error(`fs-ext 无法被内嵌 Node ${NODE_VERSION} 加载（ABI/平台不符）——修好再打包`)
+  }
+  console.log(`[bundle-sidecar] ${requireCheck.stdout.trim()}`)
+})
+
 step('复制 launch.js', () => {
   copyFileSync(join(SIDECAR, 'launch.js'), join(DIST, 'launch.js'))
 })

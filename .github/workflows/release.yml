@@ -106,10 +106,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 安装 Node.js 22
+      # Node 24：必须与 sidecar 内嵌运行时（bundle-sidecar.mjs 的 NODE_VERSION
+      # v24.19.0）同 major——npm install 会按打包机的 Node 编译 fs-ext 等原生模块，
+      # ABI 不一致时安装包一启动就 ERR_DLOPEN_FAILED（曾致后端启动超时）。
+      - name: 安装 Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
 
       - name: 安装 Rust（stable）
@@ -202,10 +205,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: 安装 Node.js 22
+      - name: 安装 Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
 
       - name: 安装 Rust 与 Android targets
@@ -288,10 +291,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 安装 Node.js 22
+      - name: 安装 Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
 
       - name: 安装 Rust 与 iOS targets

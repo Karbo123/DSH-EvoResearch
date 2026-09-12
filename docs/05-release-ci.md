@@ -33,7 +33,7 @@ prepare-release（删旧建新 Release，输出 release_id）
 └── android（ubuntu）→ APK（--split-per-abi，arm64/armv7/x86/x86_64）
 ```
 
-各 job 共同步骤：Node 22 + Rust stable + `npm ci && npm run build`
+各 job 共同步骤：Node 24 + Rust stable + `npm ci && npm run build`（Node major 必须与 sidecar 内嵌运行时一致——bundle-sidecar.mjs NODE_VERSION v24.19.0，ABI 不一致会让安装包启动即 ERR_DLOPEN_FAILED，脚本收尾有 ABI 校验 + fs-ext 实加载冒烟）
 （生成 packages/*/lib 与 evoresearch-app/dist）→ 平台差异步骤。
 
 ### Desktop 差异
