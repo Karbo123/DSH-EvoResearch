@@ -174,7 +174,7 @@ node scripts/verify-chatgraph-xyflow.mjs / verify-bundle.mjs / check-docs.mjs
 - **Tauri resources**：`tauri.conf.json` 的 `resources: ../sidecar/dist/**/*` 会把 junction 展开为真实目录（`--install-links` 保证可移植）；**移动端必须用 `tauri.<platform>.conf.json` 清空 resources**（sidecar glob 在无 dist 的 CI 直接报错；壳侧 main.rs 已拆 desktop/mobile 双入口）。
 - **iOS 构建三坑**：① `tauri ios build --target` 只认短名 `aarch64/aarch64-sim/x86_64`；② `tauri ios init` 生成的 Xcode phase 是 `npm run tauri --` → 根 package.json 须有 `"tauri": "tauri"` script 且 `@tauri-apps/cli` 在 devDependencies；③ 用 `npx tauri`（cargo 版子命令不同）。
 - **gh api**：布尔值用 `-F` 不用 `-f`（字符串 "false" 会 422）；PATCH release 只认 `/releases/{id}`，by-tag 路由 404。
-- **依赖版本**：`@deepseek-ai/dsh-client-schema-form@0.1.0-rc.7`、`dsh-client-web-react@0.1.0-rc.7` 无 0.1.3-alpha.2 版本，保持不动（ETARGET 限制）。**fs-ext**：0.1.3 起会话持久化的原生依赖，npm/pnpm 内置 node-gyp 12.x 在 Node 26 下构建报 LNK1117——根 devDep `node-gyp@13` 经 `node_modules/.bin` 供构建（start-web.mjs 注入 `npm_config_node_gyp`；profile 的 pnpm-workspace.yaml `allowBuilds` 含 fs-ext；根 `.npmrc` allow-scripts 含 fs-ext）。
+- **依赖版本**：`@deepseek-ai/dsh-client-schema-form@0.1.0-rc.7`、`dsh-client-web-react@0.1.0-rc.7` 无 0.1.3-alpha.2 版本，保持不动（ETARGET 限制）。**fs-ext**：0.1.3 起会话持久化的原生依赖，npm/pnpm 内置 node-gyp 12.x 在 Node 26 下构建报 LNK1117——根 devDep `node-gyp@13` 经 `node_modules/.bin` 供构建（start-web.mjs 注入 `npm_config_node_gyp`；profile 的 pnpm-workspace.yaml `allowBuilds` 含 fs-ext；根 `.npmrc` allow-scripts 含 fs-ext）。**ABI 红线**：sidecar 内嵌 Node 固定 v24.19.0（ABI 137，bundle-sidecar.mjs NODE_VERSION），打包机/CI 必须用同 major 的 Node（release.yml 已用 24），否则安装包一启动就 ERR_DLOPEN_FAILED（表现为「后端启动超时」）；bundle-sidecar 收尾会做 ABI 校验 + fs-ext 实加载冒烟。
 - **`.serena/`**：Serena MCP（LSP 检索）项目配置与缓存，gitignore，与本应用运行无关。
 
 ---
