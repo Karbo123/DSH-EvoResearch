@@ -57,9 +57,20 @@ const inject = [
   'remote', 'remote.fileReferences', 'remote.sessionReferenceResolver',
 ]
 
-/** 桌面模式（无边框窗口 + 自绘标题栏）：由 Tauri 壳以 ?desktop=1 加载。 */
+/** 桌面模式（无边框窗口 + 自绘标题栏）。
+ *  两条判定路径：① 壳以 ?desktop=1 加载（开发时在普通浏览器调试标题栏用）；
+ *  ② **Tauri 环境自证**——0.1.3 起 web 默认 per-process token 鉴权，首跳
+ *  `?desktop=1&token=…` 会被 303 重定向到裸 `/`（查询串整个被剥掉），只认
+ *  URL 参数时安装包挂载后参数已消失 → 标题栏不渲染，而无边框窗口没有它
+ *  就没有窗口控制（升级后首启必现）。Tauri 会向 WebView 注入
+ *  `__TAURI_INTERNALS__`/`__TAURI__`（浏览器里没有）；移动端同样注入，
+ *  但移动端不要标题栏——用 UA 排除 Android/iOS。 */
 function isDesktop(): boolean {
-  return typeof location !== 'undefined' && new URLSearchParams(location.search).get('desktop') === '1'
+  if (typeof location === 'undefined') return false
+  if (new URLSearchParams(location.search).get('desktop') === '1') return true
+  const w = window as any
+  const inTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window
+  return inTauri && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 }
 
 /** 连接状态源（ctx.connection.hostDescription，apply 时写入；快照存在 = 已握手）。 */
